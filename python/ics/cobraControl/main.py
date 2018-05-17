@@ -3,7 +3,7 @@ from ethernet import sock
 from log import dia_log, short_log, LOGS
 from func import *
 
-ctrl_ip = '128.149.77.24'
+ctrl_ip = '127.0.0.1'
 lcl_ip = '127.0.0.1'
 port = 4001
 

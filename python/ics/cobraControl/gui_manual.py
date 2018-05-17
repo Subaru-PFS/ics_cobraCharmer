@@ -138,7 +138,7 @@ class App(tk.Frame):
     
     frame7.grid(row=7, sticky=tk.W, padx=4)
     
-    self.ent_run_time.insert(10, "70")
+    self.ent_run_time.insert(10, "0.07")
     self.ent_run_steps.insert(10, "50")
     self.ent_run_time.config(width=5)
     self.ent_run_steps.config(width=5)

@@ -3,6 +3,8 @@ import os.path
 import csv
 import time
 
+import numpy as np
+
 from cmds import *
 from ethernet import sock
 from log import full_log, medium_log, short_log
@@ -141,7 +143,77 @@ def cobrasAreType(cobras, type='Hk'):
         if( not c.typeMatch(type) ):
             return False
     return True
- 
+
+
+def calibrate(cobras, thetaLow=60.4, thetaHigh=70.3, phiLow=94.4, phiHigh=108.2, clockwise=True):
+    """ calibrate a set of cobras.
+
+    Args:
+    thetaLow, thetaHigh -
+    phiLow, phiHigh -
+
+    """
+
+    spin = CW_DIR if clockwise else CCW_DIR
+    for c in cobras:
+        c.p = CalParams(m0=(thetaLow,thetaHigh),
+                        m1=(phiLow, phiHigh), en=(True,True), dir=spin)
+
+    err = CAL(cobras)
+    if err:
+        raise RuntimeError("calibration failed")
+
+def setFreq(cobras, thetaPeriods, phiPeriods):
+    """ set the frequencies for a set of cobras.
+
+    Args:
+
+
+    """
+
+    if (len(cobras) != len(thetaPeriods) or
+        len(cobras) != len(phiPeriods)):
+        raise ValueError("length of all arguments must match")
+
+    for c_i, c in enumerate(cobras):
+        enable = thetaPeriods[c_i] != 0, phiPeriods[c_i] != 0
+
+        c.p = SetParams(p0=thetaPeriods[c_i],
+                        p1=phiPeriods[c_i],
+                        en=enable)
+
+    err = SET(cobras)
+    if err:
+        raise RuntimeError("set frequency failed")
+
+def run(cobras, thetaSteps, phiSteps, thetaPeriods=None, phiPeriods=None, dirs=None):
+    """ Moves the given cobras
+
+    Args:
+       theta ([int]): steps to move the theta motors
+       phi ([int]): steps to move the theta motors
+
+    """
+
+    if np.isscalar(thetaSteps):
+        thetaSteps = [thetaSteps]*len(cobras)
+    if np.isscalar(phiSteps):
+        phiSteps = [phiSteps]*len(cobras)
+
+    if (len(cobras) != len(thetaSteps) or
+        len(cobras) != len(phiSteps)):
+        raise ValueError("length of all arguments must match")
+
+    for c_i, c in enumerate(cobras):
+        enable = thetaSteps[c_i] != 0, phiSteps[c_i] != 0
+        c.p = RunParams(pu=(thetaPeriods[c_i], phiPeriods[c_i]),
+                        st=(thetaSteps[c_i], phiSteps[c_i]),
+                        en=enable, dir=dirs)
+
+    err = RUN(cobras)
+    if err:
+        raise RuntimeError("run failed")
+
 
 # Test Functions-------------------------------------------------------------
 def POW(sec_pwr=255):
@@ -239,7 +311,7 @@ def CAL( cobras, timeout=0 ):
         resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
         error |= tlm_chk(resp)
     return error
-    
+
 def RUN( cobras, timeout=0, inter=0 ):
     if not cobrasAreType(cobras, 'Run'):
         return True # error
@@ -299,6 +371,12 @@ def SET( cobras ):
         error |= tlm_chk(resp)
     return error
 
+def EXIT():
+    short_log.log("--- EXIT FPGA ---")
+    cmd = CMD_exit()
+    sock.send(cmd, eth_hex_logger, 'h')
+
+    return True
 
 # CMD Response Parsing Functions-----------------------------------------------
 def tlm_chk(data):
