@@ -127,7 +127,7 @@ class FPGAProtocol(asyncio.Protocol):
         splitAt = self.RUN_HEADER_SIZE + nCobras*self.RUN_ARM_SIZE
         runData, self.data = self.data[self.RUN_HEADER_SIZE:splitAt], self.data[splitAt:]
 
-        dirName = {0:'ccw', 1:' cw'}
+        dirName = {False:' cw', True:'ccw'}
         self.logger.info('CMD: run (%d cobras)' % (nCobras))
         for c_i in range(nCobras):
             (flags,
@@ -155,6 +155,8 @@ class FPGAProtocol(asyncio.Protocol):
 
         if len(self.data) < self.CAL_HEADER_SIZE:
             raise IncompleteDataError()
+
+        dirName = {False:' cw', True:'ccw'}
 
         nCobras, timeLimit, CRC = struct.unpack('>HHH',
                                                 self.data[2:self.CAL_HEADER_SIZE])

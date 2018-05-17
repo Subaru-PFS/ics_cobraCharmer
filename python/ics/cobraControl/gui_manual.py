@@ -68,7 +68,7 @@ class App(tk.Frame):
     
     frame3.grid(row=3, sticky=tk.W, padx=4)
     
-    #Set Frequency----------------------------------------------
+    # Set Frequency----------------------------------------------
     frame4 = tk.Frame(self)
     btn_set = tk.Button(frame4, text="SetFreq", command=self.op_set)
     lab_setf = tk.Label(frame4, text="Low, High Freq (Khz):")
