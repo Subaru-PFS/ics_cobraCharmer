@@ -168,12 +168,30 @@ class FPGAProtocol(asyncio.Protocol):
         splitAt = self.CAL_HEADER_SIZE + nCobras*self.CAL_ARM_SIZE
         calData, self.data = self.data[self.CAL_HEADER_SIZE:splitAt], self.data[splitAt:]
 
-        self.ioLogger.debug("cal data: %d cobras",
-                            len(calData)/self.CAL_ARM_SIZE)
+        self.logger.info('CMD: cal (%d cobras)' % (nCobras))
+        for c_i in range(nCobras):
+            (flags, thetaRangeLo, thetaRangeHi,
+             phiRangeLo, phiRangeHi) = struct.unpack('>HHHHH',
+                                                     calData[c_i*self.CAL_ARM_SIZE:
+                                                             (c_i + 1)*self.CAL_ARM_SIZE])
+            thetaDir = bool(flags & 1)
+            phiDir = bool(flags & 2)
+            setTheta = bool(flags & 4)
+            setPhi = bool(flags & 8)
+            boardId = (flags >> 4) & 0x7f
+            cobraId = (flags >> 11) & 0x1f
+
+            self.logger.info('    cobra: %2d %2d  Theta: %d %s %0.2f %0.2f  Phi: %d %s %0.2f %0.2f' %
+                             (boardId, cobraId,
+                              setTheta, dirName[thetaDir], get_freq(thetaRangeLo), get_freq(thetaRangeHi),
+                              setPhi, dirName[phiDir], get_freq(phiRangeLo), get_freq(phiRangeHi)))
         self._respond()
 
     def setFreqHandler(self):
-        """ Look for a complete SET FREQUENCY command and process it. """
+        """ Look for a complete SET FREQUENCY command and process it.
+
+        No processing is done
+        """
 
         if len(self.data) < self.SETFREQ_HEADER_SIZE:
             raise IncompleteDataError()
