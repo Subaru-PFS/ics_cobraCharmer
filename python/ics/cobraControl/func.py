@@ -8,6 +8,7 @@ import numpy as np
 from .ethernet import sock
 from .log import full_log, medium_log, short_log
 from .convert import *
+from .cmds import *
 
 CCW_DIR = ('ccw','ccw')
 CW_DIR = ('cw','cw')

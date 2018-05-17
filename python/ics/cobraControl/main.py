@@ -1,5 +1,4 @@
-from ethernet import sock
-#from tests import *
+from .ethernet import sock
 from log import dia_log, short_log, LOGS
 from func import *
 

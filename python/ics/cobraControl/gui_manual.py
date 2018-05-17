@@ -1,18 +1,12 @@
-import tkinter as tk
-from ast import literal_eval as make_tuple
 from time import sleep
 
-from log import short_log, LOGS
-from ethernet import sock
-import main
-from convert import get_per
-from func import *
+import tkinter as tk
 from tkinter import messagebox
 
-# Whether we were able to connect
-#CONNECTED = 0
-    
-
+from .ethernet import sock
+from .log import short_log, LOGS
+from .convert import get_per
+from .func import *
 
 class App(tk.Frame):
   def __init__(self, *args, **kwargs):

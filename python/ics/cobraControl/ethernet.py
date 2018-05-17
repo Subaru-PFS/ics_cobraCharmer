@@ -4,7 +4,6 @@ import struct
 
 from .hexprint import arr2Hex
 
-
 def bytesAsString(msg, type=''):
     if type == 'h':
         s = arr2Hex(msg, seperator='')

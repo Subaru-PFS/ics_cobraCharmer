@@ -1,7 +1,5 @@
 from array import array
 
-from log import full_log, dia_log, short_log
-
 N_BOARDS = 84
 COBRAS_PER_BOARD = 29
 OPCODES = {'run':1,'cal':2,'set':3,'hk':4,'pow':5,'dia':6,'exit':7}
