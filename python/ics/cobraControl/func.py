@@ -16,17 +16,36 @@ EN_BOTH = (True, True)
 EN_M0 = (True, False)
 EN_M1 = (False, True)
 
+NCOBRAS_MOD = 57
+NCOBRAS_BRD = 29
+NMODULES = 42
+NBOARDS = NMODULES*2
+
 #
 eth_hex_logger = None
 
 # Classes----------------------------------------------------------------------
 class Cobra:
-    def __init__(self, board, num):
-        self.board = board
-        self.cobra = num
-        self.p = None #Params
+    def __init__(self, module, cobraNum):
+        if module < 1 or module > NMODULES:
+            raise ValueError(f'invalid module number (%s): must be 1..{NMODULES}')
+        if cobraNum < 1 or cobraNum > NCOBRAS_MOD:
+            raise ValueError(f'invalid cobra number (%s): must be 1..{NCOBRAS_MOD}')
+
+        self.module = module
+        self.cobraNum = cobraNum
+
+        # The FPGA uses board numbers, splitting odd and even cobras.
+        # Module, board, and cobra numbering is 1-indexed
+        #
+        self.board = (module - 1)*2 + 1
+        if (cobraNum-1)%2 == 1:
+            self.board += 1
+        self.cobra = (cobraNum-1)//2 + 1
+
+        self.p = None # Params
     def stringify(self):
-        s = '(C%s '%self.cobra + self.p.stringify() + ')'
+        s = '(C%s,%s ' % (self.board,self.cobra) + self.p.stringify() + ')'
         return s
     def typeMatch(self, type):
         if self.p is None:
@@ -51,8 +70,10 @@ class CalParams:
         s += 'm1:%s:%s' %(self.dir[1], str(self.m1Range)) if self.en[1] else ''
         return s
     def toList(self, board, cnum):
+        assert (board>=1 and board<=NBOARDS  and cnum>=1 and cnum<=NCOBRAS_BRD), f'{board},{cnum}'
+
         c = 0x0000 | (self.dir[0]=='ccw') | ((self.dir[1]=='ccw')<<1) | \
-                (self.en[0]<<2) | (self.en[1]<<3) | (board<<4) | (cnum%30<<11)
+                (self.en[0]<<2) | (self.en[1]<<3) | (board<<4) | (cnum<<11)
                 
         p = [c>>8, c%256, self.m0Range[0]>>8, self.m0Range[0]%256, \
                 self.m0Range[1]>>8, self.m0Range[1]%256, self.m1Range[0]>>8, \
@@ -100,8 +121,9 @@ class RunParams:
                 str(self.sleeps), str(self.dir) )
         return s
     def toList(self, board, cnum):
+        assert (board>=1 and board<=NBOARDS  and cnum>=1 and cnum<=NCOBRAS_BRD), f'{board},{cnum}'
         c = 0x0000 | (self.dir[0]=='ccw') | ((self.dir[1]=='ccw')<<1) | \
-                (self.en[0]<<2) | (self.en[1]<<3) | (board<<4) | (cnum%30<<11)
+                (self.en[0]<<2) | (self.en[1]<<3) | (board<<4) | (cnum<<11)
         p = [c>>8, c%256, self.pulses[0]>>8, self.pulses[0]%256, self.steps[0]>>8, \
                 self.steps[0]%256, self.sleeps[0]>>8, self.sleeps[0]%256, \
                 self.pulses[1]>>8, self.pulses[1]%256, self.steps[1]>>8, \
@@ -119,8 +141,10 @@ class SetParams:
         s += 'm0:%s m1:%s' %(str(self.m0Per),str(self.m1Per))
         return s
     def toList(self, board, cnum):
+        assert (board>=1 and board<=NBOARDS  and cnum>=1 and cnum<=NCOBRAS_BRD), f'{board},{cnum}'
+
         c = 0x0000 | (self.en[0]) | (self.en[1]<<1) | \
-                (board<<4) | (cnum%30<<11)
+                (board<<4) | (cnum<<11)
         p = [c>>8, c%256, self.m0Per>>8, self.m0Per%256, \
                 self.m1Per>>8, self.m1Per%256 ]
         return p

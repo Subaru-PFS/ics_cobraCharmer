@@ -30,7 +30,7 @@ class App(tk.Frame):
     
     # Board Info-----------------------------------------------
     frame2 = tk.Frame(self)
-    lab_brd = tk.Label(frame2, text="Board:")
+    lab_brd = tk.Label(frame2, text="Module:")
     lab_cob1 = tk.Label(frame2, text="Cobra Start:")
     lab_cob2 = tk.Label(frame2, text="Cobra end:")
     self.ent_brd = tk.Entry(frame2)
@@ -48,7 +48,7 @@ class App(tk.Frame):
     
     self.ent_brd.insert(10, '1')
     self.ent_cob1.insert(10, '1')
-    self.ent_cob2.insert(10, '29')
+    self.ent_cob2.insert(10, '57')
     self.ent_brd.config(width=5)
     self.ent_cob1.config(width=5)
     self.ent_cob2.config(width=5)
@@ -195,7 +195,7 @@ class App(tk.Frame):
     
   def op_hk(self):
     board = int( self.ent_brd.get() )
-    cobras = [ Cobra(board,i) for i in range(1, 30) ]
+    cobras = [ Cobra(board,i) for i in range(1, 58) ]
     for c in cobras:
         c.p = HkParams(m0=(0,1000), m1=(0,1000))
     er = HK( cobras, self.hkexport.get() )
