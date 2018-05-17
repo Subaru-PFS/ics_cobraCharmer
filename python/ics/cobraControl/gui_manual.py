@@ -180,7 +180,7 @@ class App(tk.Frame):
     self.txtLog.config(state=tk.DISABLED)
     
   def connect(self):
-    main.setup()
+    setup()
     self.update()
     self.msg_str.set("Connected.")
     
@@ -260,23 +260,37 @@ class App(tk.Frame):
     self.update()
 
 
+ctrl_ip = '127.0.0.1'
+lcl_ip = '127.0.0.1'
+port = 4001
+
+def setup(ip=ctrl_ip):
+    # Setup the logs
+    for i in LOGS:
+        i.setup()
+
+    # Socket connect
+    sock.connect(ctrl_ip, port, short_log)
+
+
+def closure():
+    # close the logs
+    for i in LOGS:
+        i.close()
+
+    # socket close
+    sock.close(short_log)
 
 root = tk.Tk()
 
-
 # assign closing routine
 def on_close():
-    main.closure() 
+    closure()
     root.destroy()
 root.protocol("WM_DELETE_WINDOW", on_close)
-
-
 
 app = App(root)
 app.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 root.wm_title("Driver Board GUI")
 
 root.mainloop()
-
-
-
