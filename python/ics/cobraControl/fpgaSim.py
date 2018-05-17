@@ -216,12 +216,10 @@ class FPGAProtocol(asyncio.Protocol):
             boardId = (flags >> 4) & 0x7f
             cobraId = (flags >> 11) & 0x1f
 
-            self.logger.info('    cobra %2d, %2d Theta: %d, 0x%04x (%0.2f) Phi: %d, 0x%04x (%0.2f)' %
+            self.logger.info('    cobra: %2d %2d Theta: %d %0.2f Phi: %d %0.2f' %
                              (boardId, cobraId,
-                              setTheta, thetaPeriod,
-                              get_freq(thetaPeriod),
-                              setPhi, phiPeriod,
-                              get_freq(phiPeriod)))
+                              setTheta, get_freq(thetaPeriod),
+                              setPhi, get_freq(phiPeriod)))
         self._respond()
 
     def housekeepingHandler(self):
