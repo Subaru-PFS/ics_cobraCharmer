@@ -2,8 +2,7 @@ import array
 import socket
 import struct
 
-from log import Logger
-from hexprint import num2Hex, arr2Hex
+from .hexprint import arr2Hex
 
 
 def bytesAsString(msg, type=''):
