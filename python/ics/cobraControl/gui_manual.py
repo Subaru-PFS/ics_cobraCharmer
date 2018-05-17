@@ -208,10 +208,10 @@ class App(tk.Frame):
     c_low = int( self.ent_cob1.get() )
     c_high = int( self.ent_cob2.get() )
     cobras = [ Cobra(board,i) for i in range(c_low, c_high+1) ]
-    m0_low = get_per( float(self.ent_cal1_high.get()) )
-    m0_high = get_per( float(self.ent_cal1_low.get()) )
-    m1_low = get_per( float(self.ent_cal2_high.get()) )
-    m1_high = get_per( float(self.ent_cal2_low.get()) )
+    m0_low = get_per( float(self.ent_cal1_low.get()) )
+    m0_high = get_per( float(self.ent_cal1_high.get()) )
+    m1_low = get_per( float(self.ent_cal2_low.get()) )
+    m1_high = get_per( float(self.ent_cal2_high.get()) )
     m0rng = (m0_low, m0_high)
     m1rng = (m1_low, m1_high)
     spin = CW_DIR if self.m_cw.get() else CCW_DIR
