@@ -12,6 +12,21 @@ class IncompleteDataError(Exception):
     pass
 
 class FPGAProtocol(asyncio.Protocol):
+    """
+    A simulator for the PFI FPGA board.
+
+    The FPGA implements six commands: move, calibrate, setFrequencies,
+    getHousekeeping, reset, and diagnostic. We accept all of these,
+    neatly log the contents, and generate fake-ish responses when
+    required.
+
+    The commands are binary encoded with a 6-10 byte header and an
+    optional body. For cross-reference with the ics_mps_prod and
+    ics_cobraControl packages, I'll use the original canonical names.
+
+
+    """
+
     RUN_HEADER_SIZE = 10
     RUN_ARM_SIZE = 14
     POWER_HEADER_SIZE = 8
@@ -20,7 +35,15 @@ class FPGAProtocol(asyncio.Protocol):
     CAL_HEADER_SIZE = 8
     CAL_ARM_SIZE = 10
 
-    def __init__(self, fpga, debug):
+    def __init__(self, fpga=None, debug=False):
+        """ Accept a new connection. Print out commands and optionally forwar to real FPGA.
+
+        Args:
+          fpga (str) : if set, the IP address/name of a real FPGA. We then forward all complete commands.
+                       NOT YET IMPLEMENTED.
+          debug (bool) : Whether to be chatty.
+        """
+
         self.logger = logging.getLogger('fpga')
         self.ioLogger = logging.getLogger('fpgaIO')
         self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
@@ -33,7 +56,8 @@ class FPGAProtocol(asyncio.Protocol):
                          4: self.housekeepingHandler,
                          5: self.powerHandler,
                          6: self.diagHandler,
-                         7: self.exitHandler,}
+                         7: self.flushHandler,
+                         8: self.exitHandler,}
 
         self.resetBuffer()
         self.pleaseFinishLoop = False
@@ -80,7 +104,15 @@ class FPGAProtocol(asyncio.Protocol):
                                 self.cmdCode, self.cmdNum, len(self.data))
 
     def runHandler(self):
-        """ Look for a complete RUN command and process it. """
+        """ Look for a complete RUN command and process it.
+
+        Run commands have a header and a body.
+
+        Header:
+          - nCobras    -- the number of cobras in the body.
+          - timeLimit  -- the number of msec to ?? for.
+          - interleave --
+        """
 
         if len(self.data) < self.RUN_HEADER_SIZE:
             raise IncompleteDataError()
@@ -196,10 +228,15 @@ class FPGAProtocol(asyncio.Protocol):
         self.pleaseFinishLoop = True
         self.resetBuffer()
 
+    def flushHandler(self):
+        self.resetBuffer()
+
+        self._respond()
+
     def _respond(self):
         noError = bytes([self.cmdCode, self.cmdNum, 0,0,0,0])
         self.transport.write(noError)
-        self.transport.write(noError)
+        self.transport.write(noError)  # WHY two copies ?!?
 
 def main():
     parser = argparse.ArgumentParser('fpgaSim')
