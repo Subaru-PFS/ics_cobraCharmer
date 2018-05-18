@@ -240,34 +240,33 @@ def run(cobras, thetaSteps, phiSteps, thetaPeriods=None, phiPeriods=None, dirs=N
 
 
 # Test Functions-------------------------------------------------------------
-def POW(sec_pwr=255):
+def POW(sectors=0x3f):
     short_log.log("--- POWER ---")
     
     sectors_off = []
     for i in range(0,6):
-        if not sec_pwr & (0x01 << i):
+        if not sectors & (0x01 << i):
             sectors_off.append(i)
     
     medium_log.log("Sectors Without Power: %s" %sectors_off)
     
-    cmd = CMD_pow(sec_pwr, 0)
+    cmd = CMD_pow(sectors, 0)
     sock.send(cmd, eth_hex_logger, 'h')
     resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
     error = tlm_chk(resp)
     return error
     
-def RST():
+def RST(sectors=0x3f):
     short_log.log("--- RESET ---")
-    sec_rst = 255
-    
+
     sectors_reseting = []
     for i in range(0,6):
-        if sec_rst & (0x01 << i):
+        if sectors & (0x01 << i):
             sectors_reseting.append(i)
     
     medium_log.log("Sectors Reseting: %s" %sectors_reseting)
     
-    cmd = CMD_pow(255, sec_rst)
+    cmd = CMD_pow(255, sectors)
     sock.send(cmd, eth_hex_logger, 'h')
     resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
     error = tlm_chk(resp)
