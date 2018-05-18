@@ -351,7 +351,7 @@ def RUN( cobras, timeout=0, inter=0 ):
             t1 = (c.p.steps[1]+c.p.sleeps[1])*c.p.pulses[1]
             tCob.append( max(t0,t1) )
         timeout = math.ceil( 1000 + 20*len(cobras)*(max( tCob )/1000) )
-        
+        timeout = min(timeout, 2**16-1)
     # Get interleave by finding longest pulsetime
     if inter == 0:
         puCob = []
