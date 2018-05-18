@@ -260,7 +260,7 @@ class App(tk.Frame):
     self.update()
 
 
-ctrl_ip = '127.0.0.1'
+ctrl_ip = 'fpga'
 lcl_ip = '127.0.0.1'
 port = 4001
 
