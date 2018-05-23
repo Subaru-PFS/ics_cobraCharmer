@@ -4,7 +4,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = python -msphinx
-SPHINXPROJ    = ics_cobraControl
+SPHINXPROJ    = ics_cobraCharmer
 SOURCEDIR     = .
 BUILDDIR      = _build
 

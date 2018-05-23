@@ -22,7 +22,7 @@ class FPGAProtocol(asyncio.Protocol):
 
     The commands are binary encoded with a 6-10 byte header and an
     optional body. For cross-reference with the ics_mps_prod and
-    ics_cobraControl packages, I'll use the original canonical names.
+    ics_cobraCharmer packages, I'll use the original canonical names.
 
 
     """

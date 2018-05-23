@@ -2,9 +2,8 @@ from importlib import reload
 
 import numpy as np
 
-from ics.cobraControl import ethernet
-from ics.cobraControl import func, cmds
-from ics.cobraControl import convert
+from ics.cobraCharmer import ethernet
+from ics.cobraCharmer import func
 
 class PFI(object):
     CW = 1
@@ -51,7 +50,7 @@ class PFI(object):
 
     def _periodToFreq(self, freq):
         """ Convert 60ns ticks to a frequency """
-        return  (16e3 / per) if (per>=1) else 0
+        return (16e3/freq) if (freq >= 1) else 0
 
     def _mapCobraIndex(self, cobra):
         """ Convert our module + cobra to global cobra index for the calibration product. """

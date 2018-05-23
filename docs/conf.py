@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# ics_cobraControl documentation build configuration file, created by
+# ics_cobraCharmer documentation build configuration file, created by
 # sphinx-quickstart on Wed May 16 21:23:56 2018.
 #
 # This file is execfile()d with the current directory set to its
@@ -52,7 +52,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = 'ics_cobraControl'
+project = 'ics_cobraCharmer'
 copyright = '2018, PFS'
 author = 'PFS'
 
@@ -121,7 +121,7 @@ html_sidebars = {
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'ics_cobraControldoc'
+htmlhelp_basename = 'ics_cobraCcharmerdoc'
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -148,7 +148,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'ics_cobraControl.tex', 'ics\\_cobraControl Documentation',
+    (master_doc, 'ics_cobraCharmer.tex', 'ics\\_cobraControl Documentation',
      'PFS', 'manual'),
 ]
 
@@ -158,7 +158,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'ics_cobracontrol', 'ics_cobraControl Documentation',
+    (master_doc, 'ics_cobracontrol', 'ics_cobraCharmer Documentation',
      [author], 1)
 ]
 
@@ -169,8 +169,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'ics_cobraControl', 'ics_cobraControl Documentation',
-     author, 'ics_cobraControl', 'One line description of project.',
+    (master_doc, 'ics_cobraCharmer', 'ics_cobraControl Documentation',
+     author, 'ics_cobraCharmer', 'One line description of project.',
      'Miscellaneous'),
 ]
 
