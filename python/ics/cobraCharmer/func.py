@@ -3,10 +3,12 @@ import os.path
 import csv
 import time
 
-from cmds import *
-from ethernet import sock
-from log import full_log, medium_log, short_log
-from convert import *
+import numpy as np
+
+from .ethernet import sock
+from .log import full_log, medium_log, short_log
+from .convert import *
+from .cmds import *
 
 CCW_DIR = ('ccw','ccw')
 CW_DIR = ('cw','cw')
@@ -14,17 +16,36 @@ EN_BOTH = (True, True)
 EN_M0 = (True, False)
 EN_M1 = (False, True)
 
+NCOBRAS_MOD = 57
+NCOBRAS_BRD = 29
+NMODULES = 42
+NBOARDS = NMODULES*2
+
 #
 eth_hex_logger = None
 
 # Classes----------------------------------------------------------------------
 class Cobra:
-    def __init__(self, board, num):
-        self.board = board
-        self.cobra = num
-        self.p = None #Params
+    def __init__(self, module, cobraNum):
+        if module < 1 or module > NMODULES:
+            raise ValueError(f'invalid module number (%s): must be 1..{NMODULES}')
+        if cobraNum < 1 or cobraNum > NCOBRAS_MOD:
+            raise ValueError(f'invalid cobra number (%s): must be 1..{NCOBRAS_MOD}')
+
+        self.module = module
+        self.cobraNum = cobraNum
+
+        # The FPGA uses board numbers, splitting odd and even cobras.
+        # Module, board, and cobra numbering is 1-indexed
+        #
+        self.board = (module - 1)*2 + 1
+        if (cobraNum-1)%2 == 1:
+            self.board += 1
+        self.cobra = (cobraNum-1)//2 + 1
+
+        self.p = None # Params
     def stringify(self):
-        s = '(C%s '%self.cobra + self.p.stringify() + ')'
+        s = '(C%s,%s ' % (self.board,self.cobra) + self.p.stringify() + ')'
         return s
     def typeMatch(self, type):
         if self.p is None:
@@ -49,8 +70,10 @@ class CalParams:
         s += 'm1:%s:%s' %(self.dir[1], str(self.m1Range)) if self.en[1] else ''
         return s
     def toList(self, board, cnum):
+        assert (board>=1 and board<=NBOARDS  and cnum>=1 and cnum<=NCOBRAS_BRD), f'{board},{cnum}'
+
         c = 0x0000 | (self.dir[0]=='ccw') | ((self.dir[1]=='ccw')<<1) | \
-                (self.en[0]<<2) | (self.en[1]<<3) | (board<<4) | (cnum%30<<11)
+                (self.en[0]<<2) | (self.en[1]<<3) | (board<<4) | (cnum<<11)
                 
         p = [c>>8, c%256, self.m0Range[0]>>8, self.m0Range[0]%256, \
                 self.m0Range[1]>>8, self.m0Range[1]%256, self.m1Range[0]>>8, \
@@ -98,8 +121,9 @@ class RunParams:
                 str(self.sleeps), str(self.dir) )
         return s
     def toList(self, board, cnum):
+        assert (board>=1 and board<=NBOARDS  and cnum>=1 and cnum<=NCOBRAS_BRD), f'{board},{cnum}'
         c = 0x0000 | (self.dir[0]=='ccw') | ((self.dir[1]=='ccw')<<1) | \
-                (self.en[0]<<2) | (self.en[1]<<3) | (board<<4) | (cnum%30<<11)
+                (self.en[0]<<2) | (self.en[1]<<3) | (board<<4) | (cnum<<11)
         p = [c>>8, c%256, self.pulses[0]>>8, self.pulses[0]%256, self.steps[0]>>8, \
                 self.steps[0]%256, self.sleeps[0]>>8, self.sleeps[0]%256, \
                 self.pulses[1]>>8, self.pulses[1]%256, self.steps[1]>>8, \
@@ -117,8 +141,10 @@ class SetParams:
         s += 'm0:%s m1:%s' %(str(self.m0Per),str(self.m1Per))
         return s
     def toList(self, board, cnum):
+        assert (board>=1 and board<=NBOARDS  and cnum>=1 and cnum<=NCOBRAS_BRD), f'{board},{cnum}'
+
         c = 0x0000 | (self.en[0]) | (self.en[1]<<1) | \
-                (board<<4) | (cnum%30<<11)
+                (board<<4) | (cnum<<11)
         p = [c>>8, c%256, self.m0Per>>8, self.m0Per%256, \
                 self.m1Per>>8, self.m1Per%256 ]
         return p
@@ -141,37 +167,106 @@ def cobrasAreType(cobras, type='Hk'):
         if( not c.typeMatch(type) ):
             return False
     return True
- 
+
+
+def calibrate(cobras, thetaLow=60.4, thetaHigh=70.3, phiLow=94.4, phiHigh=108.2, clockwise=True):
+    """ calibrate a set of cobras.
+
+    Args:
+    thetaLow, thetaHigh -
+    phiLow, phiHigh -
+
+    """
+
+    spin = CW_DIR if clockwise else CCW_DIR
+    for c in cobras:
+        c.p = CalParams(m0=(thetaLow,thetaHigh),
+                        m1=(phiLow, phiHigh), en=(True,True), dir=spin)
+
+    err = CAL(cobras)
+    if err:
+        raise RuntimeError("calibration failed")
+
+def setFreq(cobras, thetaPeriods, phiPeriods):
+    """ set the frequencies for a set of cobras.
+
+    Args:
+
+
+    """
+
+    if (len(cobras) != len(thetaPeriods) or
+        len(cobras) != len(phiPeriods)):
+        raise ValueError("length of all arguments must match")
+
+    for c_i, c in enumerate(cobras):
+        enable = thetaPeriods[c_i] != 0, phiPeriods[c_i] != 0
+
+        c.p = SetParams(p0=thetaPeriods[c_i],
+                        p1=phiPeriods[c_i],
+                        en=enable)
+
+    err = SET(cobras)
+    if err:
+        raise RuntimeError("set frequency failed")
+
+def run(cobras, thetaSteps, phiSteps, thetaPeriods=None, phiPeriods=None, dirs=None):
+    """ Moves the given cobras
+
+    Args:
+       theta ([int]): steps to move the theta motors
+       phi ([int]): steps to move the theta motors
+
+    """
+
+    if np.isscalar(thetaSteps):
+        thetaSteps = [thetaSteps]*len(cobras)
+    if np.isscalar(phiSteps):
+        phiSteps = [phiSteps]*len(cobras)
+
+    if (len(cobras) != len(thetaSteps) or
+        len(cobras) != len(phiSteps)):
+        raise ValueError("length of all arguments must match")
+
+    for c_i, c in enumerate(cobras):
+        enable = thetaSteps[c_i] != 0, phiSteps[c_i] != 0
+        c.p = RunParams(pu=(thetaPeriods[c_i], phiPeriods[c_i]),
+                        st=(thetaSteps[c_i], phiSteps[c_i]),
+                        en=enable, dir=dirs)
+
+    err = RUN(cobras)
+    if err:
+        raise RuntimeError("run failed")
+
 
 # Test Functions-------------------------------------------------------------
-def POW(sec_pwr=255):
+def POW(sectors=0x3f):
     short_log.log("--- POWER ---")
     
     sectors_off = []
     for i in range(0,6):
-        if not sec_pwr & (0x01 << i):
+        if not sectors & (0x01 << i):
             sectors_off.append(i)
     
     medium_log.log("Sectors Without Power: %s" %sectors_off)
     
-    cmd = CMD_pow(sec_pwr, 0)
+    cmd = CMD_pow(sectors, 0)
     sock.send(cmd, eth_hex_logger, 'h')
     resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
     error = tlm_chk(resp)
     return error
     
-def RST():
+def RST(sectors=0x3f):
     short_log.log("--- RESET ---")
-    sec_rst = 255
-    
+
     sectors_reseting = []
     for i in range(0,6):
-        if sec_rst & (0x01 << i):
+        if sectors & (0x01 << i):
             sectors_reseting.append(i)
     
     medium_log.log("Sectors Reseting: %s" %sectors_reseting)
     
-    cmd = CMD_pow(255, sec_rst)
+    cmd = CMD_pow(255, sectors)
     sock.send(cmd, eth_hex_logger, 'h')
     resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
     error = tlm_chk(resp)
@@ -219,8 +314,8 @@ def CAL( cobras, timeout=0 ):
     if timeout == 0:
         fRngCob = []
         for c in cobras:
-            f0rng = (c.p.m0Range[1] - c.p.m0Range[0] )
-            f1rng = (c.p.m1Range[1] - c.p.m1Range[0] )
+            f0rng = (c.p.m0Range[0] - c.p.m0Range[1] )
+            f1rng = (c.p.m1Range[0] - c.p.m1Range[1] )
             fRngCob.append( max(f0rng, f1rng) )
         tPerCobra = int(7.0*max(fRngCob)) # assume <=7ms per freq
         timeout = math.ceil( 1200 + tPerCobra*len(cobras) )
@@ -239,7 +334,7 @@ def CAL( cobras, timeout=0 ):
         resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
         error |= tlm_chk(resp)
     return error
-    
+
 def RUN( cobras, timeout=0, inter=0 ):
     if not cobrasAreType(cobras, 'Run'):
         return True # error
@@ -255,7 +350,7 @@ def RUN( cobras, timeout=0, inter=0 ):
             t1 = (c.p.steps[1]+c.p.sleeps[1])*c.p.pulses[1]
             tCob.append( max(t0,t1) )
         timeout = math.ceil( 1000 + 20*len(cobras)*(max( tCob )/1000) )
-        
+        timeout = min(timeout, 2**16-1)
     # Get interleave by finding longest pulsetime
     if inter == 0:
         puCob = []
@@ -299,6 +394,12 @@ def SET( cobras ):
         error |= tlm_chk(resp)
     return error
 
+def EXIT():
+    short_log.log("--- EXIT FPGA ---")
+    cmd = CMD_exit()
+    sock.send(cmd, eth_hex_logger, 'h')
+
+    return True
 
 # CMD Response Parsing Functions-----------------------------------------------
 def tlm_chk(data):

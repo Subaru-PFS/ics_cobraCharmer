@@ -51,6 +51,6 @@ def get_freq( per ):
     
 def get_per( freq ):
     ''' Converts a frequency in Khz to number of 60ns periods '''
-    per = round(16e3 / (freq))
+    per = int(round(16e3 / (freq)))
     return per
    

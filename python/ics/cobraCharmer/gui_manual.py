@@ -1,17 +1,12 @@
-import tkinter as tk
-from ast import literal_eval as make_tuple
 from time import sleep
 
-from log import short_log, LOGS
-from ethernet import sock
-import main
-from convert import get_per
-from func import *
+import tkinter as tk
+from tkinter import messagebox
 
-# Whether we were able to connect
-#CONNECTED = 0
-    
-
+from .ethernet import sock
+from .log import short_log, LOGS
+from .convert import get_per
+from .func import *
 
 class App(tk.Frame):
   def __init__(self, *args, **kwargs):
@@ -21,22 +16,21 @@ class App(tk.Frame):
 
     # Power Button----------------------------------
     frame1 = tk.Frame(self)
+    self.hkexport = tk.IntVar()
     btn_cnct = tk.Button(frame1, text="Connect", command=self.connect)
-    btn_pwron = tk.Button(frame1, text="Pwr On", command=self.op_powon)
-    btn_pwroff = tk.Button(frame1, text="Pwr Off", command=self.op_powoff)
-    btn_rst = tk.Button(frame1, text="Reset", command=self.op_reset)
-    btn_hk = tk.Button(frame1, text="Board Info", command=self.op_hk)
+    btn_rst = tk.Button(frame1, text="Power", command=self.op_reset)
+    btn_hk = tk.Button(frame1, text="Housekeeping", command=self.op_hk)
+    chk_hkexport = tk.Checkbutton(frame1, text="Export Housekeeping", variable=self.hkexport)
     btn_cnct.pack(side="left", fill=None, expand=False)
-    btn_pwron.pack(side="left", fill=None, expand=False)
-    btn_pwroff.pack(side="left", fill=None, expand=False)
     btn_rst.pack(side="left", fill=None, expand=False)
     btn_hk.pack(side="left", fill=None, expand=False)
+    chk_hkexport.pack(side="left", fill=None, expand=False)
     
     frame1.grid(row=1, sticky=tk.W, padx=4)
     
     # Board Info-----------------------------------------------
     frame2 = tk.Frame(self)
-    lab_brd = tk.Label(frame2, text="Board:")
+    lab_brd = tk.Label(frame2, text="Module:")
     lab_cob1 = tk.Label(frame2, text="Cobra Start:")
     lab_cob2 = tk.Label(frame2, text="Cobra end:")
     self.ent_brd = tk.Entry(frame2)
@@ -54,7 +48,7 @@ class App(tk.Frame):
     
     self.ent_brd.insert(10, '1')
     self.ent_cob1.insert(10, '1')
-    self.ent_cob2.insert(10, '29')
+    self.ent_cob2.insert(10, '57')
     self.ent_brd.config(width=5)
     self.ent_cob1.config(width=5)
     self.ent_cob2.config(width=5)
@@ -74,7 +68,7 @@ class App(tk.Frame):
     
     frame3.grid(row=3, sticky=tk.W, padx=4)
     
-    #Set Frequency----------------------------------------------
+    # Set Frequency----------------------------------------------
     frame4 = tk.Frame(self)
     btn_set = tk.Button(frame4, text="SetFreq", command=self.op_set)
     lab_setf = tk.Label(frame4, text="Low, High Freq (Khz):")
@@ -125,7 +119,7 @@ class App(tk.Frame):
     # Run--------------------------------------------------------
     frame7 = tk.Frame(self)
     btn_run = tk.Button(frame7, text="Run", command=self.op_run)
-    lab_run_time = tk.Label(frame7, text="Time(uSec):")
+    lab_run_time = tk.Label(frame7, text="Time(mSec):")
     lab_run_steps = tk.Label(frame7, text="Steps:")
     self.ent_run_time = tk.Entry(frame7)
     self.ent_run_steps = tk.Entry(frame7)
@@ -138,7 +132,7 @@ class App(tk.Frame):
     
     frame7.grid(row=7, sticky=tk.W, padx=4)
     
-    self.ent_run_time.insert(10, "70")
+    self.ent_run_time.insert(10, "0.07")
     self.ent_run_steps.insert(10, "50")
     self.ent_run_time.config(width=5)
     self.ent_run_steps.config(width=5)
@@ -186,27 +180,9 @@ class App(tk.Frame):
     self.txtLog.config(state=tk.DISABLED)
     
   def connect(self):
-    main.setup()
+    setup()
     self.update()
     self.msg_str.set("Connected.")
-    
-  def op_powon(self):
-    er = POW(255)
-    if not er:
-        sleep(0.8)
-        DIA()
-    txt = "Power Up Error!" if er else "Power Up Succeeded."
-    self.msg_str.set(txt)
-    self.update()
-    
-  def op_powoff(self):
-    er = POW(0)
-    if not er:
-        sleep(0.8)
-        DIA()
-    txt = "Power Off Error!" if er else "Power Off Succeeded."
-    self.msg_str.set(txt)
-    self.update()
     
   def op_reset(self):
     er = RST()
@@ -217,13 +193,12 @@ class App(tk.Frame):
     self.msg_str.set(txt)
     self.update()
     
-    
   def op_hk(self):
     board = int( self.ent_brd.get() )
-    cobras = [ Cobra(board,i) for i in range(1, 30) ]
+    cobras = [ Cobra(board,i) for i in range(1, 58) ]
     for c in cobras:
         c.p = HkParams(m0=(0,1000), m1=(0,1000))
-    er = HK( cobras )    
+    er = HK( cobras, self.hkexport.get() )
     txt = "Hk Error!" if er else "Hk Ran Successfully."
     self.msg_str.set(txt)
     self.update()
@@ -233,10 +208,10 @@ class App(tk.Frame):
     c_low = int( self.ent_cob1.get() )
     c_high = int( self.ent_cob2.get() )
     cobras = [ Cobra(board,i) for i in range(c_low, c_high+1) ]
-    m0_low = get_per( float(self.ent_cal1_high.get()) )
-    m0_high = get_per( float(self.ent_cal1_low.get()) )
-    m1_low = get_per( float(self.ent_cal2_high.get()) )
-    m1_high = get_per( float(self.ent_cal2_low.get()) )
+    m0_low = get_per( float(self.ent_cal1_low.get()) )
+    m0_high = get_per( float(self.ent_cal1_high.get()) )
+    m1_low = get_per( float(self.ent_cal2_low.get()) )
+    m1_high = get_per( float(self.ent_cal2_high.get()) )
     m0rng = (m0_low, m0_high)
     m1rng = (m1_low, m1_high)
     spin = CW_DIR if self.m_cw.get() else CCW_DIR
@@ -269,7 +244,10 @@ class App(tk.Frame):
     c_low = int( self.ent_cob1.get() )
     c_high = int( self.ent_cob2.get() )
     cobras = [ Cobra(board,i) for i in range(c_low, c_high+1) ]
-    rtime = int( self.ent_run_time.get() )
+    rtime = int( 1000 * float(self.ent_run_time.get()) )
+    if rtime < 15 or rtime > 140:
+        messagebox.showerror("Error", "Please enter a time between 0.015 and 0.140 mSec")
+        return
     steps = int( self.ent_run_steps.get() )
     spin = CW_DIR if self.m_cw.get() else CCW_DIR
     en = (self.m1_en.get(), self.m2_en.get())
@@ -282,23 +260,37 @@ class App(tk.Frame):
     self.update()
 
 
+ctrl_ip = 'fpga'
+lcl_ip = '127.0.0.1'
+port = 4001
+
+def setup(ip=ctrl_ip):
+    # Setup the logs
+    for i in LOGS:
+        i.setup()
+
+    # Socket connect
+    sock.connect(ctrl_ip, port, short_log)
+
+
+def closure():
+    # close the logs
+    for i in LOGS:
+        i.close()
+
+    # socket close
+    sock.close(short_log)
 
 root = tk.Tk()
 
-
 # assign closing routine
 def on_close():
-    main.closure() 
+    closure()
     root.destroy()
 root.protocol("WM_DELETE_WINDOW", on_close)
-
-
 
 app = App(root)
 app.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 root.wm_title("Driver Board GUI")
 
 root.mainloop()
-
-
-
