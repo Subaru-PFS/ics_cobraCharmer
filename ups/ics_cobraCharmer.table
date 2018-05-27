@@ -1,4 +1,4 @@
 setupRequired(ics_cobraOps)
 
-pathAppend(PATH, ${PRODUCT_DIR)/bin)
+pathAppend(PATH, ${PRODUCT_DIR}/bin)
 pathPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
