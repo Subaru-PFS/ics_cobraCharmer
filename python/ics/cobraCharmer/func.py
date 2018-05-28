@@ -431,8 +431,8 @@ def hk_chk(data, cobras, export):
     t2 = conv_temp( raw_t2 )
     v = conv_volt( raw_v )
     
-    medium_log.log("%s data tlm rx'd. (Brd:%d) (Temps:%.1fC,%.1fC) (Voltage:%.3fV)" \
-            %(CMD_NAMES[op], b, t1, t2, v))
+    medium_log.log("%s data tlm rx'd. (Brd:%d) (code:0x%04x) (Temps:%.1fC,%.1fC) (Voltage:%.3fV)" \
+            %(CMD_NAMES[op], b, code, t1, t2, v))
 
     # Write board number, temps, and voltage to a new .csv file in `log` folder
     if export:
