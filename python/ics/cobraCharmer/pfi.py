@@ -147,12 +147,12 @@ class PFI(object):
                                  dir=dirs1)
         err = func.RUN(cobras)
 
-    def homePhi(self, cobras, nsteps=3000, dir='ccw'):
+    def homePhi(self, cobras, nsteps=5000, dir='ccw'):
         steps = [(0,nsteps)]*len(cobras)
         dirs = [(dir,dir)]*len(cobras)
         self.moveSteps(cobras, steps, dirs)
 
-    def homeTheta(self, cobras, nsteps=6000, dir='ccw'):
+    def homeTheta(self, cobras, nsteps=10000, dir='ccw'):
         steps = [(nsteps,0)]*len(cobras)
         dirs = [(dir,dir)]*len(cobras)
         self.moveSteps(cobras, steps, dirs)
