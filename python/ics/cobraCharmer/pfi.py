@@ -73,7 +73,7 @@ class PFI(object):
             c.p = func.SetParams(p0=thetaPer, p1=phiPer, en=(True, True))
         err = func.SET(cobras)
 
-    def moveAllThetaPhi(self, cobras, thetaMove, phiMove, phiHome='ccw'):
+    def moveAllThetaPhi(self, cobras, thetaMove, phiMove):
         nCobras = self.calibModel.nCobras
 
         phiHomes = np.zeros(nCobras)
@@ -85,77 +85,83 @@ class PFI(object):
         print('thetaSteps: ', thetaSteps)
         print('phiSteps: ', phiSteps)
 
-        stepMoves = list(zip(thetaSteps.tolist(), phiSteps.tolist()))
-
         cIdx = [self._mapCobraIndex(c) for c in cobras]
-        cSteps = [stepMoves[i] for i in cIdx]
+        cThetaSteps = thetaSteps[cIdx]
+        cPhiSteps = phiSteps[cIdx]
 
-        self.moveSteps(cobras, cSteps, [('cw', 'cw')]*len(cIdx))
+        self.moveSteps(cobras, cThetaSteps, cPhiSteps, [('cw', 'cw')]*len(cIdx))
 
-    def moveAllSteps(self, cobras, steps, dirs):
-        allSteps = [steps]*len(cobras)
+    def moveAllSteps(self, cobras, thetaSteps, phiSteps, dirs):
+        thetaAllSteps = np.zeros(len(cobras)) + thetaSteps
+        phiAllSteps = np.zeros(len(cobras)) + phiSteps
         allDirs = [dirs]*len(cobras)
 
-        self.moveSteps(cobras, allSteps, allDirs)
+        self.moveSteps(cobras, thetaAllSteps, phiAllSteps, allDirs)
 
-    def moveSteps(self, cobras, steps, dirs, waitTimes=None):
+    def moveSteps(self, cobras, thetaSteps, phiSteps, dirs, waitThetaSteps=None, waitPhiSteps=None):
 
-        if len(cobras) != len(steps):
-            raise RuntimeError("number of steps must match number of cobras")
+        if len(cobras) != len(thetaSteps):
+            raise RuntimeError("number of theta steps must match number of cobras")
+        if len(cobras) != len(phiSteps):
+            raise RuntimeError("number of phi steps must match number of cobras")
         if len(cobras) != len(dirs):
             raise RuntimeError("number of directions must match number of cobras")
-        if waitTimes is not None and len(cobras) != len(waitTimes):
-            raise RuntimeError("number of waitTimes must match number of cobras")
+        if waitThetaSteps is not None and len(cobras) != len(waitThetaSteps):
+            raise RuntimeError("number of waitThetaSteps must match number of cobras")
+        if waitPhiSteps is not None and len(cobras) != len(waitPhiSteps):
+            raise RuntimeError("number of waitPhiSteps must match number of cobras")
 
         model = self.calibModel
 
         for c_i, c in enumerate(cobras):
-            steps1 = int(steps[c_i][0]), int(steps[c_i][1])
+            steps1 = int(thetaSteps[c_i]), int(phiSteps[c_i])
             dirs1 = dirs[c_i]
             en = (steps1[0] != 0, steps1[1] != 0)
             cobraId = self._mapCobraIndex(c)
 
             if dirs1[0] == 'cw':
                 ontime1 = model.motorOntimeFwd1[cobraId]
-                offtime1 = model.motorOfftimeFwd1[cobraId]
             elif dirs1[0] == 'ccw':
                 ontime1 = model.motorOntimeRev1[cobraId]
-                offtime1 = model.motorOfftimeRev1[cobraId]
             else:
                 raise ValueError(f'invalid direction: {dirs1[0]}')
 
             if dirs1[1] == 'cw':
                 ontime2 = model.motorOntimeFwd2[cobraId]
-                offtime2 = model.motorOfftimeFwd2[cobraId]
             elif dirs1[1] == 'ccw':
                 ontime2 = model.motorOntimeRev2[cobraId]
-                offtime2 = model.motorOfftimeRev2[cobraId]
             else:
                 raise ValueError(f'invalid direction: {dirs1[1]}')
 
             # For early-late offsets.
-            if waitTimes is not None:
-                offtime1 = waitTimes[c_i][0]
-                offtime2 = waitTimes[c_i][1]
+            if waitThetaSteps is not None:
+                offtime1 = waitThetaSteps[c_i]
             else:
-                offtime1 = offtime2 = 0
+                offtime1 = 0
+
+            if waitPhiSteps is not None:
+                offtime2 = waitPhiSteps[c_i]
+            else:
+                offtime2 = 0
 
             c.p = func.RunParams(pu=(int(1000*ontime1), int(1000*ontime2)),
                                  st=(steps1),
-                                 sl=(int(1000*offtime1), int(1000*offtime2)),
+                                 sl=(int(offtime1), int(offtime2)),
                                  en=en,
                                  dir=dirs1)
         err = func.RUN(cobras)
 
     def homePhi(self, cobras, nsteps=5000, dir='ccw'):
-        steps = [(0,nsteps)]*len(cobras)
+        thetaSteps = np.zeros(len(cobras))
+        phiSteps = np.zeros(len(cobras)) + nsteps
         dirs = [(dir,dir)]*len(cobras)
-        self.moveSteps(cobras, steps, dirs)
+        self.moveSteps(cobras, thetaSteps, phiSteps, dirs)
 
     def homeTheta(self, cobras, nsteps=10000, dir='ccw'):
-        steps = [(nsteps,0)]*len(cobras)
+        thetaSteps = np.zeros(len(cobras)) + nsteps
+        phiSteps = np.zeros(len(cobras))
         dirs = [(dir,dir)]*len(cobras)
-        self.moveSteps(cobras, steps, dirs)
+        self.moveSteps(cobras, thetaSteps, phiSteps, dirs)
 
     def cobraBySerial(self, serial):
         """ Find a cobra from its serial number. """
@@ -213,4 +219,3 @@ class PFI(object):
             cobras.append(func.Cobra(m, c))
 
         return cobras
-
