@@ -14,6 +14,13 @@ class PFI(object):
     nModules = 42
 
     def __init__(self, fpgaHost='localhost', doConnect=True, doLoadModel=True):
+        """ Initialize a PFI class
+        Args:
+           fpgaHost    - fpga device
+           doConnect   - do connection or not
+           doLoadModel - load data model or not
+        """
+
         self.fpgaHost = fpgaHost
         if doConnect:
             self.connect()
@@ -21,9 +28,11 @@ class PFI(object):
             self.loadModel()
 
     def connect(self):
+        """ Connect to COBRA fpga device """
         ethernet.sock.connect(self.fpgaHost, 4001)
 
     def disconnect(self):
+        """ Disconnect from COBRA fpga device """
         ethernet.sock.close()
         ethernet.sock = ethernet.Sock()
 
@@ -37,7 +46,7 @@ class PFI(object):
 
 
         if filename is None:
-            filename = "/Users/cloomis/Sumire/PFS/git/ics_cobraOps/python/ics/cobraOps/usedXMLFile.xml"
+            filename = "../xml/updatedLinksAndMaps.xml"
 
         self.calibModel = cobraCalib.CobrasCalibrationProduct(filename)
         self.motorMap = cobraMotorMap.MotorMapGroup(self.calibModel.nCobras)
@@ -58,12 +67,15 @@ class PFI(object):
         return ((cobra.module - 1)*self.nCobrasPerModule + cobra.cobraNum-1)
 
     def reset(self, sectors=0x3f):
+        """ Reset COBRA fpga device """
         err = func.RST(sectors)
 
-    def powerCycle(self, sectors=0x3f):
+    def power(self, sectors=0x3f):
+        """ Set COBRA PSU on/off """
         err = func.POW(sectors)
 
     def setFreq(self, cobras):
+        """ Set COBRA motor frequency """
         for c in cobras:
             cobraIdx = self._mapCobraIndex(c)
             thetaPer = self._freqToPeriod(self.calibModel.motorFreq1[cobraIdx]/1000)
@@ -74,6 +86,7 @@ class PFI(object):
         err = func.SET(cobras)
 
     def moveAllThetaPhi(self, cobras, thetaMove, phiMove):
+        """ Move all cobras for an unique theta and phi angles from home """
         nCobras = self.calibModel.nCobras
 
         phiHomes = np.zeros(nCobras)
@@ -82,29 +95,72 @@ class PFI(object):
 
         thetaSteps, phiSteps = self.motorMap.calculateSteps(thetaMoves, phiHomes, phiMoves)
 
-        print('thetaSteps: ', thetaSteps)
-        print('phiSteps: ', phiSteps)
-
         cIdx = [self._mapCobraIndex(c) for c in cobras]
         cThetaSteps = thetaSteps[cIdx]
         cPhiSteps = phiSteps[cIdx]
 
-        self.moveSteps(cobras, cThetaSteps, cPhiSteps, [('cw', 'cw')]*len(cIdx))
+        print('thetaSteps: ', cThetaSteps)
+        print('phiSteps: ', cPhiSteps)
 
-    def moveAllSteps(self, cobras, thetaSteps, phiSteps, dirs):
+        self.moveSteps(cobras, cThetaSteps, cPhiSteps)
+
+    def moveAllSteps(self, cobras, thetaSteps, phiSteps, dirs=None):
+        """ Move all cobras for an unique theta and phi steps """
         thetaAllSteps = np.zeros(len(cobras)) + thetaSteps
         phiAllSteps = np.zeros(len(cobras)) + phiSteps
-        allDirs = [dirs]*len(cobras)
+        if dirs is not None:
+            allDirs = [dirs]*len(cobras)
+        else:
+            allDirs = None
 
         self.moveSteps(cobras, thetaAllSteps, phiAllSteps, allDirs)
 
-    def moveSteps(self, cobras, thetaSteps, phiSteps, dirs, waitThetaSteps=None, waitPhiSteps=None):
+    def moveThetaPhi(self, cobras, thetaMoves, phiMoves, phiFroms=None):
+        """ Move cobras with theta and phi angles
+
+            thetaMoves: A numpy array with theta angles
+            phiMoves: A numpy array with phi angles
+            phiFroms: A numpy array with starting phi positions
+
+        """
+
+        if len(cobras) != len(thetaMoves):
+            raise RuntimeError("number of theta moves must match number of cobras")
+        if len(cobras) != len(phiMoves):
+            raise RuntimeError("number of phi moves must match number of cobras")
+        if phiFroms is not None and len(cobras) != len(phiFroms):
+            raise RuntimeError("number of phi froms must match number of cobras")
+        nCobras = self.calibModel.nCobras
+
+        _phiFroms = np.zeros(nCobras)
+        _phiMoves = np.zeros(nCobras)
+        _thetaMoves = np.zeros(nCobras)
+
+        cIdx = [self._mapCobraIndex(c) for c in cobras]
+        for i, c in enumerate(cIdx):
+            _phiMoves[c] = phiMoves[i]
+            _thetaMoves[c] = thetaMoves[i]
+            if phiFroms != None:
+                _phiFroms[c] = phiFroms[i]
+
+        thetaSteps, phiSteps = self.motorMap.calculateSteps(_thetaMoves, _phiFroms, _phiMoves)
+
+        cThetaSteps = thetaSteps[cIdx]
+        cPhiSteps = phiSteps[cIdx]
+
+        print('thetaSteps: ', cThetaSteps)
+        print('phiSteps: ', cPhiSteps)
+
+        self.moveSteps(cobras, cThetaSteps, cPhiSteps)
+
+    def moveSteps(self, cobras, thetaSteps, phiSteps, dirs=None, waitThetaSteps=None, waitPhiSteps=None):
+        """ Move cobras with theta and phi steps """
 
         if len(cobras) != len(thetaSteps):
             raise RuntimeError("number of theta steps must match number of cobras")
         if len(cobras) != len(phiSteps):
             raise RuntimeError("number of phi steps must match number of cobras")
-        if len(cobras) != len(dirs):
+        if dirs is not None and len(cobras) != len(dirs):
             raise RuntimeError("number of directions must match number of cobras")
         if waitThetaSteps is not None and len(cobras) != len(waitThetaSteps):
             raise RuntimeError("number of waitThetaSteps must match number of cobras")
@@ -114,8 +170,19 @@ class PFI(object):
         model = self.calibModel
 
         for c_i, c in enumerate(cobras):
-            steps1 = int(thetaSteps[c_i]), int(phiSteps[c_i])
-            dirs1 = dirs[c_i]
+            steps1 = int(np.abs(thetaSteps[c_i])), int(np.abs(phiSteps[c_i]))
+            if dirs is not None:
+                dirs1 = dirs[c_i]
+            else:
+                dirs1 = ['', '']
+                if thetaSteps[c_i] >= 0:
+                    dirs1[0] = 'cw'
+                else:
+                    dirs1[0] = 'ccw'
+                if phiSteps[c_i] >= 0:
+                    dirs1[1] = 'cw'
+                else:
+                    dirs1[1] = 'ccw'
             en = (steps1[0] != 0, steps1[1] != 0)
             cobraId = self._mapCobraIndex(c)
 
@@ -156,6 +223,15 @@ class PFI(object):
         phiSteps = np.zeros(len(cobras)) + nsteps
         dirs = [(dir,dir)]*len(cobras)
         self.moveSteps(cobras, thetaSteps, phiSteps, dirs)
+
+    def homePhiSafe(self, cobras, nsteps=5000, dir='ccw', iterations=20):
+        thetaSteps = (np.zeros(len(cobras)) + nsteps) * (0.5 / iterations);
+        phiSteps = (np.zeros(len(cobras)) + nsteps) * (-1.0 / iterations);
+        if dir == 'cw':
+            thetaSteps = -thetaSteps
+            phiSteps = -phiSteps
+        for i in range(iterations):
+            self.moveSteps(cobras, thetaSteps, phiSteps)
 
     def homeTheta(self, cobras, nsteps=10000, dir='ccw'):
         thetaSteps = np.zeros(len(cobras)) + nsteps
