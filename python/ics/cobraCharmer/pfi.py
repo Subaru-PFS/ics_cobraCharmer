@@ -86,14 +86,15 @@ class PFI(object):
         err = func.SET(cobras)
 
     def moveAllThetaPhi(self, cobras, thetaMove, phiMove):
-        """ Move all cobras for an unique theta and phi angles from home """
+        """ Move all cobras by theta and phi angles from home """
         nCobras = self.calibModel.nCobras
 
+        thetaHomes = np.zeros(nCobras)
         phiHomes = np.zeros(nCobras)
         phiMoves = np.zeros(nCobras) + phiMove
         thetaMoves = np.zeros(nCobras) + thetaMove
 
-        thetaSteps, phiSteps = self.motorMap.calculateSteps(thetaMoves, phiHomes, phiMoves)
+        thetaSteps, phiSteps = self.calculateSteps(thetaHomes, thetaMoves, phiHomes, phiMoves)
 
         cIdx = [self._mapCobraIndex(c) for c in cobras]
         cThetaSteps = thetaSteps[cIdx]
@@ -115,11 +116,12 @@ class PFI(object):
 
         self.moveSteps(cobras, thetaAllSteps, phiAllSteps, allDirs)
 
-    def moveThetaPhi(self, cobras, thetaMoves, phiMoves, phiFroms=None):
+    def moveThetaPhi(self, cobras, thetaMoves, phiMoves, thetaFroms=None, phiFroms=None):
         """ Move cobras with theta and phi angles
 
             thetaMoves: A numpy array with theta angles
             phiMoves: A numpy array with phi angles
+            thetaFroms: A numpy array with starting theta positions
             phiFroms: A numpy array with starting phi positions
 
         """
@@ -128,13 +130,16 @@ class PFI(object):
             raise RuntimeError("number of theta moves must match number of cobras")
         if len(cobras) != len(phiMoves):
             raise RuntimeError("number of phi moves must match number of cobras")
+        if thetaFroms is not None and len(cobras) != len(thetaFroms):
+            raise RuntimeError("number of theta froms must match number of cobras")
         if phiFroms is not None and len(cobras) != len(phiFroms):
             raise RuntimeError("number of phi froms must match number of cobras")
         nCobras = self.calibModel.nCobras
 
-        _phiFroms = np.zeros(nCobras)
         _phiMoves = np.zeros(nCobras)
         _thetaMoves = np.zeros(nCobras)
+        _phiFroms = np.zeros(nCobras)
+        _thetaFroms = np.zeros(nCobras)
 
         cIdx = [self._mapCobraIndex(c) for c in cobras]
         for i, c in enumerate(cIdx):
@@ -142,8 +147,10 @@ class PFI(object):
             _thetaMoves[c] = thetaMoves[i]
             if phiFroms != None:
                 _phiFroms[c] = phiFroms[i]
+            if thetaFroms != None:
+                _thetaFroms[c] = thetaFroms[i]
 
-        thetaSteps, phiSteps = self.motorMap.calculateSteps(_thetaMoves, _phiFroms, _phiMoves)
+        thetaSteps, phiSteps = self.calculateSteps(_thetaFroms, _thetaMoves, _phiFroms, _phiMoves)
 
         cThetaSteps = thetaSteps[cIdx]
         cPhiSteps = phiSteps[cIdx]
@@ -152,6 +159,32 @@ class PFI(object):
         print('phiSteps: ', cPhiSteps)
 
         self.moveSteps(cobras, cThetaSteps, cPhiSteps)
+
+    def thetaToGlobal(self, cobras, thetaLocals):
+        """ Convert theta angles from relative to CCW hard stops to global coordinate """
+
+        if len(cobras) != len(thetaLocals):
+            raise RuntimeError("number of theta angles must match number of cobras")
+
+        thetaGlobals = np.zeros(len(cobras))
+        cIdx = [self._mapCobraIndex(c) for c in cobras]
+        for i, c in enumerate(cIdx):
+            thetaGlobals[i] = (thetaLocals[i] + self.calibModel.tht0[c]) % (2 * np.pi)
+        return thetaGlobals
+
+    def thetaToLocal(self, cobras, thetaGlobals):
+        """ Convert theta angles from global coordinate to relative to CCW hard stop
+            Be careful of the overlapping region between two hard stops
+        """
+
+        if len(cobras) != len(thetaGlobals):
+            raise RuntimeError("number of theta angles must match number of cobras")
+
+        thetaLocals = np.zeros(len(cobras))
+        cIdx = [self._mapCobraIndex(c) for c in cobras]
+        for i, c in enumerate(cIdx):
+            thetaLocals[i] = (thetaGlobals[i] - self.calibModel.tht0[c]) % (2 * np.pi)
+        return thetaLocals
 
     def moveSteps(self, cobras, thetaSteps, phiSteps, dirs=None, waitThetaSteps=None, waitPhiSteps=None):
         """ Move cobras with theta and phi steps """
@@ -225,8 +258,8 @@ class PFI(object):
         self.moveSteps(cobras, thetaSteps, phiSteps, dirs)
 
     def homePhiSafe(self, cobras, nsteps=5000, dir='ccw', iterations=20):
-        thetaSteps = (np.zeros(len(cobras)) + nsteps) * (0.5 / iterations);
-        phiSteps = (np.zeros(len(cobras)) + nsteps) * (-1.0 / iterations);
+        thetaSteps = (np.zeros(len(cobras)) + nsteps) * (0.5 / iterations)
+        phiSteps = (np.zeros(len(cobras)) + nsteps) * (-1.0 / iterations)
         if dir == 'cw':
             thetaSteps = -thetaSteps
             phiSteps = -phiSteps
@@ -246,6 +279,58 @@ class PFI(object):
             return None
         return func.Cobra(self.calibModel.moduleIds[idx],
                           self.calibModel.positionerIds[idx])
+
+    def calculateSteps(self, startTht, deltaTht, startPhi, deltaPhi):
+        """ Modified from ics_cobraOps MotorMapGroup.py
+        Calculates the total number of motor steps required to move the
+        cobra fibers the given theta and phi delta angles.
+
+        Parameters
+        ----------
+        startTht: object
+            A numpy array with the starting theta angle positions.
+        deltaTht: object
+            A numpy array with the theta delta offsets relative to the home
+            positions.
+        startPhi: object
+            A numpy array with the starting phi angle positions.
+        deltaPhi: object
+            A numpy array with the phi delta offsets relative to the starting
+            phi positions.
+
+        Returns
+        -------
+        tuple
+            A python tuple with the total number of motor steps for the theta
+            and phi angles.
+
+        """
+        # Get the integrated step maps for the theta angle
+        thtSteps = self.motorMap.negThtSteps.copy()
+        thtSteps[deltaTht >= 0] = self.motorMap.posThtSteps[deltaTht >= 0]
+
+        # Get the integrated step maps for the phi angle
+        phiSteps = self.motorMap.negPhiSteps.copy()
+        phiSteps[deltaPhi >= 0] = self.motorMap.posPhiSteps[deltaPhi >= 0]
+
+        # Calculate the theta and phi offsets relative to the home positions
+        thtOffset = startTht % 360.0
+        phiOffset = startPhi % 360.0
+
+        # Calculate the total number of motor steps for each angle
+        nThtSteps = np.empty(self.motorMap.nMaps)
+        nPhiSteps = np.empty(self.motorMap.nMaps)
+
+        for c in range(self.motorMap.nMaps):
+            # Calculate the total number of motor steps for the theta movement
+            stepsRange = np.interp([thtOffset[c], thtOffset[c] + deltaTht[c]], self.motorMap.thtOffsets[c], thtSteps[c])
+            nThtSteps[c] = stepsRange[1] - stepsRange[0]
+
+            # Calculate the total number of motor steps for the phi movement
+            stepsRange = np.interp([phiOffset[c], phiOffset[c] + deltaPhi[c]], self.motorMap.phiOffsets[c], phiSteps[c])
+            nPhiSteps[c] = stepsRange[1] - stepsRange[0]
+
+        return (nThtSteps, nPhiSteps)
 
     @classmethod
     def allocateAllCobras(cls):
