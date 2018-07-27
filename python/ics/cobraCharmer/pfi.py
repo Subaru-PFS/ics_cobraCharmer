@@ -37,7 +37,7 @@ class PFI(object):
 
 
         if filename is None:
-            filename = "/Users/cloomis/Sumire/PFS/git/ics_cobraOps/python/ics/cobraOps/usedXMLFile.xml"
+            filename = "/Users/chyan/Documents/workspace/ics_cobraOps/python/ics/demos/usedXMLFile.xml"
 
         self.calibModel = cobraCalib.CobrasCalibrationProduct(filename)
         self.motorMap = cobraMotorMap.MotorMapGroup(self.calibModel.nCobras)
@@ -147,12 +147,12 @@ class PFI(object):
                                  dir=dirs1)
         err = func.RUN(cobras)
 
-    def homePhi(self, cobras, nsteps=5000, dir='ccw'):
+    def homePhi(self, cobras, nsteps=4000, dir='ccw'):
         steps = [(0,nsteps)]*len(cobras)
         dirs = [(dir,dir)]*len(cobras)
         self.moveSteps(cobras, steps, dirs)
 
-    def homeTheta(self, cobras, nsteps=10000, dir='ccw'):
+    def homeTheta(self, cobras, nsteps=8000, dir='ccw'):
         steps = [(nsteps,0)]*len(cobras)
         dirs = [(dir,dir)]*len(cobras)
         self.moveSteps(cobras, steps, dirs)
