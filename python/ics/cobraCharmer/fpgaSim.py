@@ -3,9 +3,9 @@ import logging
 import struct
 import asyncio
 
-from .convert import get_freq
+from convert import get_freq
 
-logging.basicConfig(format="%(asctime)s.%(msecs)04d %(levelno)s %(name)-10s %(message)s",
+logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
 
 class IncompleteDataError(Exception):
