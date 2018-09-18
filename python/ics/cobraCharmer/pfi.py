@@ -350,7 +350,8 @@ class PFI(object):
     def calculateSteps(self, startTht, deltaTht, startPhi, deltaPhi):
         """ Modified from ics_cobraOps MotorMapGroup.py
         Calculates the total number of motor steps required to move the
-        cobra fibers the given theta and phi delta angles.
+        cobra fibers the given theta and phi delta angles from
+        CCW hard stops
 
         Parameters
         ----------
