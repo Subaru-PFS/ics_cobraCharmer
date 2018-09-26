@@ -16,6 +16,7 @@ class PFI(object):
     nCobrasPerModule = 57
     nModules = 42
 
+    "CW is the same as forward or positive direction, CCW means reverse or negative direction"
     dirIds = {'ccw':'ccw', 'cw':'cw', CCW:'ccw', CW:'cw', 'CCW':'ccw', 'CW':'cw'}
 
     def __init__(self, fpgaHost='localhost', doConnect=True, doLoadModel=True, debug=False):
@@ -36,7 +37,7 @@ class PFI(object):
 
     def connect(self, fpgaHost=None):
         """ Connect to COBRA fpga device """
-        if fpgaHost != None:
+        if fpgaHost is not None:
             self.fpgaHost = fpgaHost
         ethernet.sock.connect(self.fpgaHost, 4001)
         self.ioLogger.info(f'FPGA connection to {self.fpgaHost}')
@@ -50,15 +51,15 @@ class PFI(object):
     def loadModel(self, filename=None):
         """ Load a motormap XML file. """
 
-        import ics.cobraOps.CobrasCalibrationProduct as cobraCalib
         import ics.cobraOps.MotorMapGroup as cobraMotorMap
-        reload(cobraCalib)
+        import ics.cobraCharmer.pfiDesign as pfiDesign
+        reload(pfiDesign)
         reload(cobraMotorMap)
 
         if filename is None:
             filename = os.path.dirname(sys.modules[__name__].__file__)
             filename += '/../../../xml/updatedLinksAndMaps.xml'
-        self.calibModel = cobraCalib.CobrasCalibrationProduct(filename)
+        self.calibModel = pfiDesign.PFIDesign(filename)
         self.motorMap = cobraMotorMap.MotorMapGroup(self.calibModel.nCobras)
 
         self.motorMap.useCalibrationProduct(self.calibModel)
@@ -156,8 +157,8 @@ class PFI(object):
     def moveThetaPhi(self, cobras, thetaMoves, phiMoves, thetaFroms=None, phiFroms=None):
         """ Move cobras with theta and phi angles, angles are measured from CCW hard stops
 
-            thetaMoves: A numpy array with theta angles
-            phiMoves: A numpy array with phi angles
+            thetaMoves: A numpy array with theta angles to go
+            phiMoves: A numpy array with phi angles to go
             thetaFroms: A numpy array with starting theta positions
             phiFroms: A numpy array with starting phi positions
 
@@ -182,9 +183,9 @@ class PFI(object):
         for i, c in enumerate(cIdx):
             _phiMoves[c] = phiMoves[i]
             _thetaMoves[c] = thetaMoves[i]
-            if phiFroms != None:
+            if phiFroms is not None:
                 _phiFroms[c] = phiFroms[i]
-            if thetaFroms != None:
+            if thetaFroms is not None:
                 _thetaFroms[c] = thetaFroms[i]
 
         thetaSteps, phiSteps = self.calculateSteps(_thetaFroms, _thetaMoves, _phiFroms, _phiMoves)
@@ -192,9 +193,7 @@ class PFI(object):
         cThetaSteps = thetaSteps[cIdx]
         cPhiSteps = phiSteps[cIdx]
 
-        self.logger.info(f'thetaSteps: {cThetaSteps}')
-        self.logger.info(f'phiSteps: {cPhiSteps}')
-
+        self.logger.info(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
         self.moveSteps(cobras, cThetaSteps, cPhiSteps)
 
     def thetaToGlobal(self, cobras, thetaLocals, thetaHome=None):
@@ -225,6 +224,7 @@ class PFI(object):
         """ Convert theta angles from global coordinate to relative to hard stops
             Be careful of the overlapping region between two hard stops
 
+            cobras: a list of cobras
             thetaGlobals: the angles in global coordinate
             thetaHome: 'ccw'(default) or 'cw'
 
@@ -245,7 +245,7 @@ class PFI(object):
                 thetaLocals[i] = (thetaGlobals[i] - self.calibModel.tht0[c]) % (2 * np.pi)
         return thetaLocals
 
-    def moveSteps(self, cobras, thetaSteps, phiSteps, dirs=None, waitThetaSteps=None, waitPhiSteps=None):
+    def moveSteps(self, cobras, thetaSteps, phiSteps, dirs=None, waitThetaSteps=None, waitPhiSteps=None, interval=2.5):
         """ Move cobras with theta and phi steps """
 
         if len(cobras) != len(thetaSteps):
@@ -312,7 +312,7 @@ class PFI(object):
                                  sl=(int(offtime1), int(offtime2)),
                                  en=en,
                                  dir=dirs1)
-        err = func.RUN(cobras)
+        err = func.RUN(cobras, inter=int(interval*1000))
         if err:
             self.logger.error(f'send RUN command failed')
         else:
@@ -381,24 +381,203 @@ class PFI(object):
         phiSteps = self.motorMap.negPhiSteps.copy()
         phiSteps[deltaPhi >= 0] = self.motorMap.posPhiSteps[deltaPhi >= 0]
 
-        # Calculate the theta and phi offsets relative to the home positions
-        thtOffset = startTht % (2*np.pi)
-        phiOffset = startPhi % (2*np.pi)
-
         # Calculate the total number of motor steps for each angle
         nThtSteps = np.empty(self.motorMap.nMaps)
         nPhiSteps = np.empty(self.motorMap.nMaps)
 
         for c in range(self.motorMap.nMaps):
             # Calculate the total number of motor steps for the theta movement
-            stepsRange = np.interp([thtOffset[c], thtOffset[c] + deltaTht[c]], self.motorMap.thtOffsets[c], thtSteps[c])
+            stepsRange = np.interp([startTht[c], startTht[c] + deltaTht[c]], self.motorMap.thtOffsets[c], thtSteps[c])
             nThtSteps[c] = stepsRange[1] - stepsRange[0]
 
             # Calculate the total number of motor steps for the phi movement
-            stepsRange = np.interp([phiOffset[c], phiOffset[c] + deltaPhi[c]], self.motorMap.phiOffsets[c], phiSteps[c])
+            stepsRange = np.interp([startPhi[c], startPhi[c] + deltaPhi[c]], self.motorMap.phiOffsets[c], phiSteps[c])
             nPhiSteps[c] = stepsRange[1] - stepsRange[0]
 
         return (nThtSteps, nPhiSteps)
+
+    def anglesToPositions(self, cobras, thetaAngles, phiAngles):
+        """Convert the theta, phi angles to fiber positions.
+
+        Parameters
+        ----------
+        cobras: a list of cobras
+        thetaAngles: object
+            A numpy array with the theta angles from CCW limit.
+        phiAngles: object
+            A numpy array with the phi angles from CCW limit.
+
+        Returns
+        -------
+        numpy array
+            A complex numpy array with the fiber positions.
+
+        """
+        if len(cobras) != len(thetaAngles):
+            raise RuntimeError("number of theta angles must match number of cobras")
+        if len(cobras) != len(phiAngles):
+            raise RuntimeError("number of phi angles must match number of cobras")
+        cIdx = np.array([self._mapCobraIndex(c) for c in cobras])
+
+        ang1 = self.calibModel.tht0[cIdx] + thetaAngles
+        ang2 = ang1 + phiAngles + self.calibModel.phiIn[cIdx]
+        return self.calibModel.centers[cIdx] + self.calibModel.L1[cIdx] * np.exp(1j * ang1) + self.calibModel.L2[cIdx] * np.exp(1j * ang2)
+
+    def positionsToAngles(self, cobras, positions):
+        """Convert the fiber positions to theta, phi angles from CCW limit.
+
+        Parameters
+        ----------
+        cobras: a list of cobras
+        positions: numpy array
+            A complex numpy array with the fiber positions.
+
+        Returns
+        -------
+        tuple
+            A python tuples with all the possible cobras angles (theta, phi).
+            Since there are maximum 4 possible solutions so the dimensions of theta
+            and phi are (len(positions), 4), the value np.nan indicates
+            there is no solution.
+
+        """
+        if len(cobras) != len(positions):
+            raise RuntimeError("number of positions must match number of cobras")
+        cIdx = np.array([self._mapCobraIndex(c) for c in cobras])
+
+        # Calculate the cobras rotation angles applying the law of cosines
+        relativePositions = positions - self.calibModel.centers[cIdx]
+        distance = np.abs(relativePositions)
+        L1 = self.calibModel.L1[cIdx]
+        L2 = self.calibModel.L2[cIdx]
+        distanceSq = distance ** 2
+        L1Sq = self.calibModel.L1 ** 2
+        L2Sq = self.calibModel.L2 ** 2
+        phiIn = self.calibModel.phiIn[cIdx] + np.pi
+        phiOut = self.calibModel.phiOut[cIdx] + np.pi
+        tht0 = self.calibModel.tht0[cIdx]
+        tht1 = self.calibModel.tht1[cIdx]
+        phi = np.full((len(cobras), 4), np.nan)
+        tht = np.full((len(cobras), 4), np.nan)
+
+        for i in range(len(positions)):
+            # check if the positions are reachable by cobras
+            if distance[i] > L1[i] + L2[i] or distance[i] < np.abs(L1[i] - L2[i]):
+                continue
+
+            ang1 = np.arccos((L1Sq[i] + L2Sq[i] - distanceSq[i]) / (2 * L1[i] * L2[i]))
+            ang2 = np.arccos((L1Sq[i] + distanceSq[i] - L2Sq[i]) / (2 * L1[i] * distance[i]))
+            nSolution = 0
+
+            # the regular solutions
+            if ang1 > phiIn[i] and ang1 < phiOut[i]:
+                phi[i][nSolution] = ang1 - phiIn[i]
+                tht[i][nSolution] = (np.angle(relativePositions[i]) + ang2 - tht0[i]) % (2 * np.pi)
+                nSolution += 1
+                # check if tht is within two theta hard stops
+                if tht[i][nSolution - 1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
+                    phi[i][nSolution] = phi[i][nSolution - 1]
+                    tht[i][nSolution] = tht[i][nSolution - 1] + 2 * np.pi
+                    nSolution += 1
+
+            # check if there are additional phi solutions
+            if phiIn[i] <= -ang1 and ang1 > 0:
+                # phiIn < 0
+                phi[i][nSolution] = -ang1 - phiIn[i]
+                tht[i][nSolution] = (np.angle(relativePositions[i]) - ang2 - tht0[i]) % (2 * np.pi)
+                nSolution += 1
+                # check if tht is within two theta hard stops
+                if tht[i][nSolution - 1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
+                    phi[i][nSolution] = phi[i][nSolution - 1]
+                    tht[i][nSolution] = tht[i][nSolution - 1] + 2 * np.pi
+                    nSolution += 1
+            elif phiOut[i] >= 2 * np.pi - ang1 and ang1 < np.pi:
+                # phiOut > np.pi
+                phi[i][nSolution] = 2 * np.pi - ang1 - phiIn[i]
+                tht[i][nSolution] = (np.angle(relativePositions[i]) - ang2 - tht0[i]) % (2 * np.pi)
+                nSolution += 1
+                # check if tht is within two theta hard stops
+                if tht[i][nSolution - 1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
+                    phi[i][nSolution] = phi[i][nSolution - 1]
+                    tht[i][nSolution] = tht[i][nSolution - 1] + 2 * np.pi
+                    nSolution += 1
+        return (tht, phi)
+
+    def moveXY(self, cobras, startPositions, targetPositions):
+        """Move the Cobras in XY coordinate.
+
+        Parameters
+        ----------
+        cobras: a list of cobras
+        targetPositions: numpy array
+            A complex numpy array with the target fiber positions.
+        startPositions: numpy array
+            A complex numpy array with the starting fiber positions.
+
+        If there are more than one possible convertion to theta/phi, this function picks the regular one.
+        For better control, the caller should use positionsToAngles to determine which solution is the right one.
+        """
+
+        if len(cobras) != len(startPositions):
+            raise RuntimeError("number of starting positions must match number of cobras")
+        if len(cobras) != len(targetPositions):
+            raise RuntimeError("number of target positions must match number of cobras")
+
+        startTht, startPhi = self.positionsToAngles(cobras, startPositions)
+        targetTht, targetPhi = self.positionsToAngles(cobras, targetPositions)
+        deltaTht = targetTht - startTht
+        deltaPhi = targetPhi - startPhi
+
+         # check if there is a solution
+        valids = np.all([startTht[:,0] != np.nan, targetTht[:,0] != np.nan], axis=0)
+        valid_cobras = [c for i,c in enumerate(cobras) if valids[i]]
+
+        # move bobras by angles
+        self.logger.info(f"engaged cobras: {[(c.module,c.cobraNum) for c in valid_cobras]}")
+        self.logger.info(f"move to: {list(zip(targetTht[valids,0], targetPhi[valids,0]))}")
+        self.logger.info(f"move from: {list(zip(startTht[valids,0], startPhi[valids,0]))}")
+        self.moveThetaPhi(valid_cobras, deltaTht[valids,0], deltaPhi[valids,0], startTht[valids,0], startPhi[valids,0])
+
+    def moveXYfromHome(self, cobras, targetPositions, thetaHome='ccw'):
+        """Move the Cobras in XY coordinate from hard stops.
+
+        Parameters
+        ----------
+        cobras: a list of cobras
+        targetPositions: numpy array
+            A complex numpy array with the target fiber positions.
+        thetaHome: 'ccw'(default) or 'cw' hard stop
+
+        If there are more than one possible convertion to theta/phi, this function picks the regular one.
+        For better control, the caller should use positionsToAngles to determine which solution is the right one.
+        """
+
+        if len(cobras) != len(targetPositions):
+            raise RuntimeError("number of target positions must match number of cobras")
+        home = self.dirIds.get(thetaHome, 'ccw')
+
+        targetTht, targetPhi = self.positionsToAngles(cobras, targetPositions)
+
+         # check if there is a solution
+        valids = targetTht[:,0] != np.nan
+        valid_cobras = [c for i,c in enumerate(cobras) if valids[i]]
+
+        # define home positions
+        phiHomes = np.zeros(len(valid_cobras))
+        if home == 'ccw':
+            thtHomes = phiHomes
+        else:
+            cIdx = np.array([self._mapCobraIndex(c) for i,c in enumerate(cobras) if valids[i]])
+            thtHomes = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx]) % (2*np.pi) + (2*np.pi)
+        self.logger.info(f"engaged cobras: {[(c.module,c.cobraNum) for c in valid_cobras]}")
+        self.logger.info(f"move to: {list(zip(targetTht[valids,0], targetPhi[valids,0]))}")
+        self.logger.info(f"move from: {list(zip(thtHomes, phiHomes))}")
+
+        # move cobras by angles
+        deltaTht = targetTht[valids,0] - thtHomes
+        delPhi = targetPhi[valids,0] - phiHomes
+        self.moveThetaPhi(valid_cobras, deltaTht, delPhi, thtHomes, phiHomes)
+
 
     @classmethod
     def allocateAllCobras(cls):

@@ -101,8 +101,8 @@ class PFIDesign():
             self.centers[i] = float(kinematics.find("Global_base_pos_x").text) + float(kinematics.find("Global_base_pos_y").text) * 1j
             self.tht0[i] = np.deg2rad(float(kinematics.find("CCW_Global_base_ori_z").text))
             self.tht1[i] = np.deg2rad(float(kinematics.find("CW_Global_base_ori_z").text))
-            self.phiIn[i] = np.deg2rad(float(kinematics.find("Joint2_CCW_limit_angle").text))
-            self.phiOut[i] = np.deg2rad(float(kinematics.find("Joint2_CW_limit_angle").text))
+            self.phiIn[i] = np.deg2rad(float(kinematics.find("Joint2_CCW_limit_angle").text)) - np.pi
+            self.phiOut[i] = np.deg2rad(float(kinematics.find("Joint2_CW_limit_angle").text)) - np.pi
             self.L1[i] = float(kinematics.find("Link1_Link_Length").text)
             self.L2[i] = float(kinematics.find("Link2_Link_Length").text)
 
@@ -327,10 +327,10 @@ class PFIDesign():
         for i in range(self.nCobras):
             kinematics = self.dataContainers[i].find("KINEMATICS")
             if ccw is not None:
-                self.phiIn[i] = ccw[i]
+                self.phiIn[i] = ccw[i] - np.pi
                 kinematics.find("Joint2_CCW_limit_angle").text = str(np.rad2deg(ccw[i]))
             if cw is not None:
-                self.phiOut[i] = cw[i]
+                self.phiOut[i] = cw[i] - np.pi
                 kinematics.find("Joint2_CW_limit_angle").text = str(np.rad2deg(cw[i]))
 
     def updateOntimes(self, thtFwd=None, thtRev=None, phiFwd=None, phiRev=None):
