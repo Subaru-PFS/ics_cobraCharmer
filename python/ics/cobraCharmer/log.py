@@ -48,6 +48,7 @@ full_log = Logger('log.full', logPath, 'full.log')
 dia_log = Logger('log.dia', logPath, 'dia.log')
 medium_log = Logger('log.medium', logPath, 'med.log')
 short_log = Logger('log.short', logPath, 'short.log')
+eth_hex_logger = Logger('log.eth', logPath, 'eth.log')
 
 
 LOGS = [short_log, medium_log, full_log, dia_log]

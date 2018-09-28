@@ -45,7 +45,7 @@ class Sock:
             logger = self.logger
         if logger is not None:
             s = bytesAsString(msg, type)
-            self.logger.log("(ETH)Sent msg on socket.\n(%s)"%s)
+            logger.log("(ETH)Sent msg on socket.\n(%s)"%s)
 
         self._s.send(msg)
 

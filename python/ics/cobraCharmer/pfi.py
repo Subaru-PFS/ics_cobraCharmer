@@ -312,8 +312,8 @@ class PFI(object):
                                  sl=(int(offtime1), int(offtime2)),
                                  en=en,
                                  dir=dirs1)
-        #err = func.RUN(cobras, inter=int(interval*1000))
-        err = func.RUN(cobras, inter=156)
+        # temperarily fix for interval and timeout
+        err = func.RUN(cobras, inter=int(interval*1000/16), timeout=65535)
         if err:
             self.logger.error(f'send RUN command failed')
         else:
