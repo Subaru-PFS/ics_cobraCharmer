@@ -3,12 +3,17 @@ import logging
 import struct
 import asyncio
 
-from convert import get_freq
+from .convert import get_freq
+from . import fpgaProtocol as proto
+from .fpgaLogger import FPGAProtocolLogger
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
 
 class IncompleteDataError(Exception):
+    pass
+
+class ChecksumError(Exception):
     pass
 
 class FPGAProtocol(asyncio.Protocol):
@@ -26,14 +31,6 @@ class FPGAProtocol(asyncio.Protocol):
 
 
     """
-
-    RUN_HEADER_SIZE = 10
-    RUN_ARM_SIZE = 14
-    POWER_HEADER_SIZE = 8
-    SETFREQ_HEADER_SIZE = 8
-    SETFREQ_ARM_SIZE = 6
-    CAL_HEADER_SIZE = 8
-    CAL_ARM_SIZE = 10
 
     def __init__(self, fpga=None, debug=False):
         """ Accept a new connection. Print out commands and optionally forwar to real FPGA.
