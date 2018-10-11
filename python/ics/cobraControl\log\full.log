@@ -1,0 +1,483 @@
+(ETH)Connecting...
+(ETH)Connection Made. fpga:4001 
+
+--- ISSUE SETFREQ & VERIFY (brd:1) ---
+(ETH)Sent msg on socket.
+(0300003907d0840b	081000ff009b0820	00ff009b101000ff	009b102000ff009b	
+181000ff009b1820	00ff009b201000ff	009b202000ff009b	281000ff009b2820	
+00ff009b301000ff	009b302000ff009b	381000ff009b3820	00ff009b401000ff	
+009b402000ff009b	481000ff009b4820	00ff009b501000ff	009b502000ff009b	
+581000ff009b5820	00ff009b601000ff	009b602000ff009b	681000ff009b6820	
+00ff009b701000ff	009b702000ff009b	781000ff009b7820	00ff009b801000ff	
+009b802000ff009b	881000ff009b8820	00ff009b901000ff	009b902000ff009b	
+981000ff009b9820	00ff009ba01000ff	009ba02000ff009b	a81000ff009ba820	
+00ff009bb01000ff	009bb02000ff009b	b81000ff009bb820	00ff009bc01000ff	
+009bc02000ff009b	c81000ff009bc820	00ff009bd01000ff	009bd02000ff009b	
+d81000ff009bd820	00ff009be01000ff	009be02000ff009b	e81000ff009b)
+(ETH)Rcvd msg on socket.
+(030000000000)
+SetFrequency tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(030000000000)
+SetFrequency tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,8 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe57401b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,8 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe57401b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,8 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe57401b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,8 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe57401b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,8 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe57401b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,10 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe47501b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE SETFREQ & VERIFY (brd:1) ---
+(ETH)Sent msg on socket.
+(0300000107d0fd29	501200ff009b)
+(ETH)Rcvd msg on socket.
+(030000000000)
+SetFrequency tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(030000000000)
+SetFrequency tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,10 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe47501b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,10 (70, 70)uS x(50, 50) d(0, 0) ('cw', 'cw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe4a501800460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,10 (70, 70)uS x(50, 50) d(0, 0) ('cw', 'cw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe4a501800460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE SETFREQ & VERIFY (brd:1) ---
+(ETH)Sent msg on socket.
+(0300000107d0fd21	581200ff009b)
+(ETH)Rcvd msg on socket.
+(030000000000)
+SetFrequency tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(030000000000)
+SetFrequency tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,11 (70, 70)uS x(50, 50) d(0, 0) ('cw', 'cw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe42581800460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,11 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe3f581b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,11 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe3f581b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,11 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe3f581b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,11 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe3f581b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,11 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe3f581b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,11 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe3f581b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,11 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe3f581b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,11 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe3f581b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (1) ---
+(C1,11 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe3f581b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE SETFREQ & VERIFY (brd:2) ---
+(ETH)Sent msg on socket.
+(0300000107d0fd01	682200ff009b)
+(ETH)Rcvd msg on socket.
+(030000000000)
+SetFrequency tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(030000000000)
+SetFrequency tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,13 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe1f682b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,13 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe1f682b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,13 (70, 70)uS x(50, 50) d(0, 0) ('cw', 'cw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe22682800460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,13 (70, 70)uS x(50, 50) d(0, 0) ('cw', 'cw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe22682800460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE SETFREQ & VERIFY (brd:2) ---
+(ETH)Sent msg on socket.
+(0300000107d0fcf9	702200ff009b)
+(ETH)Rcvd msg on socket.
+(030000000000)
+SetFrequency tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(030000000000)
+SetFrequency tlm rx'd. (Code:0) (Message:0)
+--- ISSUE SETFREQ & VERIFY (brd:2) ---
+(ETH)Sent msg on socket.
+(0300000107d0fcf9	702200ff009b)
+(ETH)Rcvd msg on socket.
+(030000000000)
+SetFrequency tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(030000000000)
+SetFrequency tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,14 (70, 70)uS x(50, 50) d(0, 0) ('cw', 'cw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe1a702800460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,14 (70, 70)uS x(50, 50) d(0, 0) ('cw', 'cw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe1a702800460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,15 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe0f782b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,15 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe0f782b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,15 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe0f782b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,15 (70, 70)uS x(50, 50) d(0, 0) ('cw', 'cw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe12782800460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,15 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe0f782b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,15 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe0f782b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE SETFREQ & VERIFY (brd:2) ---
+(ETH)Sent msg on socket.
+(0300000107d0fcf1	782200ff009b)
+(ETH)Rcvd msg on socket.
+(030000000000)
+SetFrequency tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(030000000000)
+SetFrequency tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,15 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe0f782b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,15 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe0f782b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,15 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe0f782b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,15 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe0f782b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,15 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe0f782b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+--- ISSUE RUN & VERIFY (2) ---
+(C2,15 (70, 70)uS x(50, 50) d(0, 0) ('ccw', 'ccw')) 
+Timeout:1070, inter:42
+(ETH)Sent msg on socket.
+(01000001042e002a	fe0f782b00460032	0000004600320000	)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
+(ETH)Rcvd msg on socket.
+(010000000000)
+Run tlm rx'd. (Code:0) (Message:0)
