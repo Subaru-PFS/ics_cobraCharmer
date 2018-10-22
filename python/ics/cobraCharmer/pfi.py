@@ -418,7 +418,14 @@ class PFI(object):
             raise RuntimeError("number of theta angles must match number of cobras")
         if len(cobras) != len(phiAngles):
             raise RuntimeError("number of phi angles must match number of cobras")
+
         cIdx = np.array([self._mapCobraIndex(c) for c in cobras])
+        thtRange = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx]) % (2*np.pi) + (2*np.pi)
+        if np.any(np.zeros(len(cIdx)) > thetaAngles) or np.any(thtRange < thetaAngles):
+            self.logger.error('Some theta angles are out of range')
+        phiRange = self.calibModel.phiOut[cIdx] - self.calibModel.phiIn[cIdx]
+        if np.any(np.zeros(len(cIdx)) > phiAngles) or np.any(phiRange < phiAngles):
+            self.logger.error('Some phi angles are out of range')
 
         ang1 = self.calibModel.tht0[cIdx] + thetaAngles
         ang2 = ang1 + phiAngles + self.calibModel.phiIn[cIdx]
@@ -436,10 +443,11 @@ class PFI(object):
         Returns
         -------
         tuple
-            A python tuples with all the possible cobras angles (theta, phi).
-            Since there are maximum 4 possible solutions so the dimensions of theta
-            and phi are (len(positions), 4), the value np.nan indicates
-            there is no solution.
+            A python tuples with all the possible angles (theta, phi, overlapping).
+            Since there are possible 2 phi solutions so the dimensions of theta
+            and phi are (len(cobras), 2), the value np.nan indicates
+            there is no solution. overlapping is a boolean array of the same size,
+            true indicatess the theta solution is within the two hard stops.
 
         """
         if len(cobras) != len(positions):
@@ -452,14 +460,15 @@ class PFI(object):
         L1 = self.calibModel.L1[cIdx]
         L2 = self.calibModel.L2[cIdx]
         distanceSq = distance ** 2
-        L1Sq = self.calibModel.L1 ** 2
-        L2Sq = self.calibModel.L2 ** 2
+        L1Sq = L1 ** 2
+        L2Sq = L2 ** 2
         phiIn = self.calibModel.phiIn[cIdx] + np.pi
         phiOut = self.calibModel.phiOut[cIdx] + np.pi
         tht0 = self.calibModel.tht0[cIdx]
         tht1 = self.calibModel.tht1[cIdx]
-        phi = np.full((len(cobras), 4), np.nan)
-        tht = np.full((len(cobras), 4), np.nan)
+        phi = np.full((len(cobras), 2), np.nan)
+        tht = np.full((len(cobras), 2), np.nan)
+        overlapping = np.full((len(cobras), 2), False)
 
         for i in range(len(positions)):
             # check if the positions are reachable by cobras
@@ -468,41 +477,31 @@ class PFI(object):
 
             ang1 = np.arccos((L1Sq[i] + L2Sq[i] - distanceSq[i]) / (2 * L1[i] * L2[i]))
             ang2 = np.arccos((L1Sq[i] + distanceSq[i] - L2Sq[i]) / (2 * L1[i] * distance[i]))
-            nSolution = 0
 
             # the regular solutions
             if ang1 > phiIn[i] and ang1 < phiOut[i]:
-                phi[i][nSolution] = ang1 - phiIn[i]
-                tht[i][nSolution] = (np.angle(relativePositions[i]) + ang2 - tht0[i]) % (2 * np.pi)
-                nSolution += 1
+                phi[i][0] = ang1 - phiIn[i]
+                tht[i][0] = (np.angle(relativePositions[i]) + ang2 - tht0[i]) % (2 * np.pi)
                 # check if tht is within two theta hard stops
-                if tht[i][nSolution - 1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-                    phi[i][nSolution] = phi[i][nSolution - 1]
-                    tht[i][nSolution] = tht[i][nSolution - 1] + 2 * np.pi
-                    nSolution += 1
+                if tht[i][0] <= (tht1[i] - tht0[i]) % (2 * np.pi):
+                    overlapping[i][0] = True
 
             # check if there are additional phi solutions
             if phiIn[i] <= -ang1 and ang1 > 0:
                 # phiIn < 0
-                phi[i][nSolution] = -ang1 - phiIn[i]
-                tht[i][nSolution] = (np.angle(relativePositions[i]) - ang2 - tht0[i]) % (2 * np.pi)
-                nSolution += 1
+                phi[i][1] = -ang1 - phiIn[i]
+                tht[i][1] = (np.angle(relativePositions[i]) - ang2 - tht0[i]) % (2 * np.pi)
                 # check if tht is within two theta hard stops
-                if tht[i][nSolution - 1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-                    phi[i][nSolution] = phi[i][nSolution - 1]
-                    tht[i][nSolution] = tht[i][nSolution - 1] + 2 * np.pi
-                    nSolution += 1
+                if tht[i][1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
+                    overlapping[i][1] = True
             elif phiOut[i] >= 2 * np.pi - ang1 and ang1 < np.pi:
                 # phiOut > np.pi
-                phi[i][nSolution] = 2 * np.pi - ang1 - phiIn[i]
-                tht[i][nSolution] = (np.angle(relativePositions[i]) - ang2 - tht0[i]) % (2 * np.pi)
-                nSolution += 1
+                phi[i][1] = 2 * np.pi - ang1 - phiIn[i]
+                tht[i][1] = (np.angle(relativePositions[i]) - ang2 - tht0[i]) % (2 * np.pi)
                 # check if tht is within two theta hard stops
-                if tht[i][nSolution - 1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-                    phi[i][nSolution] = phi[i][nSolution - 1]
-                    tht[i][nSolution] = tht[i][nSolution - 1] + 2 * np.pi
-                    nSolution += 1
-        return (tht, phi)
+                if tht[i][1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
+                    overlapping[i][1] = True
+        return (tht, phi, overlapping)
 
     def moveXY(self, cobras, startPositions, targetPositions):
         """Move the Cobras in XY coordinate.
@@ -524,14 +523,19 @@ class PFI(object):
         if len(cobras) != len(targetPositions):
             raise RuntimeError("number of target positions must match number of cobras")
 
-        startTht, startPhi = self.positionsToAngles(cobras, startPositions)
-        targetTht, targetPhi = self.positionsToAngles(cobras, targetPositions)
+        startTht, startPhi, _ = self.positionsToAngles(cobras, startPositions)
+        targetTht, targetPhi, _ = self.positionsToAngles(cobras, targetPositions)
         deltaTht = targetTht - startTht
         deltaPhi = targetPhi - startPhi
 
-         # check if there is a solution
-        valids = np.all([startTht[:,0] != np.nan, targetTht[:,0] != np.nan], axis=0)
+        # check if there is a solution
+        valids = np.all([np.isnan(startTht[:,0]) == False, np.isnan(targetTht[:,0]) == False], axis=0)
         valid_cobras = [c for i,c in enumerate(cobras) if valids[i]]
+        if len(valid_cobras) <= 0:
+            self.logger.error("no valid target positions are found")
+            return
+        elif not np.all(valids):
+            self.logger.info("some target positions are invalid")
 
         # move bobras by angles
         self.logger.info(f"engaged cobras: {[(c.module,c.cobraNum) for c in valid_cobras]}")
@@ -557,11 +561,16 @@ class PFI(object):
             raise RuntimeError("number of target positions must match number of cobras")
         home = self.dirIds.get(thetaHome, 'ccw')
 
-        targetTht, targetPhi = self.positionsToAngles(cobras, targetPositions)
+        targetTht, targetPhi, _ = self.positionsToAngles(cobras, targetPositions)
 
-         # check if there is a solution
-        valids = targetTht[:,0] != np.nan
+        # check if there is a solution
+        valids = np.isnan(targetTht[:,0]) == False
         valid_cobras = [c for i,c in enumerate(cobras) if valids[i]]
+        if len(valid_cobras) <= 0:
+            self.logger.error("no valid target positions are found")
+            return
+        elif not np.all(valids):
+            self.logger.info("some target positions are invalid")
 
         # define home positions
         phiHomes = np.zeros(len(valid_cobras))
