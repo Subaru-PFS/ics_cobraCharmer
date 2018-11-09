@@ -6,7 +6,7 @@ import time
 import numpy as np
 
 from .ethernet import sock
-from .log import full_log, medium_log, short_log
+from .log import full_log, medium_log, short_log, eth_hex_logger
 from .convert import *
 from .cmds import *
 
@@ -20,9 +20,6 @@ NCOBRAS_MOD = 57
 NCOBRAS_BRD = 29
 NMODULES = 42
 NBOARDS = NMODULES*2
-
-#
-eth_hex_logger = None
 
 # Classes----------------------------------------------------------------------
 class Cobra:
