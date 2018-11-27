@@ -182,6 +182,9 @@ class PFIDesign():
         if phiRev is not None and phiRev.shape != (self.nCobras, self.motorMapSteps):
             raise RuntimeError("number of cobra phi reverse motor maps must match number of cobras")
 
+        def f2s(x):
+            return f'{x:.6f}'
+
         for i in range(self.nCobras):
             if useSlowMaps:
                 calTable = self.dataContainers[i].find("SLOW_CALIBRATION_TABLE")
@@ -194,7 +197,7 @@ class PFIDesign():
                 else:
                     self.F1Pm[i] = self.angularSteps[i] / thtFwd[i]
                 head = calTable.find("Joint1_fwd_stepsizes").text.split(",")[:2]
-                body = list(map(str, np.rad2deg(thtFwd[i])))
+                body = list(map(f2s, np.rad2deg(thtFwd[i])))
                 calTable.find("Joint1_fwd_stepsizes").text = ','.join(head + body) + ','
             if thtRev is not None:
                 if useSlowMaps:
@@ -202,7 +205,7 @@ class PFIDesign():
                 else:
                     self.F1Nm[i] = self.angularSteps[i] / thtRev[i]
                 head = calTable.find("Joint1_rev_stepsizes").text.split(",")[:2]
-                body = list(map(str, np.rad2deg(thtRev[i])))
+                body = list(map(f2s, np.rad2deg(thtRev[i])))
                 calTable.find("Joint1_rev_stepsizes").text = ','.join(head + body) + ','
             if phiFwd is not None:
                 if useSlowMaps:
@@ -210,7 +213,7 @@ class PFIDesign():
                 else:
                     self.F2Pm[i] = self.angularSteps[i] / phiFwd[i]
                 head = calTable.find("Joint2_fwd_stepsizes").text.split(",")[:2]
-                body = list(map(str, np.rad2deg(phiFwd[i])))
+                body = list(map(f2s, np.rad2deg(phiFwd[i])))
                 calTable.find("Joint2_fwd_stepsizes").text = ','.join(head + body) + ','
             if phiRev is not None:
                 if useSlowMaps:
@@ -218,7 +221,7 @@ class PFIDesign():
                 else:
                     self.F2Nm[i] = self.angularSteps[i] / phiRev[i]
                 head = calTable.find("Joint2_rev_stepsizes").text.split(",")[:2]
-                body = list(map(str, np.rad2deg(phiRev[i])))
+                body = list(map(f2s, np.rad2deg(phiRev[i])))
                 calTable.find("Joint2_rev_stepsizes").text = ','.join(head + body) + ','
 
     def updateMotorFrequency(self, theta=None, phi=None):

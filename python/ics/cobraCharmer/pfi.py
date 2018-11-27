@@ -478,13 +478,13 @@ class PFI(object):
             ang1 = np.arccos((L1Sq[i] + L2Sq[i] - distanceSq[i]) / (2 * L1[i] * L2[i]))
             ang2 = np.arccos((L1Sq[i] + distanceSq[i] - L2Sq[i]) / (2 * L1[i] * distance[i]))
 
-            # the regular solutions
-            if ang1 > phiIn[i] and ang1 < phiOut[i]:
-                phi[i][0] = ang1 - phiIn[i]
-                tht[i][0] = (np.angle(relativePositions[i]) + ang2 - tht0[i]) % (2 * np.pi)
-                # check if tht is within two theta hard stops
-                if tht[i][0] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-                    overlapping[i][0] = True
+            # the regular solutions, phi angle is between 0 and pi, no checking for phi hard stops
+            #if ang1 > phiIn[i] and ang1 < phiOut[i]:
+            phi[i][0] = ang1 - phiIn[i]
+            tht[i][0] = (np.angle(relativePositions[i]) + ang2 - tht0[i]) % (2 * np.pi)
+            # check if tht is within two theta hard stops
+            if tht[i][0] <= (tht1[i] - tht0[i]) % (2 * np.pi):
+                overlapping[i][0] = True
 
             # check if there are additional phi solutions
             if phiIn[i] <= -ang1 and ang1 > 0:
