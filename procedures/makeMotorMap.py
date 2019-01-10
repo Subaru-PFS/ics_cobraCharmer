@@ -507,7 +507,8 @@ def runMotorMap(repeatNum, stepSize):
 
 
 def main():
-    runMotorMap()
+    for steps in [50, 100, 200, 400]:
+        runMotorMap(3, steps)
 
 
 if __name__ == '__main__':
