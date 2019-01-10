@@ -31,7 +31,7 @@ def getCobras(cobs):
 
 
 # function to move cobras to target positions
-def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=8, cam_split=26):
+def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=12, cam_split=26):
     cobras = getCobras(idx)
     pfi.moveXYfromHome(cobras, targets)
 
@@ -52,7 +52,7 @@ def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=8, cam
         idx2 = lazyIdentification(pfi.calibModel.centers[idx[idx > cam_split]], ext2['x'] + ext2['y']*(1j))
         curPos = np.concatenate((ext1[idx1]['x'] + ext1[idx1]['y']*(1j), ext2[idx2]['x'] + ext2[idx2]['y']*(1j)))
         print(curPos)
-
+        print(np.abs(curPos - targets))
         # check position errors
         done = np.abs(curPos - targets) <= threshold
         if np.all(done):
@@ -141,7 +141,8 @@ def setFiberUDPOS(XML, DataPath):
 
     # Home theta
     pfi.moveAllSteps(allCobras, -10000, 0)
-
+    pfi.moveAllSteps(allCobras, -10000, 0)
+    
     # Move the bad cobras to up/down positions
     pfi.moveSteps(getCobras(badIdx), allSteps[badIdx], np.zeros(len(brokens)))
 
@@ -155,7 +156,8 @@ def setFiberUDPOS(XML, DataPath):
 
     # Home the good cobras
     pfi.moveAllSteps(getCobras(goodIdx), -10000, -5000)
-
+    pfi.moveAllSteps(getCobras(goodIdx), -10000, -5000)
+    
     # move to outTargets
     moveToXYfromHome(pfi, goodIdx, outTargets[goodIdx], DataPath)
 
@@ -166,8 +168,8 @@ def setFiberUDPOS(XML, DataPath):
 def main():
 
     cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
-    #xml=cobraCharmerPath+'/xml/motormaps_181205.xml'
-    xml=cobraCharmerPath+'/xml/precise5.xml'
+    xml=cobraCharmerPath+'/xml/motormaps_181205.xml'
+    #xml=cobraCharmerPath+'/xml/precise5.xml'
 
     datetoday=datetime.datetime.now().strftime("%Y%m%d")
     storagePath = '/data/pfs/'+datetoday

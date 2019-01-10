@@ -54,7 +54,7 @@ def getCobras(cobs):
 
 
 # function to move cobras to target positions
-def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=8, cam_split=26):
+def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=12, cam_split=26):
     cobras = getCobras(idx)
     pfi.moveXYfromHome(cobras, targets)
 
@@ -90,7 +90,8 @@ def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=8, cam
         pfi.moveXY(cobras, curPos, targets)
 
 
-def runMotorMap(repeatNum, stepSize):
+def runMotorMap(repeat, steps):
+    
     datetoday=datetime.datetime.now().strftime("%Y%m%d")
     #datetoday='20181219'
     cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
@@ -136,7 +137,7 @@ def runMotorMap(repeatNum, stepSize):
 
     # Initializing COBRA module
     pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-    preciseXML=cobraCharmerPath+'/xml/precise5.xml'
+    preciseXML=cobraCharmerPath+'/xml/motormaps_181205.xml'
     #preciseXML=cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
 
     if not os.path.exists(preciseXML):
@@ -181,6 +182,7 @@ def runMotorMap(repeatNum, stepSize):
 
     # Home theta
     pfi.moveAllSteps(allCobras, -10000, 0)
+    pfi.moveAllSteps(allCobras, -5000, 0)
 
     # Move the bad cobras to up/down positions
     pfi.moveSteps(getCobras(badIdx), allSteps[badIdx], np.zeros(len(brokens)))
@@ -195,6 +197,7 @@ def runMotorMap(repeatNum, stepSize):
 
     # Home the good cobras
     pfi.moveAllSteps(getCobras(goodIdx), -10000, -5000)
+    pfi.moveAllSteps(getCobras(goodIdx), -5000, -5000)
 
     # move to outTargets
     moveToXYfromHome(pfi, goodIdx, outTargets[goodIdx], dataPath)
@@ -203,8 +206,8 @@ def runMotorMap(repeatNum, stepSize):
     pfi.moveAllSteps(getCobras(goodIdx), 0, -5000)
 
     # parameters declared here
-    repeat = repeatNum
-    steps = stepSize
+    #repeat = 3
+    #steps = 200
     thetaSteps = 10000
     phiSteps = 5000
     myCobras = getCobras(goodIdx)
@@ -224,8 +227,10 @@ def runMotorMap(repeatNum, stepSize):
 
     # move phi arms out for 60 degrees then home theta
     pfi.moveAllSteps(myCobras, -10000, -5000)
+    pfi.moveAllSteps(myCobras, -5000, -5000)
     moveToXYfromHome(pfi, goodIdx, outTargets[goodIdx], dataPath)
     pfi.moveAllSteps(myCobras, -10000, 0)
+    pfi.moveAllSteps(myCobras, -5000, 0)
 
     # record the theta movements
     for n in range(repeat):
@@ -499,15 +504,15 @@ def runMotorMap(repeatNum, stepSize):
 
     # write to a new XML file
     #old.createCalibrationFile('../xml/motormaps.xml')
-    old.createCalibrationFile(cobraCharmerPath+'/xml/motormap'+datetoday+'.xml')
+    old.createCalibrationFile(cobraCharmerPath+'/xml/motormap_'+datetoday+f'_step{steps}.xml')
 
 
-    print(cobraCharmerPath+'/xml/motormap'+datetoday+'.xml  produced!')
+    print(cobraCharmerPath+'/xml/motormap_'+datetoday+f'_step{steps}.xml  produced!')
     print("Process Finised")
 
 
 def main():
-    for steps in [50, 100, 200, 400]:
+    for steps in [50,100,200,400]:
         runMotorMap(3, steps)
 
 

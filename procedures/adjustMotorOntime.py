@@ -64,18 +64,11 @@ class adjustOnTime():
         j2fwd_avg = np.zeros(size)
         j2rev_avg = np.zeros(size)
 
-        
         for i in range(size):
-            
-            # Calculate the limit index
-            j1limit = 360/np.rad2deg(model.angularSteps[i])
-            j2limit = 180/np.rad2deg(model.angularSteps[i])
-
-            # The average should be in the range of 360 for theta, 180 for phi 
-            j1fwd_avg[i] = np.mean(np.rad2deg(model.angularSteps[i]/model.S1Pm[i][:j1limit.astype(int)-1]))
-            j1rev_avg[i] = -np.mean(np.rad2deg(model.angularSteps[i]/model.S1Nm[i][:j1limit.astype(int)-1]))
-            j2fwd_avg[i] = np.mean(np.rad2deg(model.angularSteps[i]/model.S2Pm[i][:j2limit.astype(int)-1]))
-            j2rev_avg[i] = -np.mean(np.rad2deg(model.angularSteps[i]/model.S2Nm[i][:j2limit.astype(int)-1]))
+            j1fwd_avg[i] = np.mean(np.rad2deg(model.angularSteps[i]/model.S1Pm[i]))
+            j1rev_avg[i] = -np.mean(np.rad2deg(model.angularSteps[i]/model.S1Nm[i]))
+            j2fwd_avg[i] = np.mean(np.rad2deg(model.angularSteps[i]/model.S2Pm[i]))
+            j2rev_avg[i] = -np.mean(np.rad2deg(model.angularSteps[i]/model.S2Nm[i]))
 
         otm = ontimeModel()
         newOntimeFwd1 = otm.getTargetOnTime(0.05,otm.j1fwd_slope, model.motorOntimeFwd1 ,j1fwd_avg)

@@ -49,7 +49,7 @@ def circle_fitting(p):
     return a/2, b/2, np.sqrt(c+(a*a+b*b)/4)
 
 # function to move cobras to target positions
-def moveToXYfromHome(idx, targets, dataPath, threshold=3.0, maxTries=8):
+def moveToXYfromHome(idx, targets, dataPath, threshold=3.0, maxTries=12, cam_split=26):
     cobras = getCobras(idx)
     pfi.moveXYfromHome(cobras, targets)
 
@@ -130,7 +130,7 @@ evenCobras = moduleCobras2[2]
 
 # Initializing COBRA module
 pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-preciseXML=cobraCharmerPath+'/xml/precise5.xml'
+preciseXML=cobraCharmerPath+'/xml/motormaps_181205.xml'
 #preciseXML=cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
 
 if not os.path.exists(preciseXML):
@@ -179,6 +179,7 @@ pfi.moveAllSteps(allCobras, 0, -5000)
 
 # Home theta
 pfi.moveAllSteps(allCobras, -10000, 0)
+pfi.moveAllSteps(allCobras, -5000, 0)
 
 # Move the bad cobras to up/down positions
 pfi.moveSteps(getCobras(badIdx), allSteps[badIdx], np.zeros(len(brokens)))
@@ -193,6 +194,7 @@ outTargets = pfi.anglesToPositions(allCobras, thetas, phis)
 
 # Home the good cobras
 pfi.moveAllSteps(getCobras(goodIdx), -10000, -5000)
+pfi.moveAllSteps(getCobras(goodIdx), -5000, -5000)
 
 # move to outTargets
 moveToXYfromHome(goodIdx, outTargets[goodIdx], dataPath)
@@ -210,8 +212,9 @@ myCobras = getCobras(goodIdx)
 
 # Loading XML file once again.  Changing XML file name if you want to loading 
 #  special setting.
-ontimeXML=cobraCharmerPath+'/xml/updateOntime_20190109.xml'
+ontimeXML=cobraCharmerPath+'/xml/updateOntime_20190110.xml'
 pfi.loadModel(ontimeXML)
+pfi.setFreq(allCobras)
 
 
 #record the phi movements
@@ -234,12 +237,14 @@ pfi.setFreq(allCobras)
 
 # move phi arms out for 60 degrees then home theta
 pfi.moveAllSteps(myCobras, -10000, -5000)
+pfi.moveAllSteps(myCobras, -5000, -5000)
 moveToXYfromHome(goodIdx, outTargets[goodIdx], dataPath)
 pfi.moveAllSteps(myCobras, -10000, 0)
+pfi.moveAllSteps(myCobras, -5000, 0)
 
 # Loading XML file once again.  Changing XML file name if you want to loading 
 #  special setting.
-ontimeXML=cobraCharmerPath+'/xml/updateOntime_20190109.xml'
+ontimeXML=cobraCharmerPath+'/xml/updateOntime_20190110.xml'
 pfi.loadModel(ontimeXML)
 pfi.setFreq(allCobras)
 
@@ -516,8 +521,8 @@ old.updateMotorMaps(fThetaFW, fThetaRV, fPhiFW, fPhiRV, useSlowMaps=False)
 
 # write to a new XML file
 #old.createCalibrationFile('../xml/motormaps.xml')
-old.createCalibrationFile(cobraCharmerPath+'/xml/motormap'+datetoday+'.xml')
+old.createCalibrationFile(cobraCharmerPath+'/xml/motormap_'+datetoday+'.xml')
 
 
-print(cobraCharmerPath+'/xml/motormap'+datetoday+'.xml  produced!')
+print(cobraCharmerPath+'/xml/motormap_'+datetoday+'.xml  produced!')
 print("Process Finised")
