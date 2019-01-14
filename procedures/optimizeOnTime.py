@@ -224,11 +224,18 @@ for n in range(repeat):
     for k in range(phiSteps//steps):
         pfi.moveAllSteps(myCobras, 0, steps)
         expose(dataPath+f'/phi1Forward{n}N{k}_', dataPath+f'/phi2Forward{n}N{k}_')
+    
+    # make sure it goes to the limit
+    pfi.moveAllSteps(myCobras, 0, 5000)
     # reverse phi motor maps
     expose(dataPath+f'/phi1End{n}_', dataPath+f'/phi2End{n}_')
     for k in range(phiSteps//steps):
         pfi.moveAllSteps(myCobras, 0, -steps)
         expose(dataPath+f'/phi1Reverse{n}N{k}_', dataPath+f'/phi2Reverse{n}N{k}_')
+
+    # At the end, make sure the cobra back to the hard stop
+    pfi.moveAllSteps(myCobras, 0, -5000)
+
 
 # After the loop, set back to default XML for repositioning the fiber
 pfi.loadModel(preciseXML)
@@ -256,12 +263,19 @@ for n in range(repeat):
     for k in range(thetaSteps//steps):
         pfi.moveAllSteps(myCobras, steps, 0)
         expose(dataPath+f'/theta1Forward{n}N{k}_', dataPath+f'/theta2Forward{n}N{k}_')
+    
+    # make sure it goes to the limit
+    pfi.moveAllSteps(myCobras, 10000, 0)
+    
     # reverse theta motor maps
     expose(dataPath+f'/theta1End{n}_', dataPath+f'/theta2End{n}_')
     for k in range(thetaSteps//steps):
         pfi.moveAllSteps(myCobras, -steps, 0)
         expose(dataPath+f'/theta1Reverse{n}N{k}_', dataPath+f'/theta2Reverse{n}N{k}_')
 
+    # make sure it goes to the limit
+    pfi.moveAllSteps(myCobras, -10000, 0)
+    
 # variable declaration for position measurement
 thetaFW = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
 thetaRV = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
