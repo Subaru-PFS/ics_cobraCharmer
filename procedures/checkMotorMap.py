@@ -167,61 +167,62 @@ def compareTwoXML():
     generateMotorMap(xml1, xml2, figpath, fiberlist=visibles)
 
 
-def main():
+# def main():
 
-    dataPath='/Volumes/Disk/Data/xml/'
+#     dataPath='/Volumes/Disk/Data/xml/'
 
-    xml_list=[dataPath+f'motormap_20190109_step50.xml',
-              dataPath+f'motormap_20190109_step100.xml',
-              dataPath+f'motormap_20190110_step200.xml',
-              dataPath+f'motormap_20190110_step400.xml']
-    tag_array=['step 50', 'step 100', 'step 200', 'step 400']
+#     xml_list=[dataPath+f'motormap_20190109_step50.xml',
+#               dataPath+f'motormap_20190109_step100.xml',
+#               dataPath+f'motormap_20190110_step200.xml',
+#               dataPath+f'motormap_20190110_step400.xml']
+#     tag_array=['step 50', 'step 100', 'step 200', 'step 400']
     
-    figPath=f'/Volumes/Disk/Data/MotorMap/20190114/'
+#     figPath=f'/Volumes/Disk/Data/MotorMap/20190114/'
 
-    brokens = [1 , 12, 39, 43, 54]
-    visibles= [e for e in range(1,58) if e not in brokens]
+#     brokens = [1 , 12, 39, 43, 54]
+#     visibles= [e for e in range(1,58) if e not in brokens]
     
-    # Prepare the data path for the work
-    if not (os.path.exists(figPath)):
-            os.makedirs(figPath)
+#     # Prepare the data path for the work
+#     if not (os.path.exists(figPath)):
+#             os.makedirs(figPath)
     
-    #visibles = [2, 3, 4]
+#     #visibles = [2, 3, 4]
 
-    for pid in visibles:
-        TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
+#     for pid in visibles:
+#         TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
 
-        p = figure(tools=TOOLS, x_range=[0, 550], y_range=[-0.2,0.2],plot_height=400,
-                plot_width=1000,title="Fiber No. "+str(int(pid)))
+#         p = figure(tools=TOOLS, x_range=[0, 550], y_range=[-0.2,0.2],plot_height=400,
+#                 plot_width=1000,title="Fiber No. "+str(int(pid)))
 
-        p.yaxis.axis_label = "Speed"
+#         p.yaxis.axis_label = "Speed"
 
-        q = figure(tools=TOOLS, x_range=[0, 300], y_range=[-0.3,0.3],plot_height=400,plot_width=1000)
+#         q = figure(tools=TOOLS, x_range=[0, 300], y_range=[-0.3,0.3],plot_height=400,plot_width=1000)
 
-        q.xaxis.axis_label = "Degree"
-        q.yaxis.axis_label = "Speed"
+#         q.xaxis.axis_label = "Degree"
+#         q.yaxis.axis_label = "Speed"
         
-        mapper = Category20[20]
-        colorcode = 0
-        for i, xml in enumerate(xml_list):
-            model = extractCalibModel(xml)
+#         mapper = Category20[20]
+#         colorcode = 0
+#         for i, xml in enumerate(xml_list):
+#             model = extractCalibModel(xml)
 
-            j1limit1 = (360/np.rad2deg(model.angularSteps[pid-1])).astype(int)-1
-            j2limit1 = (180/np.rad2deg(model.angularSteps[pid-1])).astype(int)-1
+#             j1limit1 = (360/np.rad2deg(model.angularSteps[pid-1])).astype(int)-1
+#             j2limit1 = (180/np.rad2deg(model.angularSteps[pid-1])).astype(int)-1
             
-            j1_fwd_reg1,j1_fwd_stepsize1,j1_rev_reg1,j1_rev_stepsize1,\
-                j2_fwd_reg1,j2_fwd_stepsize1,j2_rev_reg1,j2_rev_stepsize1=readMotorMap(xml,pid)
+#             j1_fwd_reg1,j1_fwd_stepsize1,j1_rev_reg1,j1_rev_stepsize1,\
+#                 j2_fwd_reg1,j2_fwd_stepsize1,j2_rev_reg1,j2_rev_stepsize1=readMotorMap(xml,pid)
 
-            legendname = tag_array[i]
-            p.line(x=j1_fwd_reg1[:j1limit1], y=j1_fwd_stepsize1[:j1limit1], color=mapper[colorcode], line_width=2, legend=legendname)
-            p.line(x=j1_rev_reg1[:j1limit1], y=j1_rev_stepsize1[:j1limit1], color=mapper[colorcode], line_width=2,line_dash="4 4")#, legend=legendname)
+#             legendname = tag_array[i]
+#             p.line(x=j1_fwd_reg1[:j1limit1], y=j1_fwd_stepsize1[:j1limit1], color=mapper[colorcode], line_width=2, legend=legendname)
+#             p.line(x=j1_rev_reg1[:j1limit1], y=j1_rev_stepsize1[:j1limit1], color=mapper[colorcode], line_width=2,line_dash="4 4")#, legend=legendname)
 
-            q.line(x=j2_fwd_reg1[:j2limit1], y=j2_fwd_stepsize1[:j2limit1], color=mapper[colorcode], line_width=3)#, legend=legendname)
-            q.line(x=j2_rev_reg1[:j2limit1], y=j2_rev_stepsize1[:j2limit1], color=mapper[colorcode], line_width=2,line_dash="4 4")#, legend=legendname)
+#             q.line(x=j2_fwd_reg1[:j2limit1], y=j2_fwd_stepsize1[:j2limit1], color=mapper[colorcode], line_width=3)#, legend=legendname)
+#             q.line(x=j2_rev_reg1[:j2limit1], y=j2_rev_stepsize1[:j2limit1], color=mapper[colorcode], line_width=2,line_dash="4 4")#, legend=legendname)
 
-            colorcode = colorcode+2
+#             colorcode = colorcode+2
 
-        export_png(column(p,q),filename=figPath+"motormap_"+str(int(pid))+".png")
+#         export_png(column(p,q),filename=figPath+"motormap_"+str(int(pid))+".png")
+
 # def main():
 #     dataPath='/Volumes/Disk/Data/xml/'
 #     xml1=dataPath+'motormaps_181205.xml'
@@ -242,6 +243,16 @@ def main():
 
 
 
+def main():
+    dataPath='/Volumes/Disk/Data/xml/'
+    xml1=dataPath+'motormaps_181205.xml'
+    brokens = [1 , 12, 39, 43, 54]
+    visibles= [e for e in range(1,58) if e not in brokens]
+
+    xml2=dataPath+f'motormap_20190114.xml'
+
+    figpath=f'/Volumes/Disk/Data/MotorMap/20190114/'
+    generateMotorMap(xml1, xml2, figpath, fiberlist=visibles)
 
 if __name__ == '__main__':
     main()

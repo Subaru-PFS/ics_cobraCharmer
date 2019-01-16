@@ -11,20 +11,110 @@ import glob
 from copy import deepcopy
 from ics.cobraCharmer import pfi as pfiControl
 from astropy.table import Table
+from scipy import stats
+
 
 class ontimeModel():
+    
+    def getCalibModel(self, initXML):
+    
+        pfi = pfiControl.PFI(fpgaHost='localhost', doConnect=False) #'fpga' for real device.
+        pfi.loadModel(initXML)
+        
+        return pfi.calibModel
 
+    def getThetaFwdSlope(self, pid, modelArray):
+        
+        onTimeArray = []
+        angSpdArray = []
+        for m in modelArray:
+            onTimeArray.append(m.motorOntimeFwd1[pid-1]*1000)
+            angSpdArray.append(np.mean(np.rad2deg(m.angularSteps[pid-1]/m.S1Pm[pid-1])))
+        
+        #print(onTimeArray)
+        #print(angSpdArray)
+        slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
+        
+        return slope
+    
+    def getThetaRevSlope(self, pid, modelArray):
+        
+        onTimeArray = []
+        angSpdArray = []
+        for m in modelArray:
+            onTimeArray.append(m.motorOntimeFwd1[pid-1]*1000)
+            angSpdArray.append(-np.mean(np.rad2deg(m.angularSteps[pid-1]/m.S1Nm[pid-1])))
+
+        slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
+        
+        return slope
+  
+    def getPhiFwdSlope(self, pid, modelArray):
+        
+        onTimeArray = []
+        angSpdArray = []
+        for m in modelArray:
+            onTimeArray.append(m.motorOntimeFwd1[pid-1]*1000)
+            angSpdArray.append(np.mean(np.rad2deg(m.angularSteps[pid-1]/m.S2Pm[pid-1])))
+        
+        #print(onTimeArray)
+        #print(angSpdArray)
+        slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
+        
+        return slope
+    
+    def getPhiRevSlope(self, pid, modelArray):
+        
+        onTimeArray = []
+        angSpdArray = []
+        for m in modelArray:
+            onTimeArray.append(m.motorOntimeFwd1[pid-1]*1000)
+            angSpdArray.append(-np.mean(np.rad2deg(m.angularSteps[pid-1]/m.S2Nm[pid-1])))
+
+        slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
+        
+        return slope
+
+    def buildModelfromXML(self, xmlArray, visibleFibers=False):
+        
+        # Reading all model and build a model list
+        model = []
+        for xml in xmlArray:
+            model.append(self.getCalibModel(xml))
+
+        j1fwd_slope = []
+        j1rev_slope = []
+        j2fwd_slope = []
+        j2rev_slope = []
+
+        for pid in range(1,58):
+            j1fwd_slope.append(self.getThetaFwdSlope(pid,model))
+            j1rev_slope.append(self.getThetaRevSlope(pid,model))
+            j2fwd_slope.append(self.getPhiFwdSlope(pid,model))
+            j2rev_slope.append(self.getPhiFwdSlope(pid,model))
+        
+        self.j1fwd_slope = j1fwd_slope
+        self.j1rev_slope = j1rev_slope
+        self.j2fwd_slope = j2fwd_slope
+        self.j2rev_slope = j2rev_slope
+
+    
     def getTargetOnTime(self, target, modelSlope, onTime, angSpeed):
         #print(onTime)
         #print(angSpeed)
         
         size = len(onTime)
         newOntime_ms = np.zeros(size)
+        sumx=np.zeros(size)
 
         onTime_ms = onTime*1000
         #if (target.any() > 0) :
-
-        sumx = (target - angSpeed)/modelSlope    
+        for i in range(size):
+            if modelSlope[i] == 0:
+                sumx[i]=0
+            else:
+                sumx[i] = (target - angSpeed[i])/modelSlope[i]   
+        
         newOntime_ms= onTime_ms+sumx
         
     
@@ -38,10 +128,7 @@ class ontimeModel():
         self.j2fwd_slope = 0.0090
         self.j2rev_slope = -0.0082
 
-        self.j1fwd_itc = -0.12
-        self.j1rev_itc = +0.10
-        self.j2fwd_itc = -0.13
-        self.j2rev_itc = +0.11
+
         
 class adjustOnTime():
 
@@ -51,6 +138,50 @@ class adjustOnTime():
         pfi.loadModel(initXML)
         
         return pfi.calibModel
+    def updateOntimeWithFiberSlope(self, xmlArray, originXML, newXML, thetaTable=False, phiTable=False):
+        
+        #datetoday=datetime.datetime.now().strftime("%Y%m%d")
+        model = self.extractCalibModel(originXML)
+
+        size = len(model.angularSteps)
+
+        j1fwd_avg = np.zeros(size)
+        j1rev_avg = np.zeros(size)
+        j2fwd_avg = np.zeros(size)
+        j2rev_avg = np.zeros(size)
+
+        for i in range(size):
+            j1fwd_avg[i] = np.mean(np.rad2deg(model.angularSteps[i]/model.S1Pm[i]))
+            j1rev_avg[i] = -np.mean(np.rad2deg(model.angularSteps[i]/model.S1Nm[i]))
+            j2fwd_avg[i] = np.mean(np.rad2deg(model.angularSteps[i]/model.S2Pm[i]))
+            j2rev_avg[i] = -np.mean(np.rad2deg(model.angularSteps[i]/model.S2Nm[i]))
+
+        otm = ontimeModel()
+        otm.buildModelfromXML(xmlArray)
+
+        newOntimeFwd1 = otm.getTargetOnTime(0.05,otm.j1fwd_slope, model.motorOntimeFwd1 ,j1fwd_avg)
+        newOntimeFwd2 = otm.getTargetOnTime(0.07,otm.j2fwd_slope, model.motorOntimeFwd2 ,j2fwd_avg)
+
+        newOntimeRev1 = otm.getTargetOnTime(-0.05,otm.j1rev_slope, model.motorOntimeRev1 ,j1rev_avg)
+        newOntimeRev2 = otm.getTargetOnTime(-0.07,otm.j2rev_slope, model.motorOntimeRev2 ,j2rev_avg)
+
+
+        if thetaTable is not False:
+            t=Table([model.motorOntimeFwd1,j1fwd_avg,newOntimeFwd1,
+                     model.motorOntimeRev1,j1rev_avg,newOntimeRev1],
+                     names=('Ori Fwd OT', 'FWD sp', 'New Fwd OT','Ori Rev OT', 'REV sp', 'New Rev OT'),
+                     dtype=('f4', 'f4', 'f4','f4', 'f4', 'f4'))
+            t.write(thetaTable,format='ascii',overwrite=True)
+
+        if phiTable is not False:
+            t=Table([model.motorOntimeFwd2,j2fwd_avg,newOntimeFwd2,
+                     model.motorOntimeRev2,j2rev_avg,newOntimeRev2],
+                     names=('Ori Fwd OT', 'FWD sp', 'New Fwd OT','Ori Rev OT', 'REV sp', 'New Rev OT'),
+                     dtype=('f4', 'f4', 'f4','f4', 'f4', 'f4'))
+            t.write(phiTable,format='ascii',overwrite=True)
+
+        model.updateOntimes(thtFwd=newOntimeFwd1, thtRev=newOntimeRev1, phiFwd=newOntimeFwd2, phiRev=newOntimeRev2)
+        model.createCalibrationFile(newXML)
 
     def updateOntimeWithDefaultSlope(self, originXML, newXML, thetaTable=False, phiTable=False):
         
@@ -99,6 +230,15 @@ class adjustOnTime():
         pass
 
 def main():
+    xmlarray = []
+    dataPath='/Volumes/Disk/Data/xml/'
+    for tms in range(25, 95, 10):
+        xml=dataPath+f'motormapOntime{tms}_20181221.xml'
+        xmlarray.append(xml)
+    
+    #otm=ontimeModel()
+    #otm.buildModelfromXML(xmlarray)
+    
     datetoday=datetime.datetime.now().strftime("%Y%m%d")    
     # cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
     cobraCharmerPath='/Users/chyan/Documents/workspace/ics_cobraCharmer/'
@@ -107,7 +247,8 @@ def main():
     initXML=cobraCharmerPath+'/xml/motormaps_181205.xml'
     newXML = cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
     
-    adjot.updateOntimeWithDefaultSlope(initXML, newXML, thetaTable='theta.tbl',phiTable='phi.tbl')
+    #adjot.updateOntimeWithDefaultSlope(initXML, newXML, thetaTable='theta.tbl',phiTable='phi.tbl')
+    adjot.updateOntimeWithFiberSlope(xmlarray, initXML, newXML, thetaTable='theta.tbl',phiTable='phi.tbl')
 
 
 if __name__ == '__main__':
