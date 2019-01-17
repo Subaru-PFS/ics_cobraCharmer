@@ -10,6 +10,7 @@ from subprocess import Popen, PIPE
 import glob
 from copy import deepcopy
 from ics.cobraCharmer import pfi as pfiControl
+from copy import deepcopy
 
 def expose(fn1, fn2):
     p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-l", "3", "-f", fn1], stdout=PIPE)
@@ -130,7 +131,7 @@ evenCobras = moduleCobras2[2]
 
 # Initializing COBRA module
 pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-preciseXML=cobraCharmerPath+'/xml/motormaps_181205.xml'
+preciseXML=cobraCharmerPath+'/xml/precise6.xml'
 #preciseXML=cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
 
 if not os.path.exists(preciseXML):
@@ -212,9 +213,16 @@ myCobras = getCobras(goodIdx)
 
 # Loading XML file once again.  Changing XML file name if you want to loading 
 #  special setting.
-ontimeXML=cobraCharmerPath+'/xml/updateOntime_20190110.xml'
+ontimeXML=cobraCharmerPath+'/xml/updateOntime_20190117.xml'
 pfi.loadModel(ontimeXML)
 pfi.setFreq(allCobras)
+
+OnTime = deepcopy([pfi.calibModel.motorOntimeFwd1,
+                   pfi.calibModel.motorOntimeRev1,
+                   pfi.calibModel.motorOntimeFwd2,
+                   pfi.calibModel.motorOntimeRev2])
+
+fastOnTime = [np.full(57, 0.09)] * 4
 
 
 #record the phi movements
@@ -226,7 +234,10 @@ for n in range(repeat):
         expose(dataPath+f'/phi1Forward{n}N{k}_', dataPath+f'/phi2Forward{n}N{k}_')
     
     # make sure it goes to the limit
+    pfi.calibModel.updateOntimes(*fastOnTime)
     pfi.moveAllSteps(myCobras, 0, 5000)
+    pfi.calibModel.updateOntimes(*OnTime)
+
     # reverse phi motor maps
     expose(dataPath+f'/phi1End{n}_', dataPath+f'/phi2End{n}_')
     for k in range(phiSteps//steps):
@@ -234,7 +245,10 @@ for n in range(repeat):
         expose(dataPath+f'/phi1Reverse{n}N{k}_', dataPath+f'/phi2Reverse{n}N{k}_')
 
     # At the end, make sure the cobra back to the hard stop
+    pfi.calibModel.updateOntimes(*fastOnTime)
     pfi.moveAllSteps(myCobras, 0, -5000)
+    pfi.calibModel.updateOntimes(*OnTime)
+
 
 
 # After the loop, set back to default XML for repositioning the fiber
@@ -244,14 +258,13 @@ pfi.setFreq(allCobras)
 
 # move phi arms out for 60 degrees then home theta
 pfi.moveAllSteps(myCobras, -10000, -5000)
-pfi.moveAllSteps(myCobras, -5000, -5000)
+pfi.moveAllSteps(myCobras, -5000, 0)
 moveToXYfromHome(goodIdx, outTargets[goodIdx], dataPath)
 pfi.moveAllSteps(myCobras, -10000, 0)
 pfi.moveAllSteps(myCobras, -5000, 0)
 
 # Loading XML file once again.  Changing XML file name if you want to loading 
 #  special setting.
-ontimeXML=cobraCharmerPath+'/xml/updateOntime_20190110.xml'
 pfi.loadModel(ontimeXML)
 pfi.setFreq(allCobras)
 
@@ -265,8 +278,10 @@ for n in range(repeat):
         expose(dataPath+f'/theta1Forward{n}N{k}_', dataPath+f'/theta2Forward{n}N{k}_')
     
     # make sure it goes to the limit
+    pfi.calibModel.updateOntimes(*fastOnTime)
     pfi.moveAllSteps(myCobras, 10000, 0)
-    
+    pfi.calibModel.updateOntimes(*OnTime)
+ 
     # reverse theta motor maps
     expose(dataPath+f'/theta1End{n}_', dataPath+f'/theta2End{n}_')
     for k in range(thetaSteps//steps):
@@ -274,8 +289,10 @@ for n in range(repeat):
         expose(dataPath+f'/theta1Reverse{n}N{k}_', dataPath+f'/theta2Reverse{n}N{k}_')
 
     # make sure it goes to the limit
+    pfi.calibModel.updateOntimes(*fastOnTime)
     pfi.moveAllSteps(myCobras, -10000, 0)
-    
+    pfi.calibModel.updateOntimes(*OnTime)
+
 # variable declaration for position measurement
 thetaFW = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
 thetaRV = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
