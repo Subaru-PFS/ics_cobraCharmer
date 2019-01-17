@@ -31,8 +31,7 @@ class ontimeModel():
             onTimeArray.append(m.motorOntimeFwd1[pid-1]*1000)
             angSpdArray.append(np.mean(np.rad2deg(m.angularSteps[pid-1]/m.S1Pm[pid-1])))
         
-        #print(onTimeArray)
-        #print(angSpdArray)
+        
         slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
         
         return slope
@@ -42,7 +41,7 @@ class ontimeModel():
         onTimeArray = []
         angSpdArray = []
         for m in modelArray:
-            onTimeArray.append(m.motorOntimeFwd1[pid-1]*1000)
+            onTimeArray.append(m.motorOntimeRev1[pid-1]*1000)
             angSpdArray.append(-np.mean(np.rad2deg(m.angularSteps[pid-1]/m.S1Nm[pid-1])))
 
         slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
@@ -54,11 +53,9 @@ class ontimeModel():
         onTimeArray = []
         angSpdArray = []
         for m in modelArray:
-            onTimeArray.append(m.motorOntimeFwd1[pid-1]*1000)
+            onTimeArray.append(m.motorOntimeFwd2[pid-1]*1000)
             angSpdArray.append(np.mean(np.rad2deg(m.angularSteps[pid-1]/m.S2Pm[pid-1])))
         
-        #print(onTimeArray)
-        #print(angSpdArray)
         slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
         
         return slope
@@ -68,9 +65,8 @@ class ontimeModel():
         onTimeArray = []
         angSpdArray = []
         for m in modelArray:
-            onTimeArray.append(m.motorOntimeFwd1[pid-1]*1000)
+            onTimeArray.append(m.motorOntimeRev2[pid-1]*1000)
             angSpdArray.append(-np.mean(np.rad2deg(m.angularSteps[pid-1]/m.S2Nm[pid-1])))
-
         slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
         
         return slope
@@ -91,8 +87,9 @@ class ontimeModel():
             j1fwd_slope.append(self.getThetaFwdSlope(pid,model))
             j1rev_slope.append(self.getThetaRevSlope(pid,model))
             j2fwd_slope.append(self.getPhiFwdSlope(pid,model))
-            j2rev_slope.append(self.getPhiFwdSlope(pid,model))
-        
+            j2rev_slope.append(self.getPhiRevSlope(pid,model))
+            
+
         self.j1fwd_slope = j1fwd_slope
         self.j1rev_slope = j1rev_slope
         self.j2fwd_slope = j2fwd_slope
@@ -109,17 +106,20 @@ class ontimeModel():
 
         onTime_ms = onTime*1000
         #if (target.any() > 0) :
-        for i in range(size):
-            if modelSlope[i] == 0:
-                sumx[i]=0
-            else:
-                sumx[i] = (target - angSpeed[i])/modelSlope[i]   
-        
-        newOntime_ms= onTime_ms+sumx
-        
-    
-        newOntime = newOntime_ms / 1000.0 
+        if isinstance(modelSlope, list) ==  True:
+ 
+            for i in range(size):
+                if modelSlope[i] == 0:
+                    sumx[i]=0
+                else:
+                    sumx[i] = (target - angSpeed[i])/modelSlope[i]   
 
+        else:
+            sumx = (target - angSpeed)/modelSlope  
+
+        newOntime_ms= onTime_ms+sumx
+
+        newOntime = newOntime_ms / 1000.0 
         return newOntime
 
     def __init__(self):
@@ -164,7 +164,6 @@ class adjustOnTime():
 
         newOntimeRev1 = otm.getTargetOnTime(-0.05,otm.j1rev_slope, model.motorOntimeRev1 ,j1rev_avg)
         newOntimeRev2 = otm.getTargetOnTime(-0.07,otm.j2rev_slope, model.motorOntimeRev2 ,j2rev_avg)
-
 
         if thetaTable is not False:
             t=Table([model.motorOntimeFwd1,j1fwd_avg,newOntimeFwd1,
@@ -232,12 +231,9 @@ class adjustOnTime():
 def main():
     xmlarray = []
     dataPath='/Volumes/Disk/Data/xml/'
-    for tms in range(25, 95, 10):
+    for tms in range(25, 75, 10):
         xml=dataPath+f'motormapOntime{tms}_20181221.xml'
         xmlarray.append(xml)
-    
-    #otm=ontimeModel()
-    #otm.buildModelfromXML(xmlarray)
     
     datetoday=datetime.datetime.now().strftime("%Y%m%d")    
     # cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
