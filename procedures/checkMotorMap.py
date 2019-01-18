@@ -18,7 +18,6 @@ from bokeh.transform import linear_cmap
 
 from bokeh.palettes import Category20
 
-#output_notebook()
 def extractCalibModel(initXML):
     
     pfi = pfiControl.PFI(fpgaHost='localhost', doConnect=False) #'fpga' for real device.
@@ -152,95 +151,119 @@ def generateMotorMap(baseXML, newXML, figPath, fiberlist = False):
         export_png(column(p,q),filename=figPath+"motormap_"+str(int(pid))+".png")
 
 
+def compareAvgSpeed(baseXML, targetXML, figPath):
+    model1 = extractCalibModel(baseXML)
+    model2 = extractCalibModel(targetXML)
+    
+
+    size1 = len(model1.angularSteps)
+
+    j1fwd_avg1 = np.zeros(size1)
+    j1rev_avg1 = np.zeros(size1)
+    j2fwd_avg1 = np.zeros(size1)
+    j2rev_avg1 = np.zeros(size1)
+
+    for i in range(size1):
+        j1fwd_avg1[i] = np.mean(np.rad2deg(model1.angularSteps[i]/model1.S1Pm[i]))
+        j1rev_avg1[i] = np.mean(np.rad2deg(model1.angularSteps[i]/model1.S1Nm[i]))
+        j2fwd_avg1[i] = np.mean(np.rad2deg(model1.angularSteps[i]/model1.S2Pm[i]))
+        j2rev_avg1[i] = np.mean(np.rad2deg(model1.angularSteps[i]/model1.S2Nm[i]))
+
+    size2 = len(model2.angularSteps)
+
+    j1fwd_avg2 = np.zeros(size2)
+    j1rev_avg2 = np.zeros(size2)
+    j2fwd_avg2 = np.zeros(size2)
+    j2rev_avg2 = np.zeros(size2)
+
+    for i in range(size1):
+        j1fwd_avg2[i] = np.mean(np.rad2deg(model2.angularSteps[i]/model2.S1Pm[i]))
+        j1rev_avg2[i] = np.mean(np.rad2deg(model2.angularSteps[i]/model2.S1Nm[i]))
+        j2fwd_avg2[i] = np.mean(np.rad2deg(model2.angularSteps[i]/model2.S2Pm[i]))
+        j2rev_avg2[i] = np.mean(np.rad2deg(model2.angularSteps[i]/model2.S2Nm[i]))
+
+
+    p1=makeHistoPlot(j1fwd_avg1, j1fwd_avg2, 'Theta Fwd', 'Caltech', 'ASIAA')
+    p2=makeHistoPlot(j1rev_avg1, j1rev_avg2, 'Theta Rev', 'Caltech', 'ASIAA')
+    p3=makeHistoPlot(j2fwd_avg1, j2fwd_avg2, 'Phi Fwd', 'Caltech', 'ASIAA')
+    p4=makeHistoPlot(j2rev_avg1, j2rev_avg2, 'Phi Rev', 'Caltech', 'ASIAA')
+
+    show(column(p1,p2,p3,p4))
+
+    #show(p4)
+def makeHistoPlot(avg1, avg2, Title, Legend1, Legend2):
+    
+    hist1, edges1 = np.histogram(avg1, density=True, bins=np.arange(0.0, 0.2, 0.01))
+    hist2, edges2 = np.histogram(avg2, density=True, bins=np.arange(0.0, 0.2, 0.01))
+
+    TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
+    p = figure(title=Title, tools=TOOLS, background_fill_color="#fafafa")
+    p.quad(top=hist1, bottom=0, left=edges1[:-1], right=edges1[1:],
+           fill_color="navy", line_color="white", alpha=0.3,legend=Legend1)
+
+    p.step(x=edges2[1:-1],y=hist2[0:-1], color='black',legend=Legend2,line_width=2)
+
+    return p
 
 
 def compareTwoXML():
 
     dataPath='/Volumes/Disk/Data/xml/'
-    xml1=dataPath+'motormaps_181205.xml'
+    xml1=dataPath+'coarse.xml'
     brokens = [1 , 12, 39, 43, 54]
     visibles= [e for e in range(1,58) if e not in brokens]
     
     figpath=f'/Volumes/Disk/Data/MotorMap/20190110/'
-    xml2=dataPath+f'motormap_20190110.xml'
+    xml2=dataPath+f'motormap_20190117.xml'
 
     generateMotorMap(xml1, xml2, figpath, fiberlist=visibles)
 
 
-# def main():
+def plotMotorMapFromMutiXML(xmlList, ledgenList, figPath, fiberlist=False):
 
-#     dataPath='/Volumes/Disk/Data/xml/'
+    if fiberlist is not False:
+        visibles = fiberlist
+    else:
+        visibles = range(57)
 
-#     xml_list=[dataPath+f'motormap_20190109_step50.xml',
-#               dataPath+f'motormap_20190109_step100.xml',
-#               dataPath+f'motormap_20190110_step200.xml',
-#               dataPath+f'motormap_20190110_step400.xml']
-#     tag_array=['step 50', 'step 100', 'step 200', 'step 400']
+    # Prepare the data path for the work
+    if not (os.path.exists(figPath)):
+            os.makedirs(figPath)
     
-#     figPath=f'/Volumes/Disk/Data/MotorMap/20190114/'
+    for pid in visibles:
+        TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
 
-#     brokens = [1 , 12, 39, 43, 54]
-#     visibles= [e for e in range(1,58) if e not in brokens]
-    
-#     # Prepare the data path for the work
-#     if not (os.path.exists(figPath)):
-#             os.makedirs(figPath)
-    
-#     #visibles = [2, 3, 4]
+        p = figure(tools=TOOLS, x_range=[0, 550], y_range=[-0.2,0.2],plot_height=400,
+                plot_width=1000,title="Fiber No. "+str(int(pid)))
 
-#     for pid in visibles:
-#         TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
+        p.yaxis.axis_label = "Speed"
 
-#         p = figure(tools=TOOLS, x_range=[0, 550], y_range=[-0.2,0.2],plot_height=400,
-#                 plot_width=1000,title="Fiber No. "+str(int(pid)))
+        q = figure(tools=TOOLS, x_range=[0, 300], y_range=[-0.3,0.3],plot_height=400,plot_width=1000)
 
-#         p.yaxis.axis_label = "Speed"
-
-#         q = figure(tools=TOOLS, x_range=[0, 300], y_range=[-0.3,0.3],plot_height=400,plot_width=1000)
-
-#         q.xaxis.axis_label = "Degree"
-#         q.yaxis.axis_label = "Speed"
+        q.xaxis.axis_label = "Degree"
+        q.yaxis.axis_label = "Speed"
         
-#         mapper = Category20[20]
-#         colorcode = 0
-#         for i, xml in enumerate(xml_list):
-#             model = extractCalibModel(xml)
+        mapper = Category20[20]
+        colorcode = 0
+        for i, xml in enumerate(xmlList):
+            model = extractCalibModel(xml)
 
-#             j1limit1 = (360/np.rad2deg(model.angularSteps[pid-1])).astype(int)-1
-#             j2limit1 = (180/np.rad2deg(model.angularSteps[pid-1])).astype(int)-1
+            j1limit1 = (360/np.rad2deg(model.angularSteps[pid-1])).astype(int)-1
+            j2limit1 = (180/np.rad2deg(model.angularSteps[pid-1])).astype(int)-1
             
-#             j1_fwd_reg1,j1_fwd_stepsize1,j1_rev_reg1,j1_rev_stepsize1,\
-#                 j2_fwd_reg1,j2_fwd_stepsize1,j2_rev_reg1,j2_rev_stepsize1=readMotorMap(xml,pid)
+            j1_fwd_reg1,j1_fwd_stepsize1,j1_rev_reg1,j1_rev_stepsize1,\
+                j2_fwd_reg1,j2_fwd_stepsize1,j2_rev_reg1,j2_rev_stepsize1=readMotorMap(xml,pid)
 
-#             legendname = tag_array[i]
-#             p.line(x=j1_fwd_reg1[:j1limit1], y=j1_fwd_stepsize1[:j1limit1], color=mapper[colorcode], line_width=2, legend=legendname)
-#             p.line(x=j1_rev_reg1[:j1limit1], y=j1_rev_stepsize1[:j1limit1], color=mapper[colorcode], line_width=2,line_dash="4 4")#, legend=legendname)
+            legendname = ledgenList[i]
+            p.line(x=j1_fwd_reg1[:j1limit1], y=j1_fwd_stepsize1[:j1limit1], color=mapper[colorcode], line_width=2, legend=legendname)
+            p.line(x=j1_rev_reg1[:j1limit1], y=j1_rev_stepsize1[:j1limit1], color=mapper[colorcode], line_width=2,line_dash="4 4")#, legend=legendname)
 
-#             q.line(x=j2_fwd_reg1[:j2limit1], y=j2_fwd_stepsize1[:j2limit1], color=mapper[colorcode], line_width=3)#, legend=legendname)
-#             q.line(x=j2_rev_reg1[:j2limit1], y=j2_rev_stepsize1[:j2limit1], color=mapper[colorcode], line_width=2,line_dash="4 4")#, legend=legendname)
+            q.line(x=j2_fwd_reg1[:j2limit1], y=j2_fwd_stepsize1[:j2limit1], color=mapper[colorcode], line_width=3)#, legend=legendname)
+            q.line(x=j2_rev_reg1[:j2limit1], y=j2_rev_stepsize1[:j2limit1], color=mapper[colorcode], line_width=2,line_dash="4 4")#, legend=legendname)
 
-#             colorcode = colorcode+2
+            colorcode = colorcode+2
 
-#         export_png(column(p,q),filename=figPath+"motormap_"+str(int(pid))+".png")
-
-# def main():
-#     dataPath='/Volumes/Disk/Data/xml/'
-#     xml1=dataPath+'motormaps_181205.xml'
-#     brokens = [1 , 12, 39, 43, 54]
-#     visibles= [e for e in range(1,58) if e not in brokens]
-
-#     for step in [50,100]:
-    
-#         xml2=dataPath+f'motormap_20190109_step{step}.xml'
-#         figpath=f'/Volumes/Disk/Data/MotorMap/20190110_step{step}/'
-#         generateMotorMap(xml1, xml2, figpath, fiberlist=visibles)
-
-#     for step in [200, 400]:
-#         xml2=dataPath+f'motormap_20190110_step{step}.xml'
-#         figpath=f'/Volumes/Disk/Data/MotorMap/20190110_step{step}/'
-    
-#         generateMotorMap(xml1, xml2, figpath, fiberlist=visibles)
-
+        export_png(column(p,q),filename=figPath+"motormap_"+str(int(pid))+".png")
 
 
 def main():
@@ -249,10 +272,11 @@ def main():
     brokens = [1 , 12, 39, 43, 54]
     visibles= [e for e in range(1,58) if e not in brokens]
 
-    xml2=dataPath+f'motormap_20190114.xml'
+    xml2=dataPath+f'motormap_20190117.xml'
 
-    figpath=f'/Volumes/Disk/Data/MotorMap/20190114/'
-    generateMotorMap(xml1, xml2, figpath, fiberlist=visibles)
+    figpath=f'/Volumes/Disk/Data/MotorMap/20190117/'
+    #generateMotorMap(xml1, xml2, figpath, fiberlist=visibles)
+    compareAvgSpeed(xml1, xml2, figpath)
 
 if __name__ == '__main__':
     main()
