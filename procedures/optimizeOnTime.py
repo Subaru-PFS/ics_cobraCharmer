@@ -205,7 +205,7 @@ pfi.moveAllSteps(getCobras(goodIdx), 0, -5000)
 
 # parameters declared here
 repeat = 3
-steps = 200
+steps = 50
 thetaSteps = 10000
 phiSteps = 5000
 myCobras = getCobras(goodIdx)
