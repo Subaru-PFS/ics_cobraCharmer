@@ -138,7 +138,7 @@ class adjustOnTime():
         pfi.loadModel(initXML)
         
         return pfi.calibModel
-    def updateOntimeWithFiberSlope(self, xmlArray, originXML, newXML, thetaTable=False, phiTable=False):
+    def updateOntimeWithFiberSlope(self, originXML, newXML, xmlArray=False, thetaTable=False, phiTable=False):
         
         #datetoday=datetime.datetime.now().strftime("%Y%m%d")
         model = self.extractCalibModel(originXML)
@@ -149,64 +149,29 @@ class adjustOnTime():
         j1rev_avg = np.zeros(size)
         j2fwd_avg = np.zeros(size)
         j2rev_avg = np.zeros(size)
-
-        for i in range(size):
-            j1fwd_avg[i] = np.mean(np.rad2deg(model.angularSteps[i]/model.S1Pm[i]))
-            j1rev_avg[i] = -np.mean(np.rad2deg(model.angularSteps[i]/model.S1Nm[i]))
-            j2fwd_avg[i] = np.mean(np.rad2deg(model.angularSteps[i]/model.S2Pm[i]))
-            j2rev_avg[i] = -np.mean(np.rad2deg(model.angularSteps[i]/model.S2Nm[i]))
-
-        otm = ontimeModel()
-        otm.buildModelfromXML(xmlArray)
-
-        newOntimeFwd1 = otm.getTargetOnTime(0.05,otm.j1fwd_slope, model.motorOntimeFwd1 ,j1fwd_avg)
-        newOntimeFwd2 = otm.getTargetOnTime(0.07,otm.j2fwd_slope, model.motorOntimeFwd2 ,j2fwd_avg)
-
-        newOntimeRev1 = otm.getTargetOnTime(-0.05,otm.j1rev_slope, model.motorOntimeRev1 ,j1rev_avg)
-        newOntimeRev2 = otm.getTargetOnTime(-0.07,otm.j2rev_slope, model.motorOntimeRev2 ,j2rev_avg)
-
-        if thetaTable is not False:
-            t=Table([model.motorOntimeFwd1,j1fwd_avg,newOntimeFwd1,
-                     model.motorOntimeRev1,j1rev_avg,newOntimeRev1],
-                     names=('Ori Fwd OT', 'FWD sp', 'New Fwd OT','Ori Rev OT', 'REV sp', 'New Rev OT'),
-                     dtype=('f4', 'f4', 'f4','f4', 'f4', 'f4'))
-            t.write(thetaTable,format='ascii',overwrite=True)
-
-        if phiTable is not False:
-            t=Table([model.motorOntimeFwd2,j2fwd_avg,newOntimeFwd2,
-                     model.motorOntimeRev2,j2rev_avg,newOntimeRev2],
-                     names=('Ori Fwd OT', 'FWD sp', 'New Fwd OT','Ori Rev OT', 'REV sp', 'New Rev OT'),
-                     dtype=('f4', 'f4', 'f4','f4', 'f4', 'f4'))
-            t.write(phiTable,format='ascii',overwrite=True)
-
-        model.updateOntimes(thtFwd=newOntimeFwd1, thtRev=newOntimeRev1, phiFwd=newOntimeFwd2, phiRev=newOntimeRev2)
-        model.createCalibrationFile(newXML)
-
-    def updateOntimeWithDefaultSlope(self, originXML, newXML, thetaTable=False, phiTable=False):
         
-        #datetoday=datetime.datetime.now().strftime("%Y%m%d")
-        model = self.extractCalibModel(originXML)
-
-        size = len(model.angularSteps)
-
-        j1fwd_avg = np.zeros(size)
-        j1rev_avg = np.zeros(size)
-        j2fwd_avg = np.zeros(size)
-        j2rev_avg = np.zeros(size)
-
+        
         for i in range(size):
-            j1fwd_avg[i] = np.mean(np.rad2deg(model.angularSteps[i]/model.S1Pm[i]))
-            j1rev_avg[i] = -np.mean(np.rad2deg(model.angularSteps[i]/model.S1Nm[i]))
-            j2fwd_avg[i] = np.mean(np.rad2deg(model.angularSteps[i]/model.S2Pm[i]))
-            j2rev_avg[i] = -np.mean(np.rad2deg(model.angularSteps[i]/model.S2Nm[i]))
+            
+            # 
+            j1_limit = (360/np.rad2deg(model.angularSteps[0])-1).astype(int)
+            j2_limit = (180/np.rad2deg(model.angularSteps[0])-1).astype(int)
+            
+            j1fwd_avg[i] = np.mean(np.rad2deg(model.angularSteps[i]/model.S1Pm[i][:j1_limit]))
+            j1rev_avg[i] = -np.mean(np.rad2deg(model.angularSteps[i]/model.S1Nm[i][:j1_limit]))
+            j2fwd_avg[i] = np.mean(np.rad2deg(model.angularSteps[i]/model.S2Pm[i][:j2_limit]))
+            j2rev_avg[i] = -np.mean(np.rad2deg(model.angularSteps[i]/model.S2Nm[i][:j2_limit]))
 
-        otm = ontimeModel()
+        # If xml files is given, use xml files to build the on-time model.
+        if xmlArray is not False:
+            otm = ontimeModel()
+            otm.buildModelfromXML(xmlArray)
+
         newOntimeFwd1 = otm.getTargetOnTime(0.05,otm.j1fwd_slope, model.motorOntimeFwd1 ,j1fwd_avg)
         newOntimeFwd2 = otm.getTargetOnTime(0.07,otm.j2fwd_slope, model.motorOntimeFwd2 ,j2fwd_avg)
 
         newOntimeRev1 = otm.getTargetOnTime(-0.05,otm.j1rev_slope, model.motorOntimeRev1 ,j1rev_avg)
         newOntimeRev2 = otm.getTargetOnTime(-0.07,otm.j2rev_slope, model.motorOntimeRev2 ,j2rev_avg)
-
 
         if thetaTable is not False:
             t=Table([model.motorOntimeFwd1,j1fwd_avg,newOntimeFwd1,
@@ -231,7 +196,7 @@ class adjustOnTime():
 def main():
     xmlarray = []
     dataPath='/Volumes/Disk/Data/xml/'
-    for tms in range(25, 75, 10):
+    for tms in range(25, 65, 10):
         xml=dataPath+f'motormapOntime{tms}_20181221.xml'
         xmlarray.append(xml)
     
@@ -243,8 +208,7 @@ def main():
     initXML=cobraCharmerPath+'/xml/motormaps_181205.xml'
     newXML = cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
     
-    #adjot.updateOntimeWithDefaultSlope(initXML, newXML, thetaTable='theta.tbl',phiTable='phi.tbl')
-    adjot.updateOntimeWithFiberSlope(xmlarray, initXML, newXML, thetaTable='theta.tbl',phiTable='phi.tbl')
+    adjot.updateOntimeWithFiberSlope(initXML, newXML, xmlArray=xmlarray, thetaTable='theta.tbl',phiTable='phi.tbl')
 
 
 if __name__ == '__main__':

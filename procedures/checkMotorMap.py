@@ -114,6 +114,7 @@ def generateMotorMap(baseXML, newXML, figPath, fiberlist = False):
         j1limit2 = (360/np.rad2deg(model2.angularSteps[pid-1])).astype(int)-1
         j2limit2 = (180/np.rad2deg(model2.angularSteps[pid-1])).astype(int)-1
 
+
         j1_fwd_reg1,j1_fwd_stepsize1,j1_rev_reg1,j1_rev_stepsize1,\
                 j2_fwd_reg1,j2_fwd_stepsize1,j2_rev_reg1,j2_rev_stepsize1=readMotorMap(xml1,pid)
         j1_fwd_reg2,j1_fwd_stepsize2,j1_rev_reg2,j1_rev_stepsize2,\
@@ -275,7 +276,7 @@ def main():
     xml2=dataPath+f'motormap_20190117.xml'
 
     figpath=f'/Volumes/Disk/Data/MotorMap/20190117/'
-    #generateMotorMap(xml1, xml2, figpath, fiberlist=visibles)
+    generateMotorMap(xml1, xml2, figpath, fiberlist=visibles)
     compareAvgSpeed(xml1, xml2, figpath)
 
 if __name__ == '__main__':
