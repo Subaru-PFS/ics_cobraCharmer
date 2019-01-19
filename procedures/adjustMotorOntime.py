@@ -174,18 +174,24 @@ class adjustOnTime():
         newOntimeRev2 = otm.getTargetOnTime(-0.07,otm.j2rev_slope, model.motorOntimeRev2 ,j2rev_avg)
 
         if thetaTable is not False:
-            t=Table([model.motorOntimeFwd1,j1fwd_avg,newOntimeFwd1,
-                     model.motorOntimeRev1,j1rev_avg,newOntimeRev1],
-                     names=('Ori Fwd OT', 'FWD sp', 'New Fwd OT','Ori Rev OT', 'REV sp', 'New Rev OT'),
-                     dtype=('f4', 'f4', 'f4','f4', 'f4', 'f4'))
-            t.write(thetaTable,format='ascii',overwrite=True)
-
+            t=Table([model.motorOntimeFwd1,j1fwd_avg, otm.j1fwd_slope, newOntimeFwd1, 
+                     model.motorOntimeRev1,j1rev_avg, otm.j1rev_slope, newOntimeRev1],
+                     names=('Ori Fwd OT', 'FWD sp', 'FWD slope', 'New Fwd OT',
+                            'Ori Rev OT', 'REV sp', 'REV slope', 'New Rev OT'),
+                     dtype=('f4', 'f4', 'f4','f4', 'f4', 'f4', 'f4', 'f4'))
+            t.write(thetaTable,format='ascii.ecsv',overwrite=True,
+                    formats={'Ori Fwd OT': '%10.5f', 'FWD sp': '%10.5f', 'FWD slope': '%10.5f', 'New Fwd OT': '%10.5f',\
+                             'Ori Rev OT': '%10.5f', 'REV sp': '%10.5f', 'REV slope': '%10.5f', 'New Rev OT': '%10.5f'})
+  
         if phiTable is not False:
-            t=Table([model.motorOntimeFwd2,j2fwd_avg,newOntimeFwd2,
-                     model.motorOntimeRev2,j2rev_avg,newOntimeRev2],
-                     names=('Ori Fwd OT', 'FWD sp', 'New Fwd OT','Ori Rev OT', 'REV sp', 'New Rev OT'),
-                     dtype=('f4', 'f4', 'f4','f4', 'f4', 'f4'))
-            t.write(phiTable,format='ascii',overwrite=True)
+            t=Table([model.motorOntimeFwd2,j2fwd_avg, otm.j2fwd_slope, newOntimeFwd2,
+                     model.motorOntimeRev2,j2rev_avg, otm.j2rev_slope, newOntimeRev2],
+                     names=('Ori Fwd OT', 'FWD sp', 'FWD slope', 'New Fwd OT',
+                            'Ori Rev OT', 'REV sp', 'REV slope', 'New Rev OT'),
+                     dtype=('f4', 'f4', 'f4','f4', 'f4', 'f4', 'f4', 'f4'))
+            t.write(phiTable,format='ascii.ecsv',overwrite=True, 
+                    formats={'Ori Fwd OT': '%10.5f', 'FWD sp': '%10.5f', 'FWD slope': '%10.5f', 'New Fwd OT': '%10.5f',\
+                             'Ori Rev OT': '%10.5f', 'REV sp': '%10.5f', 'REV slope': '%10.5f', 'New Rev OT': '%10.5f'})
 
         model.updateOntimes(thtFwd=newOntimeFwd1, thtRev=newOntimeRev1, phiFwd=newOntimeFwd2, phiRev=newOntimeRev2)
         model.createCalibrationFile(newXML)
@@ -205,7 +211,8 @@ def main():
     cobraCharmerPath='/Users/chyan/Documents/workspace/ics_cobraCharmer/'
     adjot=adjustOnTime()
   
-    initXML=cobraCharmerPath+'/xml/precise6.xml'
+    #initXML=cobraCharmerPath+'/xml/precise6.xml'
+    initXML=cobraCharmerPath+'/xml/motormaps_181205.xml'
     newXML = cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
     
     adjot.updateOntimeWithFiberSlope(initXML, newXML, xmlArray=xmlarray, thetaTable='theta.tbl',phiTable='phi.tbl')
