@@ -139,7 +139,7 @@ evenCobras = moduleCobras2[2]
 
 # Initializing COBRA module
 pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-preciseXML=cobraCharmerPath+'/xml/precise5.xml'
+preciseXML=cobraCharmerPath+'/xml/precise6.xml'
 if not os.path.exists(preciseXML):
     print(f"Error: {preciseXML} not presented!")
     sys.exit()
@@ -148,8 +148,8 @@ pfi.loadModel(preciseXML)
 pfi.setFreq(allCobras)
 
 
-# Preparing a array for on-time 
-tarray = range(25,140,10)
+# Preparing a array for on-time.  From 20 to 50 microsecond
+tarray = range(20,60,10)
 for t_ms in tarray:
     
     # In the beginning of eacho loop, loading the default XML
@@ -219,8 +219,10 @@ for t_ms in tarray:
 
     
     # Setting the on-time righrt before the loop 
-    onTime=np.full(57,t_ms/1000.0)
-    pfi.calibModel.updateOntimes(thtFwd=onTime, thtRev=onTime, phiFwd=onTime, phiRev=onTime)
+    thetaOnTime=np.full(57,t_ms/1000.0)
+    phiOnTime=np.full(57,(t_ms-5)/1000.0)
+
+    pfi.calibModel.updateOntimes(thtFwd=thetaOnTime, thtRev=thetaOnTime, phiFwd=phiOnTime, phiRev=phiOnTime)
 
 
     #record the phi movements
@@ -246,7 +248,7 @@ for t_ms in tarray:
 
     # Setting the on-time righrt before the loop 
     onTime=np.full(57,t_ms/1000.0)
-    pfi.calibModel.updateOntimes(thtFwd=onTime, thtRev=onTime, phiFwd=onTime, phiRev=onTime)
+    pfi.calibModel.updateOntimes(thtFwd=thetaOnTime, thtRev=thetaOnTime, phiFwd=phiOnTime, phiRev=phiOnTime)
 
     # record the theta movements
     for n in range(repeat):

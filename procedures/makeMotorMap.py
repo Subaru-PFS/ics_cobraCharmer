@@ -90,12 +90,13 @@ def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=12, ca
         pfi.moveXY(cobras, curPos, targets)
 
 
-def runMotorMap(repeat, steps):
+def runMotorMap(repeat, steps, storagePath, outputXML):
     
-    datetoday=datetime.datetime.now().strftime("%Y%m%d")
+    #datetoday=datetime.datetime.now().strftime("%Y%m%d")
     #datetoday='20181219'
     cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
-    storagePath = '/data/pfs/'+datetoday
+    
+    #storagePath = '/data/pfs/'+datetoday
     dataPath = storagePath+'/image'
     prodctPath = storagePath+'/product'
 
@@ -137,7 +138,7 @@ def runMotorMap(repeat, steps):
 
     # Initializing COBRA module
     pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-    preciseXML=cobraCharmerPath+'/xml/motormaps_181205.xml'
+    preciseXML=cobraCharmerPath+'/xml/precise6.xml'
     #preciseXML=cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
 
     if not os.path.exists(preciseXML):
@@ -212,6 +213,14 @@ def runMotorMap(repeat, steps):
     phiSteps = 5000
     myCobras = getCobras(goodIdx)
 
+    OnTime = deepcopy([pfi.calibModel.motorOntimeFwd1,
+                   pfi.calibModel.motorOntimeRev1,
+                   pfi.calibModel.motorOntimeFwd2,
+                   pfi.calibModel.motorOntimeRev2])
+
+    fastOnTime = [np.full(57, 0.09)] * 4
+
+
     #record the phi movements
     for n in range(repeat):
         # forward phi motor maps
@@ -219,11 +228,22 @@ def runMotorMap(repeat, steps):
         for k in range(phiSteps//steps):
             pfi.moveAllSteps(myCobras, 0, steps)
             expose(dataPath+f'/phi1Forward{n}N{k}_', dataPath+f'/phi2Forward{n}N{k}_')
+        
+        # make sure it goes to the limit
+        pfi.calibModel.updateOntimes(*fastOnTime)
+        pfi.moveAllSteps(myCobras, 0, 5000)
+        pfi.calibModel.updateOntimes(*OnTime)
+        
         # reverse phi motor maps
         expose(dataPath+f'/phi1End{n}_', dataPath+f'/phi2End{n}_')
         for k in range(phiSteps//steps):
             pfi.moveAllSteps(myCobras, 0, -steps)
             expose(dataPath+f'/phi1Reverse{n}N{k}_', dataPath+f'/phi2Reverse{n}N{k}_')
+
+        # At the end, make sure the cobra back to the hard stop
+        pfi.calibModel.updateOntimes(*fastOnTime)
+        pfi.moveAllSteps(myCobras, 0, -5000)
+        pfi.calibModel.updateOntimes(*OnTime)
 
     # move phi arms out for 60 degrees then home theta
     pfi.moveAllSteps(myCobras, -10000, -5000)
@@ -239,12 +259,23 @@ def runMotorMap(repeat, steps):
         for k in range(thetaSteps//steps):
             pfi.moveAllSteps(myCobras, steps, 0)
             expose(dataPath+f'/theta1Forward{n}N{k}_', dataPath+f'/theta2Forward{n}N{k}_')
+        
+        # make sure it goes to the limit
+        pfi.calibModel.updateOntimes(*fastOnTime)
+        pfi.moveAllSteps(myCobras, 10000, 0)
+        pfi.calibModel.updateOntimes(*OnTime)
+        
         # reverse theta motor maps
         expose(dataPath+f'/theta1End{n}_', dataPath+f'/theta2End{n}_')
         for k in range(thetaSteps//steps):
             pfi.moveAllSteps(myCobras, -steps, 0)
             expose(dataPath+f'/theta1Reverse{n}N{k}_', dataPath+f'/theta2Reverse{n}N{k}_')
 
+        # make sure it goes to the limit
+        pfi.calibModel.updateOntimes(*fastOnTime)
+        pfi.moveAllSteps(myCobras, -10000, 0)
+        pfi.calibModel.updateOntimes(*OnTime)
+    
     # variable declaration for position measurement
     thetaFW = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
     thetaRV = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
@@ -504,16 +535,21 @@ def runMotorMap(repeat, steps):
 
     # write to a new XML file
     #old.createCalibrationFile('../xml/motormaps.xml')
-    old.createCalibrationFile(cobraCharmerPath+'/xml/motormap_'+datetoday+f'_step{steps}.xml')
+    old.createCalibrationFile(outputXML)
 
 
-    print(cobraCharmerPath+'/xml/motormap_'+datetoday+f'_step{steps}.xml  produced!')
+    print(f'{outputXML}  produced!')
     print("Process Finised")
 
 
 def main():
+    datetoday=datetime.datetime.now().strftime("%Y%m%d")
+    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
+
     for steps in [50,100,200,400]:
-        runMotorMap(3, steps)
+        storagePath = '/data/pfs/'+datetoday+f'_step{steps}/'
+        outputXML = cobraCharmerPath+'/xml/motormap_'+datetoday+f'_step{steps}.xml'
+        runMotorMap(3, steps, storagePath, outputXML)
 
 
 if __name__ == '__main__':

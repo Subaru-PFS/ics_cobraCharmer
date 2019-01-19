@@ -205,7 +205,7 @@ def main():
     cobraCharmerPath='/Users/chyan/Documents/workspace/ics_cobraCharmer/'
     adjot=adjustOnTime()
   
-    initXML=cobraCharmerPath+'/xml/motormaps_181205.xml'
+    initXML=cobraCharmerPath+'/xml/precise6.xml'
     newXML = cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
     
     adjot.updateOntimeWithFiberSlope(initXML, newXML, xmlArray=xmlarray, thetaTable='theta.tbl',phiTable='phi.tbl')
