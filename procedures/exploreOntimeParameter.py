@@ -96,7 +96,7 @@ def getCobras(cobs):
 
 datetoday=datetime.datetime.now().strftime("%Y%m%d")
 #datetoday='20181219'
-cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
+cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
 storagePath = '/data/pfs/'+datetoday
 dataPath = storagePath+'/ontimeimage'
 prodctPath = storagePath+'/product'
@@ -139,7 +139,7 @@ evenCobras = moduleCobras2[2]
 
 # Initializing COBRA module
 pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-preciseXML=cobraCharmerPath+'/xml/precise6.xml'
+preciseXML=cobraCharmerPath+'/xml/motormaps_181205.xml'
 if not os.path.exists(preciseXML):
     print(f"Error: {preciseXML} not presented!")
     sys.exit()
@@ -217,7 +217,8 @@ for t_ms in tarray:
     phiSteps = 5000
     myCobras = getCobras(goodIdx)
 
-    
+    fastOnTime = [np.full(57, 0.09)] * 4
+
     # Setting the on-time righrt before the loop 
     thetaOnTime=np.full(57,t_ms/1000.0)
     phiOnTime=np.full(57,(t_ms-5)/1000.0)
@@ -232,19 +233,32 @@ for t_ms in tarray:
         for k in range(phiSteps//steps):
             pfi.moveAllSteps(myCobras, 0, steps)
             expose(dataPath+f'/phi1_Ontime{t_ms}Forward{n}N{k}_', dataPath+f'/phi2_Ontime{t_ms}Forward{n}N{k}_')
+        
+        # make sure it goes to the limit
+        pfi.calibModel.updateOntimes(*fastOnTime)
+        pfi.moveAllSteps(myCobras, 0, 5000)
+        pfi.calibModel.updateOntimes(thtFwd=thetaOnTime, thtRev=thetaOnTime, phiFwd=phiOnTime, phiRev=phiOnTime)
+        
         # reverse phi motor maps
         expose(dataPath+f'/phi1_Ontime{t_ms}End{n}_', dataPath+f'/phi2_Ontime{t_ms}End{n}_')
         for k in range(phiSteps//steps):
             pfi.moveAllSteps(myCobras, 0, -steps)
             expose(dataPath+f'/phi1_Ontime{t_ms}Reverse{n}N{k}_', dataPath+f'/phi2_Ontime{t_ms}Reverse{n}N{k}_')
 
+        # At the end, make sure the cobra back to the hard stop
+        pfi.calibModel.updateOntimes(*fastOnTime)
+        pfi.moveAllSteps(myCobras, 0, -5000)
+        pfi.calibModel.updateOntimes(thtFwd=thetaOnTime, thtRev=thetaOnTime, phiFwd=phiOnTime, phiRev=phiOnTime)
+
     # After the loop, set back to default XML for repositioning the fiber
     pfi.loadModel(preciseXML)
     
     # move phi arms out for 60 degrees then home theta
     pfi.moveAllSteps(myCobras, -10000, -5000)
+    pfi.moveAllSteps(myCobras, -5000, 0)
     moveToXYfromHome(goodIdx, outTargets[goodIdx], dataPath)
     pfi.moveAllSteps(myCobras, -10000, 0)
+    pfi.moveAllSteps(myCobras, -5000, 0)
 
     # Setting the on-time righrt before the loop 
     onTime=np.full(57,t_ms/1000.0)
@@ -257,11 +271,24 @@ for t_ms in tarray:
         for k in range(thetaSteps//steps):
             pfi.moveAllSteps(myCobras, steps, 0)
             expose(dataPath+f'/theta1_Ontime{t_ms}Forward{n}N{k}_', dataPath+f'/theta2_Ontime{t_ms}Forward{n}N{k}_')
+        
+        # make sure it goes to the limit
+        pfi.calibModel.updateOntimes(*fastOnTime)
+        pfi.moveAllSteps(myCobras, 10000, 0)
+        pfi.moveAllSteps(myCobras, 5000, 0)
+        pfi.calibModel.updateOntimes(thtFwd=thetaOnTime, thtRev=thetaOnTime, phiFwd=phiOnTime, phiRev=phiOnTime)
+            
         # reverse theta motor maps
         expose(dataPath+f'/theta1_Ontime{t_ms}End{n}_', dataPath+f'/theta2_Ontime{t_ms}End{n}_')
         for k in range(thetaSteps//steps):
             pfi.moveAllSteps(myCobras, -steps, 0)
             expose(dataPath+f'/theta1_Ontime{t_ms}Reverse{n}N{k}_', dataPath+f'/theta2_Ontime{t_ms}Reverse{n}N{k}_')
+
+        # make sure it goes to the limit
+        pfi.calibModel.updateOntimes(*fastOnTime)
+        pfi.moveAllSteps(myCobras, -10000, 0)
+        pfi.moveAllSteps(myCobras, -5000, 0)
+        pfi.calibModel.updateOntimes(thtFwd=thetaOnTime, thtRev=thetaOnTime, phiFwd=phiOnTime, phiRev=phiOnTime)
 
     # variable declaration for position measurement
     thetaFW = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
@@ -522,8 +549,8 @@ for t_ms in tarray:
 
     # write to a new XML file
     #old.createCalibrationFile('../xml/motormaps.xml')
-    old.createCalibrationFile(cobraCharmerPath+f'/xml/motormapOntime{t_ms}_'+datetoday+'.xml')
+    old.createCalibrationFile(cobraCharmerPath+f'/xml/motormapOntime_{t_ms}us_'+datetoday+'.xml')
 
 
-    print(cobraCharmerPath+f'/xml/motormapOntime{t_ms}_'+datetoday+'.xml  produced!')
+    print(cobraCharmerPath+f'/xml/motormapOntime_{t_ms}us_'+datetoday+'.xml  produced!')
     print("Process Finised")
