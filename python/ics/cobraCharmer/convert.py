@@ -1,10 +1,12 @@
+import sys
+
 ADC_VREF = 2.5
 NO_CONVERT = False
 
 def adc_val_to_voltage(adc_val):
     # voltage range on ADC is 0-2VREF
     # returns the analog voltage into the ADC (ignoring noise/railing)
-    if adc_val not in range(0,65536):
+    if adc_val < 0 or adc_val > 65535:
         print("Invalid Adc Digital value!")
         
     return (adc_val / 65535.0) * ADC_VREF   
