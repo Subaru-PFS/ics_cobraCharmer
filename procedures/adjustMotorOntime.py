@@ -12,7 +12,7 @@ from copy import deepcopy
 from ics.cobraCharmer import pfi as pfiControl
 from astropy.table import Table
 from scipy import stats
-
+from copy import deepcopy
 
 class ontimeModel():
     
@@ -138,6 +138,8 @@ class adjustOnTime():
         pfi.loadModel(initXML)
         
         return pfi.calibModel
+    
+
     def updateOntimeWithFiberSlope(self, originXML, newXML, xmlArray=False, thetaTable=False, phiTable=False):
         
         #datetoday=datetime.datetime.now().strftime("%Y%m%d")
@@ -172,25 +174,25 @@ class adjustOnTime():
 
         newOntimeRev1 = otm.getTargetOnTime(-0.05,otm.j1rev_slope, model.motorOntimeRev1 ,j1rev_avg)
         newOntimeRev2 = otm.getTargetOnTime(-0.07,otm.j2rev_slope, model.motorOntimeRev2 ,j2rev_avg)
-
+        pid = range(1,58)
         if thetaTable is not False:
-            t=Table([model.motorOntimeFwd1,j1fwd_avg, otm.j1fwd_slope, newOntimeFwd1, 
+            t=Table([pid, model.motorOntimeFwd1,j1fwd_avg, otm.j1fwd_slope, newOntimeFwd1, 
                      model.motorOntimeRev1,j1rev_avg, otm.j1rev_slope, newOntimeRev1],
-                     names=('Ori Fwd OT', 'FWD sp', 'FWD slope', 'New Fwd OT',
+                     names=('Fiber No','Ori Fwd OT', 'FWD sp', 'FWD slope', 'New Fwd OT',
                             'Ori Rev OT', 'REV sp', 'REV slope', 'New Rev OT'),
-                     dtype=('f4', 'f4', 'f4','f4', 'f4', 'f4', 'f4', 'f4'))
+                     dtype=('i2','f4', 'f4', 'f4','f4', 'f4', 'f4', 'f4', 'f4'))
             t.write(thetaTable,format='ascii.ecsv',overwrite=True,
-                    formats={'Ori Fwd OT': '%10.5f', 'FWD sp': '%10.5f', 'FWD slope': '%10.5f', 'New Fwd OT': '%10.5f',\
+                    formats={'Fiber No':'%i','Ori Fwd OT': '%10.5f', 'FWD sp': '%10.5f', 'FWD slope': '%10.5f', 'New Fwd OT': '%10.5f',\
                              'Ori Rev OT': '%10.5f', 'REV sp': '%10.5f', 'REV slope': '%10.5f', 'New Rev OT': '%10.5f'})
   
         if phiTable is not False:
-            t=Table([model.motorOntimeFwd2,j2fwd_avg, otm.j2fwd_slope, newOntimeFwd2,
+            t=Table([pid, model.motorOntimeFwd2,j2fwd_avg, otm.j2fwd_slope, newOntimeFwd2,
                      model.motorOntimeRev2,j2rev_avg, otm.j2rev_slope, newOntimeRev2],
-                     names=('Ori Fwd OT', 'FWD sp', 'FWD slope', 'New Fwd OT',
+                     names=('Fiber No','Ori Fwd OT', 'FWD sp', 'FWD slope', 'New Fwd OT',
                             'Ori Rev OT', 'REV sp', 'REV slope', 'New Rev OT'),
-                     dtype=('f4', 'f4', 'f4','f4', 'f4', 'f4', 'f4', 'f4'))
+                     dtype=('i2','f4', 'f4', 'f4','f4', 'f4', 'f4', 'f4', 'f4'))
             t.write(phiTable,format='ascii.ecsv',overwrite=True, 
-                    formats={'Ori Fwd OT': '%10.5f', 'FWD sp': '%10.5f', 'FWD slope': '%10.5f', 'New Fwd OT': '%10.5f',\
+                    formats={'Fiber No':'%i','Ori Fwd OT': '%10.5f', 'FWD sp': '%10.5f', 'FWD slope': '%10.5f', 'New Fwd OT': '%10.5f',\
                              'Ori Rev OT': '%10.5f', 'REV sp': '%10.5f', 'REV slope': '%10.5f', 'New Rev OT': '%10.5f'})
 
         model.updateOntimes(thtFwd=newOntimeFwd1, thtRev=newOntimeRev1, phiFwd=newOntimeFwd2, phiRev=newOntimeRev2)
@@ -201,22 +203,42 @@ class adjustOnTime():
 
 def main():
     xmlarray = []
-    dataPath='/Volumes/Disk/Data/xml/'
-    for tms in range(25, 65, 10):
-        xml=dataPath+f'motormapOntime{tms}_20181221.xml'
+    dataPath='/home/pfs/mhs/devel/ics_cobraCharmer/xml/'
+    for tms in range(20, 60, 10):
+        xml=dataPath+f'motormapOntime_{tms}us_20190123.xml'
         xmlarray.append(xml)
     
     datetoday=datetime.datetime.now().strftime("%Y%m%d")    
     # cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
-    cobraCharmerPath='/Users/chyan/Documents/workspace/ics_cobraCharmer/'
+    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
     adjot=adjustOnTime()
   
     #initXML=cobraCharmerPath+'/xml/precise6.xml'
     initXML=cobraCharmerPath+'/xml/motormaps_181205.xml'
-    newXML = cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
+    newXML = cobraCharmerPath+'/xml/updateOntime_'+datetoday+'n.xml'
     
     adjot.updateOntimeWithFiberSlope(initXML, newXML, xmlArray=xmlarray, thetaTable='theta.tbl',phiTable='phi.tbl')
 
+    m = adjot.extractCalibModel(newXML)
+    OnTime = deepcopy([m.motorOntimeFwd1,
+                   m.motorOntimeRev1,
+                   m.motorOntimeFwd2,
+                   m.motorOntimeRev2])
+    
+    # Taking care bad measurements
+    OnTime[2][25]=0.035
+    OnTime[3][25]=0.035
+
+    OnTime[2][29]=0.022
+    OnTime[3][29]=0.022
+
+    OnTime[2][41]=0.0229
+    OnTime[3][41]=0.0231
+    
+    OnTime[2][56]=0.020
+    OnTime[3][56]=0.020
+    m.updateOntimes(*OnTime)
+    m.createCalibrationFile(newXML)
 
 if __name__ == '__main__':
     main()

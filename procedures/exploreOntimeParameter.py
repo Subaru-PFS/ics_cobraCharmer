@@ -237,6 +237,7 @@ for t_ms in tarray:
         # make sure it goes to the limit
         pfi.calibModel.updateOntimes(*fastOnTime)
         pfi.moveAllSteps(myCobras, 0, 5000)
+        pfi.moveAllSteps(myCobras, 0, 5000)
         pfi.calibModel.updateOntimes(thtFwd=thetaOnTime, thtRev=thetaOnTime, phiFwd=phiOnTime, phiRev=phiOnTime)
         
         # reverse phi motor maps
@@ -247,6 +248,7 @@ for t_ms in tarray:
 
         # At the end, make sure the cobra back to the hard stop
         pfi.calibModel.updateOntimes(*fastOnTime)
+        pfi.moveAllSteps(myCobras, 0, -5000)
         pfi.moveAllSteps(myCobras, 0, -5000)
         pfi.calibModel.updateOntimes(thtFwd=thetaOnTime, thtRev=thetaOnTime, phiFwd=phiOnTime, phiRev=phiOnTime)
 

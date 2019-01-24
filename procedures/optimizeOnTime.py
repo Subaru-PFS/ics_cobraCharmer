@@ -88,7 +88,7 @@ def moveToXYfromHome(idx, targets, dataPath, threshold=3.0, maxTries=12, cam_spl
 
 datetoday=datetime.datetime.now().strftime("%Y%m%d")
 #datetoday='20181219'
-cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
+cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
 storagePath = '/data/pfs/'+datetoday
 dataPath = storagePath+'/image'
 prodctPath = storagePath+'/product'
@@ -131,7 +131,7 @@ evenCobras = moduleCobras2[2]
 
 # Initializing COBRA module
 pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-preciseXML=cobraCharmerPath+'/xml/precise6.xml'
+preciseXML=cobraCharmerPath+'/xml/motormaps_181205.xml'
 #preciseXML=cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
 
 if not os.path.exists(preciseXML):
@@ -213,7 +213,7 @@ myCobras = getCobras(goodIdx)
 
 # Loading XML file once again.  Changing XML file name if you want to loading 
 #  special setting.
-ontimeXML=cobraCharmerPath+'/xml/updateOntime_20190117.xml'
+ontimeXML=cobraCharmerPath+'/xml/updateOntime_20190124n.xml'
 pfi.loadModel(ontimeXML)
 pfi.setFreq(allCobras)
 
@@ -552,8 +552,8 @@ old.updateMotorMaps(fThetaFW, fThetaRV, fPhiFW, fPhiRV, useSlowMaps=False)
 
 # write to a new XML file
 #old.createCalibrationFile('../xml/motormaps.xml')
-old.createCalibrationFile(cobraCharmerPath+'/xml/motormap_'+datetoday+'.xml')
+old.createCalibrationFile(cobraCharmerPath+'/xml/motormap_'+datetoday+'n.xml')
 
 
-print(cobraCharmerPath+'/xml/motormap_'+datetoday+'.xml  produced!')
+print(cobraCharmerPath+'/xml/motormap_'+datetoday+'n.xml  produced!')
 print("Process Finised")

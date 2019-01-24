@@ -194,8 +194,8 @@ def compareAvgSpeed(baseXML, targetXML, figPath):
     #show(p4)
 def makeHistoPlot(avg1, avg2, Title, Legend1, Legend2):
     
-    hist1, edges1 = np.histogram(avg1, density=True, bins=np.arange(0.0, 0.2, 0.01))
-    hist2, edges2 = np.histogram(avg2, density=True, bins=np.arange(0.0, 0.2, 0.01))
+    hist1, edges1 = np.histogram(avg1, bins=np.arange(0.0, 0.3, 0.01))
+    hist2, edges2 = np.histogram(avg2, bins=np.arange(0.0, 0.3, 0.01))
 
     TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
     p = figure(title=Title, tools=TOOLS, background_fill_color="#fafafa")
@@ -268,14 +268,14 @@ def plotMotorMapFromMutiXML(xmlList, ledgenList, figPath, fiberlist=False):
 
 
 def main():
-    dataPath='/Volumes/Disk/Data/xml/'
+    dataPath='/home/pfs/mhs/devel/ics_cobraCharmer/xml/'
     xml1=dataPath+'motormaps_181205.xml'
-    brokens = [1 , 12, 39, 43, 54]
+    brokens = [1 , 39, 43, 54]
     visibles= [e for e in range(1,58) if e not in brokens]
 
-    xml2=dataPath+f'motormap_20190117.xml'
+    xml2=dataPath+f'motormap_20190124.xml'
 
-    figpath=f'/Volumes/Disk/Data/MotorMap/20190117/'
+    figpath=f'/data/pfs/MotorMap/20190124/'
     generateMotorMap(xml1, xml2, figpath, fiberlist=visibles)
     compareAvgSpeed(xml1, xml2, figpath)
 

@@ -116,19 +116,12 @@ def plotJ2OntimeSpeed(GroupIdx, dataFrame, xrange, yrange):
 
 def main():
     dataPath='/home/pfs/mhs/devel/ics_cobraCharmer/xml/'
-    xml1=dataPath+'motormaps_181205.xml'
     figpath='/Volumes/Disk/Data/MotorMap/'
 
     #define the broken/good cobras
     brokens = [1, 39, 43, 54]
     visibles= [e for e in range(1,58) if e not in brokens]
-    badIdx = np.array(brokens) - 1
     goodIdx = np.array(visibles) - 1
-
-    # two groups for two cameras
-    cam_split = 26
-    group1 = goodIdx[goodIdx <= cam_split]
-    group2 = goodIdx[goodIdx > cam_split]
 
     # three non-interfering groups for good cobras
     goodGroupIdx = {}
@@ -136,15 +129,15 @@ def main():
         goodGroupIdx[group] = goodIdx[goodIdx%6==group] + 1
 
 
-
-
     dataarray=[]
 
-    for tms in range(25,140,10):
+    filerange = range(25,145,10)
+    thetarange = range(25,60,10)
+    phirange = range(25,145,10)
+
+    for tms in filerange:
         
         xml2=dataPath+f'motormapOntime{tms}_20181221.xml'
-        print(xml2)
-        mappath=figpath+f'{tms}ms'
         # Prepare the data path for the work
         # if not (os.path.exists(mappath)):
         #     os.makedirs(mappath)
@@ -174,25 +167,25 @@ def main():
 
     TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
 
-    p1 = plotJ1OntimeSpeed(goodGroupIdx[0], df, [20, 65], [-0.3,0.3])
-    p2 = plotJ1OntimeSpeed(goodGroupIdx[1], df, [20, 65], [-0.3,0.3])
-    p3 = plotJ1OntimeSpeed(goodGroupIdx[2], df, [20, 65], [-0.3,0.3])
-    p4 = plotJ1OntimeSpeed(goodGroupIdx[3], df, [20, 65], [-0.3,0.3])
-    p5 = plotJ1OntimeSpeed(goodGroupIdx[4], df, [20, 65], [-0.3,0.3])
-    p6 = plotJ1OntimeSpeed(goodGroupIdx[5], df, [20, 65], [-0.3,0.3])
+    p1 = plotJ1OntimeSpeed(goodGroupIdx[0], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
+    p2 = plotJ1OntimeSpeed(goodGroupIdx[1], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
+    p3 = plotJ1OntimeSpeed(goodGroupIdx[2], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
+    p4 = plotJ1OntimeSpeed(goodGroupIdx[3], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
+    p5 = plotJ1OntimeSpeed(goodGroupIdx[4], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
+    p6 = plotJ1OntimeSpeed(goodGroupIdx[5], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
 
 
     x = np.array([])
     y1 = np.array([])
     y2 = np.array([])
-    for tms in range(25,140,10):
+    for tms in thetarange:
         x=np.append(x,tms)
         y1=np.append(y1,np.mean(df['J1_fwd'][df['J1onTime']==tms].values))
         y2=np.append(y2,np.mean(df['J1_rev'][df['J1onTime']==tms].values))
     
     slope, intercept, r_value, p_value, std_err = stats.linregress(x,y1)
 
-    q = figure(tools=TOOLS, x_range=[20, 140], y_range=[-1,1],plot_height=500, plot_width=1000)
+    q = figure(tools=TOOLS, x_range=[thetarange[0]-10, thetarange[-1]+10], y_range=[-1,1],plot_height=500, plot_width=1000)
     q.circle(x=df['J1onTime'], y=df['J1_fwd'],radius=0.3,\
             color='red',fill_color=None)
     q.circle(x=x,y=y1, radius=0.5, color='blue')
@@ -212,18 +205,18 @@ def main():
         title='Theta On-time')
 
 #-------------------------------------------
-    p1 = plotJ2OntimeSpeed(goodGroupIdx[0], df, [20, 65], [-1,1])
-    p2 = plotJ2OntimeSpeed(goodGroupIdx[1], df, [20, 65], [-1,1])
-    p3 = plotJ2OntimeSpeed(goodGroupIdx[2], df, [20, 65], [-1,1])
-    p4 = plotJ2OntimeSpeed(goodGroupIdx[3], df, [20, 65], [-1,1])
-    p5 = plotJ2OntimeSpeed(goodGroupIdx[4], df, [20, 65], [-1,1])
-    p6 = plotJ2OntimeSpeed(goodGroupIdx[5], df, [20, 65], [-1,1])
+    p1 = plotJ2OntimeSpeed(goodGroupIdx[0], df, [phirange[0], phirange[-1]], [-1,1])
+    p2 = plotJ2OntimeSpeed(goodGroupIdx[1], df, [phirange[0], phirange[-1]], [-1,1])
+    p3 = plotJ2OntimeSpeed(goodGroupIdx[2], df, [phirange[0], phirange[-1]], [-1,1])
+    p4 = plotJ2OntimeSpeed(goodGroupIdx[3], df, [phirange[0], phirange[-1]], [-1,1])
+    p5 = plotJ2OntimeSpeed(goodGroupIdx[4], df, [phirange[0], phirange[-1]], [-1,1])
+    p6 = plotJ2OntimeSpeed(goodGroupIdx[5], df, [phirange[0], phirange[-1]], [-1,1])
 
     
     x = np.array([])
     y1 = np.array([])
     y2 = np.array([])
-    for tms in range(25,140,10):
+    for tms in phirange:
         #print(np.mean(df['J2_fwd'][df['onTime']==tms].values))
         x=np.append(x,tms)
         y1=np.append(y1,np.median(df['J2_fwd'][df['J2onTime']==tms].values))
@@ -233,7 +226,7 @@ def main():
     #fit=np.polyfit(x, y*100, 1)
     #print(fit)
 
-    q = figure(tools=TOOLS, x_range=[20, 140], y_range=[-1.5,1.5],plot_height=500, plot_width=1000)
+    q = figure(tools=TOOLS, x_range=[phirange[0]-10, phirange[-1]+10], y_range=[-1.5,1.5],plot_height=500, plot_width=1000)
     q.circle(x=df['J2onTime'], y=df['J2_fwd'],radius=0.3,\
             color='red',fill_color=None)
     q.circle(x=x,y=y1, radius=0.5, color='blue')
