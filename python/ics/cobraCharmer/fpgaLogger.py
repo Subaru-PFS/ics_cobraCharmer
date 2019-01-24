@@ -89,7 +89,7 @@ class FPGAProtocolLogger(object):
           If one bytearray, it is a a return packet: a "TLM"
           If two, it is a header and data
         """
-        if isinstance(item, bytearray):
+        if isinstance(item, (bytes, bytearray)):
             self.logTLM(item)
         else:
             header, data = item
@@ -105,7 +105,7 @@ class FPGAProtocolLogger(object):
 
     def logTlm(self, tlm, ts=None, hkData=None):
         try:
-            if hkData is not None:
+            if hkData is not None or len(tlm) >= 200:
                 self.hkTlmHandler(tlm, hkData)
             else:
                 tlmType = int(tlm[0])
@@ -226,7 +226,7 @@ class FPGAProtocolLogger(object):
 
         expectedCmd = proto.POWER_CMD
 
-        cmd, cmdNum, sectorPower, sectorReset, timeLimit, CRC = struct.unpack('>BBHHHH', header)
+        cmd, cmdNum, sectorPower, sectorReset, timeLimit, CRC = struct.unpack('>BBBBHH', header)
         if cmd != expectedCmd:
             raise RuntimeError(f"incorrect command type; expected {expectedCmd}, got {cmd}")
         self.logger.info(f"CMD pow cmdNum= {cmdNum} timeLimit= {timeLimit}")
@@ -265,7 +265,10 @@ class FPGAProtocolLogger(object):
     def mainTlmHandler(self, tlm):
         """ Log a reply ("TLM") for most commands. """
 
-        cmd, cmdNum, errorCode, detail = tlm
+        if isinstance(tlm, (bytes, bytearray)):
+            cmd, cmdNum, errorCode, detail = struct.unpack('>BBHH', tlm)
+        else:
+            cmd, cmdNum, errorCode, detail = tlm
         errorString = self.errors.get(int(errorCode), f"UNKNOWN ERROR CODE {errorCode}")
 
         self.logger.info(f"TLM {cmd} cmdNum= {cmdNum} error= {errorCode} {detail} {errorString}")
@@ -273,10 +276,19 @@ class FPGAProtocolLogger(object):
     def hkTlmHandler(self, tlm, tlmData):
         """ Log a reply ("TLM") for a housekeeping command. """
 
-        cmd, cmdNum, boardNumber, temp1, temp2 = [int(i) for i in tlm]
+        if isinstance(tlm, (bytes, bytearray)):
+            cmd, cmdNum, boardNumber, temp1, temp2 = struct.unpack('BBHHH', tlm[:8])
+            tlmData = tlm[8:]
+        else:
+            cmd, cmdNum, boardNumber, temp1, temp2 = [int(i) for i in tlm]
 
         self.logger.info(f"TLM hk {cmd} cmdNum= {cmdNum} temps= {conv_temp(temp1):5.2f} {conv_temp(temp2):5.2f}")
 
+        if isinstance(tlmData, (bytes, bytearray)):
+            nbytes = len(tlmData)
+            nwords = nbytes//2
+            fmt = 'H'*nwords
+            tlmData = struct.unpack(('>%s' % fmt), tlmData)
         for cobra_i, i in enumerate(range(0, len(tlmData), 4)):
             mot1freq, mot1current, mot2freq, mot2current = [int(i) for i in tlmData[i:i+4]]
             self.logger.info("  hk  cobra %2d %2d  Theta: %0.2f %0.2f  Phi: %0.2f %0.2f" %
@@ -284,10 +296,13 @@ class FPGAProtocolLogger(object):
                               get_freq(mot1freq), conv_current(mot1current),
                               get_freq(mot2freq), conv_current(mot2current)))
 
-    def diagTlmHandler(self, tlm, tlmData):
+    def diagTlmHandler(self, tlm):
         """ Log a reply ("TLM") for a DIAG commands. """
 
-        cmd, cmdNum, *inventory, errorCode, detail = tlm
+        if isinstance(tlm, (bytes, bytearray)):
+            cmd, cmdNum, *inventory, errorCode, detail = struct.unpack('BBBBBBBBHH', tlm)
+        else:
+            cmd, cmdNum, *inventory, errorCode, detail = tlm
         errorString = self.errors.get(int(errorCode), f"UNKNOWN ERROR CODE {errorCode}")
 
         self.logger.info(f"TLM DIAG {cmd} cmdNum= {cmdNum} inventory= {inventory} error= {errorCode} {detail} {errorString}")

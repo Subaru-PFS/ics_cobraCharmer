@@ -101,7 +101,7 @@ class FPGAProtocol(asyncio.Protocol):
 
         # Only two command return anything interesting.
         if cmd == proto.HOUSEKEEPING_CMD:
-            self.housekeepingHandler()
+            self.housekeepingHandler(header, data)
             return
         if cmd == proto.DIAG_CMD:
             self.diagHandler()
@@ -211,11 +211,22 @@ class FPGAProtocol(asyncio.Protocol):
         self.respond()
         self.respond()
 
-    def housekeepingHandler(self):
-        self._respond()
+    def housekeepingHandler(self, header, data):
+        self.respond()
+
+        boardNum, timeLimit, CRC = struct.unpack('>HHH',
+                                                 header[2:proto.HOUSEKEEPING_HEADER_SIZE])
+        temp1 = 23; temp2 = 24
+        mot = struct.pack('>%s' % ('H'*(4*28)),
+                          *([1234, 12, 2345, 23] * 28))
+        TLMheader = struct.pack('>BBHHH', self.cmdCode, self.cmdNum, boardNum, temp1, temp2)
+        TLM = TLMheader + mot
+        self._respond(TLM)
 
     def diagHandler(self):
-        self._respond()
+        counts = [5,4,3,2,1,0]
+        TLM = struct.pack('>BBBBBBBBHH', self.cmdCode, self.cmdNum, *counts, 0, 0)
+        self._respond(TLM)
 
     def XXpowerHandler(self):
         """ Look for a complete RST command and process it. """
@@ -226,12 +237,11 @@ class FPGAProtocol(asyncio.Protocol):
         data, self.data = self.data[2:proto.POWER_HEADER_SIZE], self.data[proto.POWER_HEADER_SIZE:]
 
         sectorPower, sectorReset, timeout, CRC = struct.unpack('>BBHH', data)
-        self.logger.info('CMD: power')
-        self.logger.info('    sectorPower=0x%02x sectorReset=0x%02x' % (sectorPower, sectorReset))
 
         self.respond()
 
     def _respond(self, TLM):
+        self.fpgaLogger.logTlm(TLM)
         self.transport.write(TLM)
 
     def respond(self, respCode=0, respDetail=0):
