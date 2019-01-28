@@ -114,48 +114,52 @@ def generateMotorMap(baseXML, newXML, figPath, fiberlist = False):
         j1limit2 = (360/np.rad2deg(model2.angularSteps[pid-1])).astype(int)-1
         j2limit2 = (180/np.rad2deg(model2.angularSteps[pid-1])).astype(int)-1
 
-
         j1_fwd_reg1,j1_fwd_stepsize1,j1_rev_reg1,j1_rev_stepsize1,\
                 j2_fwd_reg1,j2_fwd_stepsize1,j2_rev_reg1,j2_rev_stepsize1=readMotorMap(xml1,pid)
         j1_fwd_reg2,j1_fwd_stepsize2,j1_rev_reg2,j1_rev_stepsize2,\
                 j2_fwd_reg2,j2_fwd_stepsize2,j2_rev_reg2,j2_rev_stepsize2=readMotorMap(xml2,pid)
-        legendname=f"Avg Speed = {np.mean(j1_fwd_stepsize1[:j1limit1]):.4f} Ontime = {model1.motorOntimeFwd1[pid-1]:.4f}"
+        legendname=f"Avg Speed = {np.mean(j1_fwd_stepsize1[:j1limit1]):.4f}+/-{np.std(j1_fwd_stepsize1[:j1limit1]):.4f} Ontime = {model1.motorOntimeFwd1[pid-1]:.4f}"
         p.line(x=j1_fwd_reg1[:j1limit1], y=j1_fwd_stepsize1[:j1limit1], color='green', line_width=2, legend=legendname)
         
-        legendname=f"Avg Speed = {np.mean(j1_fwd_stepsize2[:j1limit2]):.4f} Ontime = {model2.motorOntimeFwd1[pid-1]:.4f}"
+        legendname=f"Avg Speed = {np.mean(j1_fwd_stepsize2[:j1limit2]):.4f}+/-{np.std(j1_fwd_stepsize2[:j1limit2]):.4f} Ontime = {model2.motorOntimeFwd1[pid-1]:.4f}"
         p.line(x=j1_fwd_reg2[:j1limit2], y=j1_fwd_stepsize2[:j1limit2], color='red', line_width=2,legend=legendname)
         p.circle(x=j1_fwd_reg2[:j1limit2], y=j1_fwd_stepsize2[:j1limit2],radius=1, color='red',fill_color='white')
         
-        legendname=f"Avg Speed = {np.mean(j1_rev_stepsize1[:j1limit1]):.4f} Ontime = {model1.motorOntimeRev1[pid-1]:.4f}"
+        legendname=f"Avg Speed = {np.mean(j1_rev_stepsize1[:j1limit1]):.4f}+/-{np.std(j1_rev_stepsize1[:j1limit1]):.4f} Ontime = {model1.motorOntimeRev1[pid-1]:.4f}"
         p.line(x=j1_rev_reg1[:j1limit1], y=j1_rev_stepsize1[:j1limit1], color='green', line_width=2,line_dash="4 4", legend=legendname)
        
-        legendname=f"Avg Speed = {np.mean(j1_rev_stepsize2[:j1limit2]):.4f} Ontime = {model2.motorOntimeRev1[pid-1]:.4f}"
+        legendname=f"Avg Speed = {np.mean(j1_rev_stepsize2[:j1limit2]):.4f}+/-{np.std(j1_rev_stepsize2[:j1limit2]):.4f} Ontime = {model2.motorOntimeRev1[pid-1]:.4f}"
         p.line(x=j1_rev_reg2[:j1limit2], y=j1_rev_stepsize2[:j1limit2], color='red', line_width=2,line_dash="4 4",legend=legendname)
         p.circle(x=j1_rev_reg2[:j1limit2], y=j1_rev_stepsize2[:j1limit2],radius=1, color='red',fill_color='white')
 
-        legendname=f"Avg Speed = {np.mean(j2_fwd_stepsize1[:j2limit1]):.4f} Ontime = {model1.motorOntimeFwd2[pid-1]:0.4f}"
+        legendname=f"Avg Speed = {np.mean(j2_fwd_stepsize1[:j2limit1]):.4f}+/-{np.std(j2_fwd_stepsize1[:j2limit1]):.4f} Ontime = {model1.motorOntimeFwd2[pid-1]:0.4f}"
         q.line(x=j2_fwd_reg1[:j2limit1], y=j2_fwd_stepsize1[:j2limit1], color='green', line_width=3, legend=legendname)
         
-        legendname=f"Avg Speed = {np.mean(j2_fwd_stepsize2[:j2limit2]):.4f} Ontime = {model2.motorOntimeFwd2[pid-1]:0.4f}"
+        legendname=f"Avg Speed = {np.mean(j2_fwd_stepsize2[:j2limit2]):.4f}+/-{np.std(j2_fwd_stepsize2[:j2limit2]):.4f} Ontime = {model2.motorOntimeFwd2[pid-1]:0.4f}"
         q.line(x=j2_fwd_reg2[:j2limit2], y=j2_fwd_stepsize2[:j2limit2], color='red', line_width=2,legend=legendname)
         q.circle(x=j2_fwd_reg2[:j2limit2], y=j2_fwd_stepsize2[:j2limit2],radius=1, color='red', fill_color='white')
         
-        legendname=f"Avg Speed = {np.mean(j2_rev_stepsize1[:j2limit1]):.4f} Ontime = {model1.motorOntimeRev2[pid-1]:.4f}"
+        legendname=f"Avg Speed = {np.mean(j2_rev_stepsize1[:j2limit1]):.4f}+/-{np.std(j2_rev_stepsize1[:j2limit1]):.4f} Ontime = {model1.motorOntimeRev2[pid-1]:.4f}"
         q.line(x=j2_rev_reg1[:j2limit1], y=j2_rev_stepsize1[:j2limit1], color='green', line_width=2,line_dash="4 4", legend=legendname)
         
-        legendname=f"Avg Speed = {np.mean(j2_rev_stepsize2[:j2limit2]):.4f} Ontime = {model2.motorOntimeRev2[pid-1]:.4f}"
+        legendname=f"Avg Speed = {np.mean(j2_rev_stepsize2[:j2limit2]):.4f}+/-{np.std(j2_rev_stepsize1[:j2limit2]):.4f} Ontime = {model2.motorOntimeRev2[pid-1]:.4f}"
         q.line(x=j2_rev_reg2[:j2limit2], y=j2_rev_stepsize2[:j2limit2], color='red', line_width=2,line_dash="4 4",legend=legendname)
         q.circle(x=j2_rev_reg2[:j2limit2], y=j2_rev_stepsize2[:j2limit2],radius=1, color='red', fill_color='white')
-
+    
 
         #show(column(p,q))
         export_png(column(p,q),filename=figPath+"motormap_"+str(int(pid))+".png")
 
 
-def compareAvgSpeed(baseXML, targetXML, figPath):
+def compareAvgSpeed(baseXML, targetXML, figPath,  fiberlist=False):
     model1 = extractCalibModel(baseXML)
     model2 = extractCalibModel(targetXML)
     
+    if fiberlist is not False:
+        # The fiber index begins with 0 when model XML is used.
+        visibles = fiberlist
+    else:
+        visibles = range(57)
 
     size1 = len(model1.angularSteps)
 
@@ -164,11 +168,16 @@ def compareAvgSpeed(baseXML, targetXML, figPath):
     j2fwd_avg1 = np.zeros(size1)
     j2rev_avg1 = np.zeros(size1)
 
-    for i in range(size1):
-        j1fwd_avg1[i] = np.mean(np.rad2deg(model1.angularSteps[i]/model1.S1Pm[i]))
-        j1rev_avg1[i] = np.mean(np.rad2deg(model1.angularSteps[i]/model1.S1Nm[i]))
-        j2fwd_avg1[i] = np.mean(np.rad2deg(model1.angularSteps[i]/model1.S2Pm[i]))
-        j2rev_avg1[i] = np.mean(np.rad2deg(model1.angularSteps[i]/model1.S2Nm[i]))
+    
+    for pid in visibles:
+        i = pid-1
+        j1_limit = (360/np.rad2deg(model1.angularSteps[i])-1).astype(int)
+        j2_limit = (180/np.rad2deg(model1.angularSteps[i])-1).astype(int)
+
+        j1fwd_avg1[i] = np.mean(np.rad2deg(model1.angularSteps[i]/model1.S1Pm[i][:j1_limit]))
+        j1rev_avg1[i] = np.mean(np.rad2deg(model1.angularSteps[i]/model1.S1Nm[i][:j1_limit]))
+        j2fwd_avg1[i] = np.mean(np.rad2deg(model1.angularSteps[i]/model1.S2Pm[i][:j2_limit]))
+        j2rev_avg1[i] = np.mean(np.rad2deg(model1.angularSteps[i]/model1.S2Nm[i][:j2_limit]))
 
     size2 = len(model2.angularSteps)
 
@@ -177,20 +186,25 @@ def compareAvgSpeed(baseXML, targetXML, figPath):
     j2fwd_avg2 = np.zeros(size2)
     j2rev_avg2 = np.zeros(size2)
 
-    for i in range(size1):
-        j1fwd_avg2[i] = np.mean(np.rad2deg(model2.angularSteps[i]/model2.S1Pm[i]))
-        j1rev_avg2[i] = np.mean(np.rad2deg(model2.angularSteps[i]/model2.S1Nm[i]))
-        j2fwd_avg2[i] = np.mean(np.rad2deg(model2.angularSteps[i]/model2.S2Pm[i]))
-        j2rev_avg2[i] = np.mean(np.rad2deg(model2.angularSteps[i]/model2.S2Nm[i]))
+    for pid in visibles:
+        i = pid -1
+        j1_limit = (360/np.rad2deg(model2.angularSteps[i])-1).astype(int)
+        j2_limit = (180/np.rad2deg(model2.angularSteps[i])-1).astype(int)
 
+        j1fwd_avg2[i] = np.mean(np.rad2deg(model2.angularSteps[i]/model2.S1Pm[i][:j1_limit]))
+        j1rev_avg2[i] = np.mean(np.rad2deg(model2.angularSteps[i]/model2.S1Nm[i][:j1_limit]))
+        j2fwd_avg2[i] = np.mean(np.rad2deg(model2.angularSteps[i]/model2.S2Pm[i][:j2_limit]))
+        j2rev_avg2[i] = np.mean(np.rad2deg(model2.angularSteps[i]/model2.S2Nm[i][:j2_limit]))
+        
 
     p1=makeHistoPlot(j1fwd_avg1, j1fwd_avg2, 'Theta Fwd', 'Caltech', 'ASIAA')
     p2=makeHistoPlot(j1rev_avg1, j1rev_avg2, 'Theta Rev', 'Caltech', 'ASIAA')
     p3=makeHistoPlot(j2fwd_avg1, j2fwd_avg2, 'Phi Fwd', 'Caltech', 'ASIAA')
     p4=makeHistoPlot(j2rev_avg1, j2rev_avg2, 'Phi Rev', 'Caltech', 'ASIAA')
 
-    show(column(p1,p2,p3,p4))
-
+    #show(column(p1,p2,p3,p4))
+    grid = gridplot([[p1, p2], [p3,p4]])
+    export_png(grid,filename=figPath+"motor_speed_histogram.png")
     #show(p4)
 def makeHistoPlot(avg1, avg2, Title, Legend1, Legend2):
     
@@ -268,16 +282,16 @@ def plotMotorMapFromMutiXML(xmlList, ledgenList, figPath, fiberlist=False):
 
 
 def main():
-    dataPath='/home/pfs/mhs/devel/ics_cobraCharmer/xml/'
+    dataPath='/Volumes/Disk/Data/xml/'
     xml1=dataPath+'motormaps_181205.xml'
     brokens = [1 , 39, 43, 54]
     visibles= [e for e in range(1,58) if e not in brokens]
 
-    xml2=dataPath+f'motormap_20190124.xml'
+    xml2=dataPath+f'motormap_20190124n.xml'
 
-    figpath=f'/data/pfs/MotorMap/20190124/'
+    figpath=f'/Volumes/Disk/Data/MotorMap/20190124/'
     generateMotorMap(xml1, xml2, figpath, fiberlist=visibles)
-    compareAvgSpeed(xml1, xml2, figpath)
+    compareAvgSpeed(xml1, xml2, figpath, fiberlist=visibles)
 
 if __name__ == '__main__':
     main()
