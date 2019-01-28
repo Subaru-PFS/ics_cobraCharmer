@@ -203,14 +203,14 @@ class adjustOnTime():
 
 def main():
     xmlarray = []
-    dataPath='/home/pfs/mhs/devel/ics_cobraCharmer/xml/'
+    dataPath='/Users/chyan/Documents/workspace/ics_cobraCharmer/xml/'
     for tms in range(20, 60, 10):
         xml=dataPath+f'motormapOntime_{tms}us_20190123.xml'
         xmlarray.append(xml)
     
     datetoday=datetime.datetime.now().strftime("%Y%m%d")    
     # cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
-    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
+    cobraCharmerPath='/Users/chyan/Documents/workspace/ics_cobraCharmer/'
     adjot=adjustOnTime()
   
     #initXML=cobraCharmerPath+'/xml/precise6.xml'
@@ -226,6 +226,9 @@ def main():
                    m.motorOntimeRev2])
     
     # Taking care bad measurements
+    OnTime[1][46]=0.0391
+
+
     OnTime[2][25]=0.035
     OnTime[3][25]=0.035
 
@@ -235,8 +238,12 @@ def main():
     OnTime[2][41]=0.0229
     OnTime[3][41]=0.0231
     
-    OnTime[2][56]=0.020
-    OnTime[3][56]=0.020
+    OnTime[2][43]=0.0202
+    OnTime[3][43]=0.0238
+    
+    OnTime[2][56]=0.0207
+    OnTime[3][56]=0.0236
+    
     m.updateOntimes(*OnTime)
     m.createCalibrationFile(newXML)
 
