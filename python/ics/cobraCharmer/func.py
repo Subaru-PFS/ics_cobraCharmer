@@ -58,8 +58,8 @@ class CalParams:
         self.type = 'Cal'
         self.dir = dir
         self.en = en
-        self.m0Range = m0
-        self.m1Range = m1
+        self.m0Range = sorted(m0)
+        self.m1Range = sorted(m1)
     def stringify(self):
         s = ''
         s += 'm0:%s:%s' %(self.dir[0], str(self.m0Range)) if self.en[0] else ''
