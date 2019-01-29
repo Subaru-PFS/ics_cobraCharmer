@@ -5,7 +5,7 @@ LOG_TYPES = ["Short", "Medium", "Full", "Dia"]
 NUM_LOGS = 4
 LOGS = [] # Filled in after declaration
 
-logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
+logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(filename)s:%(lineno)s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
 
 class Logger:
