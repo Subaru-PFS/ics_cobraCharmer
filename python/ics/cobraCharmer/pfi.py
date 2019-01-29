@@ -8,6 +8,8 @@ from ics.cobraCharmer import ethernet
 from ics.cobraCharmer import func
 from ics.cobraCharmer.log import Logger
 
+import ics.cobraCharmer.fpgaLogger as fpgaLogger
+
 class PFI(object):
     CW = 1
     CCW = -1
@@ -28,6 +30,7 @@ class PFI(object):
         """
         self.logger = Logger.getLogger('fpga', debug)
         self.ioLogger = Logger.getLogger('fpgaIO', debug)
+        self.fpgaLogger = fpgaLogger.FPGAProtocolLogger()
 
         self.fpgaHost = fpgaHost
         if doConnect:
@@ -39,7 +42,7 @@ class PFI(object):
         """ Connect to COBRA fpga device """
         if fpgaHost is not None:
             self.fpgaHost = fpgaHost
-        ethernet.sock.connect(self.fpgaHost, 4001)
+        ethernet.sock.connect(self.fpgaHost, 4001, ioLogger=self.fpgaLogger)
         self.ioLogger.info(f'FPGA connection to {self.fpgaHost}')
 
     def disconnect(self):

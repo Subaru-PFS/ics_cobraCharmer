@@ -5,7 +5,7 @@ import multiprocessing
 from .convert import get_freq, conv_temp, conv_volt, conv_current
 from . import fpgaProtocol as proto
 
-logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
+logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(filename)s:%(lineno)s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
 
 def loggerProcess(queue):
@@ -90,10 +90,18 @@ class FPGAProtocolLogger(object):
           If two, it is a header and data
         """
         if isinstance(item, (bytes, bytearray)):
-            self.logTLM(item)
+            self.logTlm(item)
         else:
             header, data = item
             self.logCommand(header, data)
+
+    def logSend(self, item):
+        cmd = int(item[0])
+        headerSize, _ = proto.cmds[cmd]
+        self.logCommand(item[:headerSize], item[headerSize:])
+
+    def logRecv(self, item):
+        self.logTlm(item)
 
     def logCommand(self, header, data, ts=None):
         try:
