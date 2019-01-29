@@ -3,7 +3,7 @@ import logging
 import struct
 import asyncio
 
-from .convert import get_freq
+from . import convert
 from . import fpgaProtocol as proto
 from .fpgaLogger import FPGAProtocolLogger
 
@@ -206,8 +206,10 @@ class FPGAProtocol(asyncio.Protocol):
 
             self.logger.info('    cobra: %2d %2d  Theta: %d %s %0.2f %0.2f  Phi: %d %s %0.2f %0.2f' %
                              (boardId, cobraId,
-                              setTheta, dirName[thetaDir], get_freq(thetaRangeLo), get_freq(thetaRangeHi),
-                              setPhi, dirName[phiDir], get_freq(phiRangeLo), get_freq(phiRangeHi)))
+                              setTheta, dirName[thetaDir],
+                              convert.get_freq(thetaRangeLo), convert.get_freq(thetaRangeHi),
+                              setPhi, dirName[phiDir],
+                              convert.get_freq(phiRangeLo), convert.get_freq(phiRangeHi)))
         self.respond()
         self.respond()
 

@@ -2,6 +2,7 @@ import logging
 import struct
 import multiprocessing
 
+from . import convert
 from .convert import get_freq, conv_temp, conv_volt, conv_current
 from . import fpgaProtocol as proto
 
@@ -188,8 +189,8 @@ class FPGAProtocolLogger(object):
 
             self.logger.info(' cal cobra: %2d %2d  Theta: %d %s %0.2f %0.2f  Phi: %d %s %0.2f %0.2f' %
                              (boardId, cobraId,
-                              setTheta, dirName[thetaDir], get_freq(thetaRangeLo), get_freq(thetaRangeHi),
-                              setPhi, dirName[phiDir], get_freq(phiRangeLo), get_freq(phiRangeHi)))
+                              setTheta, dirName[thetaDir], convert.get_freq(thetaRangeLo), convert.get_freq(thetaRangeHi),
+                              setPhi, dirName[phiDir], convert.get_freq(phiRangeLo), convert.get_freq(phiRangeHi)))
 
     def setFreqHandler(self, header, data):
         """ Look for a complete SET FREQUENCY command and process it. """
@@ -216,8 +217,8 @@ class FPGAProtocolLogger(object):
 
             self.logger.info('  set cobra: %2d %2d  Theta: %d %0.2f  Phi: %d %0.2f' %
                              (boardId, cobraId,
-                              setTheta, get_freq(thetaPeriod),
-                              setPhi, get_freq(phiPeriod)))
+                              setTheta, convert.get_freq(thetaPeriod),
+                              setPhi, convert.get_freq(phiPeriod)))
 
     def housekeepingHandler(self, header, data):
         """ HK command """
@@ -290,7 +291,12 @@ class FPGAProtocolLogger(object):
         else:
             cmd, cmdNum, responseCode, boardNumber, temp1, temp2, voltage = [int(i) for i in tlm]
 
-        self.logger.info(f"TLM hk {cmd} cmdNum= {cmdNum} board= {boardNumber} temps= {conv_temp(temp1):5.2f} {conv_temp(temp2):5.2f} {conv_volt(voltage):5.2f}")
+        boardNumber = convert.swapBytes(boardNumber)
+        temp1 = convert.swapBytes(temp1)
+        temp2 = convert.swapBytes(temp2)
+        voltage = convert.swapBytes(voltage)
+
+        self.logger.info(f"TLM hk {cmd} cmdNum= {cmdNum} board= {boardNumber} temps= {convert.conv_temp(temp1):5.2f} {convert.conv_temp(temp2):5.2f} {convert.conv_volt(voltage):5.2f}")
 
         if isinstance(tlmData, (bytes, bytearray)):
             nbytes = len(tlmData)
@@ -301,8 +307,8 @@ class FPGAProtocolLogger(object):
             mot1freq, mot1current, mot2freq, mot2current = [int(i) for i in tlmData[i:i+4]]
             self.logger.info("  hk  cobra %2d %2d  Theta: %0.2f %0.2f  Phi: %0.2f %0.2f" %
                              (boardNumber, cobra_i + 1,
-                              get_freq(mot1freq), conv_current(mot1current),
-                              get_freq(mot2freq), conv_current(mot2current)))
+                              convert.get_freq(mot1freq), convert.conv_current(mot1current),
+                              convert.get_freq(mot2freq), convert.conv_current(mot2current)))
 
     def diagTlmHandler(self, tlm):
         """ Log a reply ("TLM") for a DIAG commands. """

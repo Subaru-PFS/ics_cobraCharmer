@@ -11,6 +11,9 @@ def adc_val_to_voltage(adc_val):
         
     return (adc_val / 65535.0) * ADC_VREF   
     
+def voltToAdc(v):
+    return int(v/ADC_VREF * 65536)
+
 def conv_temp(adc_val):
     ''' Converts Raw ADC value to Celcius '''
     adc_volts = adc_val_to_voltage(adc_val)
@@ -21,7 +24,10 @@ def conv_temp(adc_val):
 
     return ((adc_volts*1000)/5.99)-273.15
 
-    
+def tempToAdc(t):
+    v = (t + 273.15) * 5.99/1000
+    return voltToAdc(v)
+
 def conv_volt(adc_val):
     ''' Converts Raw ADC value to Volts '''
     r1 = 820   # changed from 835 by Mitsuko 9/13/2017
@@ -55,4 +61,6 @@ def get_per( freq ):
     ''' Converts a frequency in Khz to number of 60ns periods '''
     per = int(round(16e3 / (freq)))
     return per
-   
+
+def swapBytes(u):
+    return (u&0xff)<<8 | (u&0xff00)>>8
