@@ -285,12 +285,12 @@ class FPGAProtocolLogger(object):
         """ Log a reply ("TLM") for a housekeeping command. """
 
         if isinstance(tlm, (bytes, bytearray)):
-            cmd, cmdNum, boardNumber, temp1, temp2, voltage = struct.unpack('BBHHHH', tlm[:10])
-            tlmData = tlm[10:]
+            cmd, cmdNum, responseCode, boardNumber, temp1, temp2, voltage = struct.unpack('BBHHHHH', tlm[:12])
+            tlmData = tlm[12:]
         else:
-            cmd, cmdNum, boardNumber, temp1, temp2, voltage = [int(i) for i in tlm]
+            cmd, cmdNum, responseCode, boardNumber, temp1, temp2, voltage = [int(i) for i in tlm]
 
-        self.logger.info(f"TLM hk {cmd} cmdNum= {cmdNum} temps= {conv_temp(temp1):5.2f} {conv_temp(temp2):5.2f} {conv_volt(voltage):5.2f}")
+        self.logger.info(f"TLM hk {cmd} cmdNum= {cmdNum} board= {boardNumber} temps= {conv_temp(temp1):5.2f} {conv_temp(temp2):5.2f} {conv_volt(voltage):5.2f}")
 
         if isinstance(tlmData, (bytes, bytearray)):
             nbytes = len(tlmData)
