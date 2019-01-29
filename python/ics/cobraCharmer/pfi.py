@@ -84,7 +84,15 @@ class PFI(object):
         if err:
             self.logger.error(f'send RST command failed')
         else:
-            self.logger.info(f'send RST command succeeded')
+            self.logger.debug(f'send RST command succeeded')
+
+    def diag(self):
+        """ Get fpga board inventory"""
+        err = func.DIA()
+        if err:
+            self.logger.error(f'send DIA command failed')
+        else:
+            self.logger.debug(f'send DIA command succeeded')
 
     def power(self, sectors=0x3f):
         """ Set COBRA PSU on/off """
@@ -92,7 +100,15 @@ class PFI(object):
         if err:
             self.logger.error(f'send POW command failed')
         else:
-            self.logger.info(f'send POW command succeeded')
+            self.logger.debug(f'send POW command succeeded')
+
+    def hk(self, cobra):
+        """ Fetch housekeeping info for a board. """
+        err = func.HK(cobra)
+        if err:
+            self.logger.error(f'send POW command failed')
+        else:
+            self.logger.debug(f'send POW command succeeded')
 
     def setFreq(self, cobras):
         """ Set COBRA motor frequency """
@@ -107,7 +123,29 @@ class PFI(object):
         if err:
             self.logger.error(f'send SET command failed')
         else:
-            self.logger.info(f'send SET command succeeded')
+            self.logger.debug(f'send SET command succeeded')
+
+    def calibrate(self, cobras,
+                  thetaLow=60.4, thetaHigh=70.3,
+                  phiLow=94.4, phiHigh=108.2,
+                  clockwise=True):
+        """ calibrate a set of cobras.
+
+        Args:
+        thetaLow, thetaHigh -
+        phiLow, phiHigh -
+
+        """
+
+        spin = 'cw' if clockwise else 'ccw'
+        for c in cobras:
+            c.p = func.CalParams(m0=(self._freqToPeriod(thetaLow), self._freqToPeriod(thetaHigh)),
+                                 m1=(self._freqToPeriod(phiLow), self._freqToPeriod(phiHigh)),
+                                 en=(True,True), dir=spin)
+
+        err = func.CAL(cobras)
+        if err:
+            raise RuntimeError("calibration failed")
 
     def moveAllThetaPhi(self, cobras, thetaMove, phiMove, thetaHome=None, phiHome=None):
         """ Move all cobras by theta and phi angles from home
