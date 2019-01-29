@@ -109,9 +109,9 @@ class PFI(object):
         """ Fetch housekeeping info for a board. """
         err = func.HK(cobra)
         if err:
-            self.logger.error(f'send POW command failed')
+            self.logger.error(f'send HK command failed')
         else:
-            self.logger.debug(f'send POW command succeeded')
+            self.logger.debug(f'send HK command succeeded')
 
     def setFreq(self, cobras):
         """ Set COBRA motor frequency """
