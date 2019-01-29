@@ -283,8 +283,6 @@ def DIA():
     
     
 def HK( cobras, export=0 ):
-    if not cobrasAreType(cobras, 'Hk'):
-        return True # error
     board = cobras[0].board
     
     short_log.log("--- ISSUE HK & VERIFY (brd:%d) ---" %board)      
