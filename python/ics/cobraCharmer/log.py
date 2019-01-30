@@ -27,6 +27,9 @@ class Logger:
     def setup(self, propagate=True):
         pass
 
+    def debug(self, text):
+        self.logger.debug(text)
+
     def log(self, text, enable=True):
         if(enable):
             self.logger.info(text)

@@ -283,9 +283,13 @@ def DIA():
     return boards_per_sector
     
     
-def HK(cobras, export=False, updateDesign=None):
+def HK(cobras, export=False, updateModel=None):
     board = cobras[0].board
     nCobras = NCOBRAS_BRD
+    nBoardCobras = nCobras if (board%2 == 1) else nCobras-1
+
+    if nBoardCobras != len(cobras) or not all([(c.board == board) for c in cobras]):
+        raise ValueError("Can only fetch housekeeping for one single board.")
 
     short_log.log("--- ISSUE HK & VERIFY (brd:%d) ---" %board)      
     
@@ -297,7 +301,7 @@ def HK(cobras, export=False, updateDesign=None):
 
     tlmLen = HK_TLM_HDR_LEN + nCobras*8
     resp = sock.recv(tlmLen, eth_hex_logger, 'h')
-    er2 = hk_chk(resp, cobras, export, updateDesign=updateDesign)
+    er2 = hk_chk(resp, cobras, export, updateModel=updateModel)
     
     return er1 or er2
 
@@ -375,17 +379,14 @@ def RUN( cobras, timeout=0, inter=0 ):
 def SET( cobras ):
     if not cobrasAreType(cobras, 'Set'):
         return True # error
-    board = cobras[0].board
-    
-    short_log.log("--- ISSUE SETFREQ & VERIFY (brd:%d) ---" %board)
-    
+
     payload = []
     for c in cobras:
         payload += c.p.toList(c.board, c.cobra)
 
     cmd = CMD_set(payload, cmds=len(cobras), timeout=2000)
     sock.send(cmd, eth_hex_logger, 'h')
-    
+
     error = False
     for i in range(2):
         resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
@@ -413,7 +414,7 @@ def tlm_chk(data):
         error = True
     return error
 
-def hk_chk(data, cobras, export=False, updateDesign=None):
+def hk_chk(data, cobras, export=False, updateModel=None):
     """ Consume a housedkeeping response.
 
     Args
@@ -422,7 +423,7 @@ def hk_chk(data, cobras, export=False, updateDesign=None):
       the entire HK TLM packet.
     cobras : list of Cobras
       the identities of the cobras (module, board, cobra)
-    updateDesign : PfiDesign or None
+    updateModel : PfiDesign or None
       if set, design to update
     """
 
