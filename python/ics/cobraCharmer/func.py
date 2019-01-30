@@ -316,8 +316,8 @@ def CAL( cobras, timeout=0 ):
     if timeout == 0:
         fRngCob = []
         for c in cobras:
-            f0rng = (c.p.m0Range[0] - c.p.m0Range[1] )
-            f1rng = (c.p.m1Range[0] - c.p.m1Range[1] )
+            f0rng = abs(c.p.m0Range[0] - c.p.m0Range[1] )
+            f1rng = abs(c.p.m1Range[0] - c.p.m1Range[1] )
             fRngCob.append( max(f0rng, f1rng) )
         tPerCobra = int(7.0*max(fRngCob)) # assume <=7ms per freq
         timeout = math.ceil( 1200 + tPerCobra*len(cobras) )
