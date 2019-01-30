@@ -26,10 +26,13 @@ class Sock:
     def __init__(self):
         self._s = socket.socket()
 
-    def connect(self, ip, port, logger=None, ioLogger=None):
+    def connect(self, ip, port, logger=None, protoLogger=None):
         self._s = socket.socket()
+        if logger is None:
+            from .log import eth_hex_logger
+            logger = eth_hex_logger
         self.logger = logger
-        self.ioLogger = ioLogger
+        self.protoLogger = protoLogger
         if logger is not None:
             logger.log("(ETH)Connecting...")
 

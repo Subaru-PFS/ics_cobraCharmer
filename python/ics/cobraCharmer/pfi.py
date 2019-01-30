@@ -30,7 +30,10 @@ class PFI(object):
         """
         self.logger = Logger.getLogger('fpga', debug)
         self.ioLogger = Logger.getLogger('fpgaIO', debug)
-        self.fpgaLogger = fpgaLogger.FPGAProtocolLogger()
+        self.protoLogger = fpgaLogger.FPGAProtocolLogger()
+
+        self.calibModel = None
+        self.motorMap = None
 
         self.fpgaHost = fpgaHost
         if doConnect:
@@ -42,7 +45,7 @@ class PFI(object):
         """ Connect to COBRA fpga device """
         if fpgaHost is not None:
             self.fpgaHost = fpgaHost
-        ethernet.sock.connect(self.fpgaHost, 4001, ioLogger=self.fpgaLogger)
+        ethernet.sock.connect(self.fpgaHost, 4001, protoLogger=self.protoLogger)
         self.ioLogger.info(f'FPGA connection to {self.fpgaHost}')
 
     def disconnect(self):
