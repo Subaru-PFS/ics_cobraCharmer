@@ -82,7 +82,12 @@ class PFI(object):
     def _mapCobraIndex(self, cobra):
         """ Convert our module + cobra to global cobra index for the calibration product. """
 
-        return ((cobra.module - 1)*self.nCobrasPerModule + cobra.cobraNum-1)
+        if self.calibModel is not None:
+            return self.calibModel.findCobraByModuleAndPositioner(cobra.module,
+                                                                  cobra.cobraNum)
+        else:
+            self.logger.warn('no calibModel, so we are guessing about the calibModel index for a cobra')
+            return ((cobra.module - 1)*self.nCobrasPerModule + cobra.cobraNum-1)
 
     def reset(self, sectors=0x3f):
         """ Reset COBRA fpga device """
