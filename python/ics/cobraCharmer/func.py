@@ -452,6 +452,8 @@ def hk_chk(data, cobras, export=False, updateModel=None):
             filewriter.writerow([b, t1, t2, v])
 
     #Error Logging
+    vrange = [9.7, 10.2]
+    trange = [-10, 35]
     if code != 0:
         short_log.log("Error! Error Code %d." %code)
         error = True
@@ -464,7 +466,11 @@ def hk_chk(data, cobras, export=False, updateModel=None):
     
     # Error Logging Payload
     i = HK_TLM_HDR_LEN
-    for c, c_i in enumerate(cobras):
+    hkParams = HkParams()
+    for c in cobras:
+        # Note that this loop conveniently skips the 29th cobra on the
+        # 2nd board. That is the unconnected one for which we actually
+        # get a (dummy) reading for.
         p1 = int(data[i]<<8) + int(data[i+1])
         c1 = int(data[i+2]<<8) + int(data[i+3])
         p2 = int(data[i+4]<<8) + int(data[i+5])
@@ -490,7 +496,7 @@ def hk_chk(data, cobras, export=False, updateModel=None):
                 filewriter.writerow([c.cobra, get_freq(p1), conv_current(c1), \
                     get_freq(p2), conv_current(c2)])
 
-        error |= c.p.chk(p1, p2, c1, c2, en_log= not error)
+        error |= hkParams.chk(p1, p2, c1, c2, en_log= not error)
 
     return error
     
