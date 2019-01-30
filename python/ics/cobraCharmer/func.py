@@ -282,9 +282,10 @@ def DIA():
     return boards_per_sector
     
     
-def HK( cobras, export=0 ):
+def HK(cobras, export=False, updateDesign=None):
     board = cobras[0].board
-    
+    nCobras = NCOBRAS_BRD
+
     short_log.log("--- ISSUE HK & VERIFY (brd:%d) ---" %board)      
     
     cmd = CMD_hk(board, timeout=2000)
@@ -292,9 +293,10 @@ def HK( cobras, export=0 ):
     
     resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
     er1 = tlm_chk(resp)
-    
-    resp = sock.recv(HK_TLM_LEN, eth_hex_logger, 'h')
-    er2 = hk_chk(resp, cobras, export)
+
+    tlmLen = HK_TLM_HDR_LEN + nCobras*8
+    resp = sock.recv(tlmLen, eth_hex_logger, 'h')
+    er2 = hk_chk(resp, cobras, export, updateDesign=updateDesign)
     
     return er1 or er2
 
@@ -409,23 +411,33 @@ def tlm_chk(data):
         short_log.log("Error! Error code %d." %code)
         error = True
     return error
-    
-def hk_chk(data, cobras, export):
+
+def hk_chk(data, cobras, export=False, updateDesign=None):
+    """ Consume a housedkeeping response.
+
+    Args
+    ----
+    data : (byte)array
+      the entire HK TLM packet.
+    cobras : list of Cobras
+      the identities of the cobras (module, board, cobra)
+    updateDesign : PfiDesign or None
+      if set, design to update
+    """
+
     error = False
-    trange = cobras[0].p.trange
-    vrange = cobras[0].p.vrange
-    
+
     op = data[0]
     code = int(data[2] << 8) + int(data[3])
     b = int(data[4]<<8) + int(data[5])
     raw_t1 = int(data[6]<<8) + int(data[7]) 
     raw_t2 = int(data[8]<<8) + int(data[9])
     raw_v = int(data[10]<<8) + int(data[11])
-    
+
     t1 = conv_temp( raw_t1 )
     t2 = conv_temp( raw_t2 )
     v = conv_volt( raw_v )
-    
+
     medium_log.log("%s data tlm rx'd. (Brd:%d) (code:0x%04x) (Temps:%.1fC,%.1fC) (Voltage:%.3fV)" \
             %(CMD_NAMES[op], b, code, t1, t2, v))
 
@@ -450,20 +462,26 @@ def hk_chk(data, cobras, export):
     
     # Error Logging Payload
     i = HK_TLM_HDR_LEN
-    for c in cobras:
+    for c, c_i in enumerate(cobras):
         p1 = int(data[i]<<8) + int(data[i+1])
         c1 = int(data[i+2]<<8) + int(data[i+3])
         p2 = int(data[i+4]<<8) + int(data[i+5])
         c2 = int(data[i+6]<<8) + int(data[i+7])
         i += 8
-        
+
+        if updateDesign is not None:
+            updateDesign.updateMotorFrequency(theta=[get_freq(p1)],
+                                              phi=[get_freq(p2)],
+                                              moduleId=c.module,
+                                              cobraId=c.cobra)
+
         logtxt = "%d 3.4mm(%.1fKhz,%.3fAmps) 2.4mm(%.1fKhz,%.3fAmps)" \
                 %(c.cobra, get_freq(p1), conv_current(c1), \
                 get_freq(p2), conv_current(c2))
         
         medium_log.log(logtxt)
 
-		# Write motor data to .csv file
+	# Write motor data to .csv file
         if export:
             with open(path_to_file, "a", newline="") as csvfile:
                 filewriter = csv.writer(csvfile, delimiter=",", quotechar="|")
