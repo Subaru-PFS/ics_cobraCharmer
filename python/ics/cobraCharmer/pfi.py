@@ -113,9 +113,15 @@ class PFI(object):
         else:
             self.logger.debug(f'send POW command succeeded')
 
-    def hk(self, cobra):
-        """ Fetch housekeeping info for a board. """
-        err = func.HK(cobra)
+    def hk(self, module, board, updateModel=False):
+        """ Fetch housekeeping info for a board.
+
+        Note:
+
+        The FPGA deals with _boards_, but the original code deals with _modules_. Wrap that.
+        """
+        cobras = self.allocateCobraBoard(module, board)
+        err = func.HK(cobras, updateModel=(self.calibModel if updateModel else None))
         if err:
             self.logger.error(f'send HK command failed')
         else:
