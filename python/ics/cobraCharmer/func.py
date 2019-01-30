@@ -471,11 +471,11 @@ def hk_chk(data, cobras, export=False, updateModel=None):
         c2 = int(data[i+6]<<8) + int(data[i+7])
         i += 8
 
-        if updateDesign is not None:
-            updateDesign.updateMotorFrequency(theta=[get_freq(p1)],
-                                              phi=[get_freq(p2)],
-                                              moduleId=c.module,
-                                              cobraId=c.cobra)
+        if updateModel is not None:
+            updateModel.updateMotorFrequency(theta=[get_freq(p1)*1000],
+                                             phi=[get_freq(p2)*1000],
+                                             moduleId=c.module,
+                                             cobraId=c.cobraNum)
 
         logtxt = "%d 3.4mm(%.1fKhz,%.3fAmps) 2.4mm(%.1fKhz,%.3fAmps)" \
                 %(c.cobra, get_freq(p1), conv_current(c1), \
