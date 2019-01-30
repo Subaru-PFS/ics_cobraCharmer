@@ -54,9 +54,9 @@ class Sock:
             logger = self.logger
         if logger is not None:
             s = bytesAsString(msg, type)
-            logger.log("(ETH)Sent msg on socket.\n(%s)"%s)
-        if self.ioLogger is not None:
-            self.ioLogger.logSend(msg.tobytes())
+            logger.log("(ETH)Sent msg on socket.(%s)"%s)
+        if self.protoLogger is not None:
+            self.protoLogger.logSend(msg.tobytes())
 
         self._s.send(msg)
 
@@ -65,19 +65,30 @@ class Sock:
         if logger is None:
             logger = self.logger
 
-            # msg is a byteArray
+        if logger is not None:
+            logger.debug("(ETH)Looking for %d bytes)" % (tgt_len))
+
+        # msg is a byteArray
         remaining = tgt_len
         msg = array.array('B')
+
         while remaining > 0:
-            chunk = self._s.recv(remaining)
+            try:
+                chunk = self._s.recv(remaining)
+                if logger is not None:
+                    logger.debug("(ETH)Rcvd %d bytes on socket:%s" % (len(chunk), chunk))
+            except socket.timeout:
+                raise RuntimeError("timed out waiting for %d bytes. Received %d bytes: %s" % (tgt_len,
+                                                                                              tgt_len-remaining,
+                                                                                              msg))
             msg.frombytes(chunk)
             remaining -= len(chunk)
 
         if logger is not None:
             s = bytesAsString(msg, type)
-            logger.log("(ETH)Rcvd msg on socket.\n(%s)"%s)
-        if self.ioLogger is not None:
-            self.ioLogger.logRecv(msg.tobytes())
+            logger.log("(ETH)Rcvd msg on socket.(%s)"%s)
+        if self.protoLogger is not None:
+            self.protoLogger.logRecv(msg.tobytes())
 
         return msg
 
