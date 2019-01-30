@@ -164,7 +164,10 @@ class PFIDesign():
         ids : array
           The indices into our data for all cobras in the module
         """
-        return np.where(self.moduleIds == moduleId)
+        return np.where(self.moduleIds == moduleId)[0]
+
+    def findAllCobras(self):
+        return range(self.nCobras)
 
     def findCobraByModuleAndPositioner(self, moduleId, positionerId):
         """ Find cobra at a given module and positioner.
@@ -182,7 +185,7 @@ class PFIDesign():
           The index into our data for the given cobra
         """
 
-        return np.where((self.moduleIds == moduleId) & (self.positionerIds == cobraId))[0]
+        return np.where((self.moduleIds == moduleId) & (self.positionerIds == positionerId))[0][0]
 
     def findCobraBySerialNumber(self, serialNumber):
         """ Find cobra with the given serial number.
@@ -198,7 +201,7 @@ class PFIDesign():
           The index into our data for the given cobra
         """
 
-        return np.where(self.serialIds == serialNumber)[0]
+        return np.where(self.serialIds == serialNumber)[0][0]
 
     def setModuleId(self, moduleId, forModule=None):
         """Update moduleIds
@@ -337,7 +340,7 @@ class PFIDesign():
         if len(theta) != len(idx):
             raise RuntimeError(f"number of motor frequencies ({len(theta)}) must match number of cobras ({len(idx)})")
 
-        for i, i_i in enumerate(idx):
+        for i_i, i in enumerate(idx):
             header = self.dataContainers[i].find("DATA_HEADER")
             if theta[i_i] is not None:
                 self.motorFreq1[i] = theta[i_i]
