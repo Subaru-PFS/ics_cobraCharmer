@@ -151,6 +151,77 @@ class PFIDesign():
                 # Save the angular step in radians
                 self.angularSteps[i] = np.deg2rad(angularStep)
 
+    def findCobrasForModule(self, moduleId):
+        """ Find all cobras for a given module.
+
+        Args
+        ----
+        moduleId : int
+          The 1..42 number of a PFI module
+
+        Returns
+        -------
+        ids : array
+          The indices into our data for all cobras in the module
+        """
+        return np.where(self.moduleIds == moduleId)
+
+    def findCobraByModuleAndPositioner(self, moduleId, positionerId):
+        """ Find cobra at a given module and positioner.
+
+        Args
+        ----
+        moduleId : int
+          The 1..42 number of a PFI module
+        positionerId : int
+          The 1..57 number of a module cobra
+
+        Returns
+        -------
+        id : int
+          The index into our data for the given cobra
+        """
+
+        return np.where((self.moduleIds == moduleId) & (self.positionerIds == cobraId))[0]
+
+    def findCobraBySerialNumber(self, serialNumber):
+        """ Find cobra with the given serial number.
+
+        Args
+        ----
+        serialNumber : str
+           The serial number of a cobra.
+
+        Returns
+        -------
+        id : int
+          The index into our data for the given cobra
+        """
+
+        return np.where(self.serialIds == serialNumber)[0]
+
+    def setModuleId(self, moduleId, forModule=None):
+        """Update moduleIds
+
+        Args
+        ----
+        moduleId: int
+            The moduleId to set ourselves to.
+        forModule: int
+            If set, the module within ourselves to set.
+        """
+
+        if forModule is not None:
+            idx = self.findCobrasForModule(forModule)
+        else:
+            idx = range(self.nCobras)
+
+        # A length test is probably sufficient
+        if len(idx) != 57:
+            raise RuntimeError("Will not set moduleId to anything other that all cobras in a module")
+        for i in idx:
+            self.moduleIds[i] = moduleId
+
     def updateMotorMaps(self, thtFwd=None, thtRev=None, phiFwd=None, phiRev=None, useSlowMaps=True):
         """Update cobra motor maps
 
