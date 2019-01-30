@@ -121,8 +121,11 @@ class PFI(object):
         else:
             self.logger.debug(f'send HK command succeeded')
 
-    def setFreq(self, cobras):
+    def setFreq(self, cobras=None):
         """ Set COBRA motor frequency """
+        if cobras is None:
+            cobras = self.getAllDefinedCobras()
+
         for c in cobras:
             cobraIdx = self._mapCobraIndex(c)
             thetaPer = self._freqToPeriod(self.calibModel.motorFreq1[cobraIdx]/1000)
@@ -136,7 +139,7 @@ class PFI(object):
         else:
             self.logger.debug(f'send SET command succeeded')
 
-    def calibrate(self, cobras,
+    def calibrate(self, cobras=None,
                   thetaLow=60.4, thetaHigh=70.3,
                   phiLow=94.4, phiHigh=108.2,
                   clockwise=True):
@@ -147,8 +150,10 @@ class PFI(object):
         phiLow, phiHigh -
 
         """
+        if cobras is None:
+            cobras = self.getAllDefinedCobras()
 
-        spin = 'cw' if clockwise else 'ccw'
+        spin = ('cw','cw') if clockwise else ('ccw','ccw')
         for c in cobras:
             c.p = func.CalParams(m0=(self._freqToPeriod(thetaLow), self._freqToPeriod(thetaHigh)),
                                  m1=(self._freqToPeriod(phiLow), self._freqToPeriod(phiHigh)),
