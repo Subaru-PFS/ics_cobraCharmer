@@ -42,7 +42,7 @@ class Sock:
 
         self._s.settimeout(4)
         self._s.connect((ip, port))
-        self._s.settimeout(20)
+        self._s.settimeout(30)
 
         if logger is not None:
             logger.log("(ETH)Connection Made. %s:%s" %(ip,port))
