@@ -61,7 +61,7 @@ class FPGAProtocolLogger(object):
               8:"Invalid Interleave",
               9:"Too many sub-commands"}
 
-    def __init__(self, debug=False):
+    def __init__(self, debug=False, logRoot=None):
         """ Parse both MSIM logs and binary FPGA data, and log it nicely.
 
         Args
@@ -70,6 +70,9 @@ class FPGAProtocolLogger(object):
         """
 
         self.logger = logging.getLogger('fpga')
+        if logRoot is not None:
+            self.logger.addHandler(logging.FileHandler(os.path.join(logRoot, 'fpgaProtocol.log')))
+
         self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
 
         self.cmdHandlers = {proto.RUN_CMD: self.runHandler,

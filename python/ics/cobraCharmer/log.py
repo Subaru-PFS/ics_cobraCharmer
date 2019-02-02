@@ -22,7 +22,7 @@ class Logger:
         return self.fileName
 
     def getFilePath(self):
-        return self.filePath + chr(92) + self.fileName
+        return os.path.join(self.filePath, self.fileName)
 
     def setup(self, propagate=True):
         pass
