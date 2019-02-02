@@ -54,15 +54,22 @@ class ImageSet(object):
         if nameArgs is None:
             nameArgs = dict()
 
-        filename=self.makePathname(name, nameArgs)
+        if saveSpots is False:
+            saveSpots = self.saveSpots
+
+        filename=self.makePathname(name, nameArgs=nameArgs)
         im, filename = self.camera.expose(name=filename, **cameraArgs)
         self.namelist[name] = filename
 
         if self.makeStack:
             if self.stack is None:
                 self.stack = np.zeros_like(im, dtype='f4')
-            self.stack += im
+            bkg = sep.Background(im.astype('f4'))
+            self.stack += im - bkg
 
+        if saveSpots:
+            spots = self.spots(name)
+            self.allSpots[name] = spots
         return im, filename
 
     def saveImage(self, name, img):
@@ -74,6 +81,7 @@ class ImageSet(object):
         else:
             filename = name
 
+        filename = os.path.normpath(filename)
         hdus.writeto(filename, overwrite=True)
 
         return filename
@@ -81,7 +89,7 @@ class ImageSet(object):
     def saveStack(self, filename):
         if self.stack is None:
             raise RuntimeError('no stack to save')
-        self.saveImage(self.makePathname(filename).self.stack)
+        self.saveImage(self.makePathname(filename), self.stack)
 
     def stream(self, name, nFrames=1, cameraArgs=None, nameArgs=None):
         """Acquire a video image set.
@@ -92,7 +100,7 @@ class ImageSet(object):
         if nameArgs is None:
             nameArgs = dict()
 
-        filename=self.makePathname(name, nameArgs),
+        filename=self.makePathname(name, nameArgs=nameArgs),
         names = self.camera.stream(filename, nFrames, **cameraArgs)
         self.namelist.extend(names)
 
@@ -101,7 +109,12 @@ class ImageSet(object):
     def spots(self, name, sigma=5.0, doTrim=True):
         if name in self.namelist:
             name = self.namelist[name]
+        if not os.path.isabs(name):
+            name = self.makePathname(name)
+        if not name.endswith('.fits'):
+            name += '.fits'
 
+        name = os.path.normpath(name)
         im = pyfits.getdata(name)
         objects, _, _ = self.getObjects(im, sigma=sigma)
 
