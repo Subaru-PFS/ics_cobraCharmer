@@ -5,23 +5,48 @@ import astropy.io.fits as pyfits
 import sep
 
 class ImageSet(object):
-    def __init__(self, pfi, camera, output, makeStack=False):
+    def __init__(self, pfi, camera, output, name=None, makeStack=False, saveSpots=False):
         self.camera = camera
         self.output = output
         self.namelist = dict()
+        self.name = name
         self.makeStack = makeStack
         self.stack = None
+        self.allSpots = dict()
+        self.saveSpots = saveSpots
 
-    def makePathname(self, name, nameArgs=None):
+    def makePathname(self, name, dir=None, nameArgs=None):
         if nameArgs is None:
             nameArgs = dict()
         filename=name.format(nameArgs)
 
-        return os.path.join(self.output.imageDir,
-                            filename)
+        if dir is None:
+            dir = self.output.imageDir
 
-    def expose(self, name, cameraArgs=None, nameArgs=None):
+        if self.name:
+            dir = os.path.join(dir, self.name)
+        if not os.path.isdir(dir):
+            os.mkdir(dir, 0o2775)
+        return os.path.normpath(os.path.join(dir, filename))
+
+    def expose(self, name, cameraArgs=None, nameArgs=None, saveSpots=False):
         """Acquire an image set.
+
+        Args
+        ----
+        name : str
+          The non-path part of the filename. We prepend the path
+        cameraArgs : dict
+          Passed down the camera expose() routine
+        nameArgs : dict
+          Passed in to .format(nameArgs) the filename
+        saveSpots : bool
+          Measure the spots and save them.
+
+        Returns
+        -------
+        im : the image itself
+        pathname : the entire final pathname for the saved FITS file.
         """
 
         if cameraArgs is None:
