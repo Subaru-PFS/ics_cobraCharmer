@@ -226,7 +226,8 @@ class FPGAProtocol(asyncio.Protocol):
         self.logger.debug(f'temps=0x{temp1:x},0x{temp2:x} volts=0x{v:x}')
 
         mot = struct.pack('>%s' % ('H'*(4*nCobras)),
-                          *([1234, 12, 2345, 23] * nCobras))
+                          *([convert.get_per(65.0), 30000,
+                             convert.get_per(100.0), 30000] * nCobras))
         TLMheader = struct.pack('>BBHHHHH', self.cmdCode, self.cmdNum, 0, boardNum, temp1, temp2, v)
         TLM = TLMheader + mot
         self._respond(TLM)
