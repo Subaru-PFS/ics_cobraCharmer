@@ -21,20 +21,23 @@ class PFI(object):
     "CW is the same as forward or positive direction, CCW means reverse or negative direction"
     dirIds = {'ccw':'ccw', 'cw':'cw', CCW:'ccw', CW:'cw', 'CCW':'ccw', 'CW':'cw'}
 
-    def __init__(self, fpgaHost='localhost', doConnect=True, doLoadModel=True, debug=False):
+    def __init__(self, fpgaHost='localhost', logDir=None, doConnect=True, doLoadModel=False, debug=False):
         """ Initialize a PFI class
         Args:
            fpgaHost    - fpga device
+           logDir   - directory name for logs.
            doConnect   - do connection or not
            doLoadModel - load data model or not
         """
         self.logger = Logger.getLogger('fpga', debug)
         self.ioLogger = Logger.getLogger('fpgaIO', debug)
-        self.protoLogger = fpgaLogger.FPGAProtocolLogger()
+        self.protoLogger = fpgaLogger.FPGAProtocolLogger(logDir)
 
         self.calibModel = None
         self.motorMap = None
 
+        if fpgaHost == 'fpga':
+            fpgaHost = '128.149.77.24'
         self.fpgaHost = fpgaHost
         if doConnect:
             self.connect()
@@ -47,15 +50,28 @@ class PFI(object):
             self.fpgaHost = fpgaHost
         ethernet.sock.connect(self.fpgaHost, 4001, protoLogger=self.protoLogger)
         self.ioLogger.info(f'FPGA connection to {self.fpgaHost}')
+        self.protoLogger.logger.info('FPGA connection to {self.fpgaHost}')
 
     def disconnect(self):
         """ Disconnect from COBRA fpga device """
         ethernet.sock.close()
         ethernet.sock = ethernet.Sock()
         self.ioLogger.info(f'FPGA connection closed')
+        self.protoLogger.logger.info('FPGA connection closed')
 
     def loadModel(self, filename=None):
-        """ Load a motormap XML file. """
+        """ Load a motormap XML file.
+
+        Args
+        ----
+        filename : str
+          If absolute, use the file.
+          If not, look for in our product xml directory.
+          If not, look for a default file.
+
+        Note that we should be looking in some _data_ directory. The default model
+        filename ("updatedLinksAndMaps.xml") is wrong wrong wrong!
+        """
 
         import ics.cobraOps.MotorMapGroup as cobraMotorMap
         import ics.cobraCharmer.pfiDesign as pfiDesign
@@ -63,13 +79,17 @@ class PFI(object):
         reload(cobraMotorMap)
 
         if filename is None:
-            filename = os.path.dirname(sys.modules[__name__].__file__)
-            filename += '../../../xml/updatedLinksAndMaps.xml'
+            filename = 'updatedLinksAndMaps.xml'
+        if not os.path.isabs(filename):
+            ourDir = os.path.dirname(sys.modules[__name__].__file__)
+            dirName = os.path.join(ourDir, '../../../xml')
+            filename = os.path.normpath(os.path.join(dirName, filename))
+        self.logger.info(f'loading model file: {filename}')
         self.calibModel = pfiDesign.PFIDesign(filename)
         self.motorMap = cobraMotorMap.MotorMapGroup(self.calibModel.nCobras)
 
         self.motorMap.useCalibrationProduct(self.calibModel)
-        self.logger.info(f'load cobra model from {filename}')
+        self.logger.info(f'loaded cobra model from {filename}')
 
     def _freqToPeriod(self, freq):
         """ Convert frequency to 60ns ticks """
