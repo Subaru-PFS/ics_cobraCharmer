@@ -358,7 +358,7 @@ def makeMotorMap(pfi, output, modules=None,
     for m in modules:
         allCobras.extend(pfiControl.PFI.allocateCobraModule(module))
 
-    # Move and flesh out.
+    # CRAP: Move and flesh out. At least provide a commandline list.
     brokens = getBrokenCobras(pfi, module)
 
     # define the broken/good cobras
@@ -381,8 +381,6 @@ def makeMotorMap(pfi, output, modules=None,
     regions = 112
     thetaSteps = 10000
     phiSteps = 5000
-    bootstrapSteps = 100
-
 
     # Step 1: measure cobra centers at (0,0).
     # Step 2: take a phi motor map. (lets us get to 60 degress safely)
@@ -405,13 +403,32 @@ def makeMotorMap(pfi, output, modules=None,
             targets = targetThetasIn(pfi, goodCobras)
             moveToXYfromHome(pfi, goodCobras, goodIdx, targets, output)
 
-        phiDatasets = takePhiMap(pfi, output, goodCobras, steps=steps) # ontimes=ontimes
+        phiDataset = takePhiMap(pfi, output, goodCobras, steps=steps) # ontimes=ontimes
         phiFW, phiRV = phiMeasure(pfi, [phiDataset], phiSteps, steps=steps)
 
     phiCenter, phiAngFW, phiAngRV = calcPhiGeometry(pfi, phiFW, phiRV, phiSteps, steps, goodIdx=goodIdx)
-    phMMFW, phiMMRV = calcPhiMotorMap(pfi, phiCenter, phiAngFW, phiAngRV, regions, steps, goodIdx=None)
+    phiMMFW, phiMMRV = calcPhiMotorMap(pfi, phiCenter, phiAngFW, phiAngRV, regions, steps, goodIdx=None)
+
+    if bootstrap:
+        np.seterr(divide='raise')
+        model = pfi.calibModel
+        model.updateMotorMaps(phiFwd=phiMMFW, phiRev=phiMMRV)
+        model.updateMotorMaps(phiFwd=phiMMFW, phiRev=phiMMRV, useSlowMaps=False)
+
+        xmlPath = os.path.join(output.xmlDir, 'phiMM.xml')
+        model.createCalibrationFile(xmlPath)
+
+        pfi.loadModel(xmlPath)
+
+        # Be conservative until we tune ontimes: go to 50 not 60 degrees.
+        phis = np.full(len(goodCobras), np.deg2rad(50.0))
+        pfi.moveThetaPhi(goodCobras, phis*0, phis)
+
+        # No!! This can enable and execute (big!) theta moves!!!
+        # moveToXYfromHome(pfi, goodCobras, goodIdx, targets, output)
 
     breakpoint()
+
     ## Everything below this breakpoint is unevaluated, but stripped for the stuff above.
 
     oldCenters = pfi.calibModel.centers[goodIdx]
