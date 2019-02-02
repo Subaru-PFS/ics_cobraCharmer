@@ -6,6 +6,7 @@ is no pixel scaling or phi home hacking. The coordinate
 system here should be in F3C.
 
 """
+import logging
 
 import numpy as np
 import xml.etree.ElementTree as ElementTree
@@ -266,6 +267,11 @@ class PFIDesign():
                 calTable = self.dataContainers[i].find("FAST_CALIBRATION_TABLE")
 
             if thtFwd is not None:
+                w_0 = thtFwd == 0
+                if w_0.any():
+                    minv = thtFwd[~w_0].min()
+                    logging.warn(f'{w_0.sum()} thtFwd slots were 0, and set to: {minv}')
+                    thtFwd[w_0] = minv
                 if useSlowMaps:
                     self.S1Pm[i] = self.angularSteps[i] / thtFwd[i]
                 else:
@@ -274,6 +280,11 @@ class PFIDesign():
                 body = list(map(f2s, np.rad2deg(thtFwd[i])))
                 calTable.find("Joint1_fwd_stepsizes").text = ','.join(head + body) + ','
             if thtRev is not None:
+                w_0 = thtRev == 0
+                if w_0.any():
+                    minv = thtRev[~w_0].min()
+                    logging.warn(f'{w_0.sum()} thtRev slots were 0, and set to: {minv}')
+                    thtRev[w_0] = minv
                 if useSlowMaps:
                     self.S1Nm[i] = self.angularSteps[i] / thtRev[i]
                 else:
@@ -282,6 +293,11 @@ class PFIDesign():
                 body = list(map(f2s, np.rad2deg(thtRev[i])))
                 calTable.find("Joint1_rev_stepsizes").text = ','.join(head + body) + ','
             if phiFwd is not None:
+                w_0 = phiFwd == 0
+                if w_0.any():
+                    minv = phiFwd[~w_0].min()
+                    logging.warn(f'{w_0.sum()} phiFwd slots were 0, and set to: {minv}')
+                    phiFwd[w_0] = minv
                 if useSlowMaps:
                     self.S2Pm[i] = self.angularSteps[i] / phiFwd[i]
                 else:
@@ -290,6 +306,12 @@ class PFIDesign():
                 body = list(map(f2s, np.rad2deg(phiFwd[i])))
                 calTable.find("Joint2_fwd_stepsizes").text = ','.join(head + body) + ','
             if phiRev is not None:
+                w_0 = phiRev == 0
+                if w_0.any():
+                    minv = phiRev[~w_0].min()
+                    logging.warn(f'{w_0.sum()} phiRev slots were 0, and set to: {minv}')
+                    phiRev[w_0] = minv
+
                 if useSlowMaps:
                     self.S2Nm[i] = self.angularSteps[i] / phiRev[i]
                 else:
