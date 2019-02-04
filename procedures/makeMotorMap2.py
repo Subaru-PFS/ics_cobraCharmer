@@ -270,6 +270,38 @@ def calcPhiMotorMap(pfi, phiCenter, phiAngFW, phiAngRV, regions, steps, goodIdx=
 
     return phiMMFW, phiMMRV
 
+def movePhiToSafeOut(pfi, goodCobras, output,
+                     phiRange=5000, bootStrap=False):
+
+    if bootStrap:
+        # Be conservative until we tune ontimes: go to 50 not 60 degrees.
+        # Also step out in parts and back and record images.
+
+        targetAngle = 50.0
+        dataset = imageSet.ImageSet(pfi, name='safeOut',
+                                    cameraFactory(), output, makeStack=True,
+                                    saveSpots=True)
+
+        pfi.moveAllSteps(goodCobras, 0, -phiRange)
+
+        dataset.expose(f'phiSafeBegin')
+        for s in range(1,3):
+            ang = targetAngle//s
+            phis = np.full(len(goodCobras), np.deg2rad(ang))
+            pfi.moveThetaPhi(goodCobras, phis*0, phis)
+            dataset.expose(f'phiSafe{ang}')
+
+        pfi.moveAllSteps(goodCobras, 0, -phiRange)
+        phis = np.full(len(goodCobras), np.deg2rad(targetAngle))
+        pfi.moveThetaPhi(goodCobras, phis*0, phis)
+        dataset.expose(f'phiSafeEnd')
+    else:
+        targetAngle = 60.0
+        pfi.moveAllSteps(goodCobras, 0, -phiRange)
+        phis = np.full(len(goodCobras), np.deg2rad(targetAngle))
+        pfi.moveThetaPhi(goodCobras, phis*0, phis)
+
+
 def savePhiGeometry(pfi, goodIdx, output, phiCircles, phiFW, phiRV):
     if goodIdx is None:
         goodIdx = len(phiCircles)
@@ -406,9 +438,7 @@ def makeMotorMap(pfi, output, modules=None,
 
         pfi.loadModel(xmlPath)
 
-        # Be conservative until we tune ontimes: go to 50 not 60 degrees.
-        phis = np.full(len(goodCobras), np.deg2rad(50.0))
-        pfi.moveThetaPhi(goodCobras, phis*0, phis)
+        movePhiToSafeOut(pfi, goodCobras, bootstrap=True)
 
         # No!! This can enable and execute (big!) theta moves!!!
         # moveToXYfromHome(pfi, goodCobras, goodIdx, targets, output)
