@@ -81,33 +81,22 @@ def targetThetasIn(pfi, cobras):
 
     return outTargets
 
-def bootstrapPhiMap(pfi, output, cobras, steps=100):
-    """ Take phi map in groups. Used when we do not have a map. """
-
-    phisets = []
-    for g in 1,2,3:
-        gcobras = [c for c in cobras if c.cobraNum%3 == g-1]
-        phisets.append(takePhiMap(pfi, output, gcobras, steps=steps, nameExtra=f'BSgroup{g}'))
-
-    return phisets, steps
-
 def takePhiMap(pfi, output,
                cobras,
                ontimes=None,
                repeat=1,
                steps=50,
-               nameExtra='',
-               phiSteps=5000):
+               phiRange=5000):
 
     dataset = imageSet.ImageSet(pfi, cameraFactory(), output, makeStack=True, saveSpots=True)
 
     # record the phi movements
     for n in range(repeat):
         # forward phi motor maps
-        dataset.expose(f'phi{nameExtra}Forward{n}Begin_')
-        for k in range(phiSteps//steps):
+        dataset.expose(f'phiForward{n}Begin')
+        for k in range(phiRange//steps):
             pfi.moveAllSteps(cobras, 0, steps)
-            dataset.expose(f'phi{nameExtra}Forward{n}N{k}_')
+            dataset.expose(f'phiForward{n}N{k}')
 
         # make sure it goes to the limit
         if ontimes is not None:
@@ -115,13 +104,13 @@ def takePhiMap(pfi, output,
         pfi.moveAllSteps(cobras, 0, 5000)
         if ontimes is not None:
             pfi.calibModel.updateOntimes(*ontimes['normal'])
-        dataset.expose(f'phi{nameExtra}Forward{n}End_')
+        dataset.expose(f'phiForward{n}End')
 
         # reverse phi motor maps
-        dataset.expose(f'phi{nameExtra}Reverse{n}Begin_')
-        for k in range(phiSteps//steps):
+        dataset.expose(f'phiReverse{n}Begin')
+        for k in range(phiRange//steps):
             pfi.moveAllSteps(cobras, 0, -steps)
-            dataset.expose(f'phi{nameExtra}Reverse{n}N{k}_')
+            dataset.expose(f'phiReverse{n}N{k}')
 
         # At the end, make sure the cobra back to the hard stop
         if ontimes is not None:
@@ -129,13 +118,13 @@ def takePhiMap(pfi, output,
         pfi.moveAllSteps(cobras, 0, -5000)
         if ontimes is not None:
             pfi.calibModel.updateOntimes(*ontimes['normal'])
-        dataset.expose(f'phi{nameExtra}Reverse{n}End_')
+        dataset.expose(f'phiReverse{n}End')
 
-    dataset.saveStack(f'phi{nameExtra}Stack')
+    dataset.saveStack(f'phiStack')
 
     return dataset
 
-def phiMeasure(pfi, dataSets, phiSteps, steps, bootstrap=False):
+def phiMeasure(pfi, dataSets, phiRange, steps):
     """
     Given bootstrap phi data, pile up the measurements.
 
@@ -143,27 +132,25 @@ def phiMeasure(pfi, dataSets, phiSteps, steps, bootstrap=False):
     available. It should simply read them all.
     """
 
-    phiFW = np.zeros((57, 1, phiSteps//steps+2), dtype=complex)
-    phiRV = np.zeros((57, 1, phiSteps//steps+2), dtype=complex)
+    phiFW = np.zeros((57, 1, phiRange//steps+2), dtype=complex)
+    phiRV = np.zeros((57, 1, phiRange//steps+2), dtype=complex)
     centers = pfi.calibModel.centers
 
     # forward phi
-    cnt = phiSteps//steps
+    cnt = phiRange//steps
     for ds_i, dataSet in enumerate(dataSets):
         n = ds_i + 1
 
-        bootstrapString = '' if not bootstrap else f'BSGroup{n}'
-
-        cs, _ = dataSet.spots(f'phi{bootstrapString}Forward0Begin_')
+        cs, _ = dataSet.spots(f'phiForward0Begin')
         spots = np.array([c['x']+c['y']*(1j) for c in cs])
         idx = utils.lazyIdentification(centers, spots)
         phiFW[:,0,0] = spots[idx]
         for k in range(cnt):
-            cs, _ = dataSet.spots(f'phi{bootstrapString}Forward0N{k}_')
+            cs, _ = dataSet.spots(f'phiForward0N{k}')
             spots = np.array([c['x']+c['y']*(1j) for c in cs])
             idx = utils.lazyIdentification(centers, spots)
             phiFW[:,0,k+1] = spots[idx]
-        cs, _ = dataSet.spots(f'phi{bootstrapString}Forward0End_')
+        cs, _ = dataSet.spots(f'phiForward0End')
         spots = np.array([c['x']+c['y']*(1j) for c in cs])
         idx = utils.lazyIdentification(centers, spots)
         phiFW[:,0,k+2] = spots[idx]
@@ -171,25 +158,23 @@ def phiMeasure(pfi, dataSets, phiSteps, steps, bootstrap=False):
     for ds_i, dataSet in enumerate(dataSets):
         n = ds_i + 1
 
-        bootstrapString = '' if not bootstrap else f'BSGroup{n}'
-
-        cs, _ = dataSet.spots(f'phi{bootstrapString}Reverse0Begin_')
+        cs, _ = dataSet.spots(f'phiReverse0Begin')
         spots = np.array([c['x']+c['y']*(1j) for c in cs])
         idx = utils.lazyIdentification(centers, spots)
         phiRV[:,0,0] = spots[idx]
         for k in range(cnt):
-            cs, _ = dataSet.spots(f'phi{bootstrapString}Reverse0N{k}_')
+            cs, _ = dataSet.spots(f'phiReverse0N{k}')
             spots = np.array([c['x']+c['y']*(1j) for c in cs])
             idx = utils.lazyIdentification(centers, spots)
             phiRV[:,0,k+1] = spots[idx]
-        cs, _  = dataSet.spots(f'phi{bootstrapString}Reverse0End_')
+        cs, _  = dataSet.spots(f'phiReverse0End')
         spots = np.array([c['x']+c['y']*(1j) for c in cs])
         idx = utils.lazyIdentification(centers, spots)
         phiRV[:,0,k+2] = spots[idx]
 
     return phiFW, phiRV
 
-def calcPhiGeometry(pfi, phiFW, phiRV, phiSteps, steps, goodIdx=None):
+def calcPhiGeometry(pfi, phiFW, phiRV, phiRange, steps, goodIdx=None):
     """ Calculate as much phi geometry as we can from arcs between stops.
 
     Args
@@ -211,8 +196,8 @@ def calcPhiGeometry(pfi, phiFW, phiRV, phiSteps, steps, goodIdx=None):
     repeat = phiFW.shape[1]
 
     phiCenter = np.zeros(57, dtype=complex)
-    phiAngFW = np.zeros((57, repeat, phiSteps//steps+1), dtype=float)
-    phiAngRV = np.zeros((57, repeat, phiSteps//steps+1), dtype=float)
+    phiAngFW = np.zeros((57, repeat, phiRange//steps+1), dtype=float)
+    phiAngRV = np.zeros((57, repeat, phiRange//steps+1), dtype=float)
 
     # measure centers
     for c in goodIdx:
@@ -221,7 +206,7 @@ def calcPhiGeometry(pfi, phiFW, phiRV, phiSteps, steps, goodIdx=None):
         phiCenter[c] = x + y*(1j)
 
     # measure phi angles
-    cnt = phiSteps//steps + 1
+    cnt = phiRange//steps + 1
     for c in goodIdx:
         for n in range(repeat):
             for k in range(cnt):
@@ -341,6 +326,8 @@ def XXXXXstrangePhiGooFromPreciseNB():
 def makeMotorMap(pfi, output, modules=None,
                  repeat=1,
                  steps=50,
+                 phiRange=5000,
+                 thetaRange=10000,
                  bootstrap=False,
                  reprocess=False,
                  updateModel=True):
@@ -379,8 +366,6 @@ def makeMotorMap(pfi, output, modules=None,
     #        plus some suspect definitions.
     binSize = np.deg2rad(3.6)
     regions = 112
-    thetaSteps = 10000
-    phiSteps = 5000
 
     # Step 1: measure cobra centers at (0,0).
     # Step 2: take a phi motor map. (lets us get to 60 degress safely)
@@ -388,25 +373,26 @@ def makeMotorMap(pfi, output, modules=None,
 
     if reprocess:
         dataset = imageSet.ImageSet(pfi, camera=None, output=output)
-        phiFW, phiRV = phiMeasure(pfi, [dataset], phiSteps, steps=steps)
+        phiFW, phiRV = phiMeasure(pfi, [dataset], phiRange, steps=steps)
     else:
         pfi.reset()
         pfi.setFreq()
 
         if bootstrap:
             # Do __NOT__ home or move theta for bootstrapping.
-            pfi.moveAllSteps(goodCobras, 0, -5000)
+            pfi.moveAllSteps(goodCobras, 0, -phiRange)
         else:
             # Home the good cobras
-            pfi.moveAllSteps(goodCobras, -10000, -5000)
+            pfi.moveAllSteps(goodCobras, -thetaRange, -phiRange)
 
             targets = targetThetasIn(pfi, goodCobras)
             moveToXYfromHome(pfi, goodCobras, goodIdx, targets, output)
 
-        phiDataset = takePhiMap(pfi, output, goodCobras, steps=steps) # ontimes=ontimes
-        phiFW, phiRV = phiMeasure(pfi, [phiDataset], phiSteps, steps=steps)
+        phiDataset = takePhiMap(pfi, output, goodCobras,
+                                steps=steps, phiRange=phiRRange) # ontimes=ontimes
+        phiFW, phiRV = phiMeasure(pfi, [phiDataset], phiRange=phiRange,, steps=steps)
 
-    phiCenter, phiAngFW, phiAngRV = calcPhiGeometry(pfi, phiFW, phiRV, phiSteps, steps, goodIdx=goodIdx)
+    phiCenter, phiAngFW, phiAngRV = calcPhiGeometry(pfi, phiFW, phiRV, phiRange, steps, goodIdx=goodIdx)
     phiMMFW, phiMMRV = calcPhiMotorMap(pfi, phiCenter, phiAngFW, phiAngRV, regions, steps, goodIdx=None)
 
     if bootstrap:
@@ -466,7 +452,7 @@ def makeMotorMap(pfi, output, modules=None,
     for n in range(repeat):
         # forward theta motor maps
         expose(dataPath+f'/theta1Begin{n}_', dataPath+f'/theta2Begin{n}_')
-        for k in range(thetaSteps//steps):
+        for k in range(thetaRange//steps):
             pfi.moveAllSteps(goodCobras, steps, 0)
             expose(dataPath+f'/theta1Forward{n}N{k}_', dataPath+f'/theta2Forward{n}N{k}_')
 
@@ -477,7 +463,7 @@ def makeMotorMap(pfi, output, modules=None,
 
         # reverse theta motor maps
         expose(dataPath+f'/theta1End{n}_', dataPath+f'/theta2End{n}_')
-        for k in range(thetaSteps//steps):
+        for k in range(thetaRange//steps):
             pfi.moveAllSteps(goodCobras, -steps, 0)
             expose(dataPath+f'/theta1Reverse{n}N{k}_', dataPath+f'/theta2Reverse{n}N{k}_')
 
@@ -487,11 +473,11 @@ def makeMotorMap(pfi, output, modules=None,
         pfi.calibModel.updateOntimes(*onTime)
 
     # variable declaration for position measurement
-    thetaFW = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
-    thetaRV = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
+    thetaFW = np.zeros((57, repeat, thetaRange//steps+1), dtype=complex)
+    thetaRV = np.zeros((57, repeat, thetaRange//steps+1), dtype=complex)
 
     # forward theta
-    cnt = thetaSteps//steps
+    cnt = thetaRange//steps
     for n in range(repeat):
         data = fits.getdata(dataPath+f'/theta{nCam}Begin{n}_0001.fits')
         cs = sep.extract(data.astype(float), 50)
@@ -530,8 +516,8 @@ def makeMotorMap(pfi, output, modules=None,
 
     # variable declaration for theta, phi angles
     thetaCenter = np.zeros(57, dtype=complex)
-    thetaAngFW = np.zeros((57, repeat, thetaSteps//steps+1), dtype=float)
-    thetaAngRV = np.zeros((57, repeat, thetaSteps//steps+1), dtype=float)
+    thetaAngFW = np.zeros((57, repeat, thetaRange//steps+1), dtype=float)
+    thetaAngRV = np.zeros((57, repeat, thetaRange//steps+1), dtype=float)
 
     # measure centers
     for c in goodIdx:
@@ -543,7 +529,7 @@ def makeMotorMap(pfi, output, modules=None,
         #x phiCenter[c] = x + y*(1j)
 
     # measure theta angles
-    cnt = thetaSteps//steps
+    cnt = thetaRange//steps
     for c in goodIdx:
         for n in range(repeat):
             for k in range(cnt+1):
@@ -569,7 +555,7 @@ def makeMotorMap(pfi, output, modules=None,
                     thetaAngRV[c,n,k+1] -= np.pi*2
 
     # measure phi angles
-    cnt = phiSteps//steps + 1
+    cnt = phiRange//steps + 1
     for c in goodIdx:
         for n in range(repeat):
             for k in range(cnt):
@@ -592,7 +578,7 @@ def makeMotorMap(pfi, output, modules=None,
     thetaHS = np.deg2rad(370)
 
     # calculate theta motor maps
-    cnt = thetaSteps//steps
+    cnt = thetaRange//steps
     for c in goodIdx:
         for b in range(regions):
             # forward motor maps
@@ -677,7 +663,11 @@ def main(args=None):
                         help='the name of the module (e.g. "SC03", "Spare1", or "PFI")')
 
     parser.add_argument('--steps', type=int, default=50,
-                        help='size of setp to take for the motormaps')
+                        help='size of step to take for the motormaps')
+    parser.add_argument('--phiRange', type=int, default=5000,
+                        help='expected full range of phi motors')
+    parser.add_argument('--thetaRange', type=int, default=10000,
+                        help='expected full range of theta motors')
     parser.add_argument('--fpgaHost', type=str, default='localhost',
                         help='connect to the given FPGA host instead of the simulator.')
     parser.add_argument('--modelName', type=str, default=None,
@@ -687,7 +677,7 @@ def main(args=None):
     parser.add_argument('--saveModelFile', type=str, default='',
                         help='save the updated model in the given file.')
     parser.add_argument('--bootstrap', action='store_true',
-                        help='Assume that the input XML file has bad geometry.')
+                        help='Assume that the input XML file has unknown/bad geometry.')
     parser.add_argument('--reprocess', type=str, default=False,
                         help='do not acquire data, but re-process existing data in this directory.')
 
@@ -707,6 +697,8 @@ def main(args=None):
     pfi = makeMotorMap(pfi, output,
                        modules=[opts.module] if opts.module != 0 else None,
                        steps=opts.steps,
+                       phiRange=opts.phiRange,
+                       thetaRange=opts.thetaRange,
                        bootstrap=opts.bootstrap,
                        reprocess=opts.reprocess)
 
