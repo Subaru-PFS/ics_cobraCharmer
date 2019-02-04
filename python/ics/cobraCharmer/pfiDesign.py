@@ -457,11 +457,13 @@ class PFIDesign():
                 self.phiOut[i] = cw[i] - np.pi
                 kinematics.find("Joint2_CW_limit_angle").text = str(np.rad2deg(cw[i]))
 
-    def updateOntimes(self, thtFwd=None, thtRev=None, phiFwd=None, phiRev=None):
+    def updateOntimes(self, cobras=None, thtFwd=None, thtRev=None, phiFwd=None, phiRev=None):
         """Update cobra ontimes
 
         Parameters
         ----------
+        cobras: array-like
+            The indices of the cobras to update
         thtFwd: object
             A numpy array with the cobras theta forward ontimes.
         thtRev: object
@@ -473,16 +475,19 @@ class PFIDesign():
 
         """
 
-        if thtFwd is not None and len(thtFwd) != self.nCobras:
+        if cobras is None:
+            cobras = np.arange(len(nCobras))
+
+        if thtFwd is not None and len(thtFwd) != len(cobras):
             raise RuntimeError("number of cobra theta forward ontimes must match number of cobras")
-        if thtRev is not None and len(thtRev) != self.nCobras:
+        if thtRev is not None and len(thtRev) != len(cobras):
             raise RuntimeError("number of cobra theta reverse ontimes must match number of cobras")
-        if phiFwd is not None and len(phiFwd) != self.nCobras:
+        if phiFwd is not None and len(phiFwd) != len(cobras):
             raise RuntimeError("number of cobra phi forward ontimes must match number of cobras")
-        if phiRev is not None and len(phiRev) != self.nCobras:
+        if phiRev is not None and len(phiRev) != len(cobras):
             raise RuntimeError("number of cobra phi reverse ontimes must match number of cobras")
 
-        for i in range(self.nCobras):
+        for i in cobras:
             kinematics = self.dataContainers[i].find("KINEMATICS")
             if thtFwd is not None:
                 self.motorOntimeFwd1[i] = thtFwd[i]
