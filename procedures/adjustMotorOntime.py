@@ -1,28 +1,16 @@
-import sys, os
 from importlib import reload
 import numpy as np
-import time
+import os
 import datetime
-from astropy.io import fits
-import sep
-import matplotlib.pyplot as plt
-from subprocess import Popen, PIPE
-import glob
 from copy import deepcopy
-from ics.cobraCharmer import pfi as pfiControl
+
 from astropy.table import Table
 from scipy import stats
-from copy import deepcopy
+
+from ics.cobraCharmer import pfiDesign
+reload(pfiDesign)
 
 class ontimeModel():
-    
-    def getCalibModel(self, initXML):
-    
-        pfi = pfiControl.PFI(fpgaHost='localhost', doConnect=False) #'fpga' for real device.
-        pfi.loadModel(initXML)
-        
-        return pfi.calibModel
-
     def getThetaFwdSlope(self, pid, modelArray):
         
         onTimeArray = []
@@ -30,7 +18,6 @@ class ontimeModel():
         for m in modelArray:
             onTimeArray.append(m.motorOntimeFwd1[pid-1]*1000)
             angSpdArray.append(np.mean(np.rad2deg(m.angularSteps[pid-1]/m.S1Pm[pid-1])))
-        
         
         slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
         
