@@ -71,31 +71,34 @@ class ontimeModel():
         
         return slope
 
-    def buildModelfromXML(self, xmlArray, visibleFibers=False):
-        
+    def buildModelfromXML(self, xmlArray, goodFibers=None, doTheta=True, doPhi=True):
+
         # Reading all model and build a model list
         model = []
         for xml in xmlArray:
-            model.append(self.getCalibModel(xml))
+            model.append(pfiDesign.PFIDesign(xml))
 
-        j1fwd_slope = []
-        j1rev_slope = []
-        j2fwd_slope = []
-        j2rev_slope = []
+        if doTheta:
+            j1fwd_slope = []
+            j1rev_slope = []
+            for pid in range(1,58):
+                j1fwd_slope.append(self.getThetaFwdSlope(pid,model))
+                j1rev_slope.append(self.getThetaRevSlope(pid,model))
 
-        for pid in range(1,58):
-            j1fwd_slope.append(self.getThetaFwdSlope(pid,model))
-            j1rev_slope.append(self.getThetaRevSlope(pid,model))
-            j2fwd_slope.append(self.getPhiFwdSlope(pid,model))
-            j2rev_slope.append(self.getPhiRevSlope(pid,model))
-            
+                self.j1fwd_slope = j1fwd_slope
+                self.j1rev_slope = j1rev_slope
 
-        self.j1fwd_slope = j1fwd_slope
-        self.j1rev_slope = j1rev_slope
-        self.j2fwd_slope = j2fwd_slope
-        self.j2rev_slope = j2rev_slope
+        if doPhi:
+            j2fwd_slope = []
+            j2rev_slope = []
 
-    
+            for pid in range(1,58):
+                j2fwd_slope.append(self.getPhiFwdSlope(pid,model))
+                j2rev_slope.append(self.getPhiRevSlope(pid,model))
+
+            self.j2fwd_slope = j2fwd_slope
+            self.j2rev_slope = j2rev_slope
+
     def getTargetOnTime(self, target, modelSlope, onTime, angSpeed):
         #print(onTime)
         #print(angSpeed)
@@ -128,78 +131,82 @@ class ontimeModel():
         self.j2fwd_slope = 0.0090
         self.j2rev_slope = -0.0082
 
+def updateOntimeWithFiberSlope(startingXML, newXML, xmlArray,
+                               doTheta=True, doPhi=True,
+                               thetaTable=None, phiTable=None):
+    model = pfiDesign.PFIDesign(startingXML)
 
-        
-class adjustOnTime():
+    otm = ontimeModel()
+    otm.buildModelfromXML(xmlArray, doTheta=doTheta, doPhi=doPhi)
 
-    def extractCalibModel(self, initXML):
+    size = len(model.angularSteps)
 
-        pfi = pfiControl.PFI(fpgaHost='localhost', doConnect=False) #'fpga' for real device.
-        pfi.loadModel(initXML)
-        
-        return pfi.calibModel
-    
-
-    def updateOntimeWithFiberSlope(self, originXML, newXML, xmlArray=False, thetaTable=False, phiTable=False):
-        
-        #datetoday=datetime.datetime.now().strftime("%Y%m%d")
-        model = self.extractCalibModel(originXML)
-
-        size = len(model.angularSteps)
-
+    if doTheta:
         j1fwd_avg = np.zeros(size)
         j1rev_avg = np.zeros(size)
-        j2fwd_avg = np.zeros(size)
-        j2rev_avg = np.zeros(size)
-        
-        
+
         for i in range(size):
-            
-            # 
             j1_limit = (360/np.rad2deg(model.angularSteps[0])-1).astype(int)
-            j2_limit = (180/np.rad2deg(model.angularSteps[0])-1).astype(int)
-            
+
             j1fwd_avg[i] = np.mean(np.rad2deg(model.angularSteps[i]/model.S1Pm[i][:j1_limit]))
             j1rev_avg[i] = -np.mean(np.rad2deg(model.angularSteps[i]/model.S1Nm[i][:j1_limit]))
+
+        newOntimeFwd1 = otm.getTargetOnTime(0.05,otm.j1fwd_slope, model.motorOntimeFwd1 ,j1fwd_avg)
+        newOntimeRev1 = otm.getTargetOnTime(-0.05,otm.j1rev_slope, model.motorOntimeRev1 ,j1rev_avg)
+    else:
+        newOntimeFwd1 = None
+        newOntimeRev1 = None
+
+    if doPhi:
+        j2fwd_avg = np.zeros(size)
+        j2rev_avg = np.zeros(size)
+
+        for i in range(size):
+            j2_limit = (180/np.rad2deg(model.angularSteps[0])-1).astype(int)
+
             j2fwd_avg[i] = np.mean(np.rad2deg(model.angularSteps[i]/model.S2Pm[i][:j2_limit]))
             j2rev_avg[i] = -np.mean(np.rad2deg(model.angularSteps[i]/model.S2Nm[i][:j2_limit]))
 
-        # If xml files is given, use xml files to build the on-time model.
-        if xmlArray is not False:
-            otm = ontimeModel()
-            otm.buildModelfromXML(xmlArray)
-
-        newOntimeFwd1 = otm.getTargetOnTime(0.05,otm.j1fwd_slope, model.motorOntimeFwd1 ,j1fwd_avg)
         newOntimeFwd2 = otm.getTargetOnTime(0.07,otm.j2fwd_slope, model.motorOntimeFwd2 ,j2fwd_avg)
-
-        newOntimeRev1 = otm.getTargetOnTime(-0.05,otm.j1rev_slope, model.motorOntimeRev1 ,j1rev_avg)
         newOntimeRev2 = otm.getTargetOnTime(-0.07,otm.j2rev_slope, model.motorOntimeRev2 ,j2rev_avg)
-        pid = range(1,58)
-        if thetaTable is not False:
-            t=Table([pid, model.motorOntimeFwd1,j1fwd_avg, otm.j1fwd_slope, newOntimeFwd1, 
-                     model.motorOntimeRev1,j1rev_avg, otm.j1rev_slope, newOntimeRev1],
-                     names=('Fiber No','Ori Fwd OT', 'FWD sp', 'FWD slope', 'New Fwd OT',
-                            'Ori Rev OT', 'REV sp', 'REV slope', 'New Rev OT'),
-                     dtype=('i2','f4', 'f4', 'f4','f4', 'f4', 'f4', 'f4', 'f4'))
-            t.write(thetaTable,format='ascii.ecsv',overwrite=True,
-                    formats={'Fiber No':'%i','Ori Fwd OT': '%10.5f', 'FWD sp': '%10.5f', 'FWD slope': '%10.5f', 'New Fwd OT': '%10.5f',\
-                             'Ori Rev OT': '%10.5f', 'REV sp': '%10.5f', 'REV slope': '%10.5f', 'New Rev OT': '%10.5f'})
-  
-        if phiTable is not False:
-            t=Table([pid, model.motorOntimeFwd2,j2fwd_avg, otm.j2fwd_slope, newOntimeFwd2,
-                     model.motorOntimeRev2,j2rev_avg, otm.j2rev_slope, newOntimeRev2],
-                     names=('Fiber No','Ori Fwd OT', 'FWD sp', 'FWD slope', 'New Fwd OT',
-                            'Ori Rev OT', 'REV sp', 'REV slope', 'New Rev OT'),
-                     dtype=('i2','f4', 'f4', 'f4','f4', 'f4', 'f4', 'f4', 'f4'))
-            t.write(phiTable,format='ascii.ecsv',overwrite=True, 
-                    formats={'Fiber No':'%i','Ori Fwd OT': '%10.5f', 'FWD sp': '%10.5f', 'FWD slope': '%10.5f', 'New Fwd OT': '%10.5f',\
-                             'Ori Rev OT': '%10.5f', 'REV sp': '%10.5f', 'REV slope': '%10.5f', 'New Rev OT': '%10.5f'})
+    else:
+        newOntimeFwd2 = None
+        newOntimeRev2 = None
 
-        model.updateOntimes(thtFwd=newOntimeFwd1, thtRev=newOntimeRev1, phiFwd=newOntimeFwd2, phiRev=newOntimeRev2)
-        model.createCalibrationFile(newXML)
+    pid = range(1,58)
+    if thetaTable is not None:
+        t=Table([pid, model.motorOntimeFwd1,j1fwd_avg, otm.j1fwd_slope, newOntimeFwd1,
+                 model.motorOntimeRev1,j1rev_avg, otm.j1rev_slope, newOntimeRev1],
+                names=('Fiber No','Ori Fwd OT', 'FWD sp', 'FWD slope', 'New Fwd OT',
+                       'Ori Rev OT', 'REV sp', 'REV slope', 'New Rev OT'),
+                dtype=('i2','f4', 'f4', 'f4','f4', 'f4', 'f4', 'f4', 'f4'))
+        t.write(thetaTable,format='ascii.ecsv',overwrite=True,
+                formats={'Fiber No':'%i','Ori Fwd OT': '%10.5f', 'FWD sp': '%10.5f', 'FWD slope': '%10.5f',
+                         'New Fwd OT': '%10.5f', 'Ori Rev OT': '%10.5f', 'REV sp': '%10.5f',
+                         'REV slope': '%10.5f', 'New Rev OT': '%10.5f'})
 
-    def __init__(self):
-        pass
+    if phiTable is not None:
+        t=Table([pid, model.motorOntimeFwd2,j2fwd_avg, otm.j2fwd_slope, newOntimeFwd2,
+                 model.motorOntimeRev2,j2rev_avg, otm.j2rev_slope, newOntimeRev2],
+                names=('Fiber No','Ori Fwd OT', 'FWD sp', 'FWD slope', 'New Fwd OT',
+                       'Ori Rev OT', 'REV sp', 'REV slope', 'New Rev OT'),
+                dtype=('i2','f4', 'f4', 'f4','f4', 'f4', 'f4', 'f4', 'f4'))
+        t.write(phiTable,format='ascii.ecsv',overwrite=True,
+                formats={'Fiber No':'%i','Ori Fwd OT': '%10.5f', 'FWD sp': '%10.5f', 'FWD slope': '%10.5f',
+                         'New Fwd OT': '%10.5f', 'Ori Rev OT': '%10.5f', 'REV sp': '%10.5f',
+                         'REV slope': '%10.5f', 'New Rev OT': '%10.5f'})
+
+    model.updateOntimes(thtFwd=newOntimeFwd1, thtRev=newOntimeRev1,
+                        phiFwd=newOntimeFwd2, phiRev=newOntimeRev2)
+    model.createCalibrationFile(newXML)
+
+def doAdjustOnTime(outputDir, startingXML, newXML, xmlArray,
+                   doTheta=True, doPhi=True):
+
+    updateOntimeWithFiberSlope(startingXML, os.path.join(outputDir, newXML), xmlArray=xmlArray,
+                               doTheta=doTheta, doPhi=doPhi,
+                               thetaTable=os.path.join(outputDir, 'theta.tbl') if doTheta else None,
+                               phiTable=os.path.join(outputDir, 'phi.tbl') if doPhi else None)
 
 def main():
     xmlarray = []

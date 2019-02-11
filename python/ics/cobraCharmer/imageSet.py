@@ -5,11 +5,11 @@ import astropy.io.fits as pyfits
 import sep
 
 class ImageSet(object):
-    def __init__(self, pfi, camera, output, name=None, makeStack=False, saveSpots=False):
+    def __init__(self, pfi, camera, output, setName=None, makeStack=False, saveSpots=False):
         self.camera = camera
         self.output = output
         self.namelist = dict()
-        self.name = name
+        self.setName = setName
         self.makeStack = makeStack
         self.stack = None
         self.allSpots = dict()
@@ -23,8 +23,8 @@ class ImageSet(object):
         if dir is None:
             dir = self.output.imageDir
 
-        if self.name:
-            dir = os.path.join(dir, self.name)
+        if self.setName:
+            dir = os.path.join(dir, self.setName)
         if not os.path.isdir(dir):
             os.mkdir(dir, 0o2775)
         return os.path.normpath(os.path.join(dir, filename))
