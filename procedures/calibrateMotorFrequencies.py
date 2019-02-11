@@ -1,5 +1,7 @@
+import os.path
+import numpy as np
+
 from ics.cobraCharmer import pfi as pfiModule
-from ics.cobraCharmer import pfiDesign
 from ics.cobraCharmer.utils import fileManager
 
 def calibrateMotorFrequencies(pfi, modules=None, updateModel=True):
@@ -42,7 +44,7 @@ def calibrateMotorFrequencies(pfi, modules=None, updateModel=True):
 def main(args=None):
     if isinstance(args, str):
         import shlex
-        args = shlex.split(argv)
+        args = shlex.split(args)
 
     import argparse
 
@@ -50,6 +52,8 @@ def main(args=None):
     parser.add_argument('moduleName', type=str,
                         help='the name of the module (e.g. "SC03", "Spare1", or "PFI")')
 
+    parser.add_argument('--initOntimes', action='store_true',
+                        help='set the model ontimes to some sane initial value.')
     parser.add_argument('--fpgaHost', type=str, default='localhost',
                         help='connect to the given FPGA host instead of the simulator.')
     parser.add_argument('--modelName', type=str, default=None,
@@ -67,11 +71,21 @@ def main(args=None):
                         doLoadModel=False)
     pfi.loadModel(opts.modelName)
 
-    pfi = calibrateMotorFrequencies(pfi=pfi, output=output,
-                                    modules=[opts.module] if opts.module != 0 else None0
+    pfi = calibrateMotorFrequencies(pfi=pfi,
+                                    modules=[opts.module] if opts.module != 0 else None)
+    if opts.initOntimes:
+        thetaOntimes = np.full(57, 0.065)
+        phiOntimes = np.full(57, 0.045)
+
+        pfi.calibModel.updateOntimes(thtFwd=thetaOntimes, thtRev=thetaOntimes,
+                                     phiFwd=phiOntimes, phiRev=phiOntimes)
 
     if opts.saveModelFile:
-        pfi.calibModel.createCalibrationFile(opts.saveModelFile)
+        if os.path.isabs(opts.saveModelFile):
+            outputPath = opts.saveModelFile
+        else:
+            outputPath = os.path.join(output.xmlDir, opts.saveModelFile)
+        pfi.calibModel.createCalibrationFile(outputPath)
 
 if __name__ == "__main__":
     main()
