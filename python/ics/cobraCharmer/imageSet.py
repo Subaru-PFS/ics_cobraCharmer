@@ -116,14 +116,14 @@ class ImageSet(object):
 
         name = os.path.normpath(name)
         im = pyfits.getdata(name)
-        objects, _, _ = self.getObjects(im, sigma=sigma)
+        objects, imSub, _ = self.getObjects(im, sigma=sigma)
 
         if doTrim:
             # CIT Only -- wrap this, CPL.
-            w = objects['y'] < (objects['x'] + 500)
+            w = (objects['y'] < (objects['x'] + 300)) & (objects['y'] > (objects['x'] - 300))
             objects = objects[w]
 
-        return objects, im
+        return objects, imSub
 
     def getObjects(self, im, sigma=5.0):
         data = im.astype('f4')
