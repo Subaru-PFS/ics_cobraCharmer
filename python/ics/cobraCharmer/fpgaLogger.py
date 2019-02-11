@@ -1,4 +1,5 @@
 import logging
+import os
 import struct
 import multiprocessing
 
@@ -71,9 +72,12 @@ class FPGAProtocolLogger(object):
 
         self.logger = logging.getLogger('fpga')
         if logRoot is not None:
+            self.logger.handlers = []
             self.logger.addHandler(logging.FileHandler(os.path.join(logRoot, 'fpgaProtocol.log')))
+            self.logger.propagate = False
 
         self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
+        self.logger.propagate = False
 
         self.cmdHandlers = {proto.RUN_CMD: self.runHandler,
                             proto.CAL_CMD: self.calHandler,

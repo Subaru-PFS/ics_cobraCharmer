@@ -5,8 +5,8 @@ import sys
 import os
 
 from ics.cobraCharmer import ethernet
+from ics.cobraCharmer import log
 from ics.cobraCharmer import func
-from ics.cobraCharmer.log import Logger
 
 import ics.cobraCharmer.fpgaLogger as fpgaLogger
 
@@ -29,15 +29,20 @@ class PFI(object):
            doConnect   - do connection or not
            doLoadModel - load data model or not
         """
-        self.logger = Logger.getLogger('fpga', debug)
-        self.ioLogger = Logger.getLogger('fpgaIO', debug)
-        self.protoLogger = fpgaLogger.FPGAProtocolLogger(logDir)
+        logging.getLogger().propagate = False
+
+        self.logger = log.Logger.getLogger('fpga', debug)
+        self.ioLogger = log.Logger.getLogger('fpgaIO', debug)
+        if logDir is not None:
+            log.setupLogPaths(logDir)
+
+        self.protoLogger = fpgaLogger.FPGAProtocolLogger(logRoot=logDir)
 
         self.calibModel = None
         self.motorMap = None
 
         if fpgaHost == 'fpga':
-            fpgaHost = '128.149.77.24'
+            fpgaHost = '128.149.77.24'  # A JPL address which somehow got burned into the FPGAs.
         self.fpgaHost = fpgaHost
         if doConnect:
             self.connect()
@@ -465,7 +470,6 @@ class PFI(object):
         # Calculate the total number of motor steps for each angle
         nThtSteps = np.empty(self.motorMap.nMaps)
         nPhiSteps = np.empty(self.motorMap.nMaps)
-
         for c in range(self.motorMap.nMaps):
             # Calculate the total number of motor steps for the theta movement
             stepsRange = np.interp([startTht[c], startTht[c] + deltaTht[c]], self.motorMap.thtOffsets[c], thtSteps[c])
