@@ -476,7 +476,7 @@ class PFIDesign():
         """
 
         if cobras is None:
-            cobras = np.arange(len(nCobras))
+            cobras = np.arange(self.nCobras)
 
         if thtFwd is not None and len(thtFwd) != len(cobras):
             raise RuntimeError("number of cobra theta forward ontimes must match number of cobras")
@@ -487,20 +487,20 @@ class PFIDesign():
         if phiRev is not None and len(phiRev) != len(cobras):
             raise RuntimeError("number of cobra phi reverse ontimes must match number of cobras")
 
-        for i in cobras:
+        for i_i, i in enumerate(cobras):
             kinematics = self.dataContainers[i].find("KINEMATICS")
             if thtFwd is not None:
-                self.motorOntimeFwd1[i] = thtFwd[i]
-                kinematics.find("Link1_fwd_Duration").text = str(thtFwd[i])
+                self.motorOntimeFwd1[i] = thtFwd[i_i]
+                kinematics.find("Link1_fwd_Duration").text = str(thtFwd[i_i])
             if thtRev is not None:
-                self.motorOntimeRev1[i] = thtRev[i]
-                kinematics.find("Link1_rev_Duration").text = str(thtRev[i])
+                self.motorOntimeRev1[i] = thtRev[i_i]
+                kinematics.find("Link1_rev_Duration").text = str(thtRev[i_i])
             if phiFwd is not None:
-                self.motorOntimeFwd2[i] = phiFwd[i]
-                kinematics.find("Link2_fwd_Duration").text = str(phiFwd[i])
+                self.motorOntimeFwd2[i] = phiFwd[i_i]
+                kinematics.find("Link2_fwd_Duration").text = str(phiFwd[i_i])
             if phiRev is not None:
-                self.motorOntimeRev2[i] = phiRev[i]
-                kinematics.find("Link2_rev_Duration").text = str(phiRev[i])
+                self.motorOntimeRev2[i] = phiRev[i_i]
+                kinematics.find("Link2_rev_Duration").text = str(phiRev[i_i])
 
     def createCalibrationFile(self, outputFileName):
         """Creates a new XML calibration file based on current configuration
