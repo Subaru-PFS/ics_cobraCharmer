@@ -94,7 +94,7 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
     
     #datetoday=datetime.datetime.now().strftime("%Y%m%d")
     #datetoday='20181219'
-    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
+    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
     
     #storagePath = '/data/pfs/'+datetoday
     dataPath = storagePath+'/image'
@@ -138,7 +138,7 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
 
     # Initializing COBRA module
     pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-    preciseXML=cobraCharmerPath+'/xml/precise6.xml'
+    preciseXML=cobraCharmerPath+'/xml/motormap_20190128.xml'
     #preciseXML=cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
 
     if not os.path.exists(preciseXML):
@@ -544,9 +544,9 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
 
 def main():
     datetoday=datetime.datetime.now().strftime("%Y%m%d")
-    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
+    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
 
-    for steps in [50,100,200,400]:
+    for steps in [50,100]:
         storagePath = '/data/pfs/'+datetoday+f'_step{steps}/'
         outputXML = cobraCharmerPath+'/xml/motormap_'+datetoday+f'_step{steps}.xml'
         runMotorMap(3, steps, storagePath, outputXML)
