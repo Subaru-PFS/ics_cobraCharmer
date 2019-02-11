@@ -139,7 +139,16 @@ class adjustOnTime():
         
         return pfi.calibModel
     
-
+    def extractOntimefromXML(self, XML, ontimeTable=False):
+        model = self.extractCalibModel(XML)
+        pid = range(1,58)
+        if ontimeTable is not False:
+            t=Table([pid, model.motorOntimeFwd1, model.motorOntimeRev1, model.motorOntimeFwd2, model.motorOntimeFwd2],
+                     names=('Fiber No','Theta Fwd OT', 'Theta Rev OT', 'Phi Fwd OT', 'Phi Rev OT'),
+                     dtype=('i2','f4', 'f4', 'f4','f4'))
+            t.write(ontimeTable,format='ascii.ecsv',overwrite=True,
+                    formats={'Fiber No':'%i','Theta Fwd OT': '%10.5f', 'Theta Rev OT': '%10.5f', 'Phi Fwd OT': '%10.5f', 'Phi Rev OT': '%10.5f'})
+  
     def updateOntimeWithFiberSlope(self, originXML, newXML, xmlArray=False, thetaTable=False, phiTable=False):
         
         #datetoday=datetime.datetime.now().strftime("%Y%m%d")
@@ -243,9 +252,58 @@ def main():
     
     OnTime[2][56]=0.0207
     OnTime[3][56]=0.0236
-    
+
+    # Input old value from 0119
+    OnTime[0][16]=0.0341
+    OnTime[1][16]=0.0468
+
+    OnTime[0][28]=0.0359
+    OnTime[1][28]=0.0374
+
+    OnTime[0][31]=0.0299
+    OnTime[1][31]=0.0291
+
+    OnTime[0][32]=0.0391
+    OnTime[1][32]=0.0382
+
+    OnTime[0][36]=0.0282
+    OnTime[1][36]=0.0302
+
+    OnTime[0][48]=0.0389
+    OnTime[1][48]=0.0399
+
+    OnTime[0][52]=0.0317
+    OnTime[1][52]=0.0336
+    # --------------------------
+    OnTime[2][14]=0.0260
+    OnTime[3][14]=0.0299
+
+    OnTime[2][16]=0.0289
+    OnTime[3][16]=0.0319
+
+    OnTime[2][28]=0.0196
+    OnTime[3][28]=0.0197
+
+    OnTime[2][30]=0.0218
+    OnTime[3][30]=0.0209
+
+    OnTime[2][36]=0.0215
+    OnTime[3][36]=0.0247
+
+    OnTime[2][37]=0.0164
+    OnTime[3][37]=0.0183
+
+    OnTime[2][40]=0.0211
+    OnTime[3][40]=0.0227
+
+    OnTime[2][45]=0.0162
+    OnTime[3][45]=0.0188
+
+
     m.updateOntimes(*OnTime)
     m.createCalibrationFile(newXML)
+    adjot.extractOntimefromXML(newXML, ontimeTable='ot-table.csv')
+
 
 if __name__ == '__main__':
     main()
