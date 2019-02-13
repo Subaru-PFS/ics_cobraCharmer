@@ -11,6 +11,73 @@ import glob
 from copy import deepcopy
 from ics.cobraCharmer import pfi as pfiControl
 
+def getMaxSNR(pid):
+    brokens = [1, 39, 43, 54]
+    visibles= [e for e in range(1,58) if e not in brokens]
+
+
+    
+    pid = pid
+    tobs=900
+    tmax=105
+    tstep=np.array(range(0,11))*8+12
+
+    pixelscale=83
+    k_offset=1/(.075)**2
+    factor=(np.sqrt((tmax+tobs-tstep)/(tobs)))
+
+    N=4000
+    x = np.random.random(size=N) * 100
+    y = np.random.random(size=N) * 100
+
+    colors = [
+        "#%02x%02x%02x" % (int(r), int(g), 150) for r, g in zip(50+2*x, 30+2*y)
+    ]
+
+    TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
+
+    p = figure(tools=TOOLS, x_range=[-1,10], y_range=[0.8,1.05],plot_height=400,plot_width=500, 
+               title="Fiber No. "+str(int(visibles[pid])))
+
+    p.xaxis.axis_label = "Iteration"
+    p.yaxis.axis_label = "SNR"
+
+
+    snr_arr=np.array([])
+    for i in range(1,4):
+        pos=np.load('Data/pos'+str(i)+'.npy')
+        target=np.load('Data/targets'+str(i)+'.npy')
+
+        dist=pixelscale*(np.abs(pos[pid,:]-target[pid]))/1000
+        
+        snr=(1-k_offset*dist**2)*factor    
+        #snr[snr<0]=0
+        #print(np.abs(pos[pid-1,:]-target[pid-1]))
+        #print(snr)
+        if i == 1:
+            snr_arr=snr
+        else:
+            snr_arr=np.vstack((snr_arr,snr))
+
+        iteration = np.arange(0,11,1)
+        p.scatter(x=iteration, y=snr, radius=0.1,
+              fill_color=colors[0:11], fill_alpha=0.8,
+              line_color=None)
+
+    #print(snr_arr)    
+    snr_avg=np.nanmean(snr_arr, axis=0)
+    p.line(x=np.arange(0,9,1),y=snr_avg[:9],color='green', line_width=3)    
+
+    #print(snr_avg)
+    #show(p)
+    ind=np.where(snr_avg == np.nanmax(snr_avg))
+    
+    if np.nanmax(snr_avg) < 0.45:
+        return 10, 0, p
+    else:
+        return ind[0][0], np.nanmax(snr_avg), p
+
+
 def lazyIdentification(centers, spots, radii=None):
     n = len(centers)
     if radii is not None and len(radii) != n:
