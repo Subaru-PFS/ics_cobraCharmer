@@ -143,7 +143,7 @@ class adjustOnTime():
         model = self.extractCalibModel(XML)
         pid = range(1,58)
         if ontimeTable is not False:
-            t=Table([pid, model.motorOntimeFwd1, model.motorOntimeRev1, model.motorOntimeFwd2, model.motorOntimeFwd2],
+            t=Table([pid, model.motorOntimeFwd1, model.motorOntimeRev1, model.motorOntimeFwd2, model.motorOntimeRev2],
                      names=('Fiber No','Theta Fwd OT', 'Theta Rev OT', 'Phi Fwd OT', 'Phi Rev OT'),
                      dtype=('i2','f4', 'f4', 'f4','f4'))
             t.write(ontimeTable,format='ascii.ecsv',overwrite=True,
@@ -254,8 +254,14 @@ def main():
     OnTime[3][56]=0.0236
 
     # Input old value from 0119
-    OnTime[0][16]=0.0341
-    OnTime[1][16]=0.0468
+    OnTime[0][4]=0.0351
+    OnTime[1][4]=0.0566
+
+    OnTime[0][6]=0.0313
+    OnTime[1][6]=0.0320
+    
+    OnTime[0][16]=0.0400
+    OnTime[1][16]=0.0480
 
     OnTime[0][28]=0.0359
     OnTime[1][28]=0.0374
@@ -269,16 +275,22 @@ def main():
     OnTime[0][36]=0.0282
     OnTime[1][36]=0.0302
 
+    OnTime[0][46]=0.0378
+    OnTime[1][46]=0.0391
+
     OnTime[0][48]=0.0389
     OnTime[1][48]=0.0399
 
     OnTime[0][52]=0.0317
     OnTime[1][52]=0.0336
+
+    OnTime[0][54]=0.0394
+    OnTime[1][54]=0.0409
     # --------------------------
     OnTime[2][14]=0.0260
     OnTime[3][14]=0.0299
 
-    OnTime[2][16]=0.0289
+    OnTime[2][16]=0.0295
     OnTime[3][16]=0.0319
 
     OnTime[2][28]=0.0196
