@@ -167,9 +167,9 @@ def setFiberUDPOS(XML, DataPath):
 
 def main():
 
-    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
-    xml=cobraCharmerPath+'/xml/motormaps_181205.xml'
-    #xml=cobraCharmerPath+'/xml/precise5.xml'
+    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
+    #xml=cobraCharmerPath+'xml/motormap_20190211.xml'
+    xml=cobraCharmerPath+'/xml/precise6.xml'
 
     datetoday=datetime.datetime.now().strftime("%Y%m%d")
     storagePath = '/data/pfs/'+datetoday
