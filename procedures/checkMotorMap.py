@@ -168,7 +168,11 @@ def compareAvgSpeed(baseXML, targetXML, figPath,  fiberlist=False):
     j2fwd_avg1 = np.zeros(size1)
     j2rev_avg1 = np.zeros(size1)
 
-    
+    j1fwd_std1 = np.zeros(size1)
+    j1rev_std1 = np.zeros(size1)
+    j2fwd_std1 = np.zeros(size1)
+    j2rev_std1 = np.zeros(size1)
+
     for pid in visibles:
         i = pid-1
         j1_limit = (360/np.rad2deg(model1.angularSteps[i])-1).astype(int)
@@ -179,12 +183,22 @@ def compareAvgSpeed(baseXML, targetXML, figPath,  fiberlist=False):
         j2fwd_avg1[i] = np.mean(np.rad2deg(model1.angularSteps[i]/model1.S2Pm[i][:j2_limit]))
         j2rev_avg1[i] = np.mean(np.rad2deg(model1.angularSteps[i]/model1.S2Nm[i][:j2_limit]))
 
+        j1fwd_std1[i] = np.std(np.rad2deg(model1.angularSteps[i]/model1.S1Pm[i][:j1_limit]))
+        j1rev_std1[i] = np.std(np.rad2deg(model1.angularSteps[i]/model1.S1Nm[i][:j1_limit]))
+        j2fwd_std1[i] = np.std(np.rad2deg(model1.angularSteps[i]/model1.S2Pm[i][:j2_limit]))
+        j2rev_std1[i] = np.std(np.rad2deg(model1.angularSteps[i]/model1.S2Nm[i][:j2_limit]))
+
     size2 = len(model2.angularSteps)
 
     j1fwd_avg2 = np.zeros(size2)
     j1rev_avg2 = np.zeros(size2)
     j2fwd_avg2 = np.zeros(size2)
     j2rev_avg2 = np.zeros(size2)
+
+    j1fwd_std2 = np.zeros(size2)
+    j1rev_std2 = np.zeros(size2)
+    j2fwd_std2 = np.zeros(size2)
+    j2rev_std2 = np.zeros(size2)
 
     for pid in visibles:
         i = pid -1
@@ -196,15 +210,27 @@ def compareAvgSpeed(baseXML, targetXML, figPath,  fiberlist=False):
         j2fwd_avg2[i] = np.mean(np.rad2deg(model2.angularSteps[i]/model2.S2Pm[i][:j2_limit]))
         j2rev_avg2[i] = np.mean(np.rad2deg(model2.angularSteps[i]/model2.S2Nm[i][:j2_limit]))
         
+        j1fwd_std2[i] = np.std(np.rad2deg(model2.angularSteps[i]/model2.S1Pm[i][:j1_limit]))
+        j1rev_std2[i] = np.std(np.rad2deg(model2.angularSteps[i]/model2.S1Nm[i][:j1_limit]))
+        j2fwd_std2[i] = np.std(np.rad2deg(model2.angularSteps[i]/model2.S2Pm[i][:j2_limit]))
+        j2rev_std2[i] = np.std(np.rad2deg(model2.angularSteps[i]/model2.S2Nm[i][:j2_limit]))
 
     p1=makeHistoPlot(j1fwd_avg1, j1fwd_avg2, 'Theta Fwd', 'Caltech', 'ASIAA')
     p2=makeHistoPlot(j1rev_avg1, j1rev_avg2, 'Theta Rev', 'Caltech', 'ASIAA')
     p3=makeHistoPlot(j2fwd_avg1, j2fwd_avg2, 'Phi Fwd', 'Caltech', 'ASIAA')
     p4=makeHistoPlot(j2rev_avg1, j2rev_avg2, 'Phi Rev', 'Caltech', 'ASIAA')
 
+    q1=makeStdHistoPlot(j1fwd_std1, j1fwd_std2, 'Theta Fwd Std', 'Caltech', 'ASIAA')
+    q2=makeStdHistoPlot(j1rev_std1, j1rev_std2, 'Theta Rev Std', 'Caltech', 'ASIAA')
+    q3=makeStdHistoPlot(j2fwd_std1, j2fwd_std2, 'Phi Fwd Std', 'Caltech', 'ASIAA')
+    q4=makeStdHistoPlot(j2rev_std1, j2rev_std2, 'Phi Rev Std', 'Caltech', 'ASIAA')
     #show(column(p1,p2,p3,p4))
     grid = gridplot([[p1, p2], [p3,p4]])
+    qgrid = gridplot([[q1, q2], [q3,q4]])
+
     export_png(grid,filename=figPath+"motor_speed_histogram.png")
+    export_png(qgrid,filename=figPath+"motor_speed_std.png")
+
     #show(p4)
 def makeHistoPlot(avg1, avg2, Title, Legend1, Legend2):
     
@@ -216,10 +242,24 @@ def makeHistoPlot(avg1, avg2, Title, Legend1, Legend2):
     p.quad(top=hist1, bottom=0, left=edges1[:-1], right=edges1[1:],
            fill_color="navy", line_color="white", alpha=0.3,legend=Legend1)
 
-    p.step(x=edges2[1:-1],y=hist2[0:-1], color='black',legend=Legend2,line_width=2)
+    p.step(x=edges2[0:-2],y=hist2[0:-1], color='black',legend=Legend2,line_width=2,mode="after")
 
     return p
 
+
+def makeStdHistoPlot(avg1, avg2, Title, Legend1, Legend2):
+    
+    hist1, edges1 = np.histogram(avg1, bins=np.arange(0.0, 0.1, 0.005))
+    hist2, edges2 = np.histogram(avg2, bins=np.arange(0.0, 0.1, 0.005))
+
+    TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
+    p = figure(title=Title, tools=TOOLS, background_fill_color="#fafafa")
+    p.quad(top=hist1, bottom=0, left=edges1[:-1], right=edges1[1:],
+           fill_color="navy", line_color="white", alpha=0.3,legend=Legend1)
+
+    p.step(x=edges2[0:-2],y=hist2[0:-1], color='black',legend=Legend2,line_width=2,mode="after")
+
+    return p
 
 def compareTwoXML():
 
@@ -282,15 +322,15 @@ def plotMotorMapFromMutiXML(xmlList, ledgenList, figPath, fiberlist=False):
 
 
 def main():
-    dataPath='/Volumes/Disk/Data/xml/'
+    dataPath='/Users/chyan/Documents/workspace/ics_cobraCharmer/xml/'
     xml1=dataPath+'motormaps_181205.xml'
     brokens = [1 , 39, 43, 54]
     visibles= [e for e in range(1,58) if e not in brokens]
 
-    xml2=dataPath+f'motormap_20190124n.xml'
+    xml2=dataPath+f'precise_20190212.xml'
 
-    figpath=f'/Volumes/Disk/Data/MotorMap/20190124/'
-    generateMotorMap(xml1, xml2, figpath, fiberlist=visibles)
+    figpath=f'/Volumes/Disk/Data/MotorMap/20190213/'
+    #generateMotorMap(xml1, xml2, figpath, fiberlist=visibles)
     compareAvgSpeed(xml1, xml2, figpath, fiberlist=visibles)
 
 if __name__ == '__main__':
