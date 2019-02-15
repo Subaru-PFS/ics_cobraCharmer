@@ -11,6 +11,130 @@ import glob
 from copy import deepcopy
 from ics.cobraCharmer import pfi as pfiControl
 
+
+class targetConvergence():
+
+    def setFiberUDPos(self):
+         # Home phi
+        self.pfi.moveAllSteps(self.allCobras, 0, -5000)
+
+        # Home theta
+        self.pfi.moveAllSteps(self.allCobras, -10000, 0)
+        self.pfi.moveAllSteps(self.allCobras, -2000, 0)
+        
+        # Move the bad cobras to up/down positions
+        self.pfi.moveSteps(getCobras([0,38,42,53]), [3200,800,4200,5000], np.zeros(4))
+
+        # move visible positioners to outwards positions, phi arms are moved out for 60 degrees
+        # (outTargets) otherwise we can't measure the theta angles
+        thetas = np.empty(57, dtype=float)
+        thetas[::2] = self.pfi.thetaToLocal(self.oddCobras, np.full(len(self.oddCobras), np.deg2rad(270)))
+        thetas[1::2] = self.pfi.thetaToLocal(self.evenCobras, np.full(len(self.evenCobras), np.deg2rad(90)))
+        phis = np.full(57, np.deg2rad(60.0))
+        outTargets = self.pfi.anglesToPositions(self.allCobras, thetas, phis)
+
+        # Home the good cobras
+        self.pfi.moveAllSteps(getCobras(self.goodIdx), -10000, -5000)
+        self.pfi.moveAllSteps(getCobras(self.goodIdx), -5000, -5000)
+        
+        # move to outTargets
+        _ = moveToXYfromHome(self.pfi, self.goodIdx, outTargets[self.goodIdx], self.datapath)
+
+        # move phi arms in
+        self.pfi.moveAllSteps(getCobras(self.goodIdx), 0, -5000)
+
+    def oneDimensionTest(self, repeat, Theta=False, Phi=False):
+        
+        print(f"Repeating numbers = {repeat}")
+        for i in range(repeat):
+            print(f"runngin {i} iteration")
+            # Given random angels
+            target = np.random.rand(len(self.allCobras))    
+            
+            if Theta == True:
+                print("running theta convergence test.")
+            
+            if Phi == True:
+                print("running phi convergence test.")
+                # Allowing phi angel from 10 to 170
+                target = target*160 + 10
+               
+                thetas = np.empty(len(self.allCobras), dtype=float)
+                phis = np.full(len(self.allCobras), np.deg2rad(target))
+                
+                thetas[::2] = self.pfi.thetaToLocal(self.oddCobras, np.full(len(self.oddCobras), np.deg2rad(270)))
+                thetas[1::2] = self.pfi.thetaToLocal(self.evenCobras, np.full(len(self.evenCobras), np.deg2rad(90)))
+                outTargets = self.pfi.anglesToPositions(self.allCobras, thetas, phis)
+
+                # Home the good cobras
+                self.pfi.moveAllSteps(getCobras(self.goodIdx), -10000, -5000)
+                self.pfi.moveAllSteps(getCobras(self.goodIdx), -2000, -5000)
+
+                data = moveToXYfromHome(self.pfi, self.goodIdx, outTargets[self.goodIdx], self.datapath, maxTries=13)
+
+                np.array(data)
+                np.save(f'{self.datapath}/outTarget_{i}',outTargets)
+                np.save(f'{self.datapath}/curPosition_{i}',data)
+
+        print("End of convergence test.")
+
+        pass
+    
+    def __init__(self, IPstring, XML, dataPath, fiberlist=False):
+        
+        if fiberlist is not False:
+            self.visibles = fiberlist
+        else:
+            self.visibles =  range(1,58)
+            
+        self.goodIdx = np.array(self.visibles) - 1
+
+        
+        self.datapath = dataPath
+         # Define the cobra range.
+        mod1Cobras = pfiControl.PFI.allocateCobraRange(range(1,2))
+        self.allCobras = mod1Cobras
+        # partition module 1 cobras into odd and even sets
+        moduleCobras2 = {}
+        for group in 1,2:
+            cm = range(group,58,2)
+            mod = [1]*len(cm)
+            moduleCobras2[group] = pfiControl.PFI.allocateCobraList(zip(mod,cm))
+        self.oddCobras = moduleCobras2[1]
+        self.evenCobras = moduleCobras2[2]
+        
+        '''
+            Make connection to module 
+        '''   
+        # Initializing COBRA module
+        self.pfi = pfiControl.PFI(fpgaHost=IPstring) #'fpga' for real device.
+        #preciseXML=cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
+
+        if not os.path.exists(XML):
+            print(f"Error: {XML} not presented!")
+            sys.exit()
+        
+        self.pfi.loadModel(XML)
+        self.pfi.setFreq(self.allCobras)
+
+
+        # Preparing data path for storage.
+        storagePath = dataPath+'/data'
+        prodctPath = dataPath+'/product'
+
+        # Prepare the data path for the work
+        if not (os.path.exists(dataPath)):
+            os.makedirs(dataPath)
+        if not (os.path.exists(storagePath)):
+            os.makedirs(storagePath)
+        if not (os.path.exists(prodctPath)):
+            os.makedirs(prodctPath)
+        
+        #pass
+    
+    def __del__(self):
+        pass
+
 def getMaxSNR(pid):
     brokens = [1, 39, 43, 54]
     visibles= [e for e in range(1,58) if e not in brokens]
@@ -98,11 +222,13 @@ def getCobras(cobs):
 
 
 # function to move cobras to target positions
-def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=15, cam_split=26):
+def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=10, cam_split=26):
     cobras = getCobras(idx)
     pfi.moveXYfromHome(cobras, targets)
 
     ntries = 1
+
+    posArray = []
     while True:
         # check current positions, first exposing
         p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-f", dataPath+"/cam1_"], stdout=PIPE)
@@ -111,15 +237,17 @@ def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=15, ca
         p2.communicate()
 
         # extract sources and fiber identification
-        data1 = fits.getdata(dataPath+'/cam1_0001.fits').astype(float)
+        data1 = fits.getdata(dataPath+f'/cam1_0001.fits').astype(float)
         ext1 = sep.extract(data1, 100)
         idx1 = lazyIdentification(pfi.calibModel.centers[idx[idx <= cam_split]], ext1['x'] + ext1['y']*(1j))
-        data2 = fits.getdata(dataPath+'/cam2_0001.fits').astype(float)
+        data2 = fits.getdata(dataPath+f'/cam2_0001.fits').astype(float)
         ext2 = sep.extract(data2, 100)
         idx2 = lazyIdentification(pfi.calibModel.centers[idx[idx > cam_split]], ext2['x'] + ext2['y']*(1j))
         curPos = np.concatenate((ext1[idx1]['x'] + ext1[idx1]['y']*(1j), ext2[idx2]['x'] + ext2[idx2]['y']*(1j)))
         print(curPos)
         print(np.abs(curPos - targets))
+        posArray.append(curPos)
+        
         # check position errors
         done = np.abs(curPos - targets) <= threshold
         if np.all(done):
@@ -132,6 +260,8 @@ def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=15, ca
 
         # move again
         pfi.moveXY(cobras, curPos, targets)
+        
+    return posArray
 
 def setFiberUDPOS(XML, DataPath):
     # Define the cobra range.
@@ -239,20 +369,16 @@ def main():
     #xml=cobraCharmerPath+'/xml/precise6.xml'
 
     datetoday=datetime.datetime.now().strftime("%Y%m%d")
-    storagePath = '/data/pfs/'+datetoday
-    dataPath = storagePath+'/image'
-    prodctPath = storagePath+'/product'
+    dataPath = '/data/pfs/Converge_'+datetoday
+    
+    IP = '128.149.77.24'
+    
+    brokens = [1, 39, 43, 54]
+    visibles= [e for e in range(1,58) if e not in brokens]
 
-    # Prepare the data path for the work
-    if not (os.path.exists(storagePath)):
-        os.makedirs(storagePath)
-    if not (os.path.exists(dataPath)):
-        os.makedirs(dataPath)
-    if not (os.path.exists(prodctPath)):
-        os.makedirs(prodctPath)
-
-
-    setFiberUDPOS(xml, dataPath)
+    targerCon = targetConvergence(IP, xml, dataPath, fiberlist=visibles)
+    targerCon.setFiberUDPos()
+    targerCon.oneDimensionTest(50, Phi=True)
 
 
 if __name__ == '__main__':
