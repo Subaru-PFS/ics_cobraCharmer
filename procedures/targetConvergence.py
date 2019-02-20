@@ -81,7 +81,8 @@ class targetConvergence():
                 self.pfi.moveAllSteps(getCobras(self.goodIdx), -10000, -5000)
                 self.pfi.moveAllSteps(getCobras(self.goodIdx), -2000, -5000)
 
-                data = moveToXYfromHome(self.pfi, self.goodIdx, outTargets[self.goodIdx], self.datapath, maxTries=13)
+                data = moveToXYfromHome(self.pfi, self.goodIdx, outTargets[self.goodIdx], self.datapath, 
+                    stackImage=str(i), maxTries=13)
 
                 np.array(data)
                 np.save(f'{self.datapath}/outTargetTheta_{i}',outTargets)
@@ -90,10 +91,10 @@ class targetConvergence():
             if Phi == True:
                 print("running phi convergence test.")
                 # Allowing phi angel from 10 to 170
-                target = target*160 + 10
-               
+                #phis = np.deg2rad(target*130 + 20)
+                #print(phis)
                 thetas = np.empty(len(self.allCobras), dtype=float)
-                phis = np.full(len(self.allCobras), np.deg2rad(target))
+                phis = np.full(len(self.allCobras), np.deg2rad(110))
                 
                 thetas[::2] = self.pfi.thetaToLocal(self.oddCobras, np.full(len(self.oddCobras), np.deg2rad(270)))
                 thetas[1::2] = self.pfi.thetaToLocal(self.evenCobras, np.full(len(self.evenCobras), np.deg2rad(90)))
@@ -103,7 +104,8 @@ class targetConvergence():
                 self.pfi.moveAllSteps(getCobras(self.goodIdx), -10000, -5000)
                 self.pfi.moveAllSteps(getCobras(self.goodIdx), -2000, -5000)
 
-                data = moveToXYfromHome(self.pfi, self.goodIdx, outTargets[self.goodIdx], self.datapath, maxTries=13)
+                data = moveToXYfromHome(self.pfi, self.goodIdx, outTargets[self.goodIdx], self.datapath, 
+                    stackImage=str(i), maxTries=13)
 
                 np.array(data)
                 np.save(f'{self.datapath}/outTargetPhi_{i}',outTargets)
@@ -168,8 +170,8 @@ class targetConvergence():
 
         return msnr_arr
 
-    def visualizeFiberSNR(self):
-        dataPath='/Volumes/Disk/Data/Converge_20190213/'
+    def visualizeFiberSNR(self, reps, dataPath, outputPath):
+        #dataPath='/Volumes/Disk/Data/Converge_20190213/'
 
 
         tobs=900
@@ -184,9 +186,9 @@ class targetConvergence():
         target_array = []
         pos_array = []
         dist_array = []
-        for i in range(50):
-            tar = np.load(dataPath+f'outTarget_{i}.npy')
-            pos = np.load(dataPath+f'curPosition_{i}.npy')
+        for i in range(reps):
+            tar = np.load(dataPath+f'outTargetPhi_{i}.npy')
+            pos = np.load(dataPath+f'curPositionPhi_{i}.npy')
             target_array.append(tar)
             pos_array.append(pos)
             
@@ -198,7 +200,7 @@ class targetConvergence():
         target_array = np.array(target_array)
         dist_array = np.array(dist_array)
 
-        outputPath='/Volumes/Disk/Data/Convergence/'
+        #outputPath='/Volumes/Disk/Data/Convergence/'
 
 
         snr_list = np.array([])
@@ -208,7 +210,7 @@ class targetConvergence():
             #print(idx)
             maxsnr = self.plotFiberSNR(idx, dist_array, outputPath)
             fids = np.full(len(maxsnr), self.visibles[idx])    
-            repeats = np.arange(1,51)
+            repeats = np.arange(1,reps+1)
 
             snr_list = np.append(snr_list,maxsnr)
             fiber_list = np.append(fiber_list,fids)
@@ -392,7 +394,7 @@ def getCobras(cobs):
 
 
 # function to move cobras to target positions
-def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=10, cam_split=26):
+def moveToXYfromHome(pfi, idx, targets, dataPath, stackImage=None, threshold=3.0, maxTries=10, cam_split=26):
     cobras = getCobras(idx)
     pfi.moveXYfromHome(cobras, targets)
 
@@ -414,6 +416,20 @@ def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=10, ca
         ext2 = sep.extract(data2, 100)
         idx2 = lazyIdentification(pfi.calibModel.centers[idx[idx > cam_split]], ext2['x'] + ext2['y']*(1j))
         curPos = np.concatenate((ext1[idx1]['x'] + ext1[idx1]['y']*(1j), ext2[idx2]['x'] + ext2[idx2]['y']*(1j)))
+        
+        if stackImage is not None:
+            if ntries == 1:
+                stackImg1 = data1
+                stackImg2 = data2
+            else:
+                stackImg1 =stackImg1 + data1
+                stackImg2 =stackImg2 + data2
+            
+            fits.writeto(dataPath+f'/product/Cam1_stacked_'+stackImage+'.fits',stackImg1,overwrite=True)
+            fits.writeto(dataPath+f'/product/Cam2_stacked_'+stackImage+'.fits',stackImg2,overwrite=True)
+
+
+        
         print(curPos)
         print(np.abs(curPos - targets))
         posArray.append(curPos)
@@ -534,26 +550,28 @@ def setFiberUDPOS(XML, DataPath):
 
 def main():
 
-    cobraCharmerPath='/Users/chyan/Documents/workspace/ics_cobraCharmer/'
+    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
     xml=cobraCharmerPath+'xml/precise_20190212.xml'
     #xml=cobraCharmerPath+'/xml/precise6.xml'
 
     datetoday=datetime.datetime.now().strftime("%Y%m%d")
-    dataPath = '/Volumes/Disk/Data/Converge_'+datetoday
+    dataPath = '/data/pfs/Converge_'+datetoday+'/'
     
+    outputPath = '/data/pfs/Converge_'+datetoday+'/'
+
     IP = '128.149.77.24'
-    IP = 'localhost'
+    #IP = 'localhost'
     
     brokens = [1, 39, 43, 54]
     visibles= [e for e in range(1,58) if e not in brokens]
 
-    targetCon = targetConvergence(IP, xml, dataPath, fiberlist=visibles, Connect=False)
+    targetCon = targetConvergence(IP, xml, dataPath, fiberlist=visibles, Connect=True)
     #targetCon.setFiberUDPos()
-    #targetCon.oneDimensionTest(50, Phi=True)
+    targetCon.oneDimensionTest(2, Phi=True)
     #targetCon.oneDimensionTest(50, Theta=True)
 
 
-    targetCon.visualizeFiberSNR()
+    targetCon.visualizeFiberSNR(2,dataPath, outputPath)
 
 
 if __name__ == '__main__':
