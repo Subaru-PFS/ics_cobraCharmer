@@ -213,7 +213,7 @@ myCobras = getCobras(goodIdx)
 
 # Loading XML file once again.  Changing XML file name if you want to loading 
 #  special setting.
-ontimeXML=cobraCharmerPath+'/xml/updateOntime_20190211n.xml'
+ontimeXML=cobraCharmerPath+'/xml/updateOntime_20190220.xml'
 pfi.loadModel(ontimeXML)
 pfi.setFreq(allCobras)
 
