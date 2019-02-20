@@ -10,7 +10,20 @@ from subprocess import Popen, PIPE
 import glob
 from copy import deepcopy
 from ics.cobraCharmer import pfi as pfiControl
+import pandas as pd
 
+from bokeh.models.annotations import Title
+from bokeh.io import output_notebook, show, export_png,export_svgs
+from bokeh.plotting import figure, show, output_file
+import bokeh.palettes
+from bokeh.layouts import column,gridplot
+from bokeh.models import HoverTool, ColumnDataSource, LinearColorMapper
+from bokeh.models.glyphs import Text
+from bokeh.palettes import inferno
+from bokeh.models import BasicTicker, PrintfTickFormatter, ColorBar
+
+from bokeh.transform import linear_cmap
+from copy import deepcopy
 
 class targetConvergence():
 
@@ -53,7 +66,27 @@ class targetConvergence():
             
             if Theta == True:
                 print("running theta convergence test.")
-            
+                # Allowing theta angel from 10 to 350
+                target = target*340 + 10
+
+                # move visible positioners to outwards positions, phi arms are moved out for 60 degrees
+                # (outTargets) otherwise we can't measure the theta angles
+                thetas = np.full(len(self.allCobras), np.deg2rad(target))
+                #thetas[::2] = self.pfi.thetaToLocal(self.oddCobras, np.full(len(self.oddCobras), np.deg2rad(270)))
+                #thetas[1::2] = self.pfi.thetaToLocal(self.evenCobras, np.full(len(self.evenCobras), np.deg2rad(90)))
+                phis = np.full(57, np.deg2rad(60.0))
+                outTargets = self.pfi.anglesToPositions(self.allCobras, thetas, phis)
+
+                # Home the good cobras
+                self.pfi.moveAllSteps(getCobras(self.goodIdx), -10000, -5000)
+                self.pfi.moveAllSteps(getCobras(self.goodIdx), -2000, -5000)
+
+                data = moveToXYfromHome(self.pfi, self.goodIdx, outTargets[self.goodIdx], self.datapath, maxTries=13)
+
+                np.array(data)
+                np.save(f'{self.datapath}/outTargetTheta_{i}',outTargets)
+                np.save(f'{self.datapath}/curPositionTheta_{i}',data)
+
             if Phi == True:
                 print("running phi convergence test.")
                 # Allowing phi angel from 10 to 170
@@ -73,14 +106,142 @@ class targetConvergence():
                 data = moveToXYfromHome(self.pfi, self.goodIdx, outTargets[self.goodIdx], self.datapath, maxTries=13)
 
                 np.array(data)
-                np.save(f'{self.datapath}/outTarget_{i}',outTargets)
-                np.save(f'{self.datapath}/curPosition_{i}',data)
+                np.save(f'{self.datapath}/outTargetPhi_{i}',outTargets)
+                np.save(f'{self.datapath}/curPositionPhi_{i}',data)
 
         print("End of convergence test.")
 
         pass
+
+    def plotFiberSNR(self, idx, distArray, outputPath):
+        dist_array = distArray
+
+        N=4000
+        x = np.random.random(size=N) * 100
+        y = np.random.random(size=N) * 100
+
+        colors = [
+            "#%02x%02x%02x" % (int(r), int(g), 150) for r, g in zip(50+2*x, 30+2*y)
+        ]
+
+
+        TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
+        p = figure(tools=TOOLS, x_range=[0, 10], y_range=[0,1.1],plot_height=500,plot_width=800)
+
+        p.xaxis.axis_label = "Iteration No."
+        p.yaxis.axis_label = "SNR"
+
+        snr_arr=[]
+        msnr_arr=[]
+        for dist in dist_array[:,:,idx]:
+            snr=(1-self.k_offset*dist**2)*self.factor 
+            snr[snr<0]=np.nan
+            snr_arr.append(snr)
+
+            inx = np.isnan(snr)
+            new_snr = snr
+            new_snr[inx] = 0
+
+            msnr_arr.append(np.max(new_snr))
+            iteration = np.arange(0,14,1)
+            #print(dist)
+            #print(snr)
+            p.scatter(x=iteration, y=snr, radius=0.05,
+                    fill_color=colors[0:14], fill_alpha=0.8,
+                    line_color=None)
+
+        snr_arr=np.array(snr_arr)
+        snr_avg=np.nanmean(snr_arr, axis=0)
+
+        where_are_NaNs = np.isnan(snr_avg)
+        snr_avg[where_are_NaNs] = 0
+        
+        p.circle(x=np.arange(0,9,1),y=snr_avg[:9], radius=0.08,color='green',)
+        p.line(x=np.arange(0,9,1),y=snr_avg[:9],color='green', line_width=3) 
+
+        t = Title()
+        t.text = f'Fiber No {self.visibles[idx]}, Max SNR = {np.max(snr_avg):.3f}' #at {ind[0][0]}th iteration'
+        p.title = t
+
+        #show(p)
+        export_png(p,filename=outputPath+"ConvergeTest_"+str(int(self.visibles[idx]))+".png")
+
+        return msnr_arr
+
+    def visualizeFiberSNR(self):
+        dataPath='/Volumes/Disk/Data/Converge_20190213/'
+
+
+        tobs=900
+        tmax=105
+        tstep=np.array(range(0,14))*8+12
+
+        pixelscale=83
+        self.k_offset=1/(.075)**2
+        self.factor=(np.sqrt((tmax+tobs-tstep)/(tobs)))
+
+
+        target_array = []
+        pos_array = []
+        dist_array = []
+        for i in range(50):
+            tar = np.load(dataPath+f'outTarget_{i}.npy')
+            pos = np.load(dataPath+f'curPosition_{i}.npy')
+            target_array.append(tar)
+            pos_array.append(pos)
+            
+            dist=pixelscale*(np.abs(pos-tar[self.goodIdx]))/1000
+            dist_array.append(dist)
+            
+            
+        pos_array = np.array(pos_array)
+        target_array = np.array(target_array)
+        dist_array = np.array(dist_array)
+
+        outputPath='/Volumes/Disk/Data/Convergence/'
+
+
+        snr_list = np.array([])
+        fiber_list = np.array([])
+        repeat_list = np.array([])
+        for idx in range(len(self.goodIdx)):
+            #print(idx)
+            maxsnr = self.plotFiberSNR(idx, dist_array, outputPath)
+            fids = np.full(len(maxsnr), self.visibles[idx])    
+            repeats = np.arange(1,51)
+
+            snr_list = np.append(snr_list,maxsnr)
+            fiber_list = np.append(fiber_list,fids)
+            repeat_list = np.append(repeat_list,repeats)   
+        
+        #snr_list=np.array(snr_list)
+        #fiber_list=np.array(fiber_list)
+        #repeat_list = np.array(repeat_list)
+        
+        df = pd.DataFrame(data={"x":fiber_list, "y":repeat_list, "value":snr_list})
+        TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
+        colors = ["#75968f", "#a5bab7", "#c9d9d3", "#e2e2e2", "#dfccce", "#ddb7b1", "#cc7878", "#933b41", "#550b1d"]
+        mapper = LinearColorMapper(palette="Viridis256", low=df.value.min(), high=df.value.max())
+        
+        p = figure(plot_width=1000, plot_height=800, x_range=[0,58], y_range=[0,51],tools=TOOLS)
+        p.xaxis.axis_label = "Fiber No."
+        p.yaxis.axis_label = "Max SNR for Each Convergence Test"
+        
+        p.rect(x="x", y="y", width=1, height=1,
+           source=df,
+           fill_color={'field': 'value', 'transform': mapper},
+           line_color=None)
+        
+        color_bar = ColorBar(color_mapper=mapper, location=(0, 0),
+                         ticker=BasicTicker(desired_num_ticks=len(colors)),
+                         formatter=PrintfTickFormatter(format="%4.2f"))
+
+        p.add_layout(color_bar, 'right')
+
+        export_png(p,filename=outputPath+"ConvergeTest_MaxSNR.png")
     
-    def __init__(self, IPstring, XML, dataPath, fiberlist=False):
+    
+    def __init__(self, IPstring, XML, dataPath, fiberlist=False, Connect=True):
         
         if fiberlist is not False:
             self.visibles = fiberlist
@@ -107,15 +268,24 @@ class targetConvergence():
             Make connection to module 
         '''   
         # Initializing COBRA module
-        self.pfi = pfiControl.PFI(fpgaHost=IPstring) #'fpga' for real device.
+        if Connect is True:
+                self.pfi = pfiControl.PFI(fpgaHost=IPstring) #'fpga' for real device.
+                if not os.path.exists(XML):
+                    print(f"Error: {XML} not presented!")
+                    sys.exit()
+        
+                self.pfi.loadModel(XML)
+                self.pfi.setFreq(self.allCobras)
+        else:
+                self.pfi = pfiControl.PFI(fpgaHost=IPstring, doConnect=False) #'fpga' for real device.
         #preciseXML=cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
 
-        if not os.path.exists(XML):
-            print(f"Error: {XML} not presented!")
-            sys.exit()
+        # if not os.path.exists(XML):
+        #     print(f"Error: {XML} not presented!")
+        #     sys.exit()
         
-        self.pfi.loadModel(XML)
-        self.pfi.setFreq(self.allCobras)
+        # self.pfi.loadModel(XML)
+        # self.pfi.setFreq(self.allCobras)
 
 
         # Preparing data path for storage.
@@ -364,21 +534,26 @@ def setFiberUDPOS(XML, DataPath):
 
 def main():
 
-    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
+    cobraCharmerPath='/Users/chyan/Documents/workspace/ics_cobraCharmer/'
     xml=cobraCharmerPath+'xml/precise_20190212.xml'
     #xml=cobraCharmerPath+'/xml/precise6.xml'
 
     datetoday=datetime.datetime.now().strftime("%Y%m%d")
-    dataPath = '/data/pfs/Converge_'+datetoday
+    dataPath = '/Volumes/Disk/Data/Converge_'+datetoday
     
     IP = '128.149.77.24'
+    IP = 'localhost'
     
     brokens = [1, 39, 43, 54]
     visibles= [e for e in range(1,58) if e not in brokens]
 
-    targerCon = targetConvergence(IP, xml, dataPath, fiberlist=visibles)
-    targerCon.setFiberUDPos()
-    targerCon.oneDimensionTest(50, Phi=True)
+    targetCon = targetConvergence(IP, xml, dataPath, fiberlist=visibles, Connect=False)
+    #targetCon.setFiberUDPos()
+    #targetCon.oneDimensionTest(50, Phi=True)
+    #targetCon.oneDimensionTest(50, Theta=True)
+
+
+    targetCon.visualizeFiberSNR()
 
 
 if __name__ == '__main__':
