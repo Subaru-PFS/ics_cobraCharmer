@@ -119,6 +119,9 @@ def makeMotorMap(pfi, output, modules=None,
     binSize = np.deg2rad(3.6)
     regions = 112
 
+    # Requirements:
+    # - An XML file with motor frequencies and pretty good centers
+    # -
     # Step 1: measure cobra centers at (0,0).
     # Step 2: take a phi motor map. (lets us get to 60 degress safely)
     # Step 3: move phi=60, take theta motor map.
@@ -454,20 +457,13 @@ def main(args=None):
                        reprocess=opts.reprocess)
 
     if opts.saveModelFile:
-        pfi.calibModel.createCalibrationFile(opts.saveModelFile)
+        if os.path.isabs(opts.saveModelFile):
+            savePath = opts.saveModelFile
+        else:
+            savePath = os.path.join(output.xmlPath, opts.saveModelFile)
+
+        pfi.calibModel.createCalibrationFile(savePath)
 
 if __name__ == "__main__":
     main()
 
-def xxmain():
-    datetoday=datetime.datetime.now().strftime("%Y%m%d")
-    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
-
-    for steps in [50,100,200,400]:
-        storagePath = '/data/pfs/'+datetoday+f'_step{steps}/'
-        outputXML = cobraCharmerPath+'/xml/motormap_'+datetoday+f'_step{steps}.xml'
-        runMotorMap(3, steps, storagePath, outputXML)
-
-
-if __name__ == '__main__':
-    main()
