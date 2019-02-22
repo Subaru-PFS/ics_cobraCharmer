@@ -9,8 +9,11 @@ reload(imageSet)
 
 def lazyIdentification(centers, spots, radii=None):
     n = len(centers)
-    if radii is not None and len(radii) != n:
-        raise RuntimeError("number of centers must match number of radii")
+    if radii is not None:
+        if np.isscalar(radii):
+            radii = np.full(n, radii, dtype='f4')
+        if len(radii) != n:
+            raise RuntimeError("number of centers must match number of radii")
     ans = np.empty(n, dtype=int)
     for i in range(n):
         dist = np.absolute(spots - centers[i])
