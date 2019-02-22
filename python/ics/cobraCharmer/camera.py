@@ -5,7 +5,7 @@ def cameraFactory(name=None):
         if name is None:
             raise ValueError('camera type must be specified')
         if name == 'cit':
-            import citcam as citcam
+            from . import citcam as citcam
             cameraFactory.__camera = citcam
         elif name == 'asrd':
             import ics.cobraCharmer.asrdCam as asrdCam
