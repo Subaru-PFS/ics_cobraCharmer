@@ -5,15 +5,28 @@ import astropy.io.fits as pyfits
 import sep
 
 class ImageSet(object):
-    def __init__(self, pfi, camera, output, setName=None, makeStack=False, saveSpots=False):
+    def __init__(self, pfi, camera, imageDir, setName=None, makeStack=False, saveSpots=False):
         self.camera = camera
-        self.output = output
+        self.imageDir = imageDir
         self.namelist = dict()
         self.setName = setName
         self.makeStack = makeStack
         self.stack = None
         self.allSpots = dict()
         self.saveSpots = saveSpots
+
+    @classmethod
+    def makeFromDirectory(cls, imageDir):
+        self = cls(None, None, imageDir)
+        import pathlib
+
+        p = pathlib.Path(imageDir)
+        paths = p.glob('*.fits')
+        self.namelist = dict()
+        for p in paths:
+            self.namelist[p.stem] = str(p)
+
+        return self
 
     def makePathname(self, name, dir=None, nameArgs=None):
         if nameArgs is None:

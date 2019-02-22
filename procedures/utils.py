@@ -1,5 +1,6 @@
 from importlib import reload
 
+import logging
 import numpy as np
 
 from ics.cobraCharmer import imageSet
