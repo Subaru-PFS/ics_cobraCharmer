@@ -105,7 +105,42 @@ def takePhiMap(pfi, output,
 
     return dataset
 
-def phiMeasure(pfi, dataSets, phiRange, steps):
+def measureSpots(centers, dataSet, positions, names=None, disp=None,
+                 trackCenters=True, sigma=5.0):
+    if names is None:
+        names = dataSet.namelist.keys()
+    if len(positions) != len(names):
+        raise ValueError('number of positions (%d) must match the number of names (%d)' %
+                         (len(positions), len(names)))
+
+    nCobras = len(centers)
+    res = np.zeros(len(positions),
+                   dtype=dict(names=('name', 'pos', 'fiberIds', 'centers'),
+                              formats=(np.object, np.float32, f'{nCobras}u2', f'{nCobras}c8')))
+
+    # We _start_ by matching the measured centers against the provided centers. If
+    # the trackCenters flag is set, we then match to the previous position of the cobra.
+    nearestCenters = centers
+    for i in range(len(positions)):
+        res[i]['name'] = names[i]
+        res[i]['pos'] = positions[i]
+        cs, _ = dataSet.spots(names[i], sigma=sigma, disp=disp)
+
+        if len(cs) != len(centers):
+            raise RuntimeError('in %s, number of spots (%d) != number of cobras (%d)' %
+                               (names[i], len(cs), len(centers)))
+
+        spots = np.array([c['x']+c['y']*(1j) for c in cs])
+        idx = lazyIdentification(nearestCenters, spots, radii=20.0)
+        if trackCenters:
+            nearestCenters = spots[idx]
+
+        res[i]['centers'][:] = spots[idx]
+        res[i]['fiberIds'][:] = idx
+
+    return res
+
+def phiMeasure(pfiModel, dataSet, phiRange, steps):
     """
     Given bootstrap phi data, pile up the measurements.
 
