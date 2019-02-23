@@ -6,8 +6,10 @@ from ics.cobraCharmer import pfi as pfiControl
 
 from ics.cobraCharmer.utils import fileManager
 from ics.cobraCharmer.utils import coordinates
-from ics.cobraCharmer.camera import cameraFactory
+from ics.cobraCharmer import camera
 from ics.cobraCharmer import imageSet
+
+reload(camera)
 
 def transformCenters(pfi, output, initialXml, outputXml, setCenters=False):
     if outputXml is None:
@@ -21,8 +23,8 @@ def transformCenters(pfi, output, initialXml, outputXml, setCenters=False):
     pfi.reset()
     pfi.setFreq()
 
-    cam = cameraFactory()
-    dataSet = imageSet.ImageSet(pfi, cam, output)
+    cam = camera.cameraFactory()
+    dataSet = imageSet.ImageSet(cam, output.imageDir)
     im, name = dataSet.expose(name='preHome')
 
     # Take two steps since we may be coming from a place we need to
@@ -87,7 +89,7 @@ def main(args=None):
 
     opts = parser.parse_args(args)
 
-    cam = cameraFactory('cit')
+    cam = camera.cameraFactory('cit')
     output = fileManager.ProcedureDirectory(opts.moduleName, experimentName='recenter')
 
     pfi = pfiControl.PFI(fpgaHost=opts.fpgaHost, logDir=output.logDir,

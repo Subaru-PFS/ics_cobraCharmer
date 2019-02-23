@@ -9,7 +9,7 @@ import time
 import astropy.io.fits as pyfits
 import numpy as np
 
-import andor
+from Camera import andor
 
 def getCam():
     try:

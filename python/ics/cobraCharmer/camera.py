@@ -1,3 +1,5 @@
+from importlib import reload
+
 def cameraFactory(name=None):
     try:
         return cameraFactory.__camera
@@ -6,6 +8,7 @@ def cameraFactory(name=None):
             raise ValueError('camera type must be specified')
         if name == 'cit':
             from . import citcam as citcam
+            reload(citcam)
             cameraFactory.__camera = citcam
         elif name == 'asrd':
             import ics.cobraCharmer.asrdCam as asrdCam

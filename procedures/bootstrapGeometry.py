@@ -127,8 +127,8 @@ def makeMotorMap(pfi, output, modules=None,
     # Step 3: move phi=60, take theta motor map.
 
     if reprocess:
-        dataset = imageSet.ImageSet(pfi, camera=None, output=output)
-        phiFW, phiRV = utils.phiMeasure(pfi, [dataset], phiRange, steps=steps)
+        dataset = imageSet.ImageSet(camera=None, imageDir=output.imageDir)
+        phiFW, phiRV = utils.phiMeasure(pfi.calibModel, dataset, phiRange, steps=steps)
     else:
         pfi.reset()
         pfi.setFreq()
@@ -143,9 +143,9 @@ def makeMotorMap(pfi, output, modules=None,
             targets = utils.targetThetasOut(pfi, goodCobras)
             moveToXYfromHome(pfi, goodCobras, goodIdx, targets, output)
 
-        phiDataset = utils.takePhiMap(pfi, output, goodCobras,
+        phiDataset = utils.takePhiMap(pfi, output.imageDir, goodCobras,
                                       steps=steps, phiRange=phiRange) # ontimes=ontimes
-        phiFW, phiRV = utils.phiMeasure(pfi, [phiDataset], phiRange=phiRange, steps=steps)
+        phiFW, phiRV = utils.phiMeasure(pfi.calibModel, phiDataset, phiRange=phiRange, steps=steps)
 
     phiCenter, phiAngFW, phiAngRV = utils.calcPhiGeometry(pfi, phiFW, phiRV, phiRange, steps, goodIdx=goodIdx)
     phiMMFW, phiMMRV = utils.calcPhiMotorMap(pfi, phiCenter, phiAngFW, phiAngRV, regions, steps, goodIdx=None)

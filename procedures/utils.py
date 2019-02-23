@@ -295,7 +295,7 @@ def movePhiToSafeOut(pfi, goodCobras, output,
         # Also step out in parts and back and record images.
 
         targetAngle = 50.0
-        dataset = imageSet.ImageSet(pfi, cameraFactory(), output,
+        dataset = imageSet.ImageSet(cameraFactory(), output.imageDir,
                                     setName='safeOut', makeStack=True,
                                     saveSpots=True)
 

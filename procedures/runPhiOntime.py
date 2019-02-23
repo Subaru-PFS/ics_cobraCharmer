@@ -56,8 +56,8 @@ def runPhiOntime(pfi, output, modules=None,
     regions = 112
 
     if reprocess:
-        dataset = imageSet.ImageSet(pfi, camera=None, output=output)
-        phiFW, phiRV = utils.phiMeasure(pfi, [dataset], phiRange, steps=steps)
+        dataset = imageSet.ImageSet(camera=None, imageDir=output.imageDir)
+        phiFW, phiRV = utils.phiMeasure(pfi.calibModel, dataset, phiRange, steps=steps)
     else:
         pfi.reset()
         pfi.setFreq()
@@ -82,14 +82,17 @@ def runPhiOntime(pfi, output, modules=None,
             phiOnTime = np.full(57, t_ms/1000.0)
             pfi.calibModel.updateOntimes(phiFwd=phiOnTime, phiRev=phiOnTime)
 
-            phiDataset = utils.takePhiMap(pfi, output, goodCobras, setName=f'phiOntime_{t_ms}ms',
+            phiDataset = utils.takePhiMap(pfi, output.imageDir, goodCobras, setName=f'phiOntime_{t_ms}ms',
                                           steps=steps, phiRange=phiRange)
-            phiFW, phiRV = utils.phiMeasure(pfi, [phiDataset], phiRange=phiRange, steps=steps)
+            phiFW, phiRV = utils.phiMeasure(pfi.calibModel, phiDataset,
+                                            phiRange=phiRange, steps=steps)
 
-            phiCenter, phiAngFW, phiAngRV = utils.calcPhiGeometry(pfi, phiFW, phiRV, phiRange, steps,
-                                                                  goodIdx=goodIdx)
+            phiCenter, phiAngFW, phiAngRV, phiRadius = utils.calcPhiGeometry(pfi, phiFW, phiRV, phiRange,
+                                                                             steps,
+                                                                             goodIdx=goodIdx)
             phiMMFW, phiMMRV = utils.calcPhiMotorMap(pfi, phiCenter, phiAngFW, phiAngRV, regions, steps,
                                                      goodIdx=None)
+            logger.info('phiRadius: ', phiRadius)
 
             pfi.calibModel.updateMotorMaps(phiFwd=phiMMFW, phiRev=phiMMRV, useSlowMaps=True)
             pfi.calibModel.updateMotorMaps(phiFwd=phiMMFW, phiRev=phiMMRV, useSlowMaps=False)
@@ -100,15 +103,12 @@ def runPhiOntime(pfi, output, modules=None,
 
             pfi.loadModel(startingModel)
 
-        breakpoint()
-        adjustMotorOntime.doAdjustOnTime(output.xmlDir,
-                                         startingModel,
-                                         'phiOntimes.xml',
-                                         xmlFiles, doTheta=False)
-
-
-    print("Process Finised")
-
+        if len(ontimes) > 1:
+            breakpoint()
+            adjustMotorOntime.doAdjustOnTime(output.xmlDir,
+                                             startingModel,
+                                             'phiOntimes.xml',
+                                             xmlFiles, doTheta=False)
 def main(args=None):
     if isinstance(args, str):
         import shlex
@@ -138,7 +138,7 @@ def main(args=None):
 
     opts = parser.parse_args(args)
 
-    if len(opts.ontimes) < 2:
+    if len(opts.ontimes) < 1:
         parser.exit(1, '--ontimes must have at least two times')
 
     if opts.reprocess:

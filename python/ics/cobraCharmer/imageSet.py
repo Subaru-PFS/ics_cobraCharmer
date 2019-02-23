@@ -1,3 +1,4 @@
+import logging
 import os
 import numpy as np
 
@@ -5,7 +6,8 @@ import astropy.io.fits as pyfits
 import sep
 
 class ImageSet(object):
-    def __init__(self, pfi, camera, imageDir, setName=None, makeStack=False, saveSpots=False):
+    def __init__(self, camera, imageDir, setName=None, makeStack=False, saveSpots=False):
+        self.logger = logging.getLogger('images')
         self.camera = camera
         self.imageDir = imageDir
         self.namelist = dict()
@@ -34,7 +36,7 @@ class ImageSet(object):
         filename=name.format(nameArgs)
 
         if dir is None:
-            dir = self.output.imageDir
+            dir = self.imageDir
 
         if self.setName:
             dir = os.path.join(dir, self.setName)
@@ -71,6 +73,7 @@ class ImageSet(object):
             saveSpots = self.saveSpots
 
         filename=self.makePathname(name, nameArgs=nameArgs)
+        self.logger.info(f'taking {filename}')
         im, filename = self.camera.expose(name=filename, **cameraArgs)
         self.namelist[name] = filename
 
