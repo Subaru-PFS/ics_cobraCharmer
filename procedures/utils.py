@@ -61,46 +61,46 @@ def targetThetasOut(pfi, cobras):
 
     return outTargets
 
-def takePhiMap(pfi, output,
+def takePhiMap(pfi, imageDir,
                cobras,
                ontimes=None,
                setName=None,
-               repeat=1,
                steps=50,
                phiRange=5000):
 
-    dataset = imageSet.ImageSet(pfi, cameraFactory(), output, setName=setName,
+    dataset = imageSet.ImageSet(cameraFactory(), imageDir, setName=setName,
                                 makeStack=True, saveSpots=True)
 
     # record the phi movements
-    for n in range(repeat):
-        # forward phi motor maps
-        dataset.expose(f'phiForward{n}Begin')
-        for k in range(phiRange//steps):
-            pfi.moveAllSteps(cobras, 0, steps)
-            dataset.expose(f'phiForward{n}N{k}')
 
-        # make sure it goes to the limit
-        if ontimes is not None:
-            pfi.calibModel.updateOntimes(*ontimes['fast'])
-        pfi.moveAllSteps(cobras, 0, 5000)
-        if ontimes is not None:
-            pfi.calibModel.updateOntimes(*ontimes['normal'])
-        dataset.expose(f'phiForward{n}End')
+    # forward phi motor maps
+    n = 0
+    dataset.expose(f'phiForward{n}Begin')
+    for k in range(phiRange//steps):
+        pfi.moveAllSteps(cobras, 0, steps)
+        dataset.expose(f'phiForward{n}N{k}')
 
-        # reverse phi motor maps
-        dataset.expose(f'phiReverse{n}Begin')
-        for k in range(phiRange//steps):
-            pfi.moveAllSteps(cobras, 0, -steps)
-            dataset.expose(f'phiReverse{n}N{k}')
+    # make sure it goes to the limit
+    if ontimes is not None:
+        pfi.calibModel.updateOntimes(*ontimes['fast'])
+    pfi.moveAllSteps(cobras, 0, 5000)
+    if ontimes is not None:
+        pfi.calibModel.updateOntimes(*ontimes['normal'])
+    dataset.expose(f'phiForward{n}End')
 
-        # At the end, make sure the cobra back to the hard stop
-        if ontimes is not None:
-            pfi.calibModel.updateOntimes(*ontimes['fast'])
-        pfi.moveAllSteps(cobras, 0, -5000)
-        if ontimes is not None:
-            pfi.calibModel.updateOntimes(*ontimes['normal'])
-        dataset.expose(f'phiReverse{n}End')
+    # reverse phi motor maps
+    dataset.expose(f'phiReverse{n}Begin')
+    for k in range(phiRange//steps):
+        pfi.moveAllSteps(cobras, 0, -steps)
+        dataset.expose(f'phiReverse{n}N{k}')
+
+    # At the end, make sure the cobra back to the hard stop
+    if ontimes is not None:
+        pfi.calibModel.updateOntimes(*ontimes['fast'])
+    pfi.moveAllSteps(cobras, 0, -5000)
+    if ontimes is not None:
+        pfi.calibModel.updateOntimes(*ontimes['normal'])
+    dataset.expose(f'phiReverse{n}End')
 
     dataset.saveStack(f'phiStack')
 
@@ -149,45 +149,38 @@ def phiMeasure(pfiModel, dataSet, phiRange, steps):
     available. It should simply read them all.
     """
 
-    phiFW = np.zeros((57, 1, phiRange//steps+2), dtype=complex)
-    phiRV = np.zeros((57, 1, phiRange//steps+2), dtype=complex)
-    centers = pfi.calibModel.centers
+    phiFW = np.zeros((57, 1, phiRange//steps+1), dtype=complex)
+    phiRV = np.zeros((57, 1, phiRange//steps+1), dtype=complex)
+    centers = pfiModel.centers
+    cnt = phiRange//steps
 
     # forward phi
-    cnt = phiRange//steps
-    for ds_i, dataSet in enumerate(dataSets):
-        n = ds_i + 1
+    nearestCenters = centers
+    cs, _ = dataSet.spots(f'phiForward0Begin')
+    spots = np.array([c['x']+c['y']*(1j) for c in cs])
+    idx = lazyIdentification(nearestCenters, spots)
+    phiFW[:,0,0] = spots[idx]
+    for k in range(cnt):
+        cs, _ = dataSet.spots(f'phiForward0N{k}')
+        spots = np.array([c['x']+c['y']*(1j) for c in cs])
+        idx = lazyIdentification(nearestCenters, spots)
+        phiFW[:,0,k+1] = spots[idx]
+    cs, _ = dataSet.spots(f'phiForward0End')
+    spots = np.array([c['x']+c['y']*(1j) for c in cs])
+    idx = lazyIdentification(nearestCenters, spots)
 
-        cs, _ = dataSet.spots(f'phiForward0Begin')
+    cs, _ = dataSet.spots(f'phiReverse0Begin')
+    spots = np.array([c['x']+c['y']*(1j) for c in cs])
+    idx = lazyIdentification(nearestCenters, spots)
+    phiRV[:,0,0] = spots[idx]
+    for k in range(cnt):
+        cs, _ = dataSet.spots(f'phiReverse0N{k}')
         spots = np.array([c['x']+c['y']*(1j) for c in cs])
-        idx = lazyIdentification(centers, spots)
-        phiFW[:,0,0] = spots[idx]
-        for k in range(cnt):
-            cs, _ = dataSet.spots(f'phiForward0N{k}')
-            spots = np.array([c['x']+c['y']*(1j) for c in cs])
-            idx = lazyIdentification(centers, spots)
-            phiFW[:,0,k+1] = spots[idx]
-        cs, _ = dataSet.spots(f'phiForward0End')
-        spots = np.array([c['x']+c['y']*(1j) for c in cs])
-        idx = lazyIdentification(centers, spots)
-        phiFW[:,0,k+2] = spots[idx]
-
-    for ds_i, dataSet in enumerate(dataSets):
-        n = ds_i + 1
-
-        cs, _ = dataSet.spots(f'phiReverse0Begin')
-        spots = np.array([c['x']+c['y']*(1j) for c in cs])
-        idx = lazyIdentification(centers, spots)
-        phiRV[:,0,0] = spots[idx]
-        for k in range(cnt):
-            cs, _ = dataSet.spots(f'phiReverse0N{k}')
-            spots = np.array([c['x']+c['y']*(1j) for c in cs])
-            idx = lazyIdentification(centers, spots)
-            phiRV[:,0,k+1] = spots[idx]
-        cs, _  = dataSet.spots(f'phiReverse0End')
-        spots = np.array([c['x']+c['y']*(1j) for c in cs])
-        idx = lazyIdentification(centers, spots)
-        phiRV[:,0,k+2] = spots[idx]
+        idx = lazyIdentification(nearestCenters, spots)
+        phiRV[:,0,k+1] = spots[idx]
+    cs, _  = dataSet.spots(f'phiReverse0End')
+    spots = np.array([c['x']+c['y']*(1j) for c in cs])
+    idx = lazyIdentification(nearestCenters, spots)
 
     return phiFW, phiRV
 
