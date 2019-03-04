@@ -370,7 +370,7 @@ def movePhiToSafeOut(pfi, goodCobras, output,
 
     if bootstrap:
         # Be conservative until we tune ontimes: go to 50 not 60 degrees.
-        # Also step out in parts and back and record images.
+        # Also take images for posterity.
 
         targetAngle = 50.0
         dataset = imageSet.ImageSet(cameraFactory(), output.imageDir,
@@ -378,15 +378,8 @@ def movePhiToSafeOut(pfi, goodCobras, output,
                                     saveSpots=True)
 
         pfi.moveAllSteps(goodCobras, 0, -phiRange)
-
         dataset.expose(f'phiSafeBegin')
-        for s in range(1,3):
-            ang = targetAngle//s
-            phis = np.full(len(goodCobras), np.deg2rad(ang))
-            pfi.moveThetaPhi(goodCobras, phis*0, phis)
-            dataset.expose(f'phiSafe{ang}')
 
-        pfi.moveAllSteps(goodCobras, 0, -phiRange)
         phis = np.full(len(goodCobras), np.deg2rad(targetAngle))
         pfi.moveThetaPhi(goodCobras, phis*0, phis)
         dataset.expose(f'phiSafeEnd')
