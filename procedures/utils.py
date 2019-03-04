@@ -226,99 +226,12 @@ def calcPhiGeometry(phiFW, phiRV, goodIdx=None):
 
     return phiCenter, phiAngFW, phiAngRV, phiRadius
 
-def xxphiMeasure(pfiModel, dataSet, phiRange, steps):
-    """
-    Given bootstrap phi data, pile up the measurements.
-
-    This is bad: it should not know or care about how many samples are
-    available. It should simply read them all.
-    """
-
-    phiFW = np.zeros((57, 1, phiRange//steps+1), dtype=complex)
-    phiRV = np.zeros((57, 1, phiRange//steps+1), dtype=complex)
-    centers = pfiModel.centers
-    cnt = phiRange//steps
-
-    # forward phi
-    nearestCenters = centers
-    cs, _ = dataSet.spots(f'phiForward0Begin')
-    spots = np.array([c['x']+c['y']*(1j) for c in cs])
-    idx = lazyIdentification(nearestCenters, spots)
-    phiFW[:,0,0] = spots[idx]
-    for k in range(cnt):
-        cs, _ = dataSet.spots(f'phiForward0N{k}')
-        spots = np.array([c['x']+c['y']*(1j) for c in cs])
-        idx = lazyIdentification(nearestCenters, spots)
-        phiFW[:,0,k+1] = spots[idx]
-    cs, _ = dataSet.spots(f'phiForward0End')
-    spots = np.array([c['x']+c['y']*(1j) for c in cs])
-    idx = lazyIdentification(nearestCenters, spots)
-
-    cs, _ = dataSet.spots(f'phiReverse0Begin')
-    spots = np.array([c['x']+c['y']*(1j) for c in cs])
-    idx = lazyIdentification(nearestCenters, spots)
-    phiRV[:,0,0] = spots[idx]
-    for k in range(cnt):
-        cs, _ = dataSet.spots(f'phiReverse0N{k}')
-        spots = np.array([c['x']+c['y']*(1j) for c in cs])
-        idx = lazyIdentification(nearestCenters, spots)
-        phiRV[:,0,k+1] = spots[idx]
-    cs, _  = dataSet.spots(f'phiReverse0End')
-    spots = np.array([c['x']+c['y']*(1j) for c in cs])
-    idx = lazyIdentification(nearestCenters, spots)
-
-    return phiFW, phiRV
-
-def calcPhiGeometry(pfi, phiFW, phiRV, phiRange, steps, goodIdx=None):
-    """ Calculate as much phi geometry as we can from arcs between stops.
-
-    Args
-    ----
-    phiFW, phiRV : array
-      As many spots on the arc as can be gathered. All assumed to be taken with
-      theta at CCW home.
-
-    Returns
-    -------
-    phiCenter : center of rotation
-    phiAngFW : forward limit
-    phiAngRV : reverse limit
-    """
-
-    if goodIdx is None:
-        goodIdx = np.arange(57)
-
-    repeat = phiFW.shape[1]
-
-    phiCenter = np.zeros(57, dtype=complex)
-    phiAngFW = np.zeros((57, repeat, phiRange//steps+1), dtype=float)
-    phiAngRV = np.zeros((57, repeat, phiRange//steps+1), dtype=float)
-
-    # measure centers
-    for c in goodIdx:
-        data = np.concatenate((phiFW[c].flatten(), phiRV[c].flatten()))
-        x, y, r = circle_fitting(data)
-        phiCenter[c] = x + y*(1j)
-
-    # measure phi angles
-    cnt = phiRange//steps + 1
-    for c in goodIdx:
-        for n in range(repeat):
-            for k in range(cnt):
-                phiAngFW[c,n,k] = np.angle(phiFW[c,n,k] - phiCenter[c])
-                phiAngRV[c,n,k] = np.angle(phiRV[c,n,k] - phiCenter[c])
-            home = phiAngFW[c,n,0]
-            phiAngFW[c,n] = (phiAngFW[c,n] - home + np.pi/2) % (np.pi*2) - np.pi/2
-            phiAngRV[c,n] = (phiAngRV[c,n] - home + np.pi/2) % (np.pi*2) - np.pi/2
-
-    return phiCenter, phiAngFW, phiAngRV
-
-def calcPhiMotorMap(pfi, phiCenter, phiAngFW, phiAngRV, regions, steps, goodIdx=None):
-    if goodIdx is None:
-        goodIdx = np.arange(57)
-
+def calcPhiMotorMap(phiCenter, phiAngFW, phiAngRV, regions, steps, goodIdx=None):
     # calculate phi motor maps
-    ncobras, repeat, cnt = phiAngFW.shape
+    ncobras, cnt = phiAngFW.shape
+
+    if goodIdx is None:
+        goodIdx = np.arange(ncobras)
 
     # HACKS
     binSize = np.deg2rad(3.6)
