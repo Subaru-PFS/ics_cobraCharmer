@@ -122,12 +122,13 @@ def measureSpots(centers, dataSet, positions, names=None, disp=None,
 
     nCobras = len(centers)
     res = np.zeros(len(positions),
-                   dtype=dict(names=('name', 'pos', 'fiberIds', 'centers'),
-                              formats=(np.object, np.float32, f'{nCobras}u2', f'{nCobras}c8')))
+                   dtype=dict(names=('name', 'pos', 'centers'),
+                              formats=(np.object, np.float32, f'{nCobras}c8')))
 
     # We _start_ by matching the measured centers against the provided centers. If
     # the trackCenters flag is set, we then match to the previous position of the cobra.
     nearestCenters = centers
+    radii = None
     for i in range(len(positions)):
         res[i]['name'] = names[i]
         res[i]['pos'] = positions[i]
