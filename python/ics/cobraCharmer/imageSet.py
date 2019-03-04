@@ -122,7 +122,7 @@ class ImageSet(object):
 
         return names
 
-    def spots(self, name, sigma=5.0, doTrim=True):
+    def spots(self, name, sigma=10.0, doTrim=True, disp=None):
         if name in self.namelist:
             name = self.namelist[name]
         if not os.path.isabs(name):
@@ -133,6 +133,13 @@ class ImageSet(object):
         name = os.path.normpath(name)
         im = pyfits.getdata(name)
         objects, imSub, _ = self.getObjects(im, sigma=sigma)
+
+        if disp is not None:
+            disp.set('frame clear')
+            disp.set_np2arr(imSub)
+            disp.set('regions color green')
+            for o in objects:
+                disp.set(f"regions command {{point {o['x']} {o['y']}}}")
 
         if doTrim:
             # CIT Only -- wrap this, CPL.
