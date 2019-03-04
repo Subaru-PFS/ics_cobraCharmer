@@ -339,15 +339,8 @@ class PFIDesign():
         """
 
         # Normalize lengths
-        if theta is None:
-            if phi is None:
-                return
-            theta = [None]*len(phi)
-        elif phi is None:
-            phi = [None]*len(theta)
-
-        if len(phi) != len(theta):
-            raise ValueError(f"length of phi and theta arrays must match. Found {len(phi)} and {len(theta)}")
+        if theta is None and phi is None:
+            return
 
         if moduleId is not None:
             if cobraId is not None:
@@ -358,6 +351,15 @@ class PFIDesign():
             if cobraId is not None:
                 raise ValueError("if cobraId is specified, moduleId must also be.")
             idx = range(self.nCobras)
+
+        # Allow passing in values.
+        if theta is None or np.isscalar(theta):
+            theta = [theta]*len(idx)
+        if phi is None or np.isscalar(phi):
+            phi = [phi]*len(idx)
+
+        if len(phi) != len(theta):
+            raise ValueError(f"length of phi and theta arrays must match. Found {len(phi)} and {len(theta)}")
 
         if len(theta) != len(idx):
             raise RuntimeError(f"number of motor frequencies ({len(theta)}) must match number of cobras ({len(idx)})")
@@ -477,6 +479,16 @@ class PFIDesign():
 
         if cobras is None:
             cobras = np.arange(self.nCobras)
+
+        # Allow passing in single values.
+        if np.isscalar(thtFwd):
+            thtFwd = [thtFwd]*len(cobras)
+        if np.isscalar(thtRev):
+            thtRev = [thtRev]*len(cobras)
+        if np.isscalar(phiFwd):
+            phiFwd = [phiFwd]*len(cobras)
+        if np.isscalar(phiRev):
+            phiRev = [phiRev]*len(cobras)
 
         if thtFwd is not None and len(thtFwd) != len(cobras):
             raise RuntimeError("number of cobra theta forward ontimes must match number of cobras")
