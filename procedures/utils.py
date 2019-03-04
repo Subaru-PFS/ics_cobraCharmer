@@ -334,14 +334,13 @@ def calcPhiMotorMap(pfi, phiCenter, phiAngFW, phiAngRV, regions, steps, goodIdx=
             binMax = binMin + binSize
             fracSum = 0
             valueSum = 0
-            for n in range(repeat):
-                for k in range(cnt-1):
-                    if phiAngFW[c,n,k] < binMax and phiAngFW[c,n,k+1] > binMin and phiAngFW[c,n,k+1] <= np.pi - delta:
-                        moveSizeInBin = np.min([phiAngFW[c,n,k+1], binMax]) - np.max([phiAngFW[c,n,k], binMin])
-                        entireMoveSize = phiAngFW[c,n,k+1] - phiAngFW[c,n,k]
-                        fraction = moveSizeInBin * moveSizeInBin / entireMoveSize
-                        fracSum += fraction
-                        valueSum += fraction * entireMoveSize / steps
+            for k in range(cnt-1):
+                if phiAngFW[c,k] < binMax and phiAngFW[c,k+1] > binMin and phiAngFW[c,k+1] <= np.pi - delta:
+                    moveSizeInBin = np.min([phiAngFW[c,k+1], binMax]) - np.max([phiAngFW[c,k], binMin])
+                    entireMoveSize = phiAngFW[c,k+1] - phiAngFW[c,k]
+                    fraction = moveSizeInBin * moveSizeInBin / entireMoveSize
+                    fracSum += fraction
+                    valueSum += fraction * entireMoveSize / steps
             if fracSum > 0:
                 phiMMFW[c,b] = valueSum / fracSum
             else:
@@ -350,14 +349,13 @@ def calcPhiMotorMap(pfi, phiCenter, phiAngFW, phiAngRV, regions, steps, goodIdx=
             # reverse motor maps
             fracSum = 0
             valueSum = 0
-            for n in range(repeat):
-                for k in range(cnt-1):
-                    if phiAngRV[c,n,k] > binMin and phiAngRV[c,n,k+1] < binMax and phiAngFW[c,n,k+1] >= delta:
-                        moveSizeInBin = np.min([phiAngRV[c,n,k], binMax]) - np.max([phiAngRV[c,n,k+1], binMin])
-                        entireMoveSize = phiAngRV[c,n,k] - phiAngRV[c,n,k+1]
-                        fraction = moveSizeInBin * moveSizeInBin / entireMoveSize
-                        fracSum += fraction
-                        valueSum += fraction * entireMoveSize / steps
+            for k in range(cnt-1):
+                if phiAngRV[c,k] > binMin and phiAngRV[c,k+1] < binMax and phiAngFW[c,k+1] >= delta:
+                    moveSizeInBin = np.min([phiAngRV[c,k], binMax]) - np.max([phiAngRV[c,k+1], binMin])
+                    entireMoveSize = phiAngRV[c,k] - phiAngRV[c,k+1]
+                    fraction = moveSizeInBin * moveSizeInBin / entireMoveSize
+                    fracSum += fraction
+                    valueSum += fraction * entireMoveSize / steps
             if fracSum > 0:
                 phiMMRV[c,b] = valueSum / fracSum
             else:
