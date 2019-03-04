@@ -138,8 +138,8 @@ def updateOntimeWithFiberSlope(startingXML, newXML, xmlArray,
             j1fwd_avg[i] = np.mean(np.rad2deg(model.angularSteps[i]/model.S1Pm[i][:j1_limit]))
             j1rev_avg[i] = -np.mean(np.rad2deg(model.angularSteps[i]/model.S1Nm[i][:j1_limit]))
 
-        newOntimeFwd1 = otm.getTargetOnTime(0.05,otm.j1fwd_slope, model.motorOntimeFwd1 ,j1fwd_avg)
-        newOntimeRev1 = otm.getTargetOnTime(-0.05,otm.j1rev_slope, model.motorOntimeRev1 ,j1rev_avg)
+        newOntimeFwd1 = otm.getTargetOnTime(0.07,otm.j1fwd_slope, model.motorOntimeFwd1 ,j1fwd_avg)
+        newOntimeRev1 = otm.getTargetOnTime(-0.07,otm.j1rev_slope, model.motorOntimeRev1 ,j1rev_avg)
     else:
         newOntimeFwd1 = None
         newOntimeRev1 = None
@@ -154,8 +154,8 @@ def updateOntimeWithFiberSlope(startingXML, newXML, xmlArray,
             j2fwd_avg[i] = np.mean(np.rad2deg(model.angularSteps[i]/model.S2Pm[i][:j2_limit]))
             j2rev_avg[i] = -np.mean(np.rad2deg(model.angularSteps[i]/model.S2Nm[i][:j2_limit]))
 
-        newOntimeFwd2 = otm.getTargetOnTime(0.07,otm.j2fwd_slope, model.motorOntimeFwd2 ,j2fwd_avg)
-        newOntimeRev2 = otm.getTargetOnTime(-0.07,otm.j2rev_slope, model.motorOntimeRev2 ,j2rev_avg)
+        newOntimeFwd2 = otm.getTargetOnTime(0.05,otm.j2fwd_slope, model.motorOntimeFwd2 ,j2fwd_avg)
+        newOntimeRev2 = otm.getTargetOnTime(-0.05,otm.j2rev_slope, model.motorOntimeRev2 ,j2rev_avg)
     else:
         newOntimeFwd2 = None
         newOntimeRev2 = None
