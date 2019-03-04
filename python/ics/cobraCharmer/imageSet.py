@@ -143,12 +143,17 @@ class ImageSet(object):
 
         if doTrim:
             # CIT Only -- wrap this, CPL.
-            w = (objects['y'] < (objects['x'] + 300)) & (objects['y'] > (objects['x'] - 300))
+            w = (objects['y'] < (objects['x'] + 500)) & (objects['y'] > (objects['x'] - 500))
             objects = objects[w]
+
+            if disp is not None:
+                disp.set('regions color red')
+                for o in objects:
+                    disp.set(f"regions command {{circle {o['x']} {o['y']} 10}}")
 
         return objects, imSub
 
-    def getObjects(self, im, sigma=5.0):
+    def getObjects(self, im, sigma=10.0):
         data = im.astype('f4')
         bkg = sep.Background(data)
         data_sub = data - bkg
