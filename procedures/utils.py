@@ -107,7 +107,13 @@ def takePhiMap(pfi, imageDir,
     return dataset
 
 def measureSpots(centers, dataSet, positions, names=None, disp=None,
-                 trackCenters=True, sigma=5.0):
+                 trackCenters=True, sigma=10.0, trackRadius=20.0):
+
+    """ Measure a set of spots at known positions."""
+
+    if any(positions != sorted(positions)):
+        raise ValueError("positions must be sorted.")
+
     if names is None:
         names = dataSet.namelist.keys()
     if len(positions) != len(names):
@@ -132,16 +138,94 @@ def measureSpots(centers, dataSet, positions, names=None, disp=None,
                                (names[i], len(cs), len(centers)))
 
         spots = np.array([c['x']+c['y']*(1j) for c in cs])
-        idx = lazyIdentification(nearestCenters, spots, radii=20.0)
+        idx = lazyIdentification(nearestCenters, spots, radii=radii)
+        nomatch_w = (-1 == idx)
+        if nomatch_w.sum() > 0:
+            logging.warn(f'failed to match spots {np.where(nomatch_w)[0]} for {names[i]} at {positions[i]} steps')
         if trackCenters:
             nearestCenters = spots[idx]
+            radii = trackRadius
 
         res[i]['centers'][:] = spots[idx]
-        res[i]['fiberIds'][:] = idx
 
     return res
 
-def phiMeasure(pfiModel, dataSet, phiRange, steps):
+def datasetNamesAndPositions(dataSet, stepSize):
+    """ Given a dataSet, return the forward and reverse names and expected positions. """
+
+    def name2steps(n):
+        if n.find('Begin') >= 0:
+            return 0.0
+        sword = n[n.find('N')+1:]
+        return stepSize*int(sword)
+
+    allFiles = dataSet.namelist.keys()
+    fwd = np.array([n for n in allFiles if 'Forward0N' in n or 'ForwardBegin' in n])
+    fsteps = np.array([name2steps(n) for n in list(fwd)])
+    f_w = np.argsort(fsteps)
+    fsteps = fsteps[f_w]
+    fwd = fwd[f_w]
+
+    rev = np.array([n for n in allFiles if 'Reverse0N' in n or 'ReverseBegin' in n])
+    rsteps = np.array([name2steps(n) for n in list(rev)])
+    r_w = np.argsort(rsteps)
+    rsteps = rsteps[r_w]
+    rev = rev[r_w]
+
+    return fwd, fsteps, rev, rsteps
+
+def phiMeasure(centers, dataSet, stepSize):
+    fnames, fsteps, rnames, rsteps = datasetNamesAndPositions(dataSet, stepSize)
+
+    fwd = measureSpots(centers, dataSet, fsteps, names=fnames)
+    rev = measureSpots(centers, dataSet, rsteps, names=rnames)
+
+    return fwd['centers'].T, rev['centers'].T
+
+def calcPhiGeometry(phiFW, phiRV, goodIdx=None):
+    """ Calculate as much phi geometry as we can from arcs between stops.
+
+    Args
+    ----
+    phiFW, phiRV : array
+      As many spots on the arc as can be gathered. All assumed to be taken with
+      theta at CCW home.
+
+    Returns
+    -------
+    phiCenter : center of rotation
+    phiAngFW : forward limit
+    phiAngRV : reverse limit
+    """
+
+    cobCnt,posCnt = phiFW.shape
+    if goodIdx is None:
+        goodIdx = np.arange(cobCnt)
+
+    phiCenter = np.zeros(cobCnt, dtype=complex)
+    phiRadius = np.zeros(cobCnt, dtype=np.float32)
+    phiAngFW = np.zeros((cobCnt, posCnt), dtype='f4')
+    phiAngRV = np.zeros((cobCnt, posCnt), dtype='f4')
+
+    # measure centers
+    for c in goodIdx:
+        data = np.concatenate((phiFW[c].flatten(), phiRV[c].flatten()))
+        x, y, r = circle_fitting(data)
+        phiCenter[c] = x + y*(1j)
+        phiRadius[c] = r
+
+    # measure phi angles
+    for c in goodIdx:
+        for k in range(posCnt):
+            phiAngFW[c,k] = np.angle(phiFW[c,k] - phiCenter[c])
+            phiAngRV[c,k] = np.angle(phiRV[c,k] - phiCenter[c])
+        home = phiAngFW[c,0]
+        phiAngFW[c] = (phiAngFW[c] - home + np.pi/2) % (np.pi*2) - np.pi/2
+        phiAngRV[c] = (phiAngRV[c] - home + np.pi/2) % (np.pi*2) - np.pi/2
+
+    return phiCenter, phiAngFW, phiAngRV, phiRadius
+
+def xxphiMeasure(pfiModel, dataSet, phiRange, steps):
     """
     Given bootstrap phi data, pile up the measurements.
 
