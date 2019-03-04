@@ -5,18 +5,17 @@ import numpy as np
 import logging
 from copy import deepcopy
 
-import pfiSite
-
 from ics.cobraCharmer import pfi as pfiControl
 from ics.cobraCharmer import imageSet
 from ics.cobraCharmer.utils import fileManager
 from ics.cobraCharmer.camera import cameraFactory
-import adjustMotorOntime
 
-import utils
+from . import adjustMotorOntime
+from . import utils
 reload(utils)
 
-logger = logging.getLogger()
+logger = logging.getLogger('proc')
+logger.setLevel(logging.INFO)
 
 def runPhiOntime(pfi, output, modules=None,
                  repeat=1,
@@ -55,23 +54,18 @@ def runPhiOntime(pfi, output, modules=None,
     #        plus some suspect definitions.
     regions = 112
 
-    if reprocess:
-        dataset = imageSet.ImageSet(camera=None, imageDir=output.imageDir)
-        phiFW, phiRV = utils.phiMeasure(pfi.calibModel, dataset, phiRange, steps=steps)
-    else:
+    if not reprocess:
         pfi.reset()
         pfi.setFreq()
 
-        origOnTime = deepcopy([pfi.calibModel.motorOntimeFwd1,
-                               pfi.calibModel.motorOntimeRev1,
-                               pfi.calibModel.motorOntimeFwd2,
-                               pfi.calibModel.motorOntimeRev2])
+    np.seterr(divide='raise')
+    xmlFiles = []
+    for t_ms in ontimes:
+        if t_ms < 20 or t_ms > 80:
+            raise ValueError('ontimes must be between 20 and 80')
 
-        np.seterr(divide='raise')
-        xmlFiles = []
-        for t_ms in ontimes:
-            if t_ms < 20 or t_ms > 80:
-                raise ValueError('ontimes must be between 20 and 80')
+        if not reprocess:
+            logger.info(f'acquiring {t_ms}ms data')
 
             fastOnTime = np.full(57, 0.08)
 
@@ -84,31 +78,36 @@ def runPhiOntime(pfi, output, modules=None,
 
             phiDataset = utils.takePhiMap(pfi, output.imageDir, goodCobras, setName=f'phiOntime_{t_ms}ms',
                                           steps=steps, phiRange=phiRange)
-            phiFW, phiRV = utils.phiMeasure(pfi.calibModel, phiDataset,
-                                            phiRange=phiRange, steps=steps)
+        else:
+            logger.info(f'reloading {t_ms}ms data')
+            phiDataset = imageSet.ImageSet.makeFromDirectory(os.path.join(output.imageDir,
+                                                                          f'phiOntime_{t_ms}ms'))
 
-            phiCenter, phiAngFW, phiAngRV, phiRadius = utils.calcPhiGeometry(pfi, phiFW, phiRV, phiRange,
-                                                                             steps,
-                                                                             goodIdx=goodIdx)
-            phiMMFW, phiMMRV = utils.calcPhiMotorMap(pfi, phiCenter, phiAngFW, phiAngRV, regions, steps,
-                                                     goodIdx=None)
-            logger.info('phiRadius: ', phiRadius)
+        logger.info(f'processing {t_ms}ms data')
+        phiOnTime = t_ms/1000.0
+        pfi.calibModel.updateOntimes(phiFwd=phiOnTime, phiRev=phiOnTime)
+        phiFW, phiRV = utils.phiMeasure(pfi.calibModel.centers, phiDataset, stepSize=steps)
+        phiCenter, phiAngFW, phiAngRV, phiRadius = utils.calcPhiGeometry(phiFW, phiRV, goodIdx=goodIdx)
+        phiMMFW, phiMMRV = utils.calcPhiMotorMap(phiCenter, phiAngFW, phiAngRV, regions, steps,
+                                                 goodIdx=None)
 
-            pfi.calibModel.updateMotorMaps(phiFwd=phiMMFW, phiRev=phiMMRV, useSlowMaps=True)
-            pfi.calibModel.updateMotorMaps(phiFwd=phiMMFW, phiRev=phiMMRV, useSlowMaps=False)
+        pfi.calibModel.updateMotorMaps(phiFwd=phiMMFW, phiRev=phiMMRV, useSlowMaps=True)
+        pfi.calibModel.updateMotorMaps(phiFwd=phiMMFW, phiRev=phiMMRV, useSlowMaps=False)
 
-            xmlPath = os.path.join(output.xmlDir, f'phiOntime_{t_ms}ms.xml')
-            pfi.calibModel.createCalibrationFile(xmlPath)
-            xmlFiles.append(xmlPath)
+        xmlPath = os.path.join(output.xmlDir, f'phiOntime_{t_ms}ms.xml')
+        logger.info(f'writing {t_ms}ms map to {xmlPath}')
+        pfi.calibModel.createCalibrationFile(xmlPath)
+        xmlFiles.append(xmlPath)
 
-            pfi.loadModel(startingModel)
+        pfi.loadModel(startingModel)
 
-        if len(ontimes) > 1:
-            breakpoint()
-            adjustMotorOntime.doAdjustOnTime(output.xmlDir,
-                                             startingModel,
-                                             'phiOntimes.xml',
-                                             xmlFiles, doTheta=False)
+        adjustMotorOntime.doAdjustOnTime(output.xmlDir,
+                                         startingModel,
+                                         'phiOntimes.xml',
+                                         xmlFiles, doTheta=False)
+
+    print("Process Finised")
+
 def main(args=None):
     if isinstance(args, str):
         import shlex
@@ -145,20 +144,22 @@ def main(args=None):
         cam = None
         output = fileManager.ProcedureDirectory.loadFromPath(opts.reprocess)
     else:
+        import pfiSite
+
         cam = cameraFactory(pfiSite.location)  # Tell the factory the location.
         output = fileManager.ProcedureDirectory(opts.moduleName, experimentName='map')
 
     pfi = pfiControl.PFI(fpgaHost=opts.fpgaHost, logDir=output.logDir,
-                         doLoadModel=False)
+                         doLoadModel=False, doConnect=False)
     pfi.loadModel(opts.modelName)
 
-    pfi = runPhiOntime(pfi, output,
-                       modules=[opts.module] if opts.module != 0 else None,
-                       startingModel=opts.modelName,
-                       steps=opts.steps,
-                       phiRange=opts.phiRange,
-                       ontimes=opts.ontimes,
-                       reprocess=opts.reprocess)
+    runPhiOntime(pfi, output,
+                 modules=[opts.module] if opts.module != 0 else None,
+                 startingModel=opts.modelName,
+                 steps=opts.steps,
+                 phiRange=opts.phiRange,
+                 ontimes=opts.ontimes,
+                 reprocess=opts.reprocess)
 
     if opts.saveModelFile:
         pfi.calibModel.createCalibrationFile(opts.saveModelFile)
