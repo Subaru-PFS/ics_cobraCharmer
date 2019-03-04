@@ -21,20 +21,6 @@ def getCobras(module, cobs):
     # cobs is 0-indexed list
     return pfiControl.PFI.allocateCobraList(zip(np.full(len(cobs), module), np.array(cobs) + 1))
 
-def savePhiGeometry(pfi, goodIdx, output, phiCircles, phiFW, phiRV):
-    if goodIdx is None:
-        goodIdx = len(phiCircles)
-
-    # Calculate hard stops
-    phiC = phiCircles[:,0] + phiCircles[:,1]*(1j)
-    points = np.zeros((57, 4), dtype=complex)
-
-    # phi hard stops
-    phiCCW = (np.angle(points[:,0] - phiC) - np.angle(thetaC - phiC) + (np.pi/2)) % (2*np.pi) - (np.pi/2)
-    phiCW = (np.angle(points[:,1] - phiC) - np.angle(thetaC - phiC) + (np.pi/2)) % (2*np.pi) - (np.pi/2)
-
-    return phiCCW, phiCW
-
 def XXXXXstrangePhiGooFromPreciseNB():
     myIdx = goodIdx
     homes = pfi.calibModel.centers[myIdx]
