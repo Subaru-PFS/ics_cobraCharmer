@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from scipy import stats
 
-from ics.cobraCharmer import pfi as pfiControl
+from ics.cobraCharmer import pfiDesign
 
 import xml.etree.cElementTree as ET
 
@@ -141,16 +141,15 @@ def main():
         # Prepare the data path for the work
         # if not (os.path.exists(mappath)):
         #     os.makedirs(mappath)
-        pfi = pfiControl.PFI(fpgaHost='localhost', doConnect=False) #'fpga' for real device.
-        pfi.loadModel(xml2)
+        pfiModel = pfiDesign.PFIDesign(xmlPath)
 
         for i in visibles:
             pid=i
-            J1onTime=pfi.calibModel.motorOntimeFwd1[i-1]*1000
-            J2onTime=pfi.calibModel.motorOntimeFwd2[i-1]*1000
+            J1onTime=pfiModel.motorOntimeFwd1[i-1]*1000
+            J2onTime=pfiModel.motorOntimeFwd2[i-1]*1000
 
             j1_fwd_reg2,j1_fwd_stepsize2,j1_rev_reg2,j1_rev_stepsize2,\
-                    j2_fwd_reg2,j2_fwd_stepsize2,j2_rev_reg2,j2_rev_stepsize2=readMotorMap(xml2,pid)
+                               j2_fwd_reg2,j2_fwd_stepsize2,j2_rev_reg2,j2_rev_stepsize2 = readMotorMap(xmlPath, pid)
 
 
             a=[pid, J1onTime, J2onTime,np.mean(j1_fwd_stepsize2),np.mean(j1_rev_stepsize2),
@@ -167,87 +166,84 @@ def main():
 
     TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
 
-    p1 = plotJ1OntimeSpeed(goodGroupIdx[0], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
-    p2 = plotJ1OntimeSpeed(goodGroupIdx[1], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
-    p3 = plotJ1OntimeSpeed(goodGroupIdx[2], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
-    p4 = plotJ1OntimeSpeed(goodGroupIdx[3], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
-    p5 = plotJ1OntimeSpeed(goodGroupIdx[4], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
-    p6 = plotJ1OntimeSpeed(goodGroupIdx[5], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
+    if len(thetarange) > 0:
+        p1 = plotJ1OntimeSpeed(goodGroupIdx[0], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
+        p2 = plotJ1OntimeSpeed(goodGroupIdx[1], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
+        p3 = plotJ1OntimeSpeed(goodGroupIdx[2], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
+        p4 = plotJ1OntimeSpeed(goodGroupIdx[3], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
+        p5 = plotJ1OntimeSpeed(goodGroupIdx[4], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
+        p6 = plotJ1OntimeSpeed(goodGroupIdx[5], df, [thetarange[0], thetarange[-1]], [-0.3,0.3])
 
-
-    x = np.array([])
-    y1 = np.array([])
-    y2 = np.array([])
-    for tms in thetarange:
-        x=np.append(x,tms)
-        y1=np.append(y1,np.mean(df['J1_fwd'][df['J1onTime']==tms].values))
-        y2=np.append(y2,np.mean(df['J1_rev'][df['J1onTime']==tms].values))
+        x = np.array([])
+        y1 = np.array([])
+        y2 = np.array([])
+        for tms in thetarange:
+            x=np.append(x,tms)
+            y1=np.append(y1,np.mean(df['J1_fwd'][df['J1onTime']==tms].values))
+            y2=np.append(y2,np.mean(df['J1_rev'][df['J1onTime']==tms].values))
     
-    slope, intercept, r_value, p_value, std_err = stats.linregress(x,y1)
+        slope, intercept, r_value, p_value, std_err = stats.linregress(x,y1)
 
-    q = figure(tools=TOOLS, x_range=[thetarange[0]-10, thetarange[-1]+10], y_range=[-1,1],plot_height=500, plot_width=1000)
-    q.circle(x=df['J1onTime'], y=df['J1_fwd'],radius=0.3,\
-            color='red',fill_color=None)
-    q.circle(x=x,y=y1, radius=0.5, color='blue')
-    legendtext=f'Y={slope:.8f}X{intercept:.2f}'
-    q.line(x=x, y=x*slope+intercept,color='blue',line_width=3, legend=legendtext)
+        q = figure(tools=TOOLS, x_range=[thetarange[0]-10, thetarange[-1]+10], y_range=[-1,1],plot_height=500, plot_width=1000)
+        q.circle(x=df['J1onTime'], y=df['J1_fwd'],radius=0.3,\
+                 color='red',fill_color=None)
+        q.circle(x=x,y=y1, radius=0.5, color='blue')
+        legendtext=f'Y={slope:.8f}X{intercept:.2f}'
+        q.line(x=x, y=x*slope+intercept,color='blue',line_width=3, legend=legendtext)
 
-    slope, intercept, r_value, p_value, std_err = stats.linregress(x,y2)
-    #fit=np.polyfit(x, y*100, 1)
-    q.circle(x=df['J1onTime'], y=df['J1_rev'],radius=0.3,\
-            color='green',fill_color=None)
-    q.circle(x=x,y=y2, radius=0.5, color='#3B0F6F')
-    legendtext=f'Y={slope:.8f}X+{intercept:.2f}'
-    q.line(x=x, y=x*slope+intercept,color='#3B0F6F',line_width=3, legend=legendtext)
+        slope, intercept, r_value, p_value, std_err = stats.linregress(x,y2)
+        #fit=np.polyfit(x, y*100, 1)
+        q.circle(x=df['J1onTime'], y=df['J1_rev'],radius=0.3,\
+                 color='green',fill_color=None)
+        q.circle(x=x,y=y2, radius=0.5, color='#3B0F6F')
+        legendtext=f'Y={slope:.8f}X+{intercept:.2f}'
+        q.line(x=x, y=x*slope+intercept,color='#3B0F6F',line_width=3, legend=legendtext)
 
-    output_file("theta.html")
-    save(column(p1,p2,p3,p4,p5,p6,q), filename="theta.html", \
-        title='Theta On-time')
+        output_file("theta.html")
+        save(column(p1,p2,p3,p4,p5,p6,q), filename="theta.html", \
+             title='Theta On-time')
 
-#-------------------------------------------
-    p1 = plotJ2OntimeSpeed(goodGroupIdx[0], df, [phirange[0], phirange[-1]], [-1,1])
-    p2 = plotJ2OntimeSpeed(goodGroupIdx[1], df, [phirange[0], phirange[-1]], [-1,1])
-    p3 = plotJ2OntimeSpeed(goodGroupIdx[2], df, [phirange[0], phirange[-1]], [-1,1])
-    p4 = plotJ2OntimeSpeed(goodGroupIdx[3], df, [phirange[0], phirange[-1]], [-1,1])
-    p5 = plotJ2OntimeSpeed(goodGroupIdx[4], df, [phirange[0], phirange[-1]], [-1,1])
-    p6 = plotJ2OntimeSpeed(goodGroupIdx[5], df, [phirange[0], phirange[-1]], [-1,1])
+    if len(phirange) > 0:
+        p1 = plotJ2OntimeSpeed(goodGroupIdx[0], df, [phirange[0], phirange[-1]], [-1,1])
+        p2 = plotJ2OntimeSpeed(goodGroupIdx[1], df, [phirange[0], phirange[-1]], [-1,1])
+        p3 = plotJ2OntimeSpeed(goodGroupIdx[2], df, [phirange[0], phirange[-1]], [-1,1])
+        p4 = plotJ2OntimeSpeed(goodGroupIdx[3], df, [phirange[0], phirange[-1]], [-1,1])
+        p5 = plotJ2OntimeSpeed(goodGroupIdx[4], df, [phirange[0], phirange[-1]], [-1,1])
+        p6 = plotJ2OntimeSpeed(goodGroupIdx[5], df, [phirange[0], phirange[-1]], [-1,1])
 
+        x = np.array([])
+        y1 = np.array([])
+        y2 = np.array([])
+
+        for tms in phirange:
+            #print(np.mean(df['J2_fwd'][df['onTime']==tms].values))
+            x=np.append(x,tms)
+            y1=np.append(y1,np.median(df['J2_fwd'][df['J2onTime']==tms].values))
+            y2=np.append(y2,np.median(df['J2_rev'][df['J2onTime']==tms].values))
     
-    x = np.array([])
-    y1 = np.array([])
-    y2 = np.array([])
-    for tms in phirange:
-        #print(np.mean(df['J2_fwd'][df['onTime']==tms].values))
-        x=np.append(x,tms)
-        y1=np.append(y1,np.median(df['J2_fwd'][df['J2onTime']==tms].values))
-        y2=np.append(y2,np.median(df['J2_rev'][df['J2onTime']==tms].values))
-    
-    slope, intercept, r_value, p_value, std_err = stats.linregress(x[:8],y1[:8])
-    #fit=np.polyfit(x, y*100, 1)
-    #print(fit)
+        slope, intercept, r_value, p_value, std_err = stats.linregress(x[:8],y1[:8])
+        #fit=np.polyfit(x, y*100, 1)
+        #print(fit)
 
-    q = figure(tools=TOOLS, x_range=[phirange[0]-10, phirange[-1]+10], y_range=[-1.5,1.5],plot_height=500, plot_width=1000)
-    q.circle(x=df['J2onTime'], y=df['J2_fwd'],radius=0.3,\
-            color='red',fill_color=None)
-    q.circle(x=x,y=y1, radius=0.5, color='blue')
-    legendtext=f'Y={slope:.8f}X{intercept:.2f}'
-    q.line(x=x[:8], y=x[:8]*slope+intercept,color='blue',line_width=3, legend=legendtext)
+        q = figure(tools=TOOLS, x_range=[phirange[0]-10, phirange[-1]+10], y_range=[-1.5,1.5],plot_height=500, plot_width=1000)
+        q.circle(x=df['J2onTime'], y=df['J2_fwd'],radius=0.3,\
+                 color='red',fill_color=None)
+        q.circle(x=x,y=y1, radius=0.5, color='blue')
+        legendtext=f'Y={slope:.8f}X{intercept:.2f}'
+        q.line(x=x[:8], y=x[:8]*slope+intercept,color='blue',line_width=3, legend=legendtext)
 
-    slope, intercept, r_value, p_value, std_err = stats.linregress(x[:8],y2[:8])
-    #fit=np.polyfit(x, y*100, 1)
-    q.circle(x=df['J2onTime'], y=df['J2_rev'],radius=0.3,\
-            color='green',fill_color=None)
-    q.circle(x=x,y=y2, radius=0.5, color='#3B0F6F')
-    legendtext=f'Y={slope:.8f}X+{intercept:.2f}'
-    q.line(x=x[:8], y=x[:8]*slope+intercept,color='#3B0F6F',line_width=3, legend=legendtext)
+        slope, intercept, r_value, p_value, std_err = stats.linregress(x[:8],y2[:8])
+        #fit=np.polyfit(x, y*100, 1)
+        q.circle(x=df['J2onTime'], y=df['J2_rev'],radius=0.3,\
+                 color='green',fill_color=None)
+        q.circle(x=x,y=y2, radius=0.5, color='#3B0F6F')
+        legendtext=f'Y={slope:.8f}X+{intercept:.2f}'
+        q.line(x=x[:8], y=x[:8]*slope+intercept,color='#3B0F6F',line_width=3, legend=legendtext)
 
-    output_file("phi.html")
-    #show(column(p1,p2,p3,p4,p5,p6,q))
-    save(column(p1,p2,p3,p4,p5,p6,q), filename="phi.html", \
-        title='Phi On-time')
-
-
-
+        output_file("phi.html")
+        #show(column(p1,p2,p3,p4,p5,p6,q))
+        save(column(p1,p2,p3,p4,p5,p6,q), filename="phi.html", \
+             title='Phi On-time')
 
 if __name__ == '__main__':
     main()
