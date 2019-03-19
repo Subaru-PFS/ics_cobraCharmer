@@ -210,8 +210,8 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
     # parameters declared here
     #repeat = 3
     #steps = 200
-    thetaSteps = 10000
-    phiSteps = 5000
+    thetaSteps = 15000
+    phiSteps = 7000
     myCobras = getCobras(goodIdx)
 
     OnTime = deepcopy([pfi.calibModel.motorOntimeFwd1,
@@ -248,7 +248,7 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
 
     # move phi arms out for 60 degrees then home theta
     pfi.moveAllSteps(myCobras, -10000, -5000)
-    pfi.moveAllSteps(myCobras, -5000, -5000)
+    pfi.moveAllSteps(myCobras, -5000, -7000)
     moveToXYfromHome(pfi, goodIdx, outTargets[goodIdx], dataPath)
     pfi.moveAllSteps(myCobras, -10000, 0)
     pfi.moveAllSteps(myCobras, -5000, 0)
