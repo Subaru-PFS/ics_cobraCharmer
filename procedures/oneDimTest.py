@@ -490,15 +490,15 @@ def main():
     # you may want to do some inspection here
     cobra.moveCobra(3, -600, 0)
 
-    phiCenters, phiRadius, phiHomes = cobra.findPhiCenters()
-    phiData = cobra.phiTest(phiCenters, phiHomes, runs=50, tries=8, phi60=True)
+    # phiCenters, phiRadius, phiHomes = cobra.findPhiCenters()
+    # phiData = cobra.phiTest(phiCenters, phiHomes, runs=50, tries=8, phi60=True)
 
-    #cobra.moveThetaOut(60)
-    thetaCenters, thetaRadius, thetaHomes = cobra.findThetaCenters()
-    thetaData = cobra.thetaTest(thetaCenters, thetaHomes, runs=50, tries=8, margin=30.0)
+    # #cobra.moveThetaOut(60)
+    # thetaCenters, thetaRadius, thetaHomes = cobra.findThetaCenters()
+    # thetaData = cobra.thetaTest(thetaCenters, thetaHomes, runs=50, tries=8, margin=30.0)
 
-    np.save(dataPath + '/phiData', phiData)
-    np.save(dataPath + '/thetaData', thetaData)
+    # np.save(dataPath + '/phiData', phiData)
+    # np.save(dataPath + '/thetaData', thetaData)
 
 
 if __name__ == '__main__':
