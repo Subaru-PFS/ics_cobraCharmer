@@ -7,7 +7,7 @@ import math
 from astropy.io import fits
 
 class idsCamera():
-    def setExpoureTime(self):
+    def setExpoureTime(self, expTime):
         #Pixel-Clock Setting, the range of this camera is 7-35 MHz
         nPixelClockDefault=ueye.INT(200)
         nRet = ueye.is_PixelClock(self.hCam, ueye.IS_PIXELCLOCK_CMD_SET,nPixelClockDefault, 
@@ -15,10 +15,11 @@ class idsCamera():
         
         if nRet != ueye.IS_SUCCESS:
             print("is_PixelClock ERROR")
-        # Working on exposure time range
-        expinfo = ueye.INT(10)
-        #print(expinfo)
-        nRet = ueye.is_Exposure(self.hCam, ueye.IS_EXPOSURE_CMD_SET_EXPOSURE, expinfo,ueye.sizeof(expinfo))
+       
+        # Working on exposure time range. Set exposure time to be 20 ms.
+        ms = ueye.DOUBLE(expTime)
+        
+        nRet = ueye.is_Exposure(self.hCam, ueye.IS_EXPOSURE_CMD_SET_EXPOSURE, ms,ueye.sizeof(ms))
         if nRet != ueye.IS_SUCCESS:
             print("is_Exposure ERROR")
         
@@ -165,7 +166,7 @@ class idsCamera():
 def main():
 
     camera = idsCamera(1)
-    camera.setExpoureTime()
+    camera.setExpoureTime(20)
     image = camera.getCurrentFrame()
     hdu = fits.PrimaryHDU(image)
     hdu.writeto('new1.fits',overwrite=True)
