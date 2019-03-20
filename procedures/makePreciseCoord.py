@@ -80,9 +80,9 @@ def moveToXYfromHome(idx, targets, dataPath, threshold=3.0, maxTries=8):
 
 
 
-#datetoday=datetime.datetime.now().strftime("%Y%m%d")
-datetoday='20181219'
-cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
+datetoday=datetime.datetime.now().strftime("%Y%m%d")
+#datetoday='20181219'
+cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
 storagePath = '/data/pfs/'+datetoday
 dataPath = storagePath+'/image'
 prodctPath = storagePath+'/product'
@@ -446,8 +446,8 @@ myConfig.phiIn[idx] = phiCCW[idx] - np.pi
 myConfig.phiOut[idx] = phiCW[idx] - np.pi
 
 old.updateGeometry(myConfig.centers, myConfig.L1, myConfig.L2)
-#old.updateThetaHardStops(myConfig.tht0, myConfig.tht1)
-#old.updatePhiHardStops(myConfig.phiIn + np.pi, myConfig.phiOut + np.pi)
+old.updateThetaHardStops(myConfig.tht0, myConfig.tht1)
+old.updatePhiHardStops(myConfig.phiIn + np.pi, myConfig.phiOut + np.pi)
 
 old.createCalibrationFile(cobraCharmerPath+'/xml/precise'+datetoday+'.xml')
 
