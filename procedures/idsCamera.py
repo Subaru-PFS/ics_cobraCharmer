@@ -23,22 +23,7 @@ class idsCamera():
         if nRet != ueye.IS_SUCCESS:
             print("is_Exposure ERROR")
         
-        # 	if (verbose) printf("Getting the exposure time range. \n"
-        # 			"Status = %d, Min= %f Max=%f Inc=%f\n",nRet,expinfo[0],expinfo[1],expinfo[2]);
-
-        # 	if (etime < expinfo[0] || etime > expinfo[1]){
-        # 		fprintf(stderr, "Error: (%s:%s:%d) Exposure time is out of "
-        # 		"range (%8.3f - %8.3f).\n", __FILE__, __func__, __LINE__,expinfo[0],expinfo[1]);
-        # 		is_ExitCamera(hCam);
-        # 		return EXIT_FAILURE;
-        # 	}
-
-        # 	nRet = is_Exposure(hCam, IS_EXPOSURE_CMD_SET_EXPOSURE,
-        # 			(void*)&etime,sizeof(etime));
-        # 	if (verbose) printf("Setting exposure time. \n"
-        # 				"Status = %d, Value= %f \n",nRet,etime);
-        # pass
-    
+            
     def getExposureTime(self):
         pass
 
@@ -56,10 +41,11 @@ class idsCamera():
         print("getting image")
         array = ueye.get_data(self.pcImageMemory, self.width, self.height, self.nBitsPerPixel, self.pitch, copy=False)
         frame = np.reshape(array,(self.height.value, self.width.value, self.bytes_per_pixel))
-        
+        print(frame.shape)
         
         coadd = np.zeros(frame.shape[0:2]).astype('float')
-        coadd[:,:] = (frame[:,:,1]*255).astype('float')+frame[:,:,0].astype('float')
+        #coadd[:,:] = (frame[:,:,1]*255).astype('float')+frame[:,:,0].astype('float')
+        coadd[:,:] = frame[:,:,1].astype('float')*255+frame[:,:,0].astype('float')
         return coadd
 
     def __init__(self, deviceID):
