@@ -10,9 +10,9 @@ from subprocess import Popen, PIPE
 from ics.cobraCharmer import pfi as pfiControl
 from copy import deepcopy
 
-#datetoday=datetime.datetime.now().strftime("%Y%m%d")
-datetoday='20181219'
-cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
+datetoday=datetime.datetime.now().strftime("%Y%m%d")
+#datetoday='20181219'
+cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer'
 storagePath = '/data/pfs/'+datetoday
 dataPath = storagePath+'/image'
 prodctPath = storagePath+'/product'
@@ -67,17 +67,18 @@ evenCobras = moduleCobras2[2]
 
 pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
 #pfi = pfiControl.PFI(fpgaHost='localhost', doLoadModel=False)
-pfi.loadModel(cobraCharmerPath+'xml/updatedLinksAndMaps.xml')
+pfi.loadModel(cobraCharmerPath+'xml/PFS-PFI-CIT900200-02_Spare2_final_xml.xml')
 pfi.setFreq(allCobras)
 
 # Home phi
-pfi.homePhi(allCobras, nsteps=5000, dir='ccw')
+#pfi.homePhi(allCobras, nsteps=5000, dir='ccw')
 
 # Home theta
-pfi.homeTheta(allCobras, nsteps=10000, dir='ccw')
+#pfi.homeTheta(allCobras, nsteps=10000, dir='ccw')
 
 # define the broken fibers and two groups of cobras
-mapping = np.array([e for e in range(1,58) if e not in {1, 39, 43, 54}]) - 1
+#mapping = np.array([e for e in range(1,58) if e not in {1, 39, 43, 54}]) - 1
+mapping = np.array([e for e in range(1,58)]) - 1
 n1 = 26
 n2 = len(mapping) - n1
 group1 = mapping[:n1]
@@ -126,7 +127,7 @@ myConfig.L2[n:] = old.L2[n:]*scale2
 
 old.updateGeometry(myConfig.centers, myConfig.L1, myConfig.L2)
 old.updateThetaHardStops(myConfig.tht0, myConfig.tht1)
-old.createCalibrationFile(cobraCharmerPath+'/xml/coarse'+datetoday+'.xml')
+old.createCalibrationFile(cobraCharmerPath+'/xml/coarse_spare02_'+datetoday+'.xml')
 
-print(cobraCharmerPath+'/xml/coarse'+datetoday+'.xml  produced!')
+print(cobraCharmerPath+'/xml/coarse_spare02_'+datetoday+'.xml  produced!')
 print("Process Finised")

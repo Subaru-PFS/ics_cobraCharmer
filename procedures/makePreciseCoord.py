@@ -128,12 +128,29 @@ evenCobras = moduleCobras2[2]
 
 # Initializing COBRA module
 pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-coaseXML=cobraCharmerPath+'/xml/coarse'+datetoday+'.xml'
+coaseXML=cobraCharmerPath+'/xml/coarse_spare02_'+datetoday+'.xml'
 if not os.path.exists(coaseXML):
     sys.exit()
     
 pfi.loadModel(coaseXML)
 pfi.setFreq(allCobras)
+
+
+originalOnTime = deepcopy([pfi.calibModel.motorOntimeFwd1,
+                   pfi.calibModel.motorOntimeRev1,
+                   pfi.calibModel.motorOntimeFwd2,
+                   pfi.calibModel.motorOntimeRev2])
+
+
+# Using 1.5X on-time for geometry measurement
+enhanceFactor = 2.0
+fastOnTime = deepcopy([pfi.calibModel.motorOntimeFwd1*enhanceFactor,
+                   pfi.calibModel.motorOntimeRev1*enhanceFactor,
+                   pfi.calibModel.motorOntimeFwd2*enhanceFactor,
+                   pfi.calibModel.motorOntimeRev2*enhanceFactor])
+
+#pfi.calibModel.updateOntimes(*fastOnTime)
+#pfi.setFreq(allCobras)
 
 
 # Calculate up/down(outward) angles
@@ -150,8 +167,8 @@ allMoves[1::2] = evenMoves
 allSteps, _ = pfi.calculateSteps(np.zeros(57), allMoves, np.zeros(57), np.zeros(57))
 
 # define the broken/good cobras
-brokens = [1, 39, 43, 54]
-visibles= [e for e in range(1,58) if e not in brokens]
+brokens = []
+visibles= [e for e in range(1,58)]
 badIdx = np.array(brokens) - 1
 goodIdx = np.array(visibles) - 1
 
@@ -170,10 +187,10 @@ def getCobras(cobs):
     return pfiControl.PFI.allocateCobraList(zip(np.full(len(cobs), 1), np.array(cobs) + 1))
 
 def thetaFN(camId):
-    return f'data/theta{camId}_'
+    return f'/theta{camId}_'
 
 def phiFN(camId):
-    return f'data/phi{camId}_'
+    return f'/phi{camId}_'
 
 # Home phi
 pfi.moveAllSteps(allCobras, 0, -5000)
@@ -195,20 +212,24 @@ moveToXYfromHome(goodIdx, outTargets[goodIdx], dataPath)
 # move phi arms in
 pfi.moveAllSteps(getCobras(goodIdx), 0, -5000)
 
+# Using fast on-time before operation.
+pfi.calibModel.updateOntimes(*fastOnTime)
+pfi.setFreq(allCobras)
+
 # record the theta and phi arm movements
 myIdx = goodIdx
 myCobras = getCobras(myIdx)
 
 # take one image at limit
-p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-f", f"data/cam1P1_"], stdout=PIPE)
-p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-f", f"data/cam2P1_"], stdout=PIPE)
+p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-f", dataPath+"/cam1P1_"], stdout=PIPE)
+p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-f", dataPath+"/cam2P1_"], stdout=PIPE)
 p1.communicate()
 p2.communicate()
 time.sleep(1.0)
 
 # move phi out and capture the video
-p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-i", "100", "-l", "9999", "-f", f"{phiFN(1)}"], stdout=PIPE)
-p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-i", "100", "-l", "9999", "-f", f"{phiFN(2)}"], stdout=PIPE)
+p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-i", "100", "-l", "9999", "-f", dataPath+f"/{phiFN(1)}"], stdout=PIPE)
+p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-i", "100", "-l", "9999", "-f", dataPath+f"/{phiFN(2)}"], stdout=PIPE)
 time.sleep(5.0)
 pfi.moveAllSteps(myCobras, 0, 5000)
 time.sleep(0.5)
@@ -218,28 +239,34 @@ p1.communicate()
 p2.communicate()
 pfi.moveAllSteps(myCobras, 0, 5000)
 
+
 # take one image at limit
-p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-f", f"data/cam1P2_"], stdout=PIPE)
-p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-f", f"data/cam2P2_"], stdout=PIPE)
+p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-f", dataPath+f"/cam1P2_"], stdout=PIPE)
+p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-f", dataPath+f"/cam2P2_"], stdout=PIPE)
 p1.communicate()
 p2.communicate()
 time.sleep(1.0)
 
+pfi.calibModel.updateOntimes(*originalOnTime)
+pfi.setFreq(allCobras)
 # move phi arms to 60 degrees
 pfi.moveAllSteps(myCobras, 0, -10000)
 moveToXYfromHome(myIdx, outTargets[myIdx],dataPath)
 
+pfi.calibModel.updateOntimes(*fastOnTime)
+pfi.setFreq(allCobras)
+
 # move theta arms to CCW hard stops and take one image
 pfi.moveAllSteps(myCobras, -10000, 0)
-p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-f", f"data/cam1P3_"], stdout=PIPE)
-p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-f", f"data/cam2P3_"], stdout=PIPE)
+p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-f", dataPath+"/cam1P3_"], stdout=PIPE)
+p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-f", dataPath+"/cam2P3_"], stdout=PIPE)
 p1.communicate()
 p2.communicate()
 time.sleep(1.0)
 
 # move theta for a circle and capture the video
-p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-i", "100", "-l", "9999", "-f", f"{thetaFN(1)}"], stdout=PIPE)
-p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-i", "100", "-l", "9999", "-f", f"{thetaFN(2)}"], stdout=PIPE)
+p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-i", "100", "-l", "9999", "-f", dataPath+f"/{thetaFN(1)}"], stdout=PIPE)
+p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-i", "100", "-l", "9999", "-f", dataPath+f"/{thetaFN(2)}"], stdout=PIPE)
 time.sleep(5.0)
 pfi.moveAllSteps(myCobras, 10000, 0)
 time.sleep(0.5)
@@ -250,9 +277,9 @@ p2.communicate()
 pfi.moveAllSteps(myCobras, 10000, 0)
 
 # take one image at limit
-p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-f", f"data/cam1P4_"], stdout=PIPE)
+p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-f", dataPath+f"/cam1P4_"], stdout=PIPE)
 p1.communicate()
-p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-f", f"data/cam2P4_"], stdout=PIPE)
+p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-f", dataPath+f"/cam2P4_"], stdout=PIPE)
 p2.communicate()
 
 # move back to CCW hard stops
@@ -272,11 +299,11 @@ myIdx = goodIdx[goodIdx <= cam_split]
 homes = pfi.calibModel.centers[myIdx]
 
 # phi stages
-cnt = len(glob.glob(f'{phiFN(1)}*')) - 1
+cnt = len(glob.glob(dataPath+f'/{phiFN(1)}*')) - 5
 pos = np.zeros((len(myIdx), cnt, 2))
 
 for i in range(cnt):
-    data = fits.getdata(f'{phiFN(1)}{i+1:04d}.fits')
+    data = fits.getdata(dataPath+f'/{phiFN(1)}{i+1:04d}.fits')
     cs = sep.extract(data.astype(float), 50)
     spots = np.array([(c['x'],c['y']) for c in cs])
     idx = lazyIdentification(homes, spots[:,0]+spots[:,1]*(1j))
@@ -288,11 +315,11 @@ for i in range(len(myIdx)):
     phiCircles[myIdx[i]] = x0, y0, r0
 
 # theta stages
-cnt = len(glob.glob(f'{thetaFN(1)}*')) - 1
+cnt = len(glob.glob(dataPath+f'/{thetaFN(1)}*')) - 5
 pos = np.zeros((len(myIdx), cnt, 2))
-
+print(cnt)
 for i in range(cnt):
-    data = fits.getdata(f'{thetaFN(1)}{i+1:04d}.fits')
+    data = fits.getdata(dataPath+f'/{thetaFN(1)}{i+1:04d}.fits')
     cs = sep.extract(data.astype(float), 50)
     spots = np.array([(c['x'],c['y']) for c in cs])
     idx = lazyIdentification(homes, spots[:,0]+spots[:,1]*(1j))
@@ -308,11 +335,11 @@ myIdx = goodIdx[goodIdx > cam_split]
 homes = pfi.calibModel.centers[myIdx]
 
 # phi stages
-cnt = len(glob.glob(f'{phiFN(2)}*')) - 1
+cnt = len(glob.glob(dataPath+f'/{phiFN(2)}*')) - 5
 pos = np.zeros((len(myIdx), cnt, 2))
 
 for i in range(cnt):
-    data = fits.getdata(f'{phiFN(2)}{i+1:04d}.fits')
+    data = fits.getdata(dataPath+f'/{phiFN(2)}{i+1:04d}.fits')
     cs = sep.extract(data.astype(float), 50)
     spots = np.array([(c['x'],c['y']) for c in cs])
     idx = lazyIdentification(homes, spots[:,0]+spots[:,1]*(1j))
@@ -324,11 +351,11 @@ for i in range(len(myIdx)):
     phiCircles[myIdx[i]] = x0, y0, r0
 
 # theta stages
-cnt = len(glob.glob(f'{thetaFN(2)}*')) - 1
+cnt = len(glob.glob(dataPath+f'/{thetaFN(2)}*')) - 5
 pos = np.zeros((len(myIdx), cnt, 2))
 
 for i in range(cnt):
-    data = fits.getdata(f'{thetaFN(2)}{i+1:04d}.fits')
+    data = fits.getdata(dataPath+f'/{thetaFN(2)}{i+1:04d}.fits')
     cs = sep.extract(data.astype(float), 50)
     spots = np.array([(c['x'],c['y']) for c in cs])
     idx = lazyIdentification(homes, spots[:,0]+spots[:,1]*(1j))
@@ -344,11 +371,11 @@ myIdx = goodIdx[goodIdx > cam_split]
 homes = pfi.calibModel.centers[myIdx]
 
 # phi stages
-cnt = len(glob.glob(f'{phiFN(2)}*')) - 1
+cnt = len(glob.glob(dataPath+f'/{phiFN(2)}*')) - 5
 pos = np.zeros((len(myIdx), cnt, 2))
 
 for i in range(cnt):
-    data = fits.getdata(f'{phiFN(2)}{i+1:04d}.fits')
+    data = fits.getdata(dataPath+f'/{phiFN(2)}{i+1:04d}.fits')
     cs = sep.extract(data.astype(float), 50)
     spots = np.array([(c['x'],c['y']) for c in cs])
     idx = lazyIdentification(homes, spots[:,0]+spots[:,1]*(1j))
@@ -360,11 +387,11 @@ for i in range(len(myIdx)):
     phiCircles[myIdx[i]] = x0, y0, r0
 
 # theta stages
-cnt = len(glob.glob(f'{thetaFN(2)}*')) - 1
+cnt = len(glob.glob(dataPath+f'/{thetaFN(2)}*')) - 5
 pos = np.zeros((len(myIdx), cnt, 2))
 
 for i in range(cnt):
-    data = fits.getdata(f'{thetaFN(2)}{i+1:04d}.fits')
+    data = fits.getdata(dataPath+f'/{thetaFN(2)}{i+1:04d}.fits')
     cs = sep.extract(data.astype(float), 50)
     spots = np.array([(c['x'],c['y']) for c in cs])
     idx = lazyIdentification(homes, spots[:,0]+spots[:,1]*(1j))
@@ -384,7 +411,7 @@ points = np.zeros((57, 4), dtype=complex)
 myIdx = goodIdx[goodIdx <= cam_split]
 homes = pfi.calibModel.centers[myIdx]
 for p in range(4):
-    data = fits.getdata(f'data/cam1P{p+1}_0001.fits')
+    data = fits.getdata(dataPath+f'/cam1P{p+1}_0001.fits')
     cs = sep.extract(data.astype(float), 50)
     spots = np.array([(c['x'],c['y']) for c in cs])
     idx = lazyIdentification(homes, spots[:,0]+spots[:,1]*(1j))
@@ -393,7 +420,7 @@ for p in range(4):
 myIdx = goodIdx[goodIdx > cam_split]
 homes = pfi.calibModel.centers[myIdx]
 for p in range(4):
-    data = fits.getdata(f'data/cam2P{p+1}_0001.fits')
+    data = fits.getdata(dataPath+f'/cam2P{p+1}_0001.fits')
     cs = sep.extract(data.astype(float), 50)
     spots = np.array([(c['x'],c['y']) for c in cs])
     idx = lazyIdentification(homes, spots[:,0]+spots[:,1]*(1j))
@@ -404,14 +431,19 @@ phiCCW = (np.angle(points[:,0] - phiC) - np.angle(thetaC - phiC) + (np.pi/2)) % 
 phiCW = (np.angle(points[:,1] - phiC) - np.angle(thetaC - phiC) + (np.pi/2)) % (2*np.pi) - (np.pi/2)
 
 # theta CCW hard stops
-#thetaCCW = np.angle(phiC - thetaC) % (2*np.pi)
+thetaCCW = np.angle(phiC - thetaC) % (2*np.pi)
 a = np.absolute(points[:,2] - thetaC)
 b = np.absolute(thetaC - phiC)
 c = phiCircles[:,2]
-if a*b != 0:
-    thetaCCW = (np.angle(points[:,2] - thetaC) + np.arccos((a*a + b*b - c*c) / (2*a*b))) % (2*np.pi)
-else:
-    thetaCCW = 0
+
+temp = a*b
+inx = np.where(temp != 0)
+ind = np.where(temp == 0)
+print(a*b)
+#if a*b != 0:
+thetaCCW[inx] = (np.angle(points[:,2] - thetaC) + np.arccos((a*a + b*b - c*c) / (2*a*b))) % (2*np.pi)
+#else:
+thetaCCW[ind] = 0
 # thetaCW hard stops
 thetaCW = (np.angle(points[:,3] - thetaC) - np.angle(points[:,2] - thetaC) + thetaCCW) % (2*np.pi)    
 
@@ -449,11 +481,12 @@ ax.set_title(f'2nd camera')
 plt.show()
 
 # save new configuration
+pfi.calibModel.updateOntimes(*originalOnTime)
 old = pfi.calibModel
 myConfig = deepcopy(old)
 
 # you can remove bad measurement here
-idx = np.delete(goodIdx, np.argwhere(goodIdx==12))
+#idx = np.delete(goodIdx, np.argwhere(goodIdx==12))
 
 myConfig.centers[idx] = thetaC[idx]
 diff = np.absolute(thetaC - phiC)
@@ -469,6 +502,6 @@ old.updateGeometry(myConfig.centers, myConfig.L1, myConfig.L2)
 old.updateThetaHardStops(myConfig.tht0, myConfig.tht1)
 old.updatePhiHardStops(myConfig.phiIn + np.pi, myConfig.phiOut + np.pi)
 
-old.createCalibrationFile(cobraCharmerPath+'/xml/precise_'+datetoday+'.xml')
+old.createCalibrationFile(cobraCharmerPath+'/xml/precise_spare02_'+datetoday+'v1.xml')
 print("Process Finised")
 
