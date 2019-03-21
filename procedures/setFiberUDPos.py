@@ -120,7 +120,7 @@ def setFiberUDPOS(XML, DataPath):
     allSteps, _ = pfi.calculateSteps(np.zeros(57), allMoves, np.zeros(57), np.zeros(57))
 
     # define the broken/good cobras
-    brokens = [1, 39, 43, 54]
+    brokens = []
     visibles= [e for e in range(1,58) if e not in brokens]
     badIdx = np.array(brokens) - 1
     goodIdx = np.array(visibles) - 1
@@ -148,7 +148,7 @@ def setFiberUDPOS(XML, DataPath):
     
     # Move the bad cobras to up/down positions
     #pfi.moveSteps(getCobras(badIdx), allSteps[badIdx], np.zeros(len(brokens)))
-    pfi.moveSteps(getCobras([0,38,42,53]), [3200,800,4200,5000], np.zeros(4))
+    #pfi.moveSteps(getCobras([0,38,42,53]), [3200,800,4200,5000], np.zeros(4))
 
     # move visible positioners to outwards positions, phi arms are moved out for 60 degrees
     # (outTargets) otherwise we can't measure the theta angles
@@ -177,7 +177,7 @@ def setFiberUDPOS(XML, DataPath):
 def main():
 
     cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
-    xml=cobraCharmerPath+'xml/motormap_20190312.xml'
+    xml=cobraCharmerPath+'xml/precise_spare02_20190321v1.xml'
     #xml=cobraCharmerPath+'/xml/precise6.xml'
 
     datetoday=datetime.datetime.now().strftime("%Y%m%d")
