@@ -1,9 +1,3 @@
-#
-#   This program is used to run through all the on-time from 25 to 140 ms.
-#     
-#
-
-
 import sys, os
 from importlib import reload
 import numpy as np
@@ -54,8 +48,13 @@ def circle_fitting(p):
     a, b, c = np.linalg.lstsq(m, n, rcond=None)[0]
     return a/2, b/2, np.sqrt(c+(a*a+b*b)/4)
 
+def getCobras(cobs):
+    # cobs is 0-indexed list
+    return pfiControl.PFI.allocateCobraList(zip(np.full(len(cobs), 1), np.array(cobs) + 1))
+
+
 # function to move cobras to target positions
-def moveToXYfromHome(idx, targets, dataPath, threshold=3.0, maxTries=8):
+def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=12, cam_split=26):
     cobras = getCobras(idx)
     pfi.moveXYfromHome(cobras, targets)
 
@@ -90,71 +89,66 @@ def moveToXYfromHome(idx, targets, dataPath, threshold=3.0, maxTries=8):
         # move again
         pfi.moveXY(cobras, curPos, targets)
 
-def getCobras(cobs):
-        # cobs is 0-indexed list
-        return pfiControl.PFI.allocateCobraList(zip(np.full(len(cobs), 1), np.array(cobs) + 1))
 
-datetoday=datetime.datetime.now().strftime("%Y%m%d")
-#datetoday='20181219'
-cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
-storagePath = '/data/pfs/'+datetoday
-dataPath = storagePath+'/ontimeimage'
-prodctPath = storagePath+'/product'
-
-
-
-# Prepare the data path for the work
-if not (os.path.exists(storagePath)):
-    os.makedirs(storagePath)
-if not (os.path.exists(dataPath)):
-    os.makedirs(dataPath)
-if not (os.path.exists(prodctPath)):
-    os.makedirs(prodctPath)
-
-
-# Define the cobra range.
-mod1Cobras = pfiControl.PFI.allocateCobraRange(range(1,2))
-allCobras = mod1Cobras
-oneCobra = pfiControl.PFI.allocateCobraList([(1,2)])
-twoCobras = pfiControl.PFI.allocateCobraList([(1,2), (1,5)])
-
-# partition module 1 cobras into non-interfering sets
-moduleCobras = {}
-for group in 1,2,3:
-    cm = range(group,58,3)
-    mod = [1]*len(cm)
-    moduleCobras[group] = pfiControl.PFI.allocateCobraList(zip(mod,cm))
-group1Cobras = moduleCobras[1]
-group2Cobras = moduleCobras[2]
-group3Cobras = moduleCobras[3]
-
-# partition module 1 cobras into odd and even sets
-moduleCobras2 = {}
-for group in 1,2:
-    cm = range(group,58,2)
-    mod = [1]*len(cm)
-    moduleCobras2[group] = pfiControl.PFI.allocateCobraList(zip(mod,cm))
-oddCobras = moduleCobras2[1]
-evenCobras = moduleCobras2[2]
-
-# Initializing COBRA module
-pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-preciseXML=cobraCharmerPath+'/xml/precise_spare02_20190321v1.xml'
-if not os.path.exists(preciseXML):
-    print(f"Error: {preciseXML} not presented!")
-    sys.exit()
+def runPhiMotorMap(repeat, steps, storagePath, outputXML):
     
-pfi.loadModel(preciseXML)
-pfi.setFreq(allCobras)
-
-
-# Preparing a array for on-time.  From 20 to 50 microsecond
-tarray = range(20,60,10)
-for t_ms in tarray:
+    #datetoday=datetime.datetime.now().strftime("%Y%m%d")
+    #datetoday='20181219'
+    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
     
-    # In the beginning of eacho loop, loading the default XML
+    #storagePath = '/data/pfs/'+datetoday
+    dataPath = storagePath+'/image'
+    prodctPath = storagePath+'/product'
+
+
+
+    # Prepare the data path for the work
+    if not (os.path.exists(storagePath)):
+        os.makedirs(storagePath)
+    if not (os.path.exists(dataPath)):
+        os.makedirs(dataPath)
+    if not (os.path.exists(prodctPath)):
+        os.makedirs(prodctPath)
+
+
+    # Define the cobra range.
+    mod1Cobras = pfiControl.PFI.allocateCobraRange(range(1,2))
+    allCobras = mod1Cobras
+    oneCobra = pfiControl.PFI.allocateCobraList([(1,2)])
+    twoCobras = pfiControl.PFI.allocateCobraList([(1,2), (1,5)])
+
+    # partition module 1 cobras into non-interfering sets
+    moduleCobras = {}
+    for group in 1,2,3:
+        cm = range(group,58,3)
+        mod = [1]*len(cm)
+        moduleCobras[group] = pfiControl.PFI.allocateCobraList(zip(mod,cm))
+    group1Cobras = moduleCobras[1]
+    group2Cobras = moduleCobras[2]
+    group3Cobras = moduleCobras[3]
+
+    # partition module 1 cobras into odd and even sets
+    moduleCobras2 = {}
+    for group in 1,2:
+        cm = range(group,58,2)
+        mod = [1]*len(cm)
+        moduleCobras2[group] = pfiControl.PFI.allocateCobraList(zip(mod,cm))
+    oddCobras = moduleCobras2[1]
+    evenCobras = moduleCobras2[2]
+
+    # Initializing COBRA module
+    pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
+    preciseXML=cobraCharmerPath+'/xml/updatePhiOntime_spare02_20190322.xml'
+    #preciseXML=cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
+
+    if not os.path.exists(preciseXML):
+        print(f"Error: {preciseXML} not presented!")
+        sys.exit()
+        
     pfi.loadModel(preciseXML)
-    
+    pfi.setFreq(allCobras)
+
+
     # Calculate up/down(outward) angles
     oddMoves = pfi.thetaToLocal(oddCobras, [np.deg2rad(270)]*len(oddCobras))
     oddMoves[oddMoves>1.85*np.pi] = 0
@@ -188,11 +182,13 @@ for t_ms in tarray:
     pfi.moveAllSteps(allCobras, 0, -5000)
 
     # Home theta
-    #pfi.moveAllSteps(allCobras, -10000, 0)
+    pfi.moveAllSteps(allCobras, -10000, 0)
+    pfi.moveAllSteps(allCobras, -5000, 0)
 
     # Move the bad cobras to up/down positions
     #pfi.moveSteps(getCobras(badIdx), allSteps[badIdx], np.zeros(len(brokens)))
-
+    #pfi.moveSteps(getCobras([0,38,42,53]), [3200,800,4200,5000], np.zeros(4))
+    
     # move visible positioners to outwards positions, phi arms are moved out for 60 degrees
     # (outTargets) otherwise we can't measure the theta angles
     thetas = np.empty(57, dtype=float)
@@ -202,96 +198,85 @@ for t_ms in tarray:
     outTargets = pfi.anglesToPositions(allCobras, thetas, phis)
 
     # Home the good cobras
-    #pfi.moveAllSteps(getCobras(goodIdx), -10000, -5000)
+    pfi.moveAllSteps(getCobras(goodIdx), -10000, -5000)
+    pfi.moveAllSteps(getCobras(goodIdx), -5000, -5000)
 
     # move to outTargets
-    #moveToXYfromHome(goodIdx, outTargets[goodIdx], dataPath)
+    moveToXYfromHome(pfi, goodIdx, outTargets[goodIdx], dataPath)
 
     # move phi arms in
-    #pfi.moveAllSteps(getCobras(goodIdx), 0, -5000)
+    pfi.moveAllSteps(getCobras(goodIdx), 0, -5000)
 
     # parameters declared here
-    repeat = 3
-    steps = 200
+    #repeat = 3
+    #steps = 200
     thetaSteps = 15000
     phiSteps = 7000
     myCobras = getCobras(goodIdx)
 
-    fastOnTime = [np.full(57, 0.09)] * 4
+    OnTime = deepcopy([pfi.calibModel.motorOntimeFwd1,
+                   pfi.calibModel.motorOntimeRev1,
+                   pfi.calibModel.motorOntimeFwd2,
+                   pfi.calibModel.motorOntimeRev2])
 
-    # Setting the on-time righrt before the loop 
-    thetaOnTime=np.full(57,t_ms/1000.0)
-    phiOnTime=np.full(57,(t_ms-5)/1000.0)
-
-    pfi.calibModel.updateOntimes(thtFwd=thetaOnTime, thtRev=thetaOnTime, phiFwd=phiOnTime, phiRev=phiOnTime)
+    fastOnTime = [np.full(57, 0.10)] * 4
 
 
     #record the phi movements
     for n in range(repeat):
         # forward phi motor maps
-        expose(dataPath+f'/phi1_Ontime{t_ms}Begin{n}_', dataPath+f'/phi2_Ontime{t_ms}Begin{n}_')
+        expose(dataPath+f'/phi1Begin{n}_', dataPath+f'/phi2Begin{n}_')
         for k in range(phiSteps//steps):
             pfi.moveAllSteps(myCobras, 0, steps)
-            expose(dataPath+f'/phi1_Ontime{t_ms}Forward{n}N{k}_', dataPath+f'/phi2_Ontime{t_ms}Forward{n}N{k}_')
+            expose(dataPath+f'/phi1Forward{n}N{k}_', dataPath+f'/phi2Forward{n}N{k}_')
         
         # make sure it goes to the limit
         pfi.calibModel.updateOntimes(*fastOnTime)
         pfi.moveAllSteps(myCobras, 0, 5000)
-        pfi.moveAllSteps(myCobras, 0, 2000)
-        pfi.calibModel.updateOntimes(thtFwd=thetaOnTime, thtRev=thetaOnTime, phiFwd=phiOnTime, phiRev=phiOnTime)
+        pfi.calibModel.updateOntimes(*OnTime)
         
         # reverse phi motor maps
-        expose(dataPath+f'/phi1_Ontime{t_ms}End{n}_', dataPath+f'/phi2_Ontime{t_ms}End{n}_')
+        expose(dataPath+f'/phi1End{n}_', dataPath+f'/phi2End{n}_')
         for k in range(phiSteps//steps):
             pfi.moveAllSteps(myCobras, 0, -steps)
-            expose(dataPath+f'/phi1_Ontime{t_ms}Reverse{n}N{k}_', dataPath+f'/phi2_Ontime{t_ms}Reverse{n}N{k}_')
+            expose(dataPath+f'/phi1Reverse{n}N{k}_', dataPath+f'/phi2Reverse{n}N{k}_')
 
         # At the end, make sure the cobra back to the hard stop
         pfi.calibModel.updateOntimes(*fastOnTime)
         pfi.moveAllSteps(myCobras, 0, -5000)
-        pfi.moveAllSteps(myCobras, 0, -2000)
-        pfi.calibModel.updateOntimes(thtFwd=thetaOnTime, thtRev=thetaOnTime, phiFwd=phiOnTime, phiRev=phiOnTime)
+        pfi.calibModel.updateOntimes(*OnTime)
 
-    # After the loop, set back to default XML for repositioning the fiber
-    pfi.loadModel(preciseXML)
-    
     # move phi arms out for 60 degrees then home theta
-    pfi.moveAllSteps(myCobras, 0, -7000)
-    #pfi.moveAllSteps(myCobras, -5000, 0)
-    #moveToXYfromHome(goodIdx, outTargets[goodIdx], dataPath)
+    pfi.moveAllSteps(myCobras, -10000, -5000)
+    pfi.moveAllSteps(myCobras, -5000, -2000)
+    #moveToXYfromHome(pfi, goodIdx, outTargets[goodIdx], dataPath)
     #pfi.moveAllSteps(myCobras, -10000, 0)
     #pfi.moveAllSteps(myCobras, -5000, 0)
-
-    # Setting the on-time righrt before the loop 
-    #onTime=np.full(57,t_ms/1000.0)
-    #pfi.calibModel.updateOntimes(thtFwd=thetaOnTime, thtRev=thetaOnTime, phiFwd=phiOnTime, phiRev=phiOnTime)
 
     # record the theta movements
     # for n in range(repeat):
     #     # forward theta motor maps
-    #     expose(dataPath+f'/theta1_Ontime{t_ms}Begin{n}_', dataPath+f'/theta2_Ontime{t_ms}Begin{n}_')
+    #     expose(dataPath+f'/theta1Begin{n}_', dataPath+f'/theta2Begin{n}_')
     #     for k in range(thetaSteps//steps):
     #         pfi.moveAllSteps(myCobras, steps, 0)
-    #         expose(dataPath+f'/theta1_Ontime{t_ms}Forward{n}N{k}_', dataPath+f'/theta2_Ontime{t_ms}Forward{n}N{k}_')
+    #         expose(dataPath+f'/theta1Forward{n}N{k}_', dataPath+f'/theta2Forward{n}N{k}_')
         
     #     # make sure it goes to the limit
     #     pfi.calibModel.updateOntimes(*fastOnTime)
     #     pfi.moveAllSteps(myCobras, 10000, 0)
-    #     pfi.moveAllSteps(myCobras, 5000, 0)
-    #     pfi.calibModel.updateOntimes(thtFwd=thetaOnTime, thtRev=thetaOnTime, phiFwd=phiOnTime, phiRev=phiOnTime)
-            
+    #     pfi.calibModel.updateOntimes(*OnTime)
+        
     #     # reverse theta motor maps
-    #     expose(dataPath+f'/theta1_Ontime{t_ms}End{n}_', dataPath+f'/theta2_Ontime{t_ms}End{n}_')
+    #     expose(dataPath+f'/theta1End{n}_', dataPath+f'/theta2End{n}_')
     #     for k in range(thetaSteps//steps):
     #         pfi.moveAllSteps(myCobras, -steps, 0)
-    #         expose(dataPath+f'/theta1_Ontime{t_ms}Reverse{n}N{k}_', dataPath+f'/theta2_Ontime{t_ms}Reverse{n}N{k}_')
+    #         expose(dataPath+f'/theta1Reverse{n}N{k}_', dataPath+f'/theta2Reverse{n}N{k}_')
 
     #     # make sure it goes to the limit
     #     pfi.calibModel.updateOntimes(*fastOnTime)
     #     pfi.moveAllSteps(myCobras, -10000, 0)
-    #     pfi.moveAllSteps(myCobras, -5000, 0)
-    #     pfi.calibModel.updateOntimes(thtFwd=thetaOnTime, thtRev=thetaOnTime, phiFwd=phiOnTime, phiRev=phiOnTime)
-
+    #     pfi.calibModel.updateOntimes(*OnTime)
+    
     # variable declaration for position measurement
     thetaFW = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
     thetaRV = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
@@ -309,81 +294,81 @@ for t_ms in tarray:
         # forward phi
         cnt = phiSteps//steps
         for n in range(repeat):
-            data = fits.getdata(dataPath+f'/phi{nCam}_Ontime{t_ms}Begin{n}_0001.fits')
+            data = fits.getdata(dataPath+f'/phi{nCam}Begin{n}_0001.fits')
             cs = sep.extract(data.astype(float), 50)
             spots = np.array([c['x']+c['y']*(1j) for c in cs])
             idx = lazyIdentification(centers, spots)
             phiFW[myIdx,n,0] = spots[idx]
             stack_image = data   
             for k in range(cnt):
-                data = fits.getdata(dataPath+f'/phi{nCam}_Ontime{t_ms}Forward{n}N{k}_0001.fits')
+                data = fits.getdata(dataPath+f'/phi{nCam}Forward{n}N{k}_0001.fits')
                 cs = sep.extract(data.astype(float), 50)
                 spots = np.array([c['x']+c['y']*(1j) for c in cs])
                 idx = lazyIdentification(centers, spots)
                 phiFW[myIdx,n,k+1] = spots[idx]
                 stack_image = stack_image + data
-            fits.writeto(prodctPath+f'/Cam{nCam}_Ontime{t_ms}phiForwardStack.fits',stack_image,overwrite=True)
+            fits.writeto(prodctPath+f'/Cam{nCam}phiForwardStack.fits',stack_image,overwrite=True)
 
         # reverse phi
         for n in range(repeat):
-            data = fits.getdata(dataPath+f'/phi{nCam}_Ontime{t_ms}End{n}_0001.fits')
+            data = fits.getdata(dataPath+f'/phi{nCam}End{n}_0001.fits')
             cs = sep.extract(data.astype(float), 50)
             spots = np.array([c['x']+c['y']*(1j) for c in cs])
             idx = lazyIdentification(centers, spots)
             phiRV[myIdx,n,0] = spots[idx]
             stack_image = data   
             for k in range(cnt):
-                data = fits.getdata(dataPath+f'/phi{nCam}_Ontime{t_ms}Reverse{n}N{k}_0001.fits')
+                data = fits.getdata(dataPath+f'/phi{nCam}Reverse{n}N{k}_0001.fits')
                 cs = sep.extract(data.astype(float), 50)
                 spots = np.array([c['x']+c['y']*(1j) for c in cs])
                 idx = lazyIdentification(centers, spots)
                 phiRV[myIdx,n,k+1] = spots[idx]
                 stack_image = stack_image + data
-            fits.writeto(prodctPath+f'/Cam{nCam}_Ontime{t_ms}phiReverseStack.fits',stack_image,overwrite=True)
+            fits.writeto(prodctPath+f'/Cam{nCam}phiReverseStack.fits',stack_image,overwrite=True)
 
         # forward theta
         # cnt = thetaSteps//steps
         # for n in range(repeat):
-        #     data = fits.getdata(dataPath+f'/theta{nCam}_Ontime{t_ms}Begin{n}_0001.fits')
+        #     data = fits.getdata(dataPath+f'/theta{nCam}Begin{n}_0001.fits')
         #     cs = sep.extract(data.astype(float), 50)
         #     spots = np.array([c['x']+c['y']*(1j) for c in cs])
         #     idx = lazyIdentification(centers, spots)
         #     thetaFW[myIdx,n,0] = spots[idx]
         #     stack_image = data   
         #     for k in range(cnt):
-        #         data = fits.getdata(dataPath+f'/theta{nCam}_Ontime{t_ms}Forward{n}N{k}_0001.fits')
+        #         data = fits.getdata(dataPath+f'/theta{nCam}Forward{n}N{k}_0001.fits')
         #         cs = sep.extract(data.astype(float), 50)
         #         spots = np.array([c['x']+c['y']*(1j) for c in cs])
         #         idx = lazyIdentification(centers, spots)
         #         thetaFW[myIdx,n,k+1] = spots[idx]
         #         stack_image = stack_image + data
-        #     fits.writeto(prodctPath+f'/Cam{nCam}_Ontime{t_ms}thetaForwardStack.fits',stack_image,overwrite=True)
+        #     fits.writeto(prodctPath+f'/Cam{nCam}thetaForwardStack.fits',stack_image,overwrite=True)
 
 
-        # reverse theta
+        # # reverse theta
         # for n in range(repeat):
-        #     data = fits.getdata(dataPath+f'/theta{nCam}_Ontime{t_ms}End{n}_0001.fits')
+        #     data = fits.getdata(dataPath+f'/theta{nCam}End{n}_0001.fits')
         #     cs = sep.extract(data.astype(float), 50)
         #     spots = np.array([c['x']+c['y']*(1j) for c in cs])
         #     idx = lazyIdentification(centers, spots)
         #     thetaRV[myIdx,n,0] = spots[idx]
         #     stack_image = data    
         #     for k in range(cnt):
-        #         data = fits.getdata(dataPath+f'/theta{nCam}_Ontime{t_ms}Reverse{n}N{k}_0001.fits')
+        #         data = fits.getdata(dataPath+f'/theta{nCam}Reverse{n}N{k}_0001.fits')
         #         cs = sep.extract(data.astype(float), 50)
         #         spots = np.array([c['x']+c['y']*(1j) for c in cs])
         #         idx = lazyIdentification(centers, spots)
         #         thetaRV[myIdx,n,k+1] = spots[idx]
         #         stack_image = stack_image + data
-        #     fits.writeto(prodctPath+f'/Cam{nCam}_Ontime{t_ms}thetaReverseStack.fits',stack_image,overwrite=True)
+        #     fits.writeto(prodctPath+f'/Cam{nCam}thetaReverseStack.fits',stack_image,overwrite=True)
 
 
 
     # variable declaration for theta, phi angles
     thetaCenter = np.zeros(57, dtype=complex)
     phiCenter = np.zeros(57, dtype=complex)
-    #thetaAngFW = np.zeros((57, repeat, thetaSteps//steps+1), dtype=float)
-    #thetaAngRV = np.zeros((57, repeat, thetaSteps//steps+1), dtype=float)
+    thetaAngFW = np.zeros((57, repeat, thetaSteps//steps+1), dtype=float)
+    thetaAngRV = np.zeros((57, repeat, thetaSteps//steps+1), dtype=float)
     phiAngFW = np.zeros((57, repeat, phiSteps//steps+1), dtype=float)
     phiAngRV = np.zeros((57, repeat, phiSteps//steps+1), dtype=float)
 
@@ -407,7 +392,7 @@ for t_ms in tarray:
     #         thetaAngFW[c,n] = (thetaAngFW[c,n] - home) % (np.pi*2)
     #         thetaAngRV[c,n] = (thetaAngRV[c,n] - home) % (np.pi*2)
 
-    # fix over 2*pi angle issue
+    # # fix over 2*pi angle issue
     # for c in goodIdx:
     #     for n in range(repeat):
     #         for k in range(cnt):
@@ -445,7 +430,7 @@ for t_ms in tarray:
     delta = np.deg2rad(10)
     thetaHS = np.deg2rad(370)
 
-    # calculate theta motor maps
+    # # calculate theta motor maps
     # cnt = thetaSteps//steps
     # for c in goodIdx:
     #     for b in range(regions):
@@ -548,12 +533,26 @@ for t_ms in tarray:
     # update configuration
     old.updateMotorMaps(sThetaFW, sThetaRV, sPhiFW, sPhiRV, useSlowMaps=True)
     old.updateMotorMaps(fThetaFW, fThetaRV, fPhiFW, fPhiRV, useSlowMaps=False)
-    old.updateOntimes(thtFwd=thetaOnTime, thtRev=thetaOnTime, phiFwd=phiOnTime, phiRev=phiOnTime)
-    
+
     # write to a new XML file
     #old.createCalibrationFile('../xml/motormaps.xml')
-    old.createCalibrationFile(cobraCharmerPath+f'/xml/motormapPhiOntime_{t_ms}us_'+datetoday+'.xml')
+    old.createCalibrationFile(outputXML)
 
 
-    print(cobraCharmerPath+f'/xml/motormapPhiOntime_{t_ms}us_'+datetoday+'.xml  produced!')
+    print(f'{outputXML}  produced!')
     print("Process Finised")
+
+
+def main():
+    datetoday=datetime.datetime.now().strftime("%Y%m%d")
+    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
+
+    for steps in [50,400]:
+        storagePath = '/data/pfs/'+datetoday+'/'
+        outputXML = cobraCharmerPath+'/xml/motormap_'+datetoday+f'_{steps}steps.xml'
+    
+        runPhiMotorMap(3, steps, storagePath, outputXML)
+
+
+if __name__ == '__main__':
+    main()
