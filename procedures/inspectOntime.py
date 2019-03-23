@@ -115,11 +115,11 @@ def plotJ2OntimeSpeed(GroupIdx, dataFrame, xrange, yrange):
 
 
 def main():
-    dataPath='/home/pfs/mhs/devel/ics_cobraCharmer/xml/'
+    dataPath='/Users/chyan/PythonCode/Instrument/ICS/ics_cobraCharmer/xml/'
     figpath='/Volumes/Disk/Data/MotorMap/'
 
     #define the broken/good cobras
-    brokens = [1, 39, 43, 54]
+    brokens = []
     visibles= [e for e in range(1,58) if e not in brokens]
     goodIdx = np.array(visibles) - 1
 
@@ -131,13 +131,13 @@ def main():
 
     dataarray=[]
 
-    filerange = range(25,145,10)
-    thetarange = range(25,60,10)
-    phirange = range(25,145,10)
+    filerange = range(20,60,10)
+    thetarange = range(20,60,10)
+    phirange = range(20,60,10)
 
     for tms in filerange:
         
-        xml2=dataPath+f'motormapOntime{tms}_20181221.xml'
+        xml2=dataPath+f'motormapPhiOntime_{tms}us_20190321.xml'
         # Prepare the data path for the work
         # if not (os.path.exists(mappath)):
         #     os.makedirs(mappath)
@@ -146,9 +146,12 @@ def main():
 
         for i in visibles:
             pid=i
-            J1onTime=pfi.calibModel.motorOntimeFwd1[i-1]*1000
-            J2onTime=pfi.calibModel.motorOntimeFwd2[i-1]*1000
+            #J1onTime=pfi.calibModel.motorOntimeFwd1[i-1]*1000
+            #J2onTime=pfi.calibModel.motorOntimeFwd2[i-1]*1000
 
+            J1onTime=tms
+            J2onTime=tms
+            
             j1_fwd_reg2,j1_fwd_stepsize2,j1_rev_reg2,j1_rev_stepsize2,\
                     j2_fwd_reg2,j2_fwd_stepsize2,j2_rev_reg2,j2_rev_stepsize2=readMotorMap(xml2,pid)
 
@@ -162,7 +165,6 @@ def main():
        'J1onTime': data[:,1], 'J2onTime': data[:,2], 
        'J1_fwd': data[:,3], 'J1_rev': data[:,4],
        'J2_fwd': data[:,5], 'J2_rev': data[:,6]}
-    
     df = pd.DataFrame(d)
 
     TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
@@ -212,7 +214,7 @@ def main():
     p5 = plotJ2OntimeSpeed(goodGroupIdx[4], df, [phirange[0], phirange[-1]], [-1,1])
     p6 = plotJ2OntimeSpeed(goodGroupIdx[5], df, [phirange[0], phirange[-1]], [-1,1])
 
-    
+    print(df)
     x = np.array([])
     y1 = np.array([])
     y2 = np.array([])

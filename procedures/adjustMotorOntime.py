@@ -1,6 +1,7 @@
 import sys, os
 from importlib import reload
 import numpy as np
+import math
 import time
 import datetime
 from astropy.io import fits
@@ -31,9 +32,13 @@ class ontimeModel():
             onTimeArray.append(m.motorOntimeFwd1[pid-1]*1000)
             angSpdArray.append(np.mean(np.rad2deg(m.angularSteps[pid-1]/m.S1Pm[pid-1])))
         
-        
         slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
-        
+
+        # If the slope is nan, that means the linear regression is failed.  Return zero instead of nan.
+        if math.isnan(slope) is True:
+            slope = 0
+
+
         return slope
     
     def getThetaRevSlope(self, pid, modelArray):
@@ -46,6 +51,11 @@ class ontimeModel():
 
         slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
         
+        # If the slope is nan, that means the linear regression is failed.  Return zero instead of nan.
+        if math.isnan(slope) is True:
+            slope = 0
+
+
         return slope
   
     def getPhiFwdSlope(self, pid, modelArray):
@@ -58,6 +68,10 @@ class ontimeModel():
         
         slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
         
+        # If the slope is nan, that means the linear regression is failed.  Return zero instead of nan.
+        if math.isnan(slope) is True:
+            slope = 0
+        
         return slope
     
     def getPhiRevSlope(self, pid, modelArray):
@@ -68,6 +82,11 @@ class ontimeModel():
             onTimeArray.append(m.motorOntimeRev2[pid-1]*1000)
             angSpdArray.append(-np.mean(np.rad2deg(m.angularSteps[pid-1]/m.S2Nm[pid-1])))
         slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
+        
+        # If the slope is nan, that means the linear regression is failed.  Return zero instead of nan.
+        if math.isnan(slope) is True:
+            slope = 0
+
         
         return slope
 
@@ -178,11 +197,11 @@ class adjustOnTime():
             otm = ontimeModel()
             otm.buildModelfromXML(xmlArray)
 
-        newOntimeFwd1 = otm.getTargetOnTime(0.20,otm.j1fwd_slope, model.motorOntimeFwd1 ,j1fwd_avg)
-        newOntimeFwd2 = otm.getTargetOnTime(0.28,otm.j2fwd_slope, model.motorOntimeFwd2 ,j2fwd_avg)
+        newOntimeFwd1 = otm.getTargetOnTime(0.05,otm.j1fwd_slope, model.motorOntimeFwd1 ,j1fwd_avg)
+        newOntimeFwd2 = otm.getTargetOnTime(0.07,otm.j2fwd_slope, model.motorOntimeFwd2 ,j2fwd_avg)
 
-        newOntimeRev1 = otm.getTargetOnTime(-0.20,otm.j1rev_slope, model.motorOntimeRev1 ,j1rev_avg)
-        newOntimeRev2 = otm.getTargetOnTime(-0.28,otm.j2rev_slope, model.motorOntimeRev2 ,j2rev_avg)
+        newOntimeRev1 = otm.getTargetOnTime(-0.05,otm.j1rev_slope, model.motorOntimeRev1 ,j1rev_avg)
+        newOntimeRev2 = otm.getTargetOnTime(-0.07,otm.j2rev_slope, model.motorOntimeRev2 ,j2rev_avg)
         pid = range(1,58)
         if thetaTable is not False:
             t=Table([pid, model.motorOntimeFwd1,j1fwd_avg, otm.j1fwd_slope, newOntimeFwd1, 
@@ -212,20 +231,19 @@ class adjustOnTime():
 
 def main():
     xmlarray = []
-    dataPath='/home/pfs/mhs/devel/ics_cobraCharmer/xml/'
+    cobraCharmerPath='/Users/chyan/PythonCode/Instrument/ICS/ics_cobraCharmer'
     #dataPath='/Users/chyan/Documents/workspace/ics_cobraCharmer/xml/'
     for tms in range(20, 60, 10):
-        xml=dataPath+f'motormapOntime_{tms}us_20190123.xml'
+        xml=cobraCharmerPath+f'/xml/motormapPhiOntime_{tms}us_20190321new.xml'
         xmlarray.append(xml)
     
     datetoday=datetime.datetime.now().strftime("%Y%m%d")    
-    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
     #cobraCharmerPath='/Users/chyan/Documents/workspace/ics_cobraCharmer/'
     adjot=adjustOnTime()
   
     #initXML=cobraCharmerPath+'/xml/precise6.xml'
-    initXML=cobraCharmerPath+'/xml/motormaps_181205.xml'
-    newXML = cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
+    initXML=cobraCharmerPath+'/xml/precise_spare02_20190321v1.xml'
+    newXML = cobraCharmerPath+'/xml/updatePhiOntime_spare02_'+datetoday+'.xml'
     
     adjot.updateOntimeWithFiberSlope(initXML, newXML, xmlArray=xmlarray, thetaTable='theta.tbl',phiTable='phi.tbl')
 
@@ -254,80 +272,80 @@ def main():
     # OnTime[2][56]=0.0207
     # OnTime[3][56]=0.0236
     
-    OnTime[1][46]=0.0391*1.5
+    # OnTime[1][46]=0.0391*1.5
 
-    OnTime[2][25]=0.035*1.5
-    OnTime[3][25]=0.035*1.5
+    # OnTime[2][25]=0.035*1.5
+    # OnTime[3][25]=0.035*1.5
 
-    OnTime[2][29]=0.022*1.5
-    OnTime[3][29]=0.022*1.5
+    # OnTime[2][29]=0.022*1.5
+    # OnTime[3][29]=0.022*1.5
 
-    OnTime[2][41]=0.0229*1.5
-    OnTime[3][41]=0.0231*1.5
+    # OnTime[2][41]=0.0229*1.5
+    # OnTime[3][41]=0.0231*1.5
     
-    OnTime[2][43]=0.0202*1.5
-    OnTime[3][43]=0.0238*1.5
+    # OnTime[2][43]=0.0202*1.5
+    # OnTime[3][43]=0.0238*1.5
     
-    OnTime[2][56]=0.0207*1.5
-    OnTime[3][56]=0.0236*1.5
+    # OnTime[2][56]=0.0207*1.5
+    # OnTime[3][56]=0.0236*1.5
 
-    # Input old value from 0119
-    OnTime[0][4]=0.0351*1.5
-    OnTime[1][4]=0.0566*1.5
+    # # Input old value from 0119
+    # OnTime[0][4]=0.0351*1.5
+    # OnTime[1][4]=0.0566*1.5
 
-    OnTime[0][6]=0.0313*1.5
-    OnTime[1][6]=0.0320*1.5
+    # OnTime[0][6]=0.0313*1.5
+    # OnTime[1][6]=0.0320*1.5
     
-    OnTime[0][16]=0.0400*1.5
-    OnTime[1][16]=0.0480*1.5
+    # OnTime[0][16]=0.0400*1.5
+    # OnTime[1][16]=0.0480*1.5
 
-    OnTime[0][28]=0.0359*1.5
-    OnTime[1][28]=0.0374*1.5
+    # OnTime[0][28]=0.0359*1.5
+    # OnTime[1][28]=0.0374*1.5
 
-    OnTime[0][31]=0.0299*1.5
-    OnTime[1][31]=0.0291*1.5
+    # OnTime[0][31]=0.0299*1.5
+    # OnTime[1][31]=0.0291*1.5
 
-    OnTime[0][32]=0.0391*1.5
-    OnTime[1][32]=0.0382*1.5
+    # OnTime[0][32]=0.0391*1.5
+    # OnTime[1][32]=0.0382*1.5
 
-    OnTime[0][36]=0.0282*1.5
-    OnTime[1][36]=0.0302*1.5
+    # OnTime[0][36]=0.0282*1.5
+    # OnTime[1][36]=0.0302*1.5
 
-    OnTime[0][46]=0.0378*1.5
-    OnTime[1][46]=0.0391*1.5
+    # OnTime[0][46]=0.0378*1.5
+    # OnTime[1][46]=0.0391*1.5
 
-    OnTime[0][48]=0.0389*1.5
-    OnTime[1][48]=0.0399*1.5
+    # OnTime[0][48]=0.0389*1.5
+    # OnTime[1][48]=0.0399*1.5
 
-    OnTime[0][52]=0.0317*1.5
-    OnTime[1][52]=0.0336*1.5
+    # OnTime[0][52]=0.0317*1.5
+    # OnTime[1][52]=0.0336*1.5
 
-    OnTime[0][54]=0.0394*1.5
-    OnTime[1][54]=0.0409*1.5
-    # --------------------------
-    OnTime[2][14]=0.0260*1.5
-    OnTime[3][14]=0.0299*1.5
+    # OnTime[0][54]=0.0394*1.5
+    # OnTime[1][54]=0.0409*1.5
+    # # --------------------------
+    # OnTime[2][14]=0.0260*1.5
+    # OnTime[3][14]=0.0299*1.5
 
-    OnTime[2][16]=0.0295*1.5
-    OnTime[3][16]=0.0319*1.5
+    # OnTime[2][16]=0.0295*1.5
+    # OnTime[3][16]=0.0319*1.5
 
-    OnTime[2][28]=0.0196*1.5
-    OnTime[3][28]=0.0197*1.5
+    # OnTime[2][28]=0.0196*1.5
+    # OnTime[3][28]=0.0197*1.5
 
-    OnTime[2][30]=0.0218*1.5
-    OnTime[3][30]=0.0209*1.5
+    # OnTime[2][30]=0.0218*1.5
+    # OnTime[3][30]=0.0209*1.5
 
-    OnTime[2][36]=0.0215*1.5
-    OnTime[3][36]=0.0247*1.5
+    # OnTime[2][36]=0.0215*1.5
+    # OnTime[3][36]=0.0247*1.5
 
-    OnTime[2][37]=0.0164*1.5
-    OnTime[3][37]=0.0183*1.5
+    # OnTime[2][37]=0.0164*1.5
+    # OnTime[3][37]=0.0183*1.5
 
-    OnTime[2][40]=0.0211*1.5
-    OnTime[3][40]=0.0227*1.5
+    # OnTime[2][40]=0.0211*1.5
+    # OnTime[3][40]=0.0227*1.5
 
-    OnTime[2][45]=0.0162*1.5
-    OnTime[3][45]=0.0188*1.5
+    # OnTime[2][45]=0.0162*1.5
+    # OnTime[3][45]=0.0188*1.5
 
 
     m.updateOntimes(*OnTime)
