@@ -136,6 +136,7 @@ def main():
           '/Volumes/Disk/Data/xml/precise_20190212.xml']
 
     file=[
+        '/Volumes/Disk/Data/xml/precise_20190306v1.xml',
         '/Volumes/Disk/Data/xml/precise_20190312_1.xml',
         '/Volumes/Disk/Data/xml/precise_20190312_3.xml']
 
