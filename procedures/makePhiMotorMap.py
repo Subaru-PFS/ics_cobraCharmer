@@ -138,7 +138,7 @@ def runPhiMotorMap(repeat, steps, storagePath, outputXML):
 
     # Initializing COBRA module
     pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-    preciseXML=cobraCharmerPath+'/xml/updatePhiOntime_spare02_20190322.xml'
+    preciseXML=cobraCharmerPath+'/xml/updatePhiOntime_spare02_20190401.xml'
     #preciseXML=cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
 
     if not os.path.exists(preciseXML):
@@ -182,8 +182,8 @@ def runPhiMotorMap(repeat, steps, storagePath, outputXML):
     pfi.moveAllSteps(allCobras, 0, -5000)
 
     # Home theta
-    pfi.moveAllSteps(allCobras, -10000, 0)
-    pfi.moveAllSteps(allCobras, -5000, 0)
+    #pfi.moveAllSteps(allCobras, -10000, 0)
+    #pfi.moveAllSteps(allCobras, -5000, 0)
 
     # Move the bad cobras to up/down positions
     #pfi.moveSteps(getCobras(badIdx), allSteps[badIdx], np.zeros(len(brokens)))
@@ -198,8 +198,8 @@ def runPhiMotorMap(repeat, steps, storagePath, outputXML):
     outTargets = pfi.anglesToPositions(allCobras, thetas, phis)
 
     # Home the good cobras
-    pfi.moveAllSteps(getCobras(goodIdx), -10000, -5000)
-    pfi.moveAllSteps(getCobras(goodIdx), -5000, -5000)
+    #pfi.moveAllSteps(getCobras(goodIdx), -10000, -5000)
+    #pfi.moveAllSteps(getCobras(goodIdx), -5000, -5000)
 
     # move to outTargets
     moveToXYfromHome(pfi, goodIdx, outTargets[goodIdx], dataPath)
@@ -219,7 +219,8 @@ def runPhiMotorMap(repeat, steps, storagePath, outputXML):
                    pfi.calibModel.motorOntimeFwd2,
                    pfi.calibModel.motorOntimeRev2])
 
-    fastOnTime = [np.full(57, 0.10)] * 4
+    # Giving a high speed on-time
+    fastOnTime = [np.full(57, 0.60),np.full(57, 0.60), np.full(57, 0.60),np.full(57, 0.60)] 
 
 
     #record the phi movements
@@ -247,8 +248,8 @@ def runPhiMotorMap(repeat, steps, storagePath, outputXML):
         pfi.calibModel.updateOntimes(*OnTime)
 
     # move phi arms out for 60 degrees then home theta
-    pfi.moveAllSteps(myCobras, -10000, -5000)
-    pfi.moveAllSteps(myCobras, -5000, -2000)
+    pfi.moveAllSteps(myCobras, 0, -5000)
+    pfi.moveAllSteps(myCobras, 0, -2000)
     #moveToXYfromHome(pfi, goodIdx, outTargets[goodIdx], dataPath)
     #pfi.moveAllSteps(myCobras, -10000, 0)
     #pfi.moveAllSteps(myCobras, -5000, 0)
