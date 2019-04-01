@@ -114,7 +114,8 @@ class ontimeModel():
         self.j2fwd_slope = j2fwd_slope
         self.j2rev_slope = j2rev_slope
 
-    
+    #def getTargetOnTimeWithInterpolate(self, target, )
+
     def getTargetOnTime(self, target, modelSlope, onTime, angSpeed):
         #print(onTime)
         #print(angSpeed)
@@ -242,7 +243,7 @@ def main():
     adjot=adjustOnTime()
   
     #initXML=cobraCharmerPath+'/xml/precise6.xml'
-    initXML=cobraCharmerPath+'/xml/precise_spare02_20190321v1.xml'
+    initXML=cobraCharmerPath+'/xml/motormapPhiOntime_40us_20190321new.xml'
     newXML = cobraCharmerPath+'/xml/updatePhiOntime_spare02_'+datetoday+'.xml'
     
     adjot.updateOntimeWithFiberSlope(initXML, newXML, xmlArray=xmlarray, thetaTable='theta.tbl',phiTable='phi.tbl')
