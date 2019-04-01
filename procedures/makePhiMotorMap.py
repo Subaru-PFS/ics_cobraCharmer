@@ -220,7 +220,7 @@ def runPhiMotorMap(repeat, steps, storagePath, outputXML):
                    pfi.calibModel.motorOntimeRev2])
 
     # Giving a high speed on-time
-    fastOnTime = [np.full(57, 0.60),np.full(57, 0.60), np.full(57, 0.60),np.full(57, 0.60)] 
+    fastOnTime = [np.full(57, 0.060),np.full(57, 0.060), np.full(57, 0.060),np.full(57, 0.060)] 
 
 
     #record the phi movements
@@ -548,8 +548,8 @@ def main():
     datetoday=datetime.datetime.now().strftime("%Y%m%d")
     cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
 
-    for steps in [50,400]:
-        storagePath = '/data/pfs/'+datetoday+'/'
+    for steps in [400, 50]:
+        storagePath = '/data/pfs/'+datetoday+f'/{steps}steps/'
         outputXML = cobraCharmerPath+'/xml/motormap_'+datetoday+f'_{steps}steps.xml'
     
         runPhiMotorMap(3, steps, storagePath, outputXML)
