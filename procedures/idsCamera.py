@@ -12,10 +12,16 @@ class idsCamera():
         nPixelClockDefault=ueye.INT(200)
         nRet = ueye.is_PixelClock(self.hCam, ueye.IS_PIXELCLOCK_CMD_SET,nPixelClockDefault, 
             ueye.sizeof(nPixelClockDefault))
-        
+        print(nPixelClockDefault)
         if nRet != ueye.IS_SUCCESS:
             print("is_PixelClock ERROR")
-       
+        
+        nFrameRate = ueye.double(40.0)
+        nRet = ueye.is_SetFrameRate(self.hCam, ueye.IS_PIXELCLOCK_CMD_SET,nFrameRate)
+        if nRet != ueye.IS_SUCCESS:
+            print("is_SetFrameRate ERROR")
+
+        
         # Working on exposure time range. Set exposure time to be 20 ms.
         ms = ueye.DOUBLE(expTime)
         
@@ -153,9 +159,12 @@ def main():
 
     camera = idsCamera(1)
     camera.setExpoureTime(20)
-    image = camera.getCurrentFrame()
-    hdu = fits.PrimaryHDU(image)
-    hdu.writeto('new1.fits',overwrite=True)
+    for i in range(40):
+        
+        filename=f'image{i}.fits'
+        image = camera.getCurrentFrame()
+        hdu = fits.PrimaryHDU(image)
+        hdu.writeto(filename,overwrite=True)
 
 if __name__ == '__main__':
     main()
