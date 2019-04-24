@@ -277,9 +277,24 @@ def runPhiMotorMap(repeat, steps, storagePath, outputXML):
     #     pfi.calibModel.updateOntimes(*fastOnTime)
     #     pfi.moveAllSteps(myCobras, -10000, 0)
     #     pfi.calibModel.updateOntimes(*OnTime)
+    
+def analysisMotorImages(repeat, Path, thetaSteps, phiSteps, steps, oriXML, outputXML):
+    prodctPath=Path+f'/product/'
+    dataPath=Path+f'/image/'
+    
+    brokens = []
+    visibles= [e for e in range(1,58) if e not in brokens]
+    badIdx = np.array(brokens) - 1
+    goodIdx = np.array(visibles) - 1
 
-def analysisMotorImages(repeat, dataPath, thetaSteps, phiSteps, steps, outputXML):
+    cam_split = 26
+    
+    pfi = pfiControl.PFI(fpgaHost='localhost',doConnect=False)
+    pfi.loadModel(oriXML)
+    #pfi.setFreq(allCobras)
 
+    
+    
     # variable declaration for position measurement
     thetaFW = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
     thetaRV = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
@@ -534,6 +549,11 @@ def analysisMotorImages(repeat, dataPath, thetaSteps, phiSteps, steps, outputXML
     fPhiRV[idx] = phiMMRV[idx]
 
     # update configuration
+    sThetaFW = None
+    sThetaRV = None
+    fThetaFW = None
+    fThetaRV = None
+
     old.updateMotorMaps(sThetaFW, sThetaRV, sPhiFW, sPhiRV, useSlowMaps=True)
     old.updateMotorMaps(fThetaFW, fThetaRV, fPhiFW, fPhiRV, useSlowMaps=False)
 
@@ -551,11 +571,12 @@ def main():
     cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
 
     for steps in [400, 50]:
-        storagePath = '/data/pfs/'+datetoday+f'/{steps}steps/'
+        storagePath = '/data/pfs/20190401/'+f'{steps}steps/'
         outputXML = cobraCharmerPath+'/xml/motormap_'+datetoday+f'_{steps}steps.xml'
-    
-        runPhiMotorMap(3, steps, storagePath, outputXML)
-        #analysisMotorImages(3, )
+        oriXML=cobraCharmerPath+'/xml/updatePhiOntime_spare02_20190401.xml'
+
+        #runPhiMotorMap(3, steps, storagePath, outputXML)
+        analysisMotorImages(3, storagePath, 15000, 7000, steps, oriXML, outputXML)
 
 if __name__ == '__main__':
     main()
