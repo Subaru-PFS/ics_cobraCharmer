@@ -43,19 +43,13 @@ class PFI(object):
 
     def loadModel(self, filename=None):
         """ Load a motormap XML file. """
-
-#        import ics.cobraOps.MotorMapGroup as cobraMotorMap
         import ics.cobraCharmer.pfiDesign as pfiDesign
         reload(pfiDesign)
-#        reload(cobraMotorMap)
 
         if filename is None:
             filename = os.path.dirname(sys.modules[__name__].__file__)
             filename += '../../../xml/updatedLinksAndMaps.xml'
         self.calibModel = pfiDesign.PFIDesign(filename)
-#        self.motorMap = cobraMotorMap.MotorMapGroup(self.calibModel.nCobras)
-
-#        self.motorMap.useCalibrationProduct(self.calibModel)
         self.logger.info(f'load cobra model from {filename}')
 
     def _freqToPeriod(self, freq):
