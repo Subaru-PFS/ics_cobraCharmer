@@ -277,7 +277,9 @@ def runPhiMotorMap(repeat, steps, storagePath, outputXML):
     #     pfi.calibModel.updateOntimes(*fastOnTime)
     #     pfi.moveAllSteps(myCobras, -10000, 0)
     #     pfi.calibModel.updateOntimes(*OnTime)
-    
+
+def analysisMotorImages(repeat, dataPath, thetaSteps, phiSteps, steps, outputXML):
+
     # variable declaration for position measurement
     thetaFW = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
     thetaRV = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
@@ -553,7 +555,7 @@ def main():
         outputXML = cobraCharmerPath+'/xml/motormap_'+datetoday+f'_{steps}steps.xml'
     
         runPhiMotorMap(3, steps, storagePath, outputXML)
-
+        #analysisMotorImages(3, )
 
 if __name__ == '__main__':
     main()
