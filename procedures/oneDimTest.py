@@ -152,6 +152,8 @@ class COBRA():
         thetaSteps[thetaSteps > 10000] = 0
         phiSteps[phiSteps > 10000] = 0
 
+        thetaSteps[np.isnan(thetaSteps)] = 0
+
         cThetaSteps = thetaSteps[cIdx]
         cPhiSteps = phiSteps[cIdx]
 
@@ -206,13 +208,13 @@ class COBRA():
         time.sleep(2.0)
 
         # move phi out and capture the video
-        p1 = Popen(['/home/pfs/IDSControl/idsexposure', '-d', '1', '-e', '18', '-i', '100', '-l', '9999', '-f', self.datapath+'/cam1phi_'], stdout=PIPE)
-        p2 = Popen(['/home/pfs/IDSControl/idsexposure', '-d', '2', '-e', '18', '-i', '100', '-l', '9999', '-f', self.datapath+'/cam2phi_'], stdout=PIPE)
+        p1 = Popen(['/home/pfs/IDSControl/idsexposure', '-d', '1', '-e', '18', '-i', '100', '-l', '600', '-f', self.datapath+'/cam1phi_'], stdout=PIPE)
+        p2 = Popen(['/home/pfs/IDSControl/idsexposure', '-d', '2', '-e', '18', '-i', '100', '-l', '600', '-f', self.datapath+'/cam2phi_'], stdout=PIPE)
         time.sleep(5.0)
         self.pfi.moveAllSteps(myCobras, 0, 5000)
         time.sleep(0.5)
-        p1.kill()
-        p2.kill()
+        #p1.kill()
+        #p2.kill()
         p1.communicate()
         p2.communicate()
         self.pfi.moveAllSteps(myCobras, 0, 5000)
@@ -474,30 +476,31 @@ def circle_fitting(p):
 def main():
 
     cobraCharmerPath = '/home/pfs/mhs/devel/ics_cobraCharmer/'
-    xml = cobraCharmerPath + 'xml/motormap_20190312.xml'
+    xml = cobraCharmerPath + 'xml/motormap_20190424_50steps.xml'
 
     datetoday=datetime.datetime.now().strftime("%Y%m%d")
     dataPath = '/data/pfs/Converge_' + datetoday
 
     IP = '128.149.77.24'
 
-    brokens = [1, 39, 43, 54]
+    #brokens = [1, 39, 43, 54]
+    brokens = []
     cobra = COBRA(IP, xml, dataPath, badlist=brokens, cam_split=26)
 
-    cobra.moveThetaOut(60, maxTries=10)
+    #cobra.moveThetaOut(60, maxTries=10)
     cobra.pfi.moveAllSteps(cobra.goodCobras, 0, -5000)
     
     # you may want to do some inspection here
-    cobra.moveCobra(3, -600, 0)
+    #cobra.moveCobra(3, -600, 0)
 
-    # phiCenters, phiRadius, phiHomes = cobra.findPhiCenters()
-    # phiData = cobra.phiTest(phiCenters, phiHomes, runs=50, tries=8, phi60=True)
+    phiCenters, phiRadius, phiHomes = cobra.findPhiCenters()
+    phiData = cobra.phiTest(phiCenters, phiHomes, runs=20, tries=8, phi60=True)
 
     # #cobra.moveThetaOut(60)
     # thetaCenters, thetaRadius, thetaHomes = cobra.findThetaCenters()
     # thetaData = cobra.thetaTest(thetaCenters, thetaHomes, runs=50, tries=8, margin=30.0)
 
-    # np.save(dataPath + '/phiData', phiData)
+    #np.save(dataPath + '/phiData', phiData)
     # np.save(dataPath + '/thetaData', thetaData)
 
 
