@@ -202,7 +202,7 @@ def runPhiMotorMap(repeat, steps, storagePath, outputXML):
     #pfi.moveAllSteps(getCobras(goodIdx), -5000, -5000)
 
     # move to outTargets
-    moveToXYfromHome(pfi, goodIdx, outTargets[goodIdx], dataPath)
+    #moveToXYfromHome(pfi, goodIdx, outTargets[goodIdx], dataPath)
 
     # move phi arms in
     pfi.moveAllSteps(getCobras(goodIdx), 0, -5000)
