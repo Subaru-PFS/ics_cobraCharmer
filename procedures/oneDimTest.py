@@ -488,13 +488,14 @@ def main():
     cobra = COBRA(IP, xml, dataPath, badlist=brokens, cam_split=26)
 
     #cobra.moveThetaOut(60, maxTries=10)
-    cobra.pfi.moveAllSteps(cobra.goodCobras, 0, -5000)
+    #cobra.pfi.moveAllSteps(cobra.goodCobras, 0, -5000)
     
     # you may want to do some inspection here
-    #cobra.moveCobra(3, -600, 0)
+    #cobra.moveCobra(27, 0, -450)
 
     phiCenters, phiRadius, phiHomes = cobra.findPhiCenters()
-    phiData = cobra.phiTest(phiCenters, phiHomes, runs=20, tries=8, phi60=True)
+    phiData = cobra.phiTest(phiCenters, phiHomes, runs=1, tries=8, phi60=True)
+    cobra.moveCobra(27, 0, -450)
 
     # #cobra.moveThetaOut(60)
     # thetaCenters, thetaRadius, thetaHomes = cobra.findThetaCenters()
