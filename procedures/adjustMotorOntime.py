@@ -232,10 +232,10 @@ class adjustOnTime():
 
 def main():
     xmlarray = []
-    cobraCharmerPath='/Users/chyan/PythonCode/Instrument/ICS/ics_cobraCharmer'
+    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer'
     #dataPath='/Users/chyan/Documents/workspace/ics_cobraCharmer/xml/'
     for tms in range(20, 60, 10):
-        xml=cobraCharmerPath+f'/xml/motormapPhiOntime_{tms}us_20190321new.xml'
+        xml=cobraCharmerPath+f'/xml/motormapThetaOntime_{tms}us_20190425.xml'
         xmlarray.append(xml)
     
     datetoday=datetime.datetime.now().strftime("%Y%m%d")    
@@ -243,8 +243,8 @@ def main():
     adjot=adjustOnTime()
   
     #initXML=cobraCharmerPath+'/xml/precise6.xml'
-    initXML=cobraCharmerPath+'/xml/motormapPhiOntime_40us_20190321new.xml'
-    newXML = cobraCharmerPath+'/xml/updatePhiOntime_spare02_'+datetoday+'.xml'
+    initXML=cobraCharmerPath+'/xml/motormap_20190424_50steps.xml'
+    newXML = cobraCharmerPath+'/xml/updateThetaOntime_spare02_'+datetoday+'ori.xml'
     
     adjot.updateOntimeWithFiberSlope(initXML, newXML, xmlArray=xmlarray, thetaTable='theta.tbl',phiTable='phi.tbl')
 

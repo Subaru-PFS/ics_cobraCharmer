@@ -115,8 +115,8 @@ def plotJ2OntimeSpeed(GroupIdx, dataFrame, xrange, yrange):
 
 
 def main():
-    dataPath='/Users/chyan/PythonCode/Instrument/ICS/ics_cobraCharmer/xml/'
-    figpath='/Volumes/Disk/Data/MotorMap/'
+    dataPath='/home/pfs/mhs/devel/ics_cobraCharmer/xml/'
+    figpath='/data/pfs/MotorMap/'
 
     #define the broken/good cobras
     brokens = []
@@ -137,7 +137,7 @@ def main():
 
     for tms in filerange:
         
-        xml2=dataPath+f'motormapPhiOntime_{tms}us_20190321.xml'
+        xml2=dataPath+f'motormapThetaOntime_{tms}us_20190425.xml'
         # Prepare the data path for the work
         # if not (os.path.exists(mappath)):
         #     os.makedirs(mappath)
