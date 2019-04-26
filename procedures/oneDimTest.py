@@ -496,6 +496,7 @@ def main():
     phiCenters, phiRadius, phiHomes = cobra.findPhiCenters()
     phiData = cobra.phiTest(phiCenters, phiHomes, runs=1, tries=8, phi60=True)
     cobra.moveCobra(27, 0, -450)
+    cobra.moveCobra(56, 0, -100)
 
     # #cobra.moveThetaOut(60)
     # thetaCenters, thetaRadius, thetaHomes = cobra.findThetaCenters()
