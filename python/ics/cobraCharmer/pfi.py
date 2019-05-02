@@ -169,7 +169,7 @@ class PFI(object):
         if thetaFroms is not None:
             _thetaFroms[cIdx] = thetaFroms
 
-        if type(thetaFast) is bool:
+        if isinstance(thetaFast, bool):
             _thetaFast = thetaFast
         elif len(thetaFast) == len(cobras):
             _thetaFast = np.full(self.calibModel.nCobras, True)
@@ -177,7 +177,7 @@ class PFI(object):
         else:
             raise RuntimeError("number of thetaFast must match number of cobras")
 
-        if type(phiFast) is bool:
+        if isinstance(phiFast, bool):
             _phiFast = phiFast
         elif len(phiFast) == len(cobras):
             _phiFast = np.full(self.calibModel.nCobras, True)
@@ -251,13 +251,13 @@ class PFI(object):
             raise RuntimeError("number of waitThetaSteps must match number of cobras")
         if waitPhiSteps is not None and len(cobras) != len(waitPhiSteps):
             raise RuntimeError("number of waitPhiSteps must match number of cobras")
-        if type(thetaFast) is bool:
+        if isinstance(thetaFast, bool):
             _thetaFast = np.full(len(cobras), thetaFast)
         elif len(cobras) != len(thetaFast):
             raise RuntimeError("number of thetaFast must match number of cobras")
         else:
             _thetaFast = thetaFast
-        if type(phiFast) is bool:
+        if isinstance(phiFast, bool):
             _phiFast = np.full(len(cobras), phiFast)
         elif len(cobras) != len(phiFast):
             raise RuntimeError("number of phiFast must match number of cobras")
@@ -393,13 +393,13 @@ class PFI(object):
             raise RuntimeError("number of deltaPhi must match total number of cobras")
 
         # check thetaFast/phiFast parameters
-        if type(thetaFast) is bool:
+        if isinstance(thetaFast, bool):
             _thetaFast = np.full(nCobras, thetaFast)
         elif len(thetaFast) != nCobras:
             raise RuntimeError("the length of thetaFast must match total number of cobras")
         else:
             _thetaFast = thetaFast
-        if type(phiFast) is bool:
+        if isinstance(phiFast, bool):
             _phiFast = np.full(nCobras, phiFast)
         elif len(phiFast) != nCobras:
             raise RuntimeError("the length of phiFast must match total number of cobras")
