@@ -139,7 +139,17 @@ class ontimeModel():
 
         newOntime_ms= onTime_ms+sumx
 
+        #ind=np.where(abs(angSpeed-target) < 0.01)
+        #print(len(ind))
+        #print(ind)
+        #print(abs(angSpeed-target))
+        #newOntime_ms[ind]=onTime_ms
+            #newOntime_ms = onTime_ms
+        
+
         newOntime = newOntime_ms / 1000.0 
+        
+        
         return newOntime
 
     def __init__(self):
@@ -243,8 +253,8 @@ def main():
     adjot=adjustOnTime()
   
     #initXML=cobraCharmerPath+'/xml/precise6.xml'
-    initXML=cobraCharmerPath+'/xml/motormap_20190424_50steps.xml'
-    newXML = cobraCharmerPath+'/xml/updateThetaOntime_spare02_'+datetoday+'ori.xml'
+    initXML=cobraCharmerPath+'/xml/motormapThetaOntime_50us_20190425.xml'
+    newXML = cobraCharmerPath+'/xml/updateThetaOntime_spare02_'+datetoday+'.xml'
     
     adjot.updateOntimeWithFiberSlope(initXML, newXML, xmlArray=xmlarray, thetaTable='theta.tbl',phiTable='phi.tbl')
 
