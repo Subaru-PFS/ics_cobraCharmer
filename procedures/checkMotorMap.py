@@ -322,15 +322,15 @@ def plotMotorMapFromMutiXML(xmlList, ledgenList, figPath, fiberlist=False):
 
 
 def main():
-    dataPath='/Users/chyan/Documents/workspace/ics_cobraCharmer/xml/'
-    xml1=dataPath+'motormaps_181205.xml'
-    brokens = [1 , 39, 43, 54]
+    dataPath='/home/pfs/mhs/devel/ics_cobraCharmer/xml/'
+    xml1=dataPath+'motormapThetaOntime_50us_20190425.xml'
+    brokens = []
     visibles= [e for e in range(1,58) if e not in brokens]
 
-    xml2=dataPath+f'precise_20190212.xml'
+    xml2=dataPath+f'motormap_20190429_50steps.xml'
 
-    figpath=f'/Volumes/Disk/Data/MotorMap/20190213/'
-    #generateMotorMap(xml1, xml2, figpath, fiberlist=visibles)
+    figpath=f'/data/pfs/MotorMap/20190429/'
+    generateMotorMap(xml1, xml2, figpath, fiberlist=visibles)
     compareAvgSpeed(xml1, xml2, figpath, fiberlist=visibles)
 
 if __name__ == '__main__':
