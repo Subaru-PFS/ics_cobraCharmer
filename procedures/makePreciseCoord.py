@@ -211,7 +211,7 @@ outTargets = pfi.anglesToPositions(allCobras, thetas, phis)
 #pfi.moveAllSteps(getCobras(goodIdx), 0, -5000)
 
 # record the theta and phi arm movements for three non-interfering sets
-for g in range(1,2):
+for g in range(3):
     myIdx = goodGroupIdx[g]
     myCobras = getCobras(myIdx)
 
