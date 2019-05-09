@@ -10,21 +10,6 @@ from subprocess import Popen, PIPE
 from ics.cobraCharmer import pfi as pfiControl
 from copy import deepcopy
 
-datetoday=datetime.datetime.now().strftime("%Y%m%d")
-#datetoday='20181219'
-cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer'
-storagePath = '/data/pfs/'+datetoday
-dataPath = storagePath+'/image'
-prodctPath = storagePath+'/product'
-
-
-# Prepare the data path for the work
-if not (os.path.exists(storagePath)):
-    os.makedirs(storagePath)
-if not (os.path.exists(dataPath)):
-    os.makedirs(dataPath)
-if not (os.path.exists(prodctPath)):
-    os.makedirs(prodctPath)
 
 # return the tranformation parameters and a function that can convert origPoints to newPoints
 def makeTransformation(origPoints, newPoints):
@@ -40,94 +25,127 @@ def makeTransformation(origPoints, newPoints):
         return x * scale * np.exp(tilt * (1j)) + offset
     return offset, scale, tilt, tr
 
-# Define the cobra range.
-mod1Cobras = pfiControl.PFI.allocateCobraRange(range(1,2))
-allCobras = mod1Cobras
-oneCobra = pfiControl.PFI.allocateCobraList([(1,2)])
-twoCobras = pfiControl.PFI.allocateCobraList([(1,2), (1,5)])
 
-# partition module 1 cobras into non-interfering sets
-moduleCobras = {}
-for group in 1,2,3:
-    cm = range(group,58,3)
-    mod = [1]*len(cm)
-    moduleCobras[group] = pfiControl.PFI.allocateCobraList(zip(mod,cm))
-group1Cobras = moduleCobras[1]
-group2Cobras = moduleCobras[2]
-group3Cobras = moduleCobras[3]
+def transCoord(oriXML, outputXML, storagePath): 
+    #datetoday=datetime.datetime.now().strftime("%Y%m%d")
+    #datetoday='20181219'
+    #cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
+    #storagePath = '/data/pfs/'+datetoday
+    dataPath = storagePath+'/image'
+    prodctPath = storagePath+'/product'
 
-# partition module 1 cobras into odd and even sets
-moduleCobras2 = {}
-for group in 1,2:
-    cm = range(group,58,2)
-    mod = [1]*len(cm)
-    moduleCobras2[group] = pfiControl.PFI.allocateCobraList(zip(mod,cm))
-oddCobras = moduleCobras2[1]
-evenCobras = moduleCobras2[2]
 
-pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-#pfi = pfiControl.PFI(fpgaHost='localhost', doLoadModel=False)
-pfi.loadModel(cobraCharmerPath+'xml/PFS-PFI-CIT900200-02_Spare2_final_xml.xml')
-pfi.setFreq(allCobras)
+    # Prepare the data path for the work
+    if not (os.path.exists(storagePath)):
+        os.makedirs(storagePath)
+    if not (os.path.exists(dataPath)):
+        os.makedirs(dataPath)
+    if not (os.path.exists(prodctPath)):
+        os.makedirs(prodctPath)
 
-# Home phi
-#pfi.homePhi(allCobras, nsteps=5000, dir='ccw')
 
-# Home theta
-#pfi.homeTheta(allCobras, nsteps=10000, dir='ccw')
+    # Define the cobra range.
+    mod1Cobras = pfiControl.PFI.allocateCobraRange(range(1,2))
+    allCobras = mod1Cobras
+    oneCobra = pfiControl.PFI.allocateCobraList([(1,2)])
+    twoCobras = pfiControl.PFI.allocateCobraList([(1,2), (1,5)])
 
-# define the broken fibers and two groups of cobras
-#mapping = np.array([e for e in range(1,58) if e not in {1, 39, 43, 54}]) - 1
-mapping = np.array([e for e in range(1,58)]) - 1
-n1 = 26
-n2 = len(mapping) - n1
-group1 = mapping[:n1]
-group2 = mapping[n1:]
+    # partition module 1 cobras into non-interfering sets
+    moduleCobras = {}
+    for group in 1,2,3:
+        cm = range(group,58,3)
+        mod = [1]*len(cm)
+        moduleCobras[group] = pfiControl.PFI.allocateCobraList(zip(mod,cm))
+    group1Cobras = moduleCobras[1]
+    group2Cobras = moduleCobras[2]
+    group3Cobras = moduleCobras[3]
 
-# take an image at home positions
-p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-f", dataPath+"/home1_"], stdout=PIPE)
-p1.communicate()
-p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-f", dataPath+"/home2_"], stdout=PIPE)
-p2.communicate()
+    # partition module 1 cobras into odd and even sets
+    moduleCobras2 = {}
+    for group in 1,2:
+        cm = range(group,58,2)
+        mod = [1]*len(cm)
+        moduleCobras2[group] = pfiControl.PFI.allocateCobraList(zip(mod,cm))
+    oddCobras = moduleCobras2[1]
+    evenCobras = moduleCobras2[2]
 
-# process the image from the 1st camera
-data = fits.getdata(dataPath+'/home1_0001.fits').astype(float)
-cs = sep.extract(data, 50)
-cs_home = np.array(sorted([(c['x'], c['y']) for c in cs], key=lambda t: t[0], reverse=True))
-homes = cs_home[:n1,0] + cs_home[:n1,1]*(1j)
+    pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
+    #pfi = pfiControl.PFI(fpgaHost='localhost', doLoadModel=False)
+    pfi.loadModel(oriXML)
+    pfi.setFreq(allCobras)
 
-old = pfi.calibModel.centers[group1]
-offset1, scale1, tilt1, convert1 = makeTransformation(old, homes)
-np.abs(homes - convert1(old))
+    # Home phi
+    pfi.homePhi(allCobras, nsteps=5000, dir='ccw')
 
-# process the image from the 2nd camera
-data = fits.getdata(dataPath+'/home2_0001.fits').astype(float)
-cs = sep.extract(data, 50)
-cs_home = np.array(sorted([(c['x'], c['y']) for c in cs], key=lambda t: t[0], reverse=True))
-homes = cs_home[-n2:,0] + cs_home[-n2:,1]*(1j)
+    # Home theta
+    pfi.homeTheta(allCobras, nsteps=10000, dir='ccw')
 
-old = pfi.calibModel.centers[group2]
-offset2, scale2, tilt2, convert2 = makeTransformation(old, homes)
-np.abs(homes - convert2(old))
+    # define the broken fibers and two groups of cobras
+    #mapping = np.array([e for e in range(1,58) if e not in {1, 39, 43, 54}]) - 1
+    mapping = np.array([e for e in range(1,58)]) - 1
+    n1 = 26
+    n2 = len(mapping) - n1
+    group1 = mapping[:n1]
+    group2 = mapping[n1:]
 
-old = pfi.calibModel
-n = mapping[n1]
+    # take an image at home positions
+    p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-f", dataPath+"/home1_"], stdout=PIPE)
+    p1.communicate()
+    p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-f", dataPath+"/home2_"], stdout=PIPE)
+    p2.communicate()
 
-myConfig = deepcopy(old)
-myConfig.centers[:n] = convert1(old.centers[:n])
-myConfig.tht0[:n] = (old.tht0[:n]+tilt1)%(2*np.pi)
-myConfig.tht1[:n] = (old.tht1[:n]+tilt1)%(2*np.pi)
-myConfig.L1[:n] = old.L1[:n]*scale1
-myConfig.L2[:n] = old.L2[:n]*scale1
-myConfig.centers[n:] = convert2(old.centers[n:])
-myConfig.tht0[n:] = (old.tht0[n:]+tilt2)%(2*np.pi)
-myConfig.tht1[n:] = (old.tht1[n:]+tilt2)%(2*np.pi)
-myConfig.L1[n:] = old.L1[n:]*scale2
-myConfig.L2[n:] = old.L2[n:]*scale2
+    # process the image from the 1st camera
+    data = fits.getdata(dataPath+'/home1_0001.fits').astype(float)
+    cs = sep.extract(data, 50)
+    cs_home = np.array(sorted([(c['x'], c['y']) for c in cs], key=lambda t: t[0], reverse=True))
+    homes = cs_home[:n1,0] + cs_home[:n1,1]*(1j)
 
-old.updateGeometry(myConfig.centers, myConfig.L1, myConfig.L2)
-old.updateThetaHardStops(myConfig.tht0, myConfig.tht1)
-old.createCalibrationFile(cobraCharmerPath+'/xml/coarse_spare02_'+datetoday+'.xml')
+    old = pfi.calibModel.centers[group1]
+    offset1, scale1, tilt1, convert1 = makeTransformation(old, homes)
+    np.abs(homes - convert1(old))
 
-print(cobraCharmerPath+'/xml/coarse_spare02_'+datetoday+'.xml  produced!')
-print("Process Finised")
+    # process the image from the 2nd camera
+    data = fits.getdata(dataPath+'/home2_0001.fits').astype(float)
+    cs = sep.extract(data, 50)
+    cs_home = np.array(sorted([(c['x'], c['y']) for c in cs], key=lambda t: t[0], reverse=True))
+    homes = cs_home[-n2:,0] + cs_home[-n2:,1]*(1j)
+
+    old = pfi.calibModel.centers[group2]
+    offset2, scale2, tilt2, convert2 = makeTransformation(old, homes)
+    np.abs(homes - convert2(old))
+
+    old = pfi.calibModel
+    n = mapping[n1]
+
+    myConfig = deepcopy(old)
+    myConfig.centers[:n] = convert1(old.centers[:n])
+    myConfig.tht0[:n] = (old.tht0[:n]+tilt1)%(2*np.pi)
+    myConfig.tht1[:n] = (old.tht1[:n]+tilt1)%(2*np.pi)
+    myConfig.L1[:n] = old.L1[:n]*scale1
+    myConfig.L2[:n] = old.L2[:n]*scale1
+    myConfig.centers[n:] = convert2(old.centers[n:])
+    myConfig.tht0[n:] = (old.tht0[n:]+tilt2)%(2*np.pi)
+    myConfig.tht1[n:] = (old.tht1[n:]+tilt2)%(2*np.pi)
+    myConfig.L1[n:] = old.L1[n:]*scale2
+    myConfig.L2[n:] = old.L2[n:]*scale2
+
+    old.updateGeometry(myConfig.centers, myConfig.L1, myConfig.L2)
+    old.updateThetaHardStops(myConfig.tht0, myConfig.tht1)
+    old.createCalibrationFile(outputXML)
+
+    print(f'{outputXML} produced!')
+    print("Process Finised")
+
+def main():
+    datetoday=datetime.datetime.now().strftime("%Y%m%d")
+
+    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
+    oriXML=cobraCharmerPath+'/xml/PFS-PFI-CIT900200-02_Spare2_final_xml.xml'
+    outputXML=cobraCharmerPath+'/xml/coarse_spare02_'+datetoday+'.xml'
+    storagePath = '/data/pfs/'+datetoday
+
+    transCoord(oriXML, outputXML, storagePath)
+    
+    
+if __name__ == '__main__':
+    main()
