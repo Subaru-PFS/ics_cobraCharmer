@@ -185,10 +185,10 @@ def phiFN(camId, group):
 
 
 # Home phi
-#pfi.moveAllSteps(allCobras, 0, -5000)
+pfi.moveAllSteps(allCobras, 0, -5000)
 
 # Home theta
-#pfi.moveAllSteps(allCobras, -10000, 0)
+pfi.moveAllSteps(allCobras, -10000, 0)
 
 # Move the bad cobras to up/down positions
 #pfi.moveSteps(getCobras(badIdx), allSteps[badIdx], np.zeros(len(brokens)))
