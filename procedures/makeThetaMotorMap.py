@@ -89,12 +89,7 @@ def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=12, ca
         # move again
         pfi.moveXY(cobras, curPos, targets)
 
-
-def runThetaMotorMap(repeat, steps, storagePath, outputXML):
-    
-    #datetoday=datetime.datetime.now().strftime("%Y%m%d")
-    #datetoday='20181219'
-    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
+def runThetaMotorMap(fpgaHost, repeat, totalStep, steps, storagePath, oriXML):
     
     #storagePath = '/data/pfs/'+datetoday
     dataPath = storagePath+'/image'
@@ -137,8 +132,9 @@ def runThetaMotorMap(repeat, steps, storagePath, outputXML):
     evenCobras = moduleCobras2[2]
 
     # Initializing COBRA module
-    pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-    preciseXML=cobraCharmerPath+'/xml/updateThetaOntime_spare02_20190429.xml'
+    pfi = pfiControl.PFI(fpgaHost=fpgaHost) #'fpga' for real device.
+    preciseXML = oriXML
+    # preciseXML=cobraCharmerPath+'/xml/updateThetaOntime_spare02_20190429.xml'
     #preciseXML=cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
 
     if not os.path.exists(preciseXML):
@@ -178,40 +174,18 @@ def runThetaMotorMap(repeat, steps, storagePath, outputXML):
     for group in range(3):
         goodGroupIdx[group] = goodIdx[goodIdx%3==group]
 
-    # Home phi
-    #pfi.moveAllSteps(allCobras, 0, -5000)
-
-    # Home theta
-    #pfi.moveAllSteps(allCobras, -10000, 0)
-    #pfi.moveAllSteps(allCobras, -5000, 0)
-
-    # Move the bad cobras to up/down positions
-    #pfi.moveSteps(getCobras(badIdx), allSteps[badIdx], np.zeros(len(brokens)))
-    #pfi.moveSteps(getCobras([0,38,42,53]), [3200,800,4200,5000], np.zeros(4))
-    
     # move visible positioners to outwards positions, phi arms are moved out for 60 degrees
-    # (outTargets) otherwise we can't measure the theta angles
     thetas = np.empty(57, dtype=float)
     thetas[::2] = pfi.thetaToLocal(oddCobras, np.full(len(oddCobras), np.deg2rad(270)))
     thetas[1::2] = pfi.thetaToLocal(evenCobras, np.full(len(evenCobras), np.deg2rad(90)))
-    phis = np.full(57, np.deg2rad(60.0))
-    outTargets = pfi.anglesToPositions(allCobras, thetas, phis)
+    #outTargets = pfi.anglesToPositions(allCobras, thetas, phis)
 
-    # Home the good cobras
-    #pfi.moveAllSteps(getCobras(goodIdx), -10000, -5000)
-    #pfi.moveAllSteps(getCobras(goodIdx), -5000, -5000)
-
-    # move to outTargets
-    #moveToXYfromHome(pfi, goodIdx, outTargets[goodIdx], dataPath)
-
-    # move phi arms in
-    #pfi.moveAllSteps(getCobras(goodIdx), 0, -5000)
 
     # parameters declared here
     #repeat = 3
     #steps = 200
-    thetaSteps = 15000
-    phiSteps = 7000
+    thetaSteps = totalStep
+    #phiSteps = 7000
     myCobras = getCobras(goodIdx)
 
     OnTime = deepcopy([pfi.calibModel.motorOntimeFwd1,
@@ -223,34 +197,7 @@ def runThetaMotorMap(repeat, steps, storagePath, outputXML):
     fastOnTime = [np.full(57, 0.060),np.full(57, 0.060), np.full(57, 0.060),np.full(57, 0.060)] 
 
 
-    #record the phi movements
-    # for n in range(repeat):
-    #     # forward phi motor maps
-    #     expose(dataPath+f'/phi1Begin{n}_', dataPath+f'/phi2Begin{n}_')
-    #     for k in range(phiSteps//steps):
-    #         pfi.moveAllSteps(myCobras, 0, steps)
-    #         expose(dataPath+f'/phi1Forward{n}N{k}_', dataPath+f'/phi2Forward{n}N{k}_')
-        
-    #     # make sure it goes to the limit
-    #     pfi.calibModel.updateOntimes(*fastOnTime)
-    #     pfi.moveAllSteps(myCobras, 0, 5000)
-    #     pfi.calibModel.updateOntimes(*OnTime)
-        
-    #     # reverse phi motor maps
-    #     expose(dataPath+f'/phi1End{n}_', dataPath+f'/phi2End{n}_')
-    #     for k in range(phiSteps//steps):
-    #         pfi.moveAllSteps(myCobras, 0, -steps)
-    #         expose(dataPath+f'/phi1Reverse{n}N{k}_', dataPath+f'/phi2Reverse{n}N{k}_')
-
-    #     # At the end, make sure the cobra back to the hard stop
-    #     pfi.calibModel.updateOntimes(*fastOnTime)
-    #     pfi.moveAllSteps(myCobras, 0, -5000)
-    #     pfi.calibModel.updateOntimes(*OnTime)
-
-    # # move phi arms out for 60 degrees then home theta
-    # pfi.moveAllSteps(myCobras, 0, -5000)
-    # pfi.moveAllSteps(myCobras, 0, -2000)
-    #moveToXYfromHome(pfi, goodIdx, outTargets[goodIdx], dataPath)
+    # Home 
     pfi.moveAllSteps(myCobras, -10000, 0)
     pfi.moveAllSteps(myCobras, -5000, 0)
 
@@ -278,7 +225,7 @@ def runThetaMotorMap(repeat, steps, storagePath, outputXML):
         pfi.moveAllSteps(myCobras, -10000, 0)
         pfi.calibModel.updateOntimes(*OnTime)
     
-def analysisMotorImages(repeat, Path, thetaSteps, phiSteps, steps, oriXML, outputXML):
+def analysisThetaMotorImages(repeat, Path, thetaSteps, steps, oriXML, outputXML):
     prodctPath=Path+f'/product/'
     dataPath=Path+f'/image/'
     
@@ -298,8 +245,8 @@ def analysisMotorImages(repeat, Path, thetaSteps, phiSteps, steps, oriXML, outpu
     # variable declaration for position measurement
     thetaFW = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
     thetaRV = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
-    phiFW = np.zeros((57, repeat, phiSteps//steps+1), dtype=complex)
-    phiRV = np.zeros((57, repeat, phiSteps//steps+1), dtype=complex)
+    #phiFW = np.zeros((57, repeat, phiSteps//steps+1), dtype=complex)
+    #phiRV = np.zeros((57, repeat, phiSteps//steps+1), dtype=complex)
 
     # first camera
 
@@ -309,40 +256,6 @@ def analysisMotorImages(repeat, Path, thetaSteps, phiSteps, steps, oriXML, outpu
         if (nCam == 2): myIdx = goodIdx[goodIdx > cam_split]
         centers = pfi.calibModel.centers[myIdx]
 
-        # forward phi
-        # cnt = phiSteps//steps
-        # for n in range(repeat):
-        #     data = fits.getdata(dataPath+f'/phi{nCam}Begin{n}_0001.fits')
-        #     cs = sep.extract(data.astype(float), 50)
-        #     spots = np.array([c['x']+c['y']*(1j) for c in cs])
-        #     idx = lazyIdentification(centers, spots)
-        #     phiFW[myIdx,n,0] = spots[idx]
-        #     stack_image = data   
-        #     for k in range(cnt):
-        #         data = fits.getdata(dataPath+f'/phi{nCam}Forward{n}N{k}_0001.fits')
-        #         cs = sep.extract(data.astype(float), 50)
-        #         spots = np.array([c['x']+c['y']*(1j) for c in cs])
-        #         idx = lazyIdentification(centers, spots)
-        #         phiFW[myIdx,n,k+1] = spots[idx]
-        #         stack_image = stack_image + data
-        #     fits.writeto(prodctPath+f'/Cam{nCam}phiForwardStack.fits',stack_image,overwrite=True)
-
-        # # reverse phi
-        # for n in range(repeat):
-        #     data = fits.getdata(dataPath+f'/phi{nCam}End{n}_0001.fits')
-        #     cs = sep.extract(data.astype(float), 50)
-        #     spots = np.array([c['x']+c['y']*(1j) for c in cs])
-        #     idx = lazyIdentification(centers, spots)
-        #     phiRV[myIdx,n,0] = spots[idx]
-        #     stack_image = data   
-        #     for k in range(cnt):
-        #         data = fits.getdata(dataPath+f'/phi{nCam}Reverse{n}N{k}_0001.fits')
-        #         cs = sep.extract(data.astype(float), 50)
-        #         spots = np.array([c['x']+c['y']*(1j) for c in cs])
-        #         idx = lazyIdentification(centers, spots)
-        #         phiRV[myIdx,n,k+1] = spots[idx]
-        #         stack_image = stack_image + data
-        #     fits.writeto(prodctPath+f'/Cam{nCam}phiReverseStack.fits',stack_image,overwrite=True)
 
         # forward theta
         cnt = thetaSteps//steps
@@ -425,17 +338,7 @@ def analysisMotorImages(repeat, Path, thetaSteps, phiSteps, steps, oriXML, outpu
                 if thetaAngRV[c,n,k+1] > thetaAngRV[c,n,k]:
                     thetaAngRV[c,n,k+1] -= np.pi*2
 
-    # measure phi angles
-    # cnt = phiSteps//steps + 1
-    # for c in goodIdx:
-    #     for n in range(repeat):
-    #         for k in range(cnt):
-    #             phiAngFW[c,n,k] = np.angle(phiFW[c,n,k] - phiCenter[c])
-    #             phiAngRV[c,n,k] = np.angle(phiRV[c,n,k] - phiCenter[c])
-    #         home = phiAngFW[c,n,0]
-    #         phiAngFW[c,n] = (phiAngFW[c,n] - home + np.pi/2) % (np.pi*2) - np.pi/2
-    #         phiAngRV[c,n] = (phiAngRV[c,n] - home + np.pi/2) % (np.pi*2) - np.pi/2
-
+   
     # use the same weighting as Johannes to calculate motor maps
     binSize = np.deg2rad(3.6)
     regions = 112
@@ -486,43 +389,7 @@ def analysisMotorImages(repeat, Path, thetaSteps, phiSteps, steps, oriXML, outpu
             else:
                 thetaMMRV[c,b] = thetaMMFW[c,b-1]
 
-    # calculate phi motor maps
-    # cnt = phiSteps//steps
-    # for c in goodIdx:
-    #     for b in range(regions):
-    #         # forward motor maps
-    #         binMin = binSize * b
-    #         binMax = binMin + binSize
-    #         fracSum = 0
-    #         valueSum = 0
-    #         for n in range(repeat):
-    #             for k in range(cnt):
-    #                 if phiAngFW[c,n,k] < binMax and phiAngFW[c,n,k+1] > binMin and phiAngFW[c,n,k+1] <= np.pi - delta:
-    #                     moveSizeInBin = np.min([phiAngFW[c,n,k+1], binMax]) - np.max([phiAngFW[c,n,k], binMin])
-    #                     entireMoveSize = phiAngFW[c,n,k+1] - phiAngFW[c,n,k]
-    #                     fraction = moveSizeInBin * moveSizeInBin / entireMoveSize
-    #                     fracSum += fraction
-    #                     valueSum += fraction * entireMoveSize / steps
-    #         if fracSum > 0:
-    #             phiMMFW[c,b] = valueSum / fracSum
-    #         else:
-    #             phiMMFW[c,b] = phiMMFW[c,b-1]
-
-    #         # reverse motor maps
-    #         fracSum = 0
-    #         valueSum = 0
-    #         for n in range(repeat):
-    #             for k in range(cnt):
-    #                 if phiAngRV[c,n,k] > binMin and phiAngRV[c,n,k+1] < binMax and phiAngFW[c,n,k+1] >= delta:
-    #                     moveSizeInBin = np.min([phiAngRV[c,n,k], binMax]) - np.max([phiAngRV[c,n,k+1], binMin])
-    #                     entireMoveSize = phiAngRV[c,n,k] - phiAngRV[c,n,k+1]
-    #                     fraction = moveSizeInBin * moveSizeInBin / entireMoveSize
-    #                     fracSum += fraction
-    #                     valueSum += fraction * entireMoveSize / steps
-    #         if fracSum > 0:
-    #             phiMMRV[c,b] = valueSum / fracSum
-    #         else:
-    #             phiMMRV[c,b] = phiMMFW[c,b-1]
+    
     # save new configuration for both slow nad fast motor maps
     old = pfi.calibModel
 
@@ -570,15 +437,17 @@ def main():
     datetoday=datetime.datetime.now().strftime("%Y%m%d")
     cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
 
+    fpgaHost = '128.149.77.24'
+
     for steps in [50]:
         storagePath = '/data/pfs/20190429/'+f'{steps}steps/'
         outputXML = cobraCharmerPath+'/xml/motormap_'+datetoday+f'_{steps}steps.xml'
         oriXML=cobraCharmerPath+f'/xml/updateThetaOntime_spare02_20190429.xml'
-        print(outputXML)
-        print(oriXML)
+        #print(outputXML)
+        #print(oriXML)
 
-        runThetaMotorMap(1, steps, storagePath, outputXML)
-        analysisMotorImages(1, storagePath, 15000, 7000, steps, oriXML, outputXML)
+        runThetaMotorMap(fpgaHost, 1, 15000, steps, storagePath, oriXML)
+        analysisThetaMotorImages(1, storagePath, 15000, steps, oriXML, outputXML)
 
 if __name__ == '__main__':
     main()

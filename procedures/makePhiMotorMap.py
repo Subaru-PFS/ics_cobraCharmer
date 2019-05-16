@@ -90,11 +90,11 @@ def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=12, ca
         pfi.moveXY(cobras, curPos, targets)
 
 
-def runPhiMotorMap(repeat, totalStep, steps, storagePath, outputXML):
+def runPhiMotorMap(fpgaHost, repeat, totalStep, steps, storagePath, oriXML):
     
     #datetoday=datetime.datetime.now().strftime("%Y%m%d")
     #datetoday='20181219'
-    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
+    #cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
     
     #storagePath = '/data/pfs/'+datetoday
     dataPath = storagePath+'/image'
@@ -137,9 +137,9 @@ def runPhiMotorMap(repeat, totalStep, steps, storagePath, outputXML):
     evenCobras = moduleCobras2[2]
 
     # Initializing COBRA module
-    pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-    preciseXML=cobraCharmerPath+'/xml/updatePhiOntime_spare02_20190401.xml'
-    #preciseXML=cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
+    pfi = pfiControl.PFI(fpgaHost=fpgaHost) #'fpga' for real device.
+    #preciseXML=cobraCharmerPath+'/xml/updatePhiOntime_spare02_20190401.xml'
+    preciseXML=oriXML
 
     if not os.path.exists(preciseXML):
         print(f"Error: {preciseXML} not presented!")
@@ -239,7 +239,7 @@ def runPhiMotorMap(repeat, totalStep, steps, storagePath, outputXML):
     pfi.moveAllSteps(myCobras, 0, -2000)
     
     
-def analysisMotorImages(repeat, Path, thetaSteps, phiSteps, steps, oriXML, outputXML):
+def analysisPhiImages(repeat, Path, phiSteps, steps, oriXML, outputXML):
     prodctPath=Path+f'/product/'
     dataPath=Path+f'/image/'
     
@@ -257,8 +257,6 @@ def analysisMotorImages(repeat, Path, thetaSteps, phiSteps, steps, oriXML, outpu
     
     
     # variable declaration for position measurement
-    thetaFW = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
-    thetaRV = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
     phiFW = np.zeros((57, repeat, phiSteps//steps+1), dtype=complex)
     phiRV = np.zeros((57, repeat, phiSteps//steps+1), dtype=complex)
 
@@ -309,8 +307,6 @@ def analysisMotorImages(repeat, Path, thetaSteps, phiSteps, steps, oriXML, outpu
     # variable declaration for theta, phi angles
     thetaCenter = np.zeros(57, dtype=complex)
     phiCenter = np.zeros(57, dtype=complex)
-    thetaAngFW = np.zeros((57, repeat, thetaSteps//steps+1), dtype=float)
-    thetaAngRV = np.zeros((57, repeat, thetaSteps//steps+1), dtype=float)
     phiAngFW = np.zeros((57, repeat, phiSteps//steps+1), dtype=float)
     phiAngRV = np.zeros((57, repeat, phiSteps//steps+1), dtype=float)
 
@@ -419,7 +415,6 @@ def analysisMotorImages(repeat, Path, thetaSteps, phiSteps, steps, oriXML, outpu
     old.updateMotorMaps(fThetaFW, fThetaRV, fPhiFW, fPhiRV, useSlowMaps=False)
 
     # write to a new XML file
-    #old.createCalibrationFile('../xml/motormaps.xml')
     old.createCalibrationFile(outputXML)
 
 
@@ -431,13 +426,15 @@ def main():
     datetoday=datetime.datetime.now().strftime("%Y%m%d")
     cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
 
+    fpgaHost = '128.149.77.24'
+
     for steps in [400, 50]:
         storagePath = '/data/pfs/20190401/'+f'{steps}steps/'
         outputXML = cobraCharmerPath+'/xml/motormap_'+datetoday+f'_{steps}steps.xml'
         oriXML=cobraCharmerPath+'/xml/updatePhiOntime_spare02_20190401.xml'
 
-        runPhiMotorMap(3, 7000, steps, storagePath, outputXML)
-        analysisMotorImages(3, storagePath, 15000, 7000, steps, oriXML, outputXML)
+        runPhiMotorMap(fpgaHost, 3, 7000, steps, storagePath, oriXML)
+        analysisPhiImages(3, storagePath, 7000, steps, oriXML, outputXML)
 
 if __name__ == '__main__':
     main()
