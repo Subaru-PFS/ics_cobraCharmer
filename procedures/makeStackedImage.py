@@ -30,7 +30,7 @@ def stackMotormapImage(storagePath,repeat):
         for nCam in [1,2]:
             for n in range(0,repeat):
                 stack_image = np.zeros((2048,2592))   
-                filelist=glob.glob(storagePath+'/image/'+f'/{arm}{nCam}{m}{n}N*_0001.fits')
+                filelist=glob.glob(storagePath+'/image/'+f'/{arm}{nCam}{m}{n}N*.fits')
 
                 if len(filelist) > 1:
 
@@ -135,7 +135,6 @@ def showStackedOntimeImage(storagePath, repeat):
 
 def main():
     storagePath = '/arrays/rigel/chyan/20190426/200steps'
-    stackMotormapImage(storagePath, 3)
     showStackedMortormapImage(storagePath, 3)
  
  
