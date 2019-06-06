@@ -96,6 +96,29 @@ class PFI(object):
         else:
             self.logger.info(f'send SET command succeeded')
 
+    def calibrateFreq(self, cobras, thetaLow=60.4, thetaHigh=70.3, phiLow=94.4, phiHigh=108.2, clockwise=True):
+        """ Calibrate COBRA motor frequency """
+#        func.calibrate(cobras, thetaLow, thetaHigh, phiLow, phiHigh, clockwise)
+        spin = func.CW_DIR if clockwise else func.CCW_DIR
+        for c in cobras:
+            c.p = func.CalParams(m0=(thetaLow,thetaHigh), m1=(phiLow, phiHigh), en=(True,True), dir=spin)
+        err = func.CAL(cobras)
+        if err:
+            self.logger.error(f'send Calibrate command failed')
+        else:
+            self.logger.info(f'send Calibrate command succeeded')
+
+    def houseKeeping(self, module=1, m0=(0,1000), m1=(0,1000), temps=(16.0,31.0), cur=(0.25,1.2), volt=(9.5,10.5)):
+        """ HK command """
+        cobras = self.allocateCobraRange(module)
+        for c in cobras:
+            c.p = func.HkParams(m0, m1, temps, cur, volt)
+        err = func.HK(cobras)
+        if err:
+            self.logger.error(f'send HK command failed')
+        else:
+            self.logger.info(f'send HK command succeeded')
+
     def moveAllThetaPhiFromHome(self, cobras, thetaMove, phiMove, thetaFast=True, phiFast=True):
         """ Move all cobras by theta and phi angles from home
 

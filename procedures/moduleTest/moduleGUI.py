@@ -6,12 +6,14 @@ from PyQt5.QtCore import Qt
 import sys
 import os
 import numpy as np
-from moduleTest import ModuleTest
+import matplotlib.pyplot as plt
+from moduleTest import ModuleTest, getCobras
 
 active_cobras = np.full(57, False)
 bad_cobras = np.full(57, False)
 IP = '128.149.77.24'
 #IP = '133.40.164.251'
+camSplit = 25
 
 class CobraButton(QPushButton):
     def __init__(self, idx):
@@ -32,14 +34,12 @@ class CobraButton(QPushButton):
             else:
                 self.setStyleSheet('background-color: None')
 
-
 class MainWindow(QMainWindow):
+    mt = None
+    pfi = None
+
     def __init__(self):
         super().__init__()
-
-        self.func = None
-        self.pfi = None
-
         self.setWindowTitle('Cobra controller')
         self.statusBar().showMessage('Please load XML file')
 
@@ -51,8 +51,8 @@ class MainWindow(QMainWindow):
         self.btn_xml.clicked.connect(self.click_load)
         block1.addWidget(self.btn_xml)
         block1.addWidget(QSplitter(Qt.Vertical), QSizePolicy.Expanding)
-        btn = QPushButton('Move Up/Down')
-        btn.clicked.connect(self.move_up_down)
+        btn = QPushButton('Check positions')
+        btn.clicked.connect(self.check_positions)
         block1.addWidget(btn)
 
         block2 = QHBoxLayout()
@@ -123,7 +123,7 @@ class MainWindow(QMainWindow):
             self.btn_speed.setText('Fast')
 
     def click_go(self, direction=1):
-        if self.func is None:
+        if self.mt is None:
             self.statusBar().showMessage('Load XML file first!')
             return
         cIdx = [idx for idx, c in enumerate(active_cobras) if c]
@@ -134,7 +134,7 @@ class MainWindow(QMainWindow):
             return
 
         use_fast = not self.btn_speed.isChecked()
-        cobras = pfiUtility.getCobras(cIdx)
+        cobras = getCobras(cIdx)
         theta_steps = int(self.theta.text()) * direction
         phi_steps = int(self.phi.text()) * direction
         self.statusBar().showMessage('Start to moving cobra...')
@@ -157,17 +157,74 @@ class MainWindow(QMainWindow):
             return
         xml = '../xml/' + self.xml.text()
         if not os.path.exists(xml):
-            self.statusBar().showMessage(f"Error: {xml} not presented!")
+            self.statusBar().showMessage(f"Error: {xml} is not presented!")
+            return
+        if self.mt is not None:
+            self.statusBar().showMessage(f"Error: {xml} is already set!")
             return
 
-        if self.func is None:
-            self.func = ModuleTest(IP, xml)
-            self.pfi = self.func.pfi
-
+        self.mt = ModuleTest(IP, xml, brokens=None, camSplit=camSplit)
+        self.pfi = self.mt.pfi
         self.btn_xml.setStyleSheet('background-color: green')
 
-    def move_up_down(self):
-        self.statusBar().showMessage(f"Function not implemented!")
+    def check_positions(self):
+        """ show current cobra arm angles """
+        if self.mt is None:
+            self.statusBar().showMessage('Load XML file first!')
+            return
+        brokens = (np.arange(57) + 1)[bad_cobras]
+        self.mt.setBrokenCobras(brokens)
+
+        data1 = self.mt.cam1.expose()
+        data2 = self.mt.cam2.expose()
+        pos = self.mt.extractPositions(data1, data2)
+
+        tht, phi, _ = self.pfi.positionsToAngles(self.mt.goodCobras, pos)
+        c = self.pfi.calibModel.centers[self.mt.goodIdx]
+        t = self.pfi.thetaToGlobal(self.mt.goodCobras, tht[:,0])
+        p = t + phi[:,0] + self.pfi.calibModel.phiIn[self.mt.goodIdx]
+        L1 = self.pfi.calibModel.L1[self.mt.goodIdx]
+        L2 = self.pfi.calibModel.L2[self.mt.goodIdx]
+        s = self.mt.goodIdx[self.mt.goodIdx<=camSplit].shape[0]
+
+        plt.figure(1)
+        plt.clf()
+        ax = plt.gca()
+        ax.axis('equal')
+
+        ax.plot(c[:s].real, c[:s].imag, 'r.')
+        ax.plot(pos[:s].real, pos[:s].imag, 'bo')
+
+        p1 = c[:s]
+        p2 = p1 + L1[:s]*np.exp(t[:s]*(1j))
+        p3 = p2 + L2[:s]*np.exp(p[:s]*(1j))
+        for n in range(s):
+            ax.plot([p1[n].real, p2[n].real], [p1[n].imag, p2[n].imag], 'g', linewidth=1)
+            ax.plot([p2[n].real, p3[n].real], [p2[n].imag, p3[n].imag], 'c', linewidth=1)
+            ax.text(c[n].real-20, c[n].imag-40, f'{np.rad2deg(t[n]):.1f}')
+            ax.text(c[n].real-20, c[n].imag-60, f'{np.rad2deg((p-t)[n]+np.pi):.1f}')
+
+        ax.set_title(f'1st camera')
+
+        plt.figure(2)
+        plt.clf()
+        ax = plt.gca()
+        ax.axis('equal')
+
+        ax.plot(c[s:].real, c[s:].imag, 'r.')
+        ax.plot(pos[s:].real, pos[s:].imag, 'bo')
+
+        p1 = c[s:]
+        p2 = p1 + L1[s:]*np.exp(t[s:]*(1j))
+        p3 = p2 + L2[s:]*np.exp(p[s:]*(1j))
+        for n in range(len(self.mt.goodIdx)-s):
+            ax.plot([p1[n].real, p2[n].real], [p1[n].imag, p2[n].imag], 'g', linewidth=1)
+            ax.plot([p2[n].real, p3[n].real], [p2[n].imag, p3[n].imag], 'c', linewidth=1)
+            ax.text(c[s+n].real-20, c[s+n].imag-40, f'{np.rad2deg(t[s+n]):.1f}')
+            ax.text(c[s+n].real-20, c[s+n].imag-60, f'{np.rad2deg((p-t)[s+n]+np.pi):.1f}')
+
+            ax.set_title(f'2nd camera')
+        plt.show()
 
 
 if __name__ == '__main__':
