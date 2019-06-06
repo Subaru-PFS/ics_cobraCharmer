@@ -179,7 +179,7 @@ class ModuleTest():
             newXml,
             dataPath,
             repeat=3,
-            steps=250,
+            steps=200,
             totalSteps=5000,
             fast=True,
             phiOnTime=None,
@@ -222,6 +222,7 @@ class ModuleTest():
         phiRV = np.zeros((57, repeat, iteration+1), dtype=complex)
 
         #record the phi movements
+        self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
         for n in range(repeat):
             # forward phi motor maps
             data1 = self.cam1.expose(dataPath + f'/phi1Begin{n}.fits.gz')
@@ -489,7 +490,7 @@ class ModuleTest():
             newXml,
             dataPath,
             repeat=3,
-            steps=250,
+            steps=200,
             totalSteps=10000,
             fast=True,
             thetaOnTime=None,
@@ -811,6 +812,235 @@ class ModuleTest():
 
         # restore default setting
         self.pfi.loadModel(self.xml)
+
+    def phiConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, fast=True):
+        # variable declaration for center measurement
+        steps = 200
+        iteration = 4000 // steps
+        phiFW = np.zeros((57, iteration+1), dtype=complex)
+        phiRV = np.zeros((57, iteration+1), dtype=complex)
+
+        #record the phi movements
+        self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
+        data1 = self.cam1.expose()
+        data2 = self.cam2.expose()
+        phiFW[self.goodIdx, 0] = self.extractPositions(data1, data2)
+        stack_image1 = data1
+        stack_image2 = data2
+
+        for k in range(iteration):
+            self.pfi.moveAllSteps(self.goodCobras, 0, steps)
+            data1 = self.cam1.expose()
+            data2 = self.cam2.expose()
+            phiFW[self.goodIdx, k+1] = self.extractPositions(data1, data2, guess=phiFW[self.goodIdx, k])
+            stack_image1 += data1
+            stack_image2 += data2
+        fits.writeto(dataPath + f'/phi1ForwardStack.fits.gz', stack_image1, overwrite=True)
+        fits.writeto(dataPath + f'/phi2ForwardStack.fits.gz', stack_image2, overwrite=True)
+
+        # make sure it goes to the limit
+        self.pfi.moveAllSteps(self.goodCobras, 0, 5000)
+
+        # reverse phi motors
+        data1 = self.cam1.expose()
+        data2 = self.cam2.expose()
+        phiRV[self.goodIdx, 0] = self.extractPositions(data1, data2, guess=phiFW[self.goodIdx, iteration])
+        stack_image1 = data1
+        stack_image2 = data2
+
+        for k in range(iteration):
+            self.pfi.moveAllSteps(self.goodCobras, 0, -steps)
+            data1 = self.cam1.expose()
+            data2 = self.cam2.expose()
+            phiRV[self.goodIdx, k+1] = self.extractPositions(data1, data2, guess=phiRV[self.goodIdx, k])
+            stack_image1 += data1
+            stack_image2 += data2
+        fits.writeto(dataPath + f'/phi1ReverseStack.fits.gz', stack_image1, overwrite=True)
+        fits.writeto(dataPath + f'/phi2ReverseStack.fits.gz', stack_image2, overwrite=True)
+
+        # At the end, make sure the cobra back to the hard stop
+        self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
+
+        # save calculation result
+        np.save(dataPath + '/phiFW', phiFW)
+        np.save(dataPath + '/phiRV', phiRV)
+
+        # variable declaration
+        phiCenter = np.zeros(57, dtype=complex)
+        phiRadius = np.zeros(57, dtype=float)
+        phiHS = np.zeros(57, dtype=float)
+
+        # measure centers
+        for c in self.goodIdx:
+            data = np.concatenate((phiFW[c].flatten(), phiRV[c].flatten()))
+            x, y, r = circle_fitting(data)
+            phiCenter[c] = x + y*(1j)
+            phiRadius[c] = r
+
+        # measure phi hard stops
+        for c in self.goodIdx:
+            phiHS[c] = np.angle(phiFW[c, 0] - phiCenter[c])
+
+        # save calculation result
+        np.save(dataPath + '/phiCenter', phiCenter)
+        np.save(dataPath + '/phiRadius', phiRadius)
+        np.save(dataPath + '/phiHS', phiHS)
+
+        # convergence test
+        phiData = np.zeros((57, runs, tries, 3))
+        goodIdx = self.goodIdx
+        zeros = np.zeros(len(goodIdx))
+        centers = phiCenter[goodIdx]
+        homes = phiHS[goodIdx]
+
+        for i in range(runs):
+            if runs > 1:
+                angle = np.deg2rad(margin + (180 - 2 * margin) * i / (runs - 1))
+            else:
+                angle = np.deg2rad(90)
+            self.moveThetaPhi(self.goodCobras, zeros, zeros + angle, phiFast=fast)
+            cAngles, cPositions = self.measureAngles(centers, homes)
+            phiData[goodIdx, i, 0, 0] = cAngles
+            phiData[goodIdx, i, 0, 1] = np.real(cPositions)
+            phiData[goodIdx, i, 0, 2] = np.imag(cPositions)
+
+            for j in range(tries - 1):
+                self.moveThetaPhi(self.goodCobras, zeros, angle - cAngles, phiFroms=cAngles, phiFast=fast)
+                cAngles, cPositions = self.measureAngles(centers, homes)
+                cAngles[cAngles>np.pi*(3/2)] -= np.pi*2
+                phiData[goodIdx, i, j+1, 0] = cAngles
+                phiData[goodIdx, i, j+1, 1] = np.real(cPositions)
+                phiData[goodIdx, i, j+1, 2] = np.imag(cPositions)
+
+            # home phi
+            self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
+
+        # save calculation result
+        np.save(dataPath + '/phiData', phiData)
+
+    def thetaConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, fast=True):
+        # variable declaration for center measurement
+        steps = 300
+        iteration = 6000 // steps
+        thetaFW = np.zeros((57, iteration+1), dtype=complex)
+        thetaRV = np.zeros((57, iteration+1), dtype=complex)
+
+        #record the theta movements
+        self.pfi.moveAllSteps(self.goodCobras, -10000, 0)
+        data1 = self.cam1.expose()
+        data2 = self.cam2.expose()
+        thetaFW[self.goodIdx, 0] = self.extractPositions(data1, data2)
+        stack_image1 = data1
+        stack_image2 = data2
+
+        for k in range(iteration):
+            self.pfi.moveAllSteps(self.goodCobras, steps, 0)
+            data1 = self.cam1.expose()
+            data2 = self.cam2.expose()
+            thetaFW[self.goodIdx, k+1] = self.extractPositions(data1, data2)
+            stack_image1 += data1
+            stack_image2 += data2
+        fits.writeto(dataPath + f'/theta1ForwardStack.fits.gz', stack_image1, overwrite=True)
+        fits.writeto(dataPath + f'/theta2ForwardStack.fits.gz', stack_image2, overwrite=True)
+
+        # make sure it goes to the limit
+        self.pfi.moveAllSteps(self.goodCobras, 10000, 0)
+
+        # reverse theta motors
+        data1 = self.cam1.expose()
+        data2 = self.cam2.expose()
+        thetaRV[self.goodIdx, 0] = self.extractPositions(data1, data2)
+        stack_image1 = data1
+        stack_image2 = data2
+
+        for k in range(iteration):
+            self.pfi.moveAllSteps(self.goodCobras, -steps, 0)
+            data1 = self.cam1.expose()
+            data2 = self.cam2.expose()
+            thetaRV[self.goodIdx, k+1] = self.extractPositions(data1, data2)
+            stack_image1 += data1
+            stack_image2 += data2
+        fits.writeto(dataPath + f'/theta1ReverseStack.fits.gz', stack_image1, overwrite=True)
+        fits.writeto(dataPath + f'/theta2ReverseStack.fits.gz', stack_image2, overwrite=True)
+
+        # At the end, make sure the cobra back to the hard stop
+        self.pfi.moveAllSteps(self.goodCobras, -10000, 0)
+
+        # save calculation result
+        np.save(dataPath + '/thetaFW', thetaFW)
+        np.save(dataPath + '/thetaRV', thetaRV)
+
+        # variable declaration
+        thetaCenter = np.zeros(57, dtype=complex)
+        thetaRadius = np.zeros(57, dtype=float)
+        thetaHS = np.zeros(57, dtype=float)
+
+        # measure centers
+        for c in self.goodIdx:
+            data = np.concatenate((thetaFW[c].flatten(), thetaRV[c].flatten()))
+            x, y, r = circle_fitting(data)
+            thetaCenter[c] = x + y*(1j)
+            thetaRadius[c] = r
+
+        # measure theta hard stops
+        for c in self.goodIdx:
+            thetaHS[c] = np.angle(thetaFW[c, 0] - thetaCenter[c])
+
+        # save calculation result
+        np.save(dataPath + '/thetaCenter', thetaCenter)
+        np.save(dataPath + '/thetaRadius', thetaRadius)
+        np.save(dataPath + '/thetaHS', thetaHS)
+
+        # convergence test
+        thetaData = np.zeros((57, runs, tries, 3))
+        goodIdx = self.goodIdx
+        zeros = np.zeros(len(goodIdx))
+        centers = thetaCenter[goodIdx]
+        homes = thetaHS[goodIdx]
+        tGaps = ((self.pfi.calibModel.tht1 - self.pfi.calibModel.tht0) % (np.pi*2))[goodIdx]
+
+        for i in range(runs):
+            if runs > 1:
+                angle = np.deg2rad(margin + (360 - 2 * margin) * i / (runs - 1))
+            else:
+                angle = np.deg2rad(180)
+            self.moveThetaPhi(self.goodCobras, zeros + angle, zeros, thetaFast=fast)
+            cAngles, cPositions = self.measureAngles(centers, homes)
+            for k in range(len(goodIdx)):
+                if angle > np.pi + tGaps[k] and cAngles[k] < tGaps[k] + 0.1:
+                    cAngles[k] += np.pi*2
+            thetaData[goodIdx, i, 0, 0] = cAngles
+            thetaData[goodIdx, i, 0, 1] = np.real(cPositions)
+            thetaData[goodIdx, i, 0, 2] = np.imag(cPositions)
+
+            for j in range(tries - 1):
+                dirs = angle > cAngles
+                self.moveThetaPhi(self.goodCobras, angle - cAngles, zeros, thetaFroms=cAngles, thetaFast=fast)
+                cAngles, cPositions = self.measureAngles(centers, homes)
+                for k in range(len(goodIdx)):
+                    lastAngle = thetaData[goodIdx[k], i, j, 0]
+                    if dirs[k] and cAngles[k] < lastAngle - 0.01 and cAngles[k] < tGaps[k] + 0.1:
+                        cAngles[k] += np.pi*2
+                    elif not dirs[k] and cAngles[k] > lastAngle + 0.01 and cAngles[k] > np.pi*2 - 0.1:
+                        cAngles[k] -= np.pi*2
+                thetaData[goodIdx, i, j+1, 0] = cAngles
+                thetaData[goodIdx, i, j+1, 1] = np.real(cPositions)
+                thetaData[goodIdx, i, j+1, 2] = np.imag(cPositions)
+
+            # home theta
+            self.pfi.moveAllSteps(self.goodCobras, -10000, 0)
+
+        # save calculation result
+        np.save(dataPath + '/thetaData', thetaData)
+
+    def measureAngles(self, centers, homes):
+        """ measure positions and angles for good cobras """
+
+        data1 = self.cam1.expose()
+        data2 = self.cam2.expose()
+        curPos = self.extractPositions(data1, data2)
+        angles = (np.angle(curPos - centers) - homes) % (np.pi*2)
+        return angles, curPos
 
 
 def getCobras(cobs):
