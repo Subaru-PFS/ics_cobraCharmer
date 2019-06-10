@@ -110,14 +110,18 @@ class PFI(object):
 
     def houseKeeping(self, module=1, m0=(0,1000), m1=(0,1000), temps=(16.0,31.0), cur=(0.25,1.2), volt=(9.5,10.5)):
         """ HK command """
-        cobras = self.allocateCobraRange(module)
-        for c in cobras:
-            c.p = func.HkParams(m0, m1, temps, cur, volt)
-        err = func.HK(cobras)
-        if err:
-            self.logger.error(f'send HK command failed')
-        else:
-            self.logger.info(f'send HK command succeeded')
+
+        for board in [1, 2]:
+            # two boards in one module
+            cobra_num = np.arange(board, self.nCobrasPerModule+1, 2)
+            cobras = self.allocateCobraRange(module, cobra_num)
+            for c in cobras:
+                c.p = func.HkParams(m0, m1, temps, cur, volt)
+            err = func.HK(cobras)
+            if err:
+                self.logger.error(f'send HK command failed')
+            else:
+                self.logger.info(f'send HK command succeeded')
 
     def moveAllThetaPhiFromHome(self, cobras, thetaMove, phiMove, thetaFast=True, phiFast=True):
         """ Move all cobras by theta and phi angles from home
