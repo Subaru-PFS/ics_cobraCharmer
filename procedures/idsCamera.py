@@ -7,37 +7,29 @@ import math
 from astropy.io import fits
 
 class idsCamera():
-    def setExpoureTime(self):
+    def setExpoureTime(self, expTime):
         #Pixel-Clock Setting, the range of this camera is 7-35 MHz
         nPixelClockDefault=ueye.INT(200)
         nRet = ueye.is_PixelClock(self.hCam, ueye.IS_PIXELCLOCK_CMD_SET,nPixelClockDefault, 
             ueye.sizeof(nPixelClockDefault))
-        
+        print(nPixelClockDefault)
         if nRet != ueye.IS_SUCCESS:
             print("is_PixelClock ERROR")
-        # Working on exposure time range
-        expinfo = ueye.INT(10)
-        #print(expinfo)
-        nRet = ueye.is_Exposure(self.hCam, ueye.IS_EXPOSURE_CMD_SET_EXPOSURE, expinfo,ueye.sizeof(expinfo))
+        
+        nFrameRate = ueye.double(40.0)
+        nRet = ueye.is_SetFrameRate(self.hCam, ueye.IS_PIXELCLOCK_CMD_SET,nFrameRate)
+        if nRet != ueye.IS_SUCCESS:
+            print("is_SetFrameRate ERROR")
+
+        
+        # Working on exposure time range. Set exposure time to be 20 ms.
+        ms = ueye.DOUBLE(expTime)
+        
+        nRet = ueye.is_Exposure(self.hCam, ueye.IS_EXPOSURE_CMD_SET_EXPOSURE, ms,ueye.sizeof(ms))
         if nRet != ueye.IS_SUCCESS:
             print("is_Exposure ERROR")
         
-        # 	if (verbose) printf("Getting the exposure time range. \n"
-        # 			"Status = %d, Min= %f Max=%f Inc=%f\n",nRet,expinfo[0],expinfo[1],expinfo[2]);
-
-        # 	if (etime < expinfo[0] || etime > expinfo[1]){
-        # 		fprintf(stderr, "Error: (%s:%s:%d) Exposure time is out of "
-        # 		"range (%8.3f - %8.3f).\n", __FILE__, __func__, __LINE__,expinfo[0],expinfo[1]);
-        # 		is_ExitCamera(hCam);
-        # 		return EXIT_FAILURE;
-        # 	}
-
-        # 	nRet = is_Exposure(hCam, IS_EXPOSURE_CMD_SET_EXPOSURE,
-        # 			(void*)&etime,sizeof(etime));
-        # 	if (verbose) printf("Setting exposure time. \n"
-        # 				"Status = %d, Value= %f \n",nRet,etime);
-        # pass
-    
+            
     def getExposureTime(self):
         pass
 
@@ -55,10 +47,11 @@ class idsCamera():
         print("getting image")
         array = ueye.get_data(self.pcImageMemory, self.width, self.height, self.nBitsPerPixel, self.pitch, copy=False)
         frame = np.reshape(array,(self.height.value, self.width.value, self.bytes_per_pixel))
-        
+        print(frame.shape)
         
         coadd = np.zeros(frame.shape[0:2]).astype('float')
-        coadd[:,:] = (frame[:,:,1]*255).astype('float')+frame[:,:,0].astype('float')
+        #coadd[:,:] = (frame[:,:,1]*255).astype('float')+frame[:,:,0].astype('float')
+        coadd[:,:] = frame[:,:,1].astype('float')*255+frame[:,:,0].astype('float')
         return coadd
 
     def __init__(self, deviceID):
@@ -165,10 +158,13 @@ class idsCamera():
 def main():
 
     camera = idsCamera(1)
-    camera.setExpoureTime()
-    image = camera.getCurrentFrame()
-    hdu = fits.PrimaryHDU(image)
-    hdu.writeto('new1.fits',overwrite=True)
+    camera.setExpoureTime(20)
+    for i in range(40):
+        
+        filename=f'image{i}.fits'
+        image = camera.getCurrentFrame()
+        hdu = fits.PrimaryHDU(image)
+        hdu.writeto(filename,overwrite=True)
 
 if __name__ == '__main__':
     main()
