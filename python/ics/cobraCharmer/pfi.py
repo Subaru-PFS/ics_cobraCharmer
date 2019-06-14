@@ -83,9 +83,9 @@ class PFI(object):
 
     def setFreq(self, cobras, thetaFreq=None, phiFreq=None):
         """ Set COBRA motor frequency """
-        if len(cobras) != len(thetaFreq):
+        if thetaFreq is not None and len(cobras) != len(thetaFreq):
             raise RuntimeError("number of theta frquencies must match number of cobras")
-        if len(cobras) != len(phiFreq):
+        if phiFreq is not None and len(cobras) != len(phiFreq):
             raise RuntimeError("number of phi frquencies must match number of cobras")
 
         for c in cobras:
