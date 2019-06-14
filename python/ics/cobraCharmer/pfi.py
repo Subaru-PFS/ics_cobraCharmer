@@ -81,12 +81,23 @@ class PFI(object):
         else:
             self.logger.info(f'send POW command succeeded')
 
-    def setFreq(self, cobras):
+    def setFreq(self, cobras, thetaFreq=None, phiFreq=None):
         """ Set COBRA motor frequency """
+        if len(cobras) != len(thetaFreq):
+            raise RuntimeError("number of theta frquencies must match number of cobras")
+        if len(cobras) != len(phiFreq):
+            raise RuntimeError("number of phi frquencies must match number of cobras")
+
         for c in cobras:
             cobraIdx = self._mapCobraIndex(c)
-            thetaPer = self._freqToPeriod(self.calibModel.motorFreq1[cobraIdx]/1000)
-            phiPer = self._freqToPeriod(self.calibModel.motorFreq2[cobraIdx]/1000)
+            if thetaFreq is None:
+                thetaPer = self._freqToPeriod(self.calibModel.motorFreq1[cobraIdx]/1000)
+            else:
+                thetaPer = self._freqToPeriod(np.array(thetaFreq))
+            if phiFreq is None:
+                phiPer = self._freqToPeriod(self.calibModel.motorFreq2[cobraIdx]/1000)
+            else:
+                phiPer = self._freqToPeriod(np.array(phiFreq))
 
             # print(f'set {c.board},{c.cobra} to {thetaPer},{phiPer} {self.calibModel.motorFreq1[c.cobra]}')
             c.p = func.SetParams(p0=thetaPer, p1=phiPer, en=(True, True))
@@ -98,30 +109,38 @@ class PFI(object):
 
     def calibrateFreq(self, cobras, thetaLow=60.4, thetaHigh=70.3, phiLow=94.4, phiHigh=108.2, clockwise=True):
         """ Calibrate COBRA motor frequency """
-#        func.calibrate(cobras, thetaLow, thetaHigh, phiLow, phiHigh, clockwise)
         spin = func.CW_DIR if clockwise else func.CCW_DIR
+        m0 = (self._freqToPeriod(thetaHigh), self._freqToPeriod(thetaLow))
+        m1 = (self._freqToPeriod(phiHigh), self._freqToPeriod(phiLow))
         for c in cobras:
-            c.p = func.CalParams(m0=(thetaLow,thetaHigh), m1=(phiLow, phiHigh), en=(True,True), dir=spin)
-        err = func.CAL(cobras)
+            c.p = func.CalParams(m0=m0, m1=m1, en=(True,True), dir=spin)
+        err = func.CAL(cobras, timeout=65535)
         if err:
             self.logger.error(f'send Calibrate command failed')
         else:
             self.logger.info(f'send Calibrate command succeeded')
 
-    def houseKeeping(self, module=1, m0=(0,1000), m1=(0,1000), temps=(16.0,31.0), cur=(0.25,1.2), volt=(9.5,10.5)):
+    def houseKeeping(self, modules=None, m0=(0,1000), m1=(0,1000), temps=(16.0,31.0), cur=(0.25,1.2), volt=(9.5,10.5)):
         """ HK command """
 
-        for board in [1, 2]:
-            # two boards in one module
-            cobra_num = np.arange(board, self.nCobrasPerModule+1, 2)
-            cobras = self.allocateCobraRange(module, cobra_num)
-            for c in cobras:
-                c.p = func.HkParams(m0, m1, temps, cur, volt)
-            err = func.HK(cobras)
-            if err:
-                self.logger.error(f'send HK command failed')
-            else:
-                self.logger.info(f'send HK command succeeded')
+        if modules is None:
+            modules = [1]
+        elif np.isscalar(modules):
+            modules = [modules]
+
+        for m in modules:
+            self.logger.info(f'HK command for Cobra module #{m}')
+            for board in [1, 2]:
+                # two boards in one module
+                cobra_num = np.arange(board, self.nCobrasPerModule+1, 2)
+                cobras = self.allocateCobraRange(m, cobra_num)
+                for c in cobras:
+                    c.p = func.HkParams(m0, m1, temps, cur, volt)
+                err = func.HK(cobras)
+                if err:
+                    self.logger.error(f'send HK command failed')
+                else:
+                    self.logger.info(f'send HK command succeeded')
 
     def moveAllThetaPhiFromHome(self, cobras, thetaMove, phiMove, thetaFast=True, phiFast=True):
         """ Move all cobras by theta and phi angles from home
