@@ -177,6 +177,7 @@ class moduleAnalyze():
         phiSpeedRV = np.zeros(57, dtype=float)
         phiStops = phiAngRV[:, :, 0] - delta
         cnt = np.zeros(regions)
+        bad = np.full(57, False)
 
         for c in self.goodIdx:
             # calculate phi motor maps in Johannes way
@@ -224,12 +225,18 @@ class moduleAnalyze():
 
             # fill the zeros closed to hard stops
             nz = np.nonzero(phiMMFW[c])[0]
-            phiMMFW[c, :nz[0]] = phiMMFW[c, nz[0]]
-            phiMMFW[c, nz[-1]+1:] = phiMMFW[c, nz[-1]]
+            if nz.size > 0:
+                phiMMFW[c, :nz[0]] = phiMMFW[c, nz[0]]
+                phiMMFW[c, nz[-1]+1:] = phiMMFW[c, nz[-1]]
+            else:
+                bad[c] = True
 
             nz = np.nonzero(phiMMRV[c])[0]
-            phiMMRV[c, :nz[0]] = phiMMRV[c, nz[0]]
-            phiMMRV[c, nz[-1]+1:] = phiMMRV[c, nz[-1]]
+            if nz.size > 0:
+                phiMMRV[c, :nz[0]] = phiMMRV[c, nz[0]]
+                phiMMRV[c, nz[-1]+1:] = phiMMRV[c, nz[-1]]
+            else:
+                bad[c] = True
 
             # calculate average speed
             mSteps = 0
@@ -265,15 +272,19 @@ class moduleAnalyze():
                 mm = np.interp(x, xp, fp)
                 diff = mm[1:] - mm[:-1]
                 nz = np.nonzero(diff)[0]
-                phiMMFW2[c] += diff
-                cnt[nz[:-1]] += 1
-                if phiAngFW[c, n, k] % binSize != 0:
-                    cnt[nz[-1]] += (phiAngFW[c, n, k] % binSize) / binSize
-                else:
-                    cnt[nz[-1]] += 1
+                if nz.size > 0:
+                    phiMMFW2[c] += diff
+                    cnt[nz[:-1]] += 1
+                    if phiAngFW[c, n, k] % binSize != 0:
+                        cnt[nz[-1]] += (phiAngFW[c, n, k] % binSize) / binSize
+                    else:
+                        cnt[nz[-1]] += 1
             nz = np.nonzero(cnt)[0]
-            phiMMFW2[c, nz] = binSize / (phiMMFW2[c, nz] / cnt[nz])
-            phiMMFW2[c, nz[-1]+1:] = phiMMFW2[c, nz[-1]]
+            if nz.size > 0:
+                phiMMFW2[c, nz] = binSize / (phiMMFW2[c, nz] / cnt[nz])
+                phiMMFW2[c, nz[-1]+1:] = phiMMFW2[c, nz[-1]]
+            else:
+                bad[c] = True
 
             cnt[:] = 0
             for n in range(repeat):
@@ -287,17 +298,21 @@ class moduleAnalyze():
                 mm = np.interp(x, xp, fp)
                 diff = mm[1:] - mm[:-1]
                 nz = np.nonzero(diff)[0]
-                phiMMRV2[c] += diff
-                cnt[nz[1:-1]] += 1
-                cnt[nz[0]] += 1 - (phiAngRV[c, n, k] % binSize) / binSize
-                if phiAngRV[c, n, 0] % binSize != 0:
-                    cnt[nz[-1]] += (phiAngRV[c, n, 0] % binSize) / binSize
-                else:
-                    cnt[nz[-1]] += 1
+                if nz.size > 0:
+                    phiMMRV2[c] += diff
+                    cnt[nz[1:-1]] += 1
+                    cnt[nz[0]] += 1 - (phiAngRV[c, n, k] % binSize) / binSize
+                    if phiAngRV[c, n, 0] % binSize != 0:
+                        cnt[nz[-1]] += (phiAngRV[c, n, 0] % binSize) / binSize
+                    else:
+                        cnt[nz[-1]] += 1
             nz = np.nonzero(cnt)[0]
-            phiMMRV2[c, nz] = binSize / (phiMMRV2[c, nz] / cnt[nz])
-            phiMMRV2[c, :nz[0]] = phiMMRV2[c, nz[0]]
-            phiMMRV2[c, nz[-1]+1:] = phiMMRV2[c, nz[-1]]
+            if nz.size > 0:
+                phiMMRV2[c, nz] = binSize / (phiMMRV2[c, nz] / cnt[nz])
+                phiMMRV2[c, :nz[0]] = phiMMRV2[c, nz[0]]
+                phiMMRV2[c, nz[-1]+1:] = phiMMRV2[c, nz[-1]]
+            else:
+                bad[c] = True
 
         # save calculation result
         np.save(dataPath + '/phiMMFW_A', phiMMFW)
@@ -306,10 +321,11 @@ class moduleAnalyze():
         np.save(dataPath + '/phiMMRV2_A', phiMMRV2)
         np.save(dataPath + '/phiSpeedFW_A', phiSpeedFW)
         np.save(dataPath + '/phiSpeedRV_A', phiSpeedRV)
+        np.save(dataPath + '/bad_A', np.where(bad)[0])
 
         # update XML configuration
         new = self.calibModel
-        idx = self.goodIdx
+        idx = np.array([c for c in self.goodIdx if not bad[c]])
 
         sPhiFW = binSize / new.S2Pm
         sPhiRV = binSize / new.S2Nm
@@ -464,14 +480,14 @@ class moduleAnalyze():
                 thetaAngRV[c, n] += (home2 - home1 + 0.1) % (np.pi*2) - 0.2
 
         # mark bad cobras by checking hard stops
-        bad = np.where(np.any(thetaAngRV[:, :, 0] < np.pi*2, axis=1))[0]
+        badRange = np.where(np.any(thetaAngRV[:, :, 0] < np.pi*2, axis=1))[0]
 
         # save calculation result
         np.save(dataPath + '/thetaCenter_A', thetaCenter)
         np.save(dataPath + '/thetaRadius_A', thetaRadius)
         np.save(dataPath + '/thetaAngFW_A', thetaAngFW)
         np.save(dataPath + '/thetaAngRV_A', thetaAngRV)
-        np.save(dataPath + '/bad_A', bad)
+        np.save(dataPath + '/badRange_A', badRange)
 
         # use both Johannes way and average steps for motor maps
         binSize = np.deg2rad(3.6)
@@ -484,6 +500,7 @@ class moduleAnalyze():
         thetaSpeedRV = np.zeros(57, dtype=float)
         thetaStops = thetaAngRV[:, :, 0] - delta
         cnt = np.zeros(regions)
+        bad = np.full(57, False)
 
         for c in self.goodIdx:
             # calculate theta motor maps in Jonhannes way
@@ -531,12 +548,18 @@ class moduleAnalyze():
 
             # fill the zeros closed to hard stops
             nz = np.nonzero(thetaMMFW[c])[0]
-            thetaMMFW[c, :nz[0]] = thetaMMFW[c, nz[0]]
-            thetaMMFW[c, nz[-1]+1:] = thetaMMFW[c, nz[-1]]
+            if nz.size > 0:
+                thetaMMFW[c, :nz[0]] = thetaMMFW[c, nz[0]]
+                thetaMMFW[c, nz[-1]+1:] = thetaMMFW[c, nz[-1]]
+            else:
+                bad[c] = True
 
             nz = np.nonzero(thetaMMRV[c])[0]
-            thetaMMRV[c, :nz[0]] = thetaMMRV[c, nz[0]]
-            thetaMMRV[c, nz[-1]+1:] = thetaMMRV[c, nz[-1]]
+            if nz.size > 0:
+                thetaMMRV[c, :nz[0]] = thetaMMRV[c, nz[0]]
+                thetaMMRV[c, nz[-1]+1:] = thetaMMRV[c, nz[-1]]
+            else:
+                bad[c] = True
 
             # calculate average speed
             mSteps = 0
@@ -572,15 +595,19 @@ class moduleAnalyze():
                 mm = np.interp(x, xp, fp)
                 diff = mm[1:] - mm[:-1]
                 nz = np.nonzero(diff)[0]
-                thetaMMFW2[c] += diff
-                cnt[nz[:-1]] += 1
-                if thetaAngFW[c, n, k] % binSize != 0:
-                    cnt[nz[-1]] += (thetaAngFW[c, n, k] % binSize) / binSize
-                else:
-                    cnt[nz[-1]] += 1
+                if nz.size > 0:
+                    thetaMMFW2[c] += diff
+                    cnt[nz[:-1]] += 1
+                    if thetaAngFW[c, n, k] % binSize != 0:
+                        cnt[nz[-1]] += (thetaAngFW[c, n, k] % binSize) / binSize
+                    else:
+                        cnt[nz[-1]] += 1
             nz = np.nonzero(cnt)[0]
-            thetaMMFW2[c, nz] = binSize / (thetaMMFW2[c, nz] / cnt[nz])
-            thetaMMFW2[c, nz[-1]+1:] = thetaMMFW2[c, nz[-1]]
+            if nz.size > 0:
+                thetaMMFW2[c, nz] = binSize / (thetaMMFW2[c, nz] / cnt[nz])
+                thetaMMFW2[c, nz[-1]+1:] = thetaMMFW2[c, nz[-1]]
+            else:
+                bad[c] = True
 
             cnt[:] = 0
             for n in range(repeat):
@@ -594,17 +621,21 @@ class moduleAnalyze():
                 mm = np.interp(x, xp, fp)
                 diff = mm[1:] - mm[:-1]
                 nz = np.nonzero(diff)[0]
-                thetaMMRV2[c] += diff
-                cnt[nz[1:-1]] += 1
-                cnt[nz[0]] += 1 - (thetaAngRV[c, n, k] % binSize) / binSize
-                if thetaAngRV[c, n, 0] % binSize != 0:
-                    cnt[nz[-1]] += (thetaAngRV[c, n, 0] % binSize) / binSize
-                else:
-                    cnt[nz[-1]] += 1
+                if nz.size > 0:
+                    thetaMMRV2[c] += diff
+                    cnt[nz[1:-1]] += 1
+                    cnt[nz[0]] += 1 - (thetaAngRV[c, n, k] % binSize) / binSize
+                    if thetaAngRV[c, n, 0] % binSize != 0:
+                        cnt[nz[-1]] += (thetaAngRV[c, n, 0] % binSize) / binSize
+                    else:
+                        cnt[nz[-1]] += 1
             nz = np.nonzero(cnt)[0]
-            thetaMMRV2[c, nz] = binSize / (thetaMMRV2[c, nz] / cnt[nz])
-            thetaMMRV2[c, :nz[0]] = thetaMMRV2[c, nz[0]]
-            thetaMMRV2[c, nz[-1]+1:] = thetaMMRV2[c, nz[-1]]
+            if nz.size > 0:
+                thetaMMRV2[c, nz] = binSize / (thetaMMRV2[c, nz] / cnt[nz])
+                thetaMMRV2[c, :nz[0]] = thetaMMRV2[c, nz[0]]
+                thetaMMRV2[c, nz[-1]+1:] = thetaMMRV2[c, nz[-1]]
+            else:
+                bad[c] = True
 
         # save calculation result
         np.save(dataPath + '/thetaMMFW_A', thetaMMFW)
@@ -613,10 +644,11 @@ class moduleAnalyze():
         np.save(dataPath + '/thetaMMRV2_A', thetaMMRV2)
         np.save(dataPath + '/thetaSpeedFW_A', thetaSpeedFW)
         np.save(dataPath + '/thetaSpeedRV_A', thetaSpeedRV)
+        np.save(dataPath + '/bad_A', np.where(bad)[0])
 
         # update XML configuration
         new = self.calibModel
-        idx = self.goodIdx
+        idx = np.array([c for c in self.goodIdx if not bad[c]])
 
         sThetaFW = binSize / new.S2Pm
         sThetaRV = binSize / new.S2Nm

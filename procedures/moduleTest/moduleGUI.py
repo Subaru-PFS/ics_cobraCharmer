@@ -155,7 +155,7 @@ class MainWindow(QMainWindow):
         if len(self.xml.text()) <= 0:
             self.statusBar().showMessage(f"Error: enter XML filename!")
             return
-        xml = '../xml/' + self.xml.text()
+        xml = self.xml.text()
         if not os.path.exists(xml):
             self.statusBar().showMessage(f"Error: {xml} is not presented!")
             return
@@ -186,9 +186,14 @@ class MainWindow(QMainWindow):
         L1 = self.pfi.calibModel.L1[self.mt.goodIdx]
         L2 = self.pfi.calibModel.L2[self.mt.goodIdx]
         s = self.mt.goodIdx[self.mt.goodIdx<=camSplit].shape[0]
+        T1 = self.pfi.calibModel.tht0[self.mt.goodIdx]
+        T2 = self.pfi.calibModel.tht1[self.mt.goodIdx]
 
-        plt.figure(1)
-        plt.clf()
+#        plt.figure(1)
+#        plt.clf()
+        plt.close()
+        plt.figure(figsize=(15,6))
+        plt.subplot(211)
         ax = plt.gca()
         ax.axis('equal')
 
@@ -198,16 +203,22 @@ class MainWindow(QMainWindow):
         p1 = c[:s]
         p2 = p1 + L1[:s]*np.exp(t[:s]*(1j))
         p3 = p2 + L2[:s]*np.exp(p[:s]*(1j))
+        t1 = p1 + L1[:s]*np.exp(T1[:s]*(1j))
+        t2 = p1 + L1[:s]*np.exp(T2[:s]*(1j))
+        ax.plot(t1.real, t1.imag, 'y.')
+        ax.plot(t2.real, t2.imag, 'y.')
         for n in range(s):
             ax.plot([p1[n].real, p2[n].real], [p1[n].imag, p2[n].imag], 'g', linewidth=1)
             ax.plot([p2[n].real, p3[n].real], [p2[n].imag, p3[n].imag], 'c', linewidth=1)
-            ax.text(c[n].real-20, c[n].imag-40, f'{np.rad2deg(t[n]):.1f}')
-            ax.text(c[n].real-20, c[n].imag-60, f'{np.rad2deg((p-t)[n]+np.pi):.1f}')
+            ax.text(c[n].real-20, c[n].imag-30, f'#{self.mt.goodIdx[n]+1}')
+            ax.text(c[n].real-20, c[n].imag-50, f'{np.rad2deg(t[n]):.1f}')
+            ax.text(c[n].real-20, c[n].imag-70, f'{np.rad2deg((p-t)[n]+np.pi):.1f}')
 
-        ax.set_title(f'1st camera')
+#        ax.set_title(f'1st camera')
 
-        plt.figure(2)
-        plt.clf()
+#        plt.figure(2)
+#        plt.clf()
+        plt.subplot(212)
         ax = plt.gca()
         ax.axis('equal')
 
@@ -217,13 +228,18 @@ class MainWindow(QMainWindow):
         p1 = c[s:]
         p2 = p1 + L1[s:]*np.exp(t[s:]*(1j))
         p3 = p2 + L2[s:]*np.exp(p[s:]*(1j))
+        t1 = p1 + L1[s:]*np.exp(T1[s:]*(1j))
+        t2 = p1 + L1[s:]*np.exp(T2[s:]*(1j))
+        ax.plot(t1.real, t1.imag, 'y.')
+        ax.plot(t2.real, t2.imag, 'y.')
         for n in range(len(self.mt.goodIdx)-s):
             ax.plot([p1[n].real, p2[n].real], [p1[n].imag, p2[n].imag], 'g', linewidth=1)
             ax.plot([p2[n].real, p3[n].real], [p2[n].imag, p3[n].imag], 'c', linewidth=1)
-            ax.text(c[s+n].real-20, c[s+n].imag-40, f'{np.rad2deg(t[s+n]):.1f}')
-            ax.text(c[s+n].real-20, c[s+n].imag-60, f'{np.rad2deg((p-t)[s+n]+np.pi):.1f}')
+            ax.text(c[s+n].real-20, c[s+n].imag-30, f'#{self.mt.goodIdx[s+n]+1}')
+            ax.text(c[s+n].real-20, c[s+n].imag-50, f'{np.rad2deg(t[s+n]):.1f}')
+            ax.text(c[s+n].real-20, c[s+n].imag-70, f'{np.rad2deg((p-t)[s+n]+np.pi):.1f}')
 
-            ax.set_title(f'2nd camera')
+#        ax.set_title(f'2nd camera')
         plt.show()
 
 
