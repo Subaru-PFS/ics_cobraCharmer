@@ -40,6 +40,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self.control_btn = []
         self.setWindowTitle('Cobra controller')
         self.statusBar().showMessage('Please load XML file')
 
@@ -51,12 +52,16 @@ class MainWindow(QMainWindow):
         self.btn_xml.clicked.connect(self.click_load)
         block1.addWidget(self.btn_xml)
         block1.addWidget(QSplitter(Qt.Vertical), QSizePolicy.Expanding)
+        self.cb_refresh = QCheckBox('auto refresh')
+        block1.addWidget(self.cb_refresh)
         btn = QPushButton('Check positions')
+        self.control_btn.append(btn)
         btn.clicked.connect(self.check_positions)
         block1.addWidget(btn)
 
         block2 = QHBoxLayout()
         btn = QPushButton('Forward')
+        self.control_btn.append(btn)
         block2.addWidget(btn, QSizePolicy.Expanding)
         btn.clicked.connect(lambda: self.click_go(1))
         onlyInt = QIntValidator()
@@ -69,6 +74,7 @@ class MainWindow(QMainWindow):
         self.phi.setValidator(onlyInt)
         block2.addWidget(self.phi)
         btn = QPushButton('Reverse')
+        self.control_btn.append(btn)
         block2.addWidget(btn, QSizePolicy.Expanding)
         btn.clicked.connect(lambda: self.click_go(-1))
 
@@ -133,6 +139,8 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage('No cobras selected!')
             return
 
+        for btn in self.control_btn:
+            btn.setEnabled(False)
         use_fast = not self.btn_speed.isChecked()
         cobras = getCobras(cIdx)
         theta_steps = int(self.theta.text()) * direction
@@ -140,6 +148,10 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage('Start to moving cobra...')
         self.pfi.moveAllSteps(cobras, theta_steps, phi_steps, thetaFast=use_fast, phiFast=use_fast)
         self.statusBar().showMessage('Moving cobra succeed!')
+        if self.cb_refresh.isChecked():
+            self.check_positions()
+        for btn in self.control_btn:
+            btn.setEnabled(True)
 
     def click_odd(self, pressed):
         for idx in range(0, 57, 2):
@@ -166,6 +178,7 @@ class MainWindow(QMainWindow):
         self.mt = ModuleTest(IP, xml, brokens=None, camSplit=camSplit)
         self.pfi = self.mt.pfi
         self.btn_xml.setStyleSheet('background-color: green')
+        self.btn_xml.setEnabled(False)
 
     def check_positions(self):
         """ show current cobra arm angles """
@@ -189,8 +202,6 @@ class MainWindow(QMainWindow):
         T1 = self.pfi.calibModel.tht0[self.mt.goodIdx]
         T2 = self.pfi.calibModel.tht1[self.mt.goodIdx]
 
-#        plt.figure(1)
-#        plt.clf()
         plt.close()
         plt.figure(figsize=(15,6))
         plt.subplot(211)
@@ -214,10 +225,6 @@ class MainWindow(QMainWindow):
             ax.text(c[n].real-20, c[n].imag-50, f'{np.rad2deg(t[n]):.1f}')
             ax.text(c[n].real-20, c[n].imag-70, f'{np.rad2deg((p-t)[n]+np.pi):.1f}')
 
-#        ax.set_title(f'1st camera')
-
-#        plt.figure(2)
-#        plt.clf()
         plt.subplot(212)
         ax = plt.gca()
         ax.axis('equal')
@@ -239,7 +246,6 @@ class MainWindow(QMainWindow):
             ax.text(c[s+n].real-20, c[s+n].imag-50, f'{np.rad2deg(t[s+n]):.1f}')
             ax.text(c[s+n].real-20, c[s+n].imag-70, f'{np.rad2deg((p-t)[s+n]+np.pi):.1f}')
 
-#        ax.set_title(f'2nd camera')
         plt.show()
 
 

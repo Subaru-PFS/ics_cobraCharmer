@@ -426,13 +426,18 @@ class ModuleTest():
 
             cnt[:] = 0
             for n in range(repeat):
+                first = 0
                 for k in range(iteration):
                     if phiAngRV[c, n, k+1] - phiAngRV[c, n, k] > 0 or phiAngRV[c, n, k+1] < delta:
-                        # hit hard stop or somethings went wrong, stop here
-                        break
+                        if k == 0:
+                            # sticky at hard stops ???, skip this point
+                            first = 1
+                        else:
+                            # hit hard stop or somethings went wrong, stop here
+                            break
                 x = np.arange(regions+1) * binSize
-                xp = np.flip(phiAngRV[c, n, :k+1], 0)
-                fp = np.arange(k+1) * steps
+                xp = np.flip(phiAngRV[c, n, first:k+1], 0)
+                fp = np.arange(k+1-first) * steps
                 mm = np.interp(x, xp, fp)
                 diff = mm[1:] - mm[:-1]
                 nz = np.nonzero(diff)[0]
@@ -440,8 +445,8 @@ class ModuleTest():
                     phiMMRV2[c] += diff
                     cnt[nz[1:-1]] += 1
                     cnt[nz[0]] += 1 - (phiAngRV[c, n, k] % binSize) / binSize
-                    if phiAngRV[c, n, 0] % binSize != 0:
-                        cnt[nz[-1]] += (phiAngRV[c, n, 0] % binSize) / binSize
+                    if phiAngRV[c, n, first] % binSize != 0:
+                        cnt[nz[-1]] += (phiAngRV[c, n, first] % binSize) / binSize
                     else:
                         cnt[nz[-1]] += 1
             nz = np.nonzero(cnt)[0]
