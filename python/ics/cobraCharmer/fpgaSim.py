@@ -3,12 +3,17 @@ import logging
 import struct
 import asyncio
 
-from convert import get_freq
+from .convert import get_freq
+from . import fpgaProtocol as proto
+from .fpgaLogger import FPGAProtocolLogger
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
 
 class IncompleteDataError(Exception):
+    pass
+
+class ChecksumError(Exception):
     pass
 
 class FPGAProtocol(asyncio.Protocol):
@@ -27,14 +32,6 @@ class FPGAProtocol(asyncio.Protocol):
 
     """
 
-    RUN_HEADER_SIZE = 10
-    RUN_ARM_SIZE = 14
-    POWER_HEADER_SIZE = 8
-    SETFREQ_HEADER_SIZE = 8
-    SETFREQ_ARM_SIZE = 6
-    CAL_HEADER_SIZE = 8
-    CAL_ARM_SIZE = 10
-
     def __init__(self, fpga=None, debug=False):
         """ Accept a new connection. Print out commands and optionally forwar to real FPGA.
 
@@ -49,15 +46,7 @@ class FPGAProtocol(asyncio.Protocol):
         self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
         self.ioLogger.setLevel(logging.DEBUG if debug else logging.INFO)
         self.fpga = fpga
-
-        self.handlers = {1: self.runHandler,
-                         2: self.calHandler,
-                         3: self.setFreqHandler,
-                         4: self.housekeepingHandler,
-                         5: self.powerHandler,
-                         6: self.diagHandler,
-                         7: self.flushHandler,
-                         8: self.exitHandler,}
+        self.fpgaLogger = FPGAProtocolLogger(debug=True)
 
         self.resetBuffer()
         self.pleaseFinishLoop = False
@@ -76,104 +65,138 @@ class FPGAProtocol(asyncio.Protocol):
         self.ioLogger.debug("received %d bytes, with %d already buffered",
                             len(data), len(self.data))
         self.data.extend(data)
-        self.handle()
+        self.processAllCommands()
 
         if self.pleaseFinishLoop:
             asyncio.get_event_loop().stop()
 
     def resetBuffer(self):
-        self.ioLogger.debug('clearing buffer')
+        self.ioLogger.info('clearing buffer')
         self.data = bytearray()
 
-    def handle(self):
+    def processAllCommands(self):
         """ Look for complete commands in .data and handle them all. """
 
         while len(self.data) >= 2:
-            self.cmdHeader = self.data[:2]
-            self.cmdCode, self.cmdNum = self.cmdHeader
+            self.cmdCode, self.cmdNum = self.data[:2]
             self.ioLogger.debug("command %d, %d, %d bytes",
                                 self.cmdCode, self.cmdNum, len(self.data))
             try:
-                self.handlers[self.cmdCode]()
+                self.processOneCmd()
             except IncompleteDataError:
-                self.ioLogger.info('not enough data for one command (%d bytes). Waiting.', len(self.data))
+                self.ioLogger.debug('not enough data for one command (%d bytes). Waiting.', len(self.data))
                 return
             except KeyError:
                 raise RuntimeError(f"unknown call: {self.data[0]}")
             self.ioLogger.debug('command %d,%d handled; %d bytes in buffer',
                                 self.cmdCode, self.cmdNum, len(self.data))
 
-    def runHandler(self):
-        """ Look for a complete RUN command and process it.
+    def processOneCmd(self):
+        """ Remove a complete command from .data and process it. """
 
-        Run commands have a header and a body.
+        header, data, self.data = self.splitCommand(self.data)
+        cmd = int(header[0])
 
-        Header:
-          - nCobras    -- the number of cobras in the body.
-          - timeLimit  -- the number of msec to ?? for.
-          - interleave --
+        self.fpgaLogger.logCommand(header, data)
+
+        # Only two command return anything interesting.
+        if cmd == proto.HOUSEKEEPING_CMD:
+            self.housekeepingHandler(header, data)
+            return
+        if cmd == proto.DIAG_CMD:
+            self.diagHandler()
+            return
+
+        if cmd == proto.EXIT_CMD:
+            self.pleaseFinishLoop = True
+        elif cmd == proto.FLUSH_CMD:
+            self.resetBuffer()
+
+        # Acknowledge receipt of the command
+        self.respond()
+
+        # For some commands, declare that command is done. Could pause here.
+        if cmd in {proto.RUN_CMD, proto.CAL_CMD, proto.SETFREQ_CMD}:
+            self.respond()
+
+    def splitCommand(self, buf):
+        """ Look for a complete command and split it off.
+
+        Args
+        ----
+        buf : bytearray
+
+        Returns
+        -------
+        header : bytearray
+          the command header
+        data : bytearray or None
+          the command data, if any
+        leftovers : bytearray
+          any unconsumed data in buf
+
+        Raises
+        ------
+        IncompleteDataError, if there is not enough data to complete a single command.
+        ChecksumError, if the checksum is not valid.
         """
 
-        if len(self.data) < self.RUN_HEADER_SIZE:
+        try:
+            cmd = int(buf[0])
+        except IndexError:
             raise IncompleteDataError()
 
-        nCobras, timeLimit, interleave, CRC = struct.unpack('>HHHH',
-                                                            self.data[2:self.RUN_HEADER_SIZE])
-        self.ioLogger.debug(f"run header: nCobras={nCobras}")
-
-        if len(self.data) < self.RUN_HEADER_SIZE + nCobras * self.RUN_ARM_SIZE:
+        headerSize, itemSize = proto.cmds[cmd]
+        if len(buf) < headerSize:
             raise IncompleteDataError()
 
-        splitAt = self.RUN_HEADER_SIZE + nCobras*self.RUN_ARM_SIZE
-        runData, self.data = self.data[self.RUN_HEADER_SIZE:splitAt], self.data[splitAt:]
+        header, allData = buf[:headerSize], buf[headerSize:]
 
-        dirName = {False:' cw', True:'ccw'}
-        self.logger.info('CMD: run (%d cobras)' % (nCobras))
-        for c_i in range(nCobras):
-            (flags,
-             thetaOntime, thetaSteps, thetaOfftime,
-             phiOntime, phiSteps, phiOfftime) = struct.unpack('>HHHHHHH',
-                                                              runData[c_i*self.RUN_ARM_SIZE:
-                                                                      (c_i + 1)*self.RUN_ARM_SIZE])
-            thetaDir = bool(flags & 1)
-            phiDir = bool(flags & 2)
-            thetaEnable = bool(flags & 4)
-            phiEnable = bool(flags & 8)
-            boardId = (flags >> 4) & 0x7f
-            cobraId = (flags >> 11) & 0x1f
+        if itemSize == 0:
+            nCobras = 0
+        else:
+            _, cmdNum, nCobras = struct.unpack('>BBH', header[:4])
 
-            self.logger.info('    cobra= %2d %2d   Theta= %d %s  %3d %5.1f %5.1f   Phi= %d %s  %3d %5.1f %5.1f' %
-                             (boardId, cobraId,
-                              thetaEnable, dirName[thetaDir], thetaSteps,
-                              thetaOntime, thetaOfftime,
-                              phiEnable, dirName[phiDir], phiSteps,
-                              phiOntime, phiOfftime))
-        self._respond()
+        dataLen = nCobras*itemSize
+        if len(allData) < dataLen:
+            raise IncompleteDataError()
 
-    def calHandler(self):
+        # empty bytearray if there is no per-arm data
+        data = allData[:dataLen]
+
+        # checksum and leftovers
+        cmdLen = headerSize + dataLen
+        checksum = (sum(buf[:cmdLen]) - header[-2] - header[-1]) & 0xffff
+        hdrChecksum = (header[-2] << 8) + header[-1]
+        if (checksum + hdrChecksum) != 65536:
+            raise ChecksumError(f"cmd={cmd} cmdNum={cmdNum} checksum={checksum}/{hdrChecksum} header={header} data={data}")
+
+        return header, data, buf[cmdLen:]
+
+    def XXcalHandler(self):
         """ Look for a complete CALibrate command and process it. """
 
-        if len(self.data) < self.CAL_HEADER_SIZE:
+        if len(self.data) < proto.CAL_HEADER_SIZE:
             raise IncompleteDataError()
 
         dirName = {False:' cw', True:'ccw'}
 
         nCobras, timeLimit, CRC = struct.unpack('>HHH',
-                                                self.data[2:self.CAL_HEADER_SIZE])
+                                                self.data[2:proto.CAL_HEADER_SIZE])
         self.ioLogger.debug(f"CAL header: nCobras={nCobras}")
 
-        if len(self.data) < self.CAL_HEADER_SIZE + nCobras * self.CAL_ARM_SIZE:
+        if len(self.data) < proto.CAL_HEADER_SIZE + nCobras * proto.CAL_ARM_SIZE:
             raise IncompleteDataError()
 
-        splitAt = self.CAL_HEADER_SIZE + nCobras*self.CAL_ARM_SIZE
-        calData, self.data = self.data[self.CAL_HEADER_SIZE:splitAt], self.data[splitAt:]
+        splitAt = proto.CAL_HEADER_SIZE + nCobras*proto.CAL_ARM_SIZE
+        calData, self.data = self.data[proto.CAL_HEADER_SIZE:splitAt], self.data[splitAt:]
 
         self.logger.info('CMD: cal (%d cobras)' % (nCobras))
         for c_i in range(nCobras):
             (flags, thetaRangeLo, thetaRangeHi,
              phiRangeLo, phiRangeHi) = struct.unpack('>HHHHH',
-                                                     calData[c_i*self.CAL_ARM_SIZE:
-                                                             (c_i + 1)*self.CAL_ARM_SIZE])
+                                                     calData[c_i*proto.CAL_ARM_SIZE:
+                                                             (c_i + 1)*proto.CAL_ARM_SIZE])
             thetaDir = bool(flags & 1)
             phiDir = bool(flags & 2)
             setTheta = bool(flags & 4)
@@ -185,76 +208,45 @@ class FPGAProtocol(asyncio.Protocol):
                              (boardId, cobraId,
                               setTheta, dirName[thetaDir], get_freq(thetaRangeLo), get_freq(thetaRangeHi),
                               setPhi, dirName[phiDir], get_freq(phiRangeLo), get_freq(phiRangeHi)))
-        self._respond()
+        self.respond()
+        self.respond()
 
-    def setFreqHandler(self):
-        """ Look for a complete SET FREQUENCY command and process it.
+    def housekeepingHandler(self, header, data):
+        self.respond()
 
-        No processing is done
-        """
-
-        if len(self.data) < self.SETFREQ_HEADER_SIZE:
-            raise IncompleteDataError()
-
-        nCobras, timeLimit, CRC = struct.unpack('>HHH',
-                                                self.data[2:self.SETFREQ_HEADER_SIZE])
-        self.ioLogger.debug(f"SET header: nCobras={nCobras}")
-
-        if len(self.data) < self.SETFREQ_HEADER_SIZE + nCobras * self.SETFREQ_ARM_SIZE:
-            raise IncompleteDataError()
-
-        splitAt = self.SETFREQ_HEADER_SIZE + nCobras*self.SETFREQ_ARM_SIZE
-        setData, self.data = self.data[self.SETFREQ_HEADER_SIZE:splitAt], self.data[splitAt:]
-
-        self.logger.info('CMD: setFreq (%d cobras)' % (nCobras))
-        for c_i in range(nCobras):
-            flags, thetaPeriod, phiPeriod = struct.unpack('>HHH',
-                                                          setData[c_i*self.SETFREQ_ARM_SIZE:
-                                                                  (c_i + 1)*self.SETFREQ_ARM_SIZE])
-            setTheta = bool(flags & 1)
-            setPhi = bool(flags & 2)
-            boardId = (flags >> 4) & 0x7f
-            cobraId = (flags >> 11) & 0x1f
-
-            self.logger.info('    cobra: %2d %2d Theta: %d %0.2f Phi: %d %0.2f' %
-                             (boardId, cobraId,
-                              setTheta, get_freq(thetaPeriod),
-                              setPhi, get_freq(phiPeriod)))
-        self._respond()
-
-    def housekeepingHandler(self):
-        self._respond()
-
-    def powerHandler(self):
-        """ Look for a complete RST command and process it. """
-
-        if len(self.data) < self.POWER_HEADER_SIZE:
-            raise IncompleteDataError()
-
-        data, self.data = self.data[2:self.POWER_HEADER_SIZE], self.data[self.POWER_HEADER_SIZE:]
-
-        sectorPower, sectorReset, timeout, CRC = struct.unpack('>BBHH', data)
-        self.logger.info('CMD: power')
-        self.logger.info('    sectorPower=0x%02x sectorReset=0x%02x' % (sectorPower, sectorReset))
-
-        self._respond()
+        boardNum, timeLimit, CRC = struct.unpack('>HHH',
+                                                 header[2:proto.HOUSEKEEPING_HEADER_SIZE])
+        temp1 = 23; temp2 = 24
+        mot = struct.pack('>%s' % ('H'*(4*28)),
+                          *([1234, 12, 2345, 23] * 28))
+        TLMheader = struct.pack('>BBHHH', self.cmdCode, self.cmdNum, boardNum, temp1, temp2)
+        TLM = TLMheader + mot
+        self._respond(TLM)
 
     def diagHandler(self):
-        self._respond()
+        counts = [5,4,3,2,1,0]
+        TLM = struct.pack('>BBBBBBBBHH', self.cmdCode, self.cmdNum, *counts, 0, 0)
+        self._respond(TLM)
 
-    def exitHandler(self):
-        self.pleaseFinishLoop = True
-        self.resetBuffer()
+    def XXpowerHandler(self):
+        """ Look for a complete RST command and process it. """
 
-    def flushHandler(self):
-        self.resetBuffer()
+        if len(self.data) < proto.POWER_HEADER_SIZE:
+            raise IncompleteDataError()
 
-        self._respond()
+        data, self.data = self.data[2:proto.POWER_HEADER_SIZE], self.data[proto.POWER_HEADER_SIZE:]
 
-    def _respond(self):
-        noError = bytes([self.cmdCode, self.cmdNum, 0,0,0,0])
-        self.transport.write(noError)
-        self.transport.write(noError)  # WHY two copies ?!?
+        sectorPower, sectorReset, timeout, CRC = struct.unpack('>BBHH', data)
+
+        self.respond()
+
+    def _respond(self, TLM):
+        self.fpgaLogger.logTlm(TLM)
+        self.transport.write(TLM)
+
+    def respond(self, respCode=0, respDetail=0):
+        TLM = struct.pack('>BBHH', self.cmdCode, self.cmdNum, respCode, respDetail)
+        self._respond(TLM)
 
 def main():
     parser = argparse.ArgumentParser('fpgaSim')
@@ -264,14 +256,17 @@ def main():
                         help='host port to listen on')
     parser.add_argument('--fpga', nargs='?', type=str, default='',
                         help='address to forward to')
-    parser.add_argument('--debug', nargs='?', type=bool,
+    parser.add_argument('--debug', action='store_true',
                         help='be chattier')
     args = parser.parse_args()
 
     logging.getLogger('asyncio').setLevel(logging.DEBUG if args.debug else logging.INFO)
+    logging.getLogger('').setLevel(logging.DEBUG if args.debug else logging.INFO)
+    logging.warning(f'starting asyncio with {args.debug}')
 
     loop = asyncio.get_event_loop()
     loop.set_debug(args.debug)
+    logging.info('launching server')
     fpgaCmdHandler = loop.create_server(lambda: FPGAProtocol(args.fpga, args.debug), args.host, args.port)
     server = loop.run_until_complete(fpgaCmdHandler)
     try:

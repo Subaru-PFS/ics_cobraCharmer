@@ -58,16 +58,16 @@ class PFIDesign():
 
         self.motorFreq1 = np.empty(self.nCobras)
         self.motorFreq2 = np.empty(self.nCobras)
-        
+
         self.motorOntimeFwd1 = np.empty(self.nCobras)
         self.motorOntimeFwd2 = np.empty(self.nCobras)
         self.motorOntimeRev1 = np.empty(self.nCobras)
         self.motorOntimeRev2 = np.empty(self.nCobras)
 
-        self.motorOfftimeFwd1 = np.empty(self.nCobras)
-        self.motorOfftimeFwd2 = np.empty(self.nCobras)
-        self.motorOfftimeRev1 = np.empty(self.nCobras)
-        self.motorOfftimeRev2 = np.empty(self.nCobras)
+        self.motorOntimeSlowFwd1 = np.empty(self.nCobras)
+        self.motorOntimeSlowFwd2 = np.empty(self.nCobras)
+        self.motorOntimeSlowRev1 = np.empty(self.nCobras)
+        self.motorOntimeSlowRev2 = np.empty(self.nCobras)
 
         # Check if the data containers have information about the motor maps
         slowCalTable = dataContainers[0].find("SLOW_CALIBRATION_TABLE")
@@ -123,10 +123,10 @@ class PFIDesign():
                 self.motorOntimeFwd2[i] = float(kinematics.find('Link2_fwd_Duration').text)
                 self.motorOntimeRev2[i] = float(kinematics.find('Link2_rev_Duration').text)
 
-                self.motorOfftimeFwd1[i] = float(kinematics.find('Link1_fwd_Intervals').text)
-                self.motorOfftimeRev1[i] = float(kinematics.find('Link1_rev_Intervals').text)
-                self.motorOfftimeFwd2[i] = float(kinematics.find('Link2_fwd_Intervals').text)
-                self.motorOfftimeRev2[i] = float(kinematics.find('Link2_rev_Intervals').text)
+                self.motorOntimeSlowFwd1[i] = float(kinematics.find('Link1_fwd_Duration_Slow').text)
+                self.motorOntimeSlowRev1[i] = float(kinematics.find('Link1_rev_Duration_Slow').text)
+                self.motorOntimeSlowFwd2[i] = float(kinematics.find('Link2_fwd_Duration_Slow').text)
+                self.motorOntimeSlowRev2[i] = float(kinematics.find('Link2_rev_Duration_Slow').text)
 
                 # Get the cobra motors speeds in degrees per step
                 slowJoint1Fwd = slowCalTable.find("Joint1_fwd_stepsizes").text.split(",")[2:-1]
@@ -150,6 +150,22 @@ class PFIDesign():
 
                 # Save the angular step in radians
                 self.angularSteps[i] = np.deg2rad(angularStep)
+
+        if hasattr(self, "motorMapSteps"):
+            # Set the theta and phi offset arrays
+            self.thtOffsets = np.arange(self.S1Pm.shape[1] + 1) * self.angularSteps[:, np.newaxis]
+            self.phiOffsets = np.arange(self.S2Pm.shape[1] + 1) * self.angularSteps[:, np.newaxis]
+
+            # Calculate the cumulative step sums
+            zeros = np.zeros((self.nCobras, 1))
+            self.posThtSlowSteps = np.hstack((zeros, np.cumsum(self.S1Pm, axis=1)))
+            self.negThtSlowSteps = np.hstack((zeros, np.cumsum(self.S1Nm, axis=1)))
+            self.posPhiSlowSteps = np.hstack((zeros, np.cumsum(self.S2Pm, axis=1)))
+            self.negPhiSlowSteps = np.hstack((zeros, np.cumsum(self.S2Nm, axis=1)))
+            self.posThtSteps = np.hstack((zeros, np.cumsum(self.F1Pm, axis=1)))
+            self.negThtSteps = np.hstack((zeros, np.cumsum(self.F1Nm, axis=1)))
+            self.posPhiSteps = np.hstack((zeros, np.cumsum(self.F2Pm, axis=1)))
+            self.negPhiSteps = np.hstack((zeros, np.cumsum(self.F2Nm, axis=1)))
 
     def updateMotorMaps(self, thtFwd=None, thtRev=None, phiFwd=None, phiRev=None, useSlowMaps=True):
         """Update cobra motor maps
@@ -336,7 +352,7 @@ class PFIDesign():
                 self.phiOut[i] = cw[i] - np.pi
                 kinematics.find("Joint2_CW_limit_angle").text = str(np.rad2deg(cw[i]))
 
-    def updateOntimes(self, thtFwd=None, thtRev=None, phiFwd=None, phiRev=None):
+    def updateOntimes(self, thtFwd=None, thtRev=None, phiFwd=None, phiRev=None, fast=True):
         """Update cobra ontimes
 
         Parameters
@@ -349,6 +365,8 @@ class PFIDesign():
             A numpy array with the cobras phi forward ontimes.
         phiRev: object
             A numpy array with the cobras phi reverse ontimes.
+        fast: boolean
+            Update fast or slow motor maps.
 
         """
 
@@ -363,18 +381,32 @@ class PFIDesign():
 
         for i in range(self.nCobras):
             kinematics = self.dataContainers[i].find("KINEMATICS")
-            if thtFwd is not None:
-                self.motorOntimeFwd1[i] = thtFwd[i]
-                kinematics.find("Link1_fwd_Duration").text = str(thtFwd[i])
-            if thtRev is not None:
-                self.motorOntimeRev1[i] = thtRev[i]
-                kinematics.find("Link1_rev_Duration").text = str(thtRev[i])
-            if phiFwd is not None:
-                self.motorOntimeFwd2[i] = phiFwd[i]
-                kinematics.find("Link2_fwd_Duration").text = str(phiFwd[i])
-            if phiRev is not None:
-                self.motorOntimeRev2[i] = phiRev[i]
-                kinematics.find("Link2_rev_Duration").text = str(phiRev[i])
+            if fast:
+                if thtFwd is not None:
+                    self.motorOntimeFwd1[i] = thtFwd[i]
+                    kinematics.find("Link1_fwd_Duration").text = str(thtFwd[i])
+                if thtRev is not None:
+                    self.motorOntimeRev1[i] = thtRev[i]
+                    kinematics.find("Link1_rev_Duration").text = str(thtRev[i])
+                if phiFwd is not None:
+                    self.motorOntimeFwd2[i] = phiFwd[i]
+                    kinematics.find("Link2_fwd_Duration").text = str(phiFwd[i])
+                if phiRev is not None:
+                    self.motorOntimeRev2[i] = phiRev[i]
+                    kinematics.find("Link2_rev_Duration").text = str(phiRev[i])
+            else:
+                if thtFwd is not None:
+                    self.motorOntimeSlowFwd1[i] = thtFwd[i]
+                    kinematics.find("Link1_fwd_Duration_Slow").text = str(thtFwd[i])
+                if thtRev is not None:
+                    self.motorOntimeSlowRev1[i] = thtRev[i]
+                    kinematics.find("Link1_rev_Duration_Slow").text = str(thtRev[i])
+                if phiFwd is not None:
+                    self.motorOntimeSlowFwd2[i] = phiFwd[i]
+                    kinematics.find("Link2_fwd_Duration_Slow").text = str(phiFwd[i])
+                if phiRev is not None:
+                    self.motorOntimeSlowRev2[i] = phiRev[i]
+                    kinematics.find("Link2_rev_Duration_Slow").text = str(phiRev[i])
 
     def createCalibrationFile(self, outputFileName):
         """Creates a new XML calibration file based on current configuration
