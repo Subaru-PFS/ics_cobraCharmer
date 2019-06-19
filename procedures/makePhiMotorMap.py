@@ -90,11 +90,11 @@ def moveToXYfromHome(pfi, idx, targets, dataPath, threshold=3.0, maxTries=12, ca
         pfi.moveXY(cobras, curPos, targets)
 
 
-def runMotorMap(repeat, steps, storagePath, outputXML):
+def runPhiMotorMap(fpgaHost, repeat, totalStep, steps, storagePath, oriXML):
     
     #datetoday=datetime.datetime.now().strftime("%Y%m%d")
     #datetoday='20181219'
-    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
+    #cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
     
     #storagePath = '/data/pfs/'+datetoday
     dataPath = storagePath+'/image'
@@ -137,9 +137,9 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
     evenCobras = moduleCobras2[2]
 
     # Initializing COBRA module
-    pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-    preciseXML=cobraCharmerPath+'/xml/precise_20190304.xml'
-    #preciseXML=cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
+    pfi = pfiControl.PFI(fpgaHost=fpgaHost) #'fpga' for real device.
+    #preciseXML=cobraCharmerPath+'/xml/updatePhiOntime_spare02_20190401.xml'
+    preciseXML=oriXML
 
     if not os.path.exists(preciseXML):
         print(f"Error: {preciseXML} not presented!")
@@ -163,7 +163,7 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
     allSteps, _ = pfi.calculateSteps(np.zeros(57), allMoves, np.zeros(57), np.zeros(57))
 
     # define the broken/good cobras
-    brokens = [1, 39, 43, 54]
+    brokens = []
     visibles= [e for e in range(1,58) if e not in brokens]
     badIdx = np.array(brokens) - 1
     goodIdx = np.array(visibles) - 1
@@ -179,39 +179,26 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
         goodGroupIdx[group] = goodIdx[goodIdx%3==group]
 
     # Home phi
-    pfi.moveAllSteps(allCobras, 0, -5000)
 
-    # Home theta
-    pfi.moveAllSteps(allCobras, -10000, 0)
-    pfi.moveAllSteps(allCobras, -5000, 0)
-
-    # Move the bad cobras to up/down positions
-    #pfi.moveSteps(getCobras(badIdx), allSteps[badIdx], np.zeros(len(brokens)))
-    pfi.moveSteps(getCobras([0,38,42,53]), [3200,800,4200,5000], np.zeros(4))
-    
     # move visible positioners to outwards positions, phi arms are moved out for 60 degrees
     # (outTargets) otherwise we can't measure the theta angles
     thetas = np.empty(57, dtype=float)
     thetas[::2] = pfi.thetaToLocal(oddCobras, np.full(len(oddCobras), np.deg2rad(270)))
     thetas[1::2] = pfi.thetaToLocal(evenCobras, np.full(len(evenCobras), np.deg2rad(90)))
     phis = np.full(57, np.deg2rad(60.0))
-    outTargets = pfi.anglesToPositions(allCobras, thetas, phis)
 
     # Home the good cobras
-    pfi.moveAllSteps(getCobras(goodIdx), -10000, -5000)
-    pfi.moveAllSteps(getCobras(goodIdx), -5000, -5000)
+    #pfi.moveAllSteps(getCobras(goodIdx), -10000, -5000)
+    #pfi.moveAllSteps(getCobras(goodIdx), -5000, -5000)
 
     # move to outTargets
-    moveToXYfromHome(pfi, goodIdx, outTargets[goodIdx], dataPath)
+    #moveToXYfromHome(pfi, goodIdx, outTargets[goodIdx], dataPath)
 
     # move phi arms in
     pfi.moveAllSteps(getCobras(goodIdx), 0, -5000)
 
     # parameters declared here
-    #repeat = 3
-    #steps = 200
-    thetaSteps = 15000
-    phiSteps = 7000
+    phiSteps = totalStep
     myCobras = getCobras(goodIdx)
 
     OnTime = deepcopy([pfi.calibModel.motorOntimeFwd1,
@@ -219,7 +206,8 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
                    pfi.calibModel.motorOntimeFwd2,
                    pfi.calibModel.motorOntimeRev2])
 
-    fastOnTime = [np.full(57, 0.09)] * 4
+    # Giving a high speed on-time
+    fastOnTime = [np.full(57, 0.060),np.full(57, 0.060), np.full(57, 0.060),np.full(57, 0.060)] 
 
 
     #record the phi movements
@@ -247,39 +235,28 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
         pfi.calibModel.updateOntimes(*OnTime)
 
     # move phi arms out for 60 degrees then home theta
-    pfi.moveAllSteps(myCobras, -10000, -5000)
-    pfi.moveAllSteps(myCobras, -5000, -7000)
-    moveToXYfromHome(pfi, goodIdx, outTargets[goodIdx], dataPath)
-    pfi.moveAllSteps(myCobras, -10000, 0)
-    pfi.moveAllSteps(myCobras, -5000, 0)
+    pfi.moveAllSteps(myCobras, 0, -5000)
+    pfi.moveAllSteps(myCobras, 0, -2000)
+    
+    
+def analysisPhiImages(repeat, Path, phiSteps, steps, oriXML, outputXML):
+    prodctPath=Path+f'/product/'
+    dataPath=Path+f'/image/'
+    
+    brokens = []
+    visibles= [e for e in range(1,58) if e not in brokens]
+    badIdx = np.array(brokens) - 1
+    goodIdx = np.array(visibles) - 1
 
-    # record the theta movements
-    for n in range(repeat):
-        # forward theta motor maps
-        expose(dataPath+f'/theta1Begin{n}_', dataPath+f'/theta2Begin{n}_')
-        for k in range(thetaSteps//steps):
-            pfi.moveAllSteps(myCobras, steps, 0)
-            expose(dataPath+f'/theta1Forward{n}N{k}_', dataPath+f'/theta2Forward{n}N{k}_')
-        
-        # make sure it goes to the limit
-        pfi.calibModel.updateOntimes(*fastOnTime)
-        pfi.moveAllSteps(myCobras, 10000, 0)
-        pfi.calibModel.updateOntimes(*OnTime)
-        
-        # reverse theta motor maps
-        expose(dataPath+f'/theta1End{n}_', dataPath+f'/theta2End{n}_')
-        for k in range(thetaSteps//steps):
-            pfi.moveAllSteps(myCobras, -steps, 0)
-            expose(dataPath+f'/theta1Reverse{n}N{k}_', dataPath+f'/theta2Reverse{n}N{k}_')
+    cam_split = 26
+    
+    pfi = pfiControl.PFI(fpgaHost='localhost',doConnect=False)
+    pfi.loadModel(oriXML)
+    #pfi.setFreq(allCobras)
 
-        # make sure it goes to the limit
-        pfi.calibModel.updateOntimes(*fastOnTime)
-        pfi.moveAllSteps(myCobras, -10000, 0)
-        pfi.calibModel.updateOntimes(*OnTime)
+    
     
     # variable declaration for position measurement
-    thetaFW = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
-    thetaRV = np.zeros((57, repeat, thetaSteps//steps+1), dtype=complex)
     phiFW = np.zeros((57, repeat, phiSteps//steps+1), dtype=complex)
     phiRV = np.zeros((57, repeat, phiSteps//steps+1), dtype=complex)
 
@@ -326,49 +303,10 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
                 stack_image = stack_image + data
             fits.writeto(prodctPath+f'/Cam{nCam}phiReverseStack.fits',stack_image,overwrite=True)
 
-        # forward theta
-        cnt = thetaSteps//steps
-        for n in range(repeat):
-            data = fits.getdata(dataPath+f'/theta{nCam}Begin{n}_0001.fits')
-            cs = sep.extract(data.astype(float), 50)
-            spots = np.array([c['x']+c['y']*(1j) for c in cs])
-            idx = lazyIdentification(centers, spots)
-            thetaFW[myIdx,n,0] = spots[idx]
-            stack_image = data   
-            for k in range(cnt):
-                data = fits.getdata(dataPath+f'/theta{nCam}Forward{n}N{k}_0001.fits')
-                cs = sep.extract(data.astype(float), 50)
-                spots = np.array([c['x']+c['y']*(1j) for c in cs])
-                idx = lazyIdentification(centers, spots)
-                thetaFW[myIdx,n,k+1] = spots[idx]
-                stack_image = stack_image + data
-            fits.writeto(prodctPath+f'/Cam{nCam}thetaForwardStack.fits',stack_image,overwrite=True)
-
-
-        # reverse theta
-        for n in range(repeat):
-            data = fits.getdata(dataPath+f'/theta{nCam}End{n}_0001.fits')
-            cs = sep.extract(data.astype(float), 50)
-            spots = np.array([c['x']+c['y']*(1j) for c in cs])
-            idx = lazyIdentification(centers, spots)
-            thetaRV[myIdx,n,0] = spots[idx]
-            stack_image = data    
-            for k in range(cnt):
-                data = fits.getdata(dataPath+f'/theta{nCam}Reverse{n}N{k}_0001.fits')
-                cs = sep.extract(data.astype(float), 50)
-                spots = np.array([c['x']+c['y']*(1j) for c in cs])
-                idx = lazyIdentification(centers, spots)
-                thetaRV[myIdx,n,k+1] = spots[idx]
-                stack_image = stack_image + data
-            fits.writeto(prodctPath+f'/Cam{nCam}thetaReverseStack.fits',stack_image,overwrite=True)
-
-
 
     # variable declaration for theta, phi angles
     thetaCenter = np.zeros(57, dtype=complex)
     phiCenter = np.zeros(57, dtype=complex)
-    thetaAngFW = np.zeros((57, repeat, thetaSteps//steps+1), dtype=float)
-    thetaAngRV = np.zeros((57, repeat, thetaSteps//steps+1), dtype=float)
     phiAngFW = np.zeros((57, repeat, phiSteps//steps+1), dtype=float)
     phiAngRV = np.zeros((57, repeat, phiSteps//steps+1), dtype=float)
 
@@ -381,31 +319,6 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
         x, y, r = circle_fitting(data)
         phiCenter[c] = x + y*(1j)
 
-    # measure theta angles
-    cnt = thetaSteps//steps
-    for c in goodIdx:
-        for n in range(repeat):
-            for k in range(cnt+1):
-                thetaAngFW[c,n,k] = np.angle(thetaFW[c,n,k] - thetaCenter[c])
-                thetaAngRV[c,n,k] = np.angle(thetaRV[c,n,k] - thetaCenter[c])
-            home = thetaAngFW[c,n,0]
-            thetaAngFW[c,n] = (thetaAngFW[c,n] - home) % (np.pi*2)
-            thetaAngRV[c,n] = (thetaAngRV[c,n] - home) % (np.pi*2)
-
-    # fix over 2*pi angle issue
-    for c in goodIdx:
-        for n in range(repeat):
-            for k in range(cnt):
-                if thetaAngFW[c,n,k+1] < thetaAngFW[c,n,k]:
-                    thetaAngFW[c,n,k+1] += np.pi*2
-            for k in range(cnt):
-                if thetaAngRV[c,n,k+1] > thetaAngRV[c,n,k]:
-                    thetaAngRV[c,n,k] += np.pi*2
-                else:
-                    break
-            for k in range(cnt):
-                if thetaAngRV[c,n,k+1] > thetaAngRV[c,n,k]:
-                    thetaAngRV[c,n,k+1] -= np.pi*2
 
     # measure phi angles
     cnt = phiSteps//steps + 1
@@ -429,44 +342,6 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
 
     delta = np.deg2rad(10)
     thetaHS = np.deg2rad(370)
-
-    # calculate theta motor maps
-    cnt = thetaSteps//steps
-    for c in goodIdx:
-        for b in range(regions):
-            # forward motor maps
-            binMin = binSize * b
-            binMax = binMin + binSize
-            fracSum = 0
-            valueSum = 0
-            for n in range(repeat):
-                for k in range(cnt):
-                    if thetaAngFW[c,n,k] < binMax and thetaAngFW[c,n,k+1] > binMin and thetaAngFW[c,n,k+1] <= thetaHS:
-                        moveSizeInBin = np.min([thetaAngFW[c,n,k+1], binMax]) - np.max([thetaAngFW[c,n,k], binMin])
-                        entireMoveSize = thetaAngFW[c,n,k+1] - thetaAngFW[c,n,k]
-                        fraction = moveSizeInBin * moveSizeInBin / entireMoveSize
-                        fracSum += fraction
-                        valueSum += fraction * entireMoveSize / steps
-            if fracSum > 0:
-                thetaMMFW[c,b] = valueSum / fracSum
-            else:
-                thetaMMFW[c,b] = thetaMMFW[c,b-1]
-
-            # reverse motor maps
-            fracSum = 0
-            valueSum = 0
-            for n in range(repeat):
-                for k in range(cnt):
-                    if thetaAngRV[c,n,k] > binMin and thetaAngRV[c,n,k+1] < binMax and thetaAngFW[c,n,k+1] >= delta:
-                        moveSizeInBin = np.min([thetaAngRV[c,n,k], binMax]) - np.max([thetaAngRV[c,n,k+1], binMin])
-                        entireMoveSize = thetaAngRV[c,n,k] - thetaAngRV[c,n,k+1]
-                        fraction = moveSizeInBin * moveSizeInBin / entireMoveSize
-                        fracSum += fraction
-                        valueSum += fraction * entireMoveSize / steps
-            if fracSum > 0:
-                thetaMMRV[c,b] = valueSum / fracSum
-            else:
-                thetaMMRV[c,b] = thetaMMFW[c,b-1]
 
     # calculate phi motor maps
     cnt = phiSteps//steps
@@ -531,11 +406,15 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
     fPhiRV[idx] = phiMMRV[idx]
 
     # update configuration
+    sThetaFW = None
+    sThetaRV = None
+    fThetaFW = None
+    fThetaRV = None
+
     old.updateMotorMaps(sThetaFW, sThetaRV, sPhiFW, sPhiRV, useSlowMaps=True)
     old.updateMotorMaps(fThetaFW, fThetaRV, fPhiFW, fPhiRV, useSlowMaps=False)
 
     # write to a new XML file
-    #old.createCalibrationFile('../xml/motormaps.xml')
     old.createCalibrationFile(outputXML)
 
 
@@ -547,12 +426,15 @@ def main():
     datetoday=datetime.datetime.now().strftime("%Y%m%d")
     cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
 
-    #for steps in [50,100]:
-    storagePath = '/data/pfs/'+datetoday+'/'
-    outputXML = cobraCharmerPath+'/xml/motormap_'+datetoday+f'.xml'
-    
-    runMotorMap(3, 100, storagePath, outputXML)
+    fpgaHost = '128.149.77.24'
 
+    for steps in [400, 50]:
+        storagePath = '/data/pfs/20190401/'+f'{steps}steps/'
+        outputXML = cobraCharmerPath+'/xml/motormap_'+datetoday+f'_{steps}steps.xml'
+        oriXML=cobraCharmerPath+'/xml/updatePhiOntime_spare02_20190401.xml'
+
+        runPhiMotorMap(fpgaHost, 3, 7000, steps, storagePath, oriXML)
+        analysisPhiImages(3, storagePath, 7000, steps, oriXML, outputXML)
 
 if __name__ == '__main__':
     main()

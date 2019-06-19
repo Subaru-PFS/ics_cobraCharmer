@@ -236,8 +236,17 @@ class PFI(object):
         cThetaSteps = thetaSteps[cIdx]
         cPhiSteps = phiSteps[cIdx]
 
+        
+        """ 
+        Looking for NaN values and put them as 0
+        """
+        thetaIndex =  np.isnan(cThetaSteps)
+        phiIndex = np.isnan(cPhiSteps)
+        cThetaSteps[thetaIndex] = 0
+        cPhiSteps[[phiIndex]] = 0
         self.logger.info(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
         self.moveSteps(cobras, cThetaSteps, cPhiSteps, thetaFast=thetaFast, phiFast=phiFast)
+
 
     def thetaToGlobal(self, cobras, thetaLocals):
         """ Convert theta angles from relative to hard stops to global coordinate
