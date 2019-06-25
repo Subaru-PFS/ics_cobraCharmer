@@ -4,6 +4,7 @@ import numpy as np
 from astropy.io import fits
 import sep
 from copy import deepcopy
+import calculation
 from idsCamera import idsCamera
 from ics.cobraCharmer import pfi as pfiControl
 
@@ -28,7 +29,7 @@ class Camera():
 
 class ModuleTest():
     def __init__(self, fpgaHost, xml, brokens=None, cam1Id=1, cam2Id=2, camSplit=26):
-        # Define module 1 cobras
+        """ Init module 1 cobras """
         self.allCobras = pfiControl.PFI.allocateCobraRange(range(1, 2))
 
         # partition module 1 cobras into odd and even sets
@@ -57,8 +58,11 @@ class ModuleTest():
         self.cam2 = Camera(cam2Id)
         self.camSplit = camSplit
 
+        # init calculation library
+        self.cal = calculation.Calculation(xml, brokens, camSplit)
+
     def setBrokenCobras(self, brokens=None):
-        # define the broken/good cobras
+        """ define the broken/good cobras """
         if brokens is None:
             brokens = []
         visibles = [e for e in range(1, 58) if e not in brokens]
@@ -67,48 +71,13 @@ class ModuleTest():
         self.badCobras = getCobras(self.badIdx)
         self.goodCobras = getCobras(self.goodIdx)
 
+        self.cal.setBrokenCobras(brokens)
+
     def extractPositions(self, data1, data2, guess=None, tolerance=None):
-        idx = self.goodIdx
-        idx1 = idx[idx <= self.camSplit]
-        idx2 = idx[idx > self.camSplit]
-        if tolerance is not None:
-            radii = (self.pfi.calibModel.L1 + self.pfi.calibModel.L2) * (1 + tolerance)
-            radii1 = radii[idx1]
-            radii2 = radii[idx2]
-        else:
-            radii1 = None
-            radii2 = None
+        self.cal.extractPositions(data1, data2, guess, tolerance)
 
-        if guess is None:
-            center1 = self.pfi.calibModel.centers[idx1]
-            center2 = self.pfi.calibModel.centers[idx2]
-        else:
-            center1 = guess[:len(idx1)]
-            center2 = guess[len(idx1):]
-
-        ext1 = sep.extract(data1.astype(float), 200)
-        pos1 = np.array(ext1['x'] + ext1['y']*(1j))
-        target1 = lazyIdentification(center1, pos1, radii=radii1)
-        ext2 = sep.extract(data2.astype(float), 200)
-        pos2 = np.array(ext2['x'] + ext2['y']*(1j))
-        target2 = lazyIdentification(center2, pos2, radii=radii2)
-
-        pos = np.zeros(len(idx), dtype=complex)
-        for n, k in enumerate(target1):
-            if k < 0:
-                pos[n] = self.pfi.calibModel.centers[idx[n]]
-            else:
-                pos[n] = pos1[k]
-        for n, k in enumerate(target2):
-            m = n + len(target1)
-            if k < 0:
-                pos[m] = self.pfi.calibModel.centers[idx[m]]
-            else:
-                pos[m] = pos2[k]
-        return pos
-
-    # function to move cobras to target positions
     def moveToXYfromHome(self, idx, targets, threshold=3.0, maxTries=8):
+        """ function to move cobras to target positions """
         cobras = getCobras(idx)
         self.pfi.moveXYfromHome(cobras, targets, thetaThreshold=threshold, phiThreshold=threshold)
 
@@ -119,7 +88,7 @@ class ModuleTest():
             data2 = self.cam2.expose()
 
             # extract sources and fiber identification
-            curPos = self.extractPositions(data1, data2, 0.01)
+            curPos = self.extractPositions(data1, data2, tolerance=0.2)
             print(curPos)
 
             # check position errors
@@ -137,6 +106,7 @@ class ModuleTest():
             self.pfi.moveXY(cobras[good], curPos[good], targets[good], thetaThreshold=threshold, phiThreshold=threshold)
 
     def moveBadCobrasOut(self):
+        """ move bad cobras to point outwards """
         if len(self.badIdx) <= 0:
             return
 
@@ -161,8 +131,9 @@ class ModuleTest():
         self.pfi.moveSteps(self.badCobras, allSteps[self.badIdx], np.zeros(len(self.badIdx)))
 
     def moveGoodCobrasOut(self, threshold=3.0, maxTries=8):
-        # move visible positioners to outwards positions, phi arms are moved out for 60 degrees
-        # (outTargets) so we can measure the arm angles
+        """ move visible positioners to outwards positions, phi arms are moved out for 60 degrees
+            (outTargets) so we can measure the arm angles
+        """
         thetas = np.empty(57, dtype=float)
         thetas[::2] = self.pfi.thetaToLocal(self.oddCobras, np.full(len(self.oddCobras), np.deg2rad(270)))
         thetas[1::2] = self.pfi.thetaToLocal(self.evenCobras, np.full(len(self.evenCobras), np.deg2rad(90)))
@@ -189,16 +160,17 @@ class ModuleTest():
             fast=True,
             phiOnTime=None,
             limitOnTime=0.08,
-            delta=np.deg2rad(5.0)
+            delta=0.1
         ):
-        # generate phi motor maps, it accepts custom phiOnTIme parameter.
-        # it assumes that theta arms have been move to up/down positions to avoid collision
-        # if phiOnTime is not None, fast parameter is ignored. Otherwise use fast/slow ontime
-        #
-        # Example:
-        #     makePhiMotorMap(xml, path, fast=True)             // update fast motor maps
-        #     makePhiMotorMap(xml, path, fast=False)            // update slow motor maps
-        #     makePhiMotorMap(xml, path, phiOnTime=0.06)        // motor maps for on-time=0.06
+        """ generate phi motor maps, it accepts custom phiOnTIme parameter.
+            it assumes that theta arms have been move to up/down positions to avoid collision
+            if phiOnTime is not None, fast parameter is ignored. Otherwise use fast/slow ontime
+
+            Example:
+                makePhiMotorMap(xml, path, fast=True)             // update fast motor maps
+                makePhiMotorMap(xml, path, fast=False)            // update slow motor maps
+                makePhiMotorMap(xml, path, phiOnTime=0.06)        // motor maps for on-time=0.06
+        """
         defaultOnTime = deepcopy([self.pfi.calibModel.motorOntimeFwd1,
                                   self.pfi.calibModel.motorOntimeRev1,
                                   self.pfi.calibModel.motorOntimeFwd2,
@@ -275,240 +247,38 @@ class ModuleTest():
         np.save(dataPath + '/phiFW', phiFW)
         np.save(dataPath + '/phiRV', phiRV)
 
-        # variable declaration for phi angles
-        phiCenter = np.zeros(57, dtype=complex)
-        phiRadius = np.zeros(57, dtype=float)
-        phiAngFW = np.zeros((57, repeat, iteration+1), dtype=float)
-        phiAngRV = np.zeros((57, repeat, iteration+1), dtype=float)
-
-        # measure centers
-        for c in self.goodIdx:
-            data = np.concatenate((phiFW[c].flatten(), phiRV[c].flatten()))
-            x, y, r = circle_fitting(data)
-            phiCenter[c] = x + y*(1j)
-            phiRadius[c] = r
-
-        # measure phi angles
-        for c in self.goodIdx:
-            for n in range(repeat):
-                for k in range(iteration+1):
-                    phiAngFW[c, n, k] = np.angle(phiFW[c, n, k] - phiCenter[c])
-                    phiAngRV[c, n, k] = np.angle(phiRV[c, n, k] - phiCenter[c])
-                home = phiAngFW[c, n, 0]
-                phiAngFW[c, n] = (phiAngFW[c, n] - home + np.pi/2) % (np.pi*2) - np.pi/2
-                phiAngRV[c, n] = (phiAngRV[c, n] - home + np.pi/2) % (np.pi*2) - np.pi/2
-
-        # save calculation result
+        # calculate centers and phi angles
+        phiCenter, phiRadius, phiAngFW, phiAngRV = self.cal.phiCenterAngles(phiFW, phiRV)
         np.save(dataPath + '/phiCenter', phiCenter)
         np.save(dataPath + '/phiRadius', phiRadius)
         np.save(dataPath + '/phiAngFW', phiAngFW)
         np.save(dataPath + '/phiAngRV', phiAngRV)
 
-        # use both Johannes way and average steps for motor maps
-        binSize = np.deg2rad(3.6)
-        regions = 112
-        phiMMFW = np.zeros((57, regions), dtype=float)
-        phiMMRV = np.zeros((57, regions), dtype=float)
-        phiMMFW2 = np.zeros((57, regions), dtype=float)
-        phiMMRV2 = np.zeros((57, regions), dtype=float)
-        phiSpeedFW = np.zeros(57, dtype=float)
-        phiSpeedRV = np.zeros(57, dtype=float)
-        phiStops = phiAngRV[:, :, 0] - delta
-        cnt = np.zeros(regions)
-        bad = np.full(57, False)
-
-        # calculate phi motor maps
-        for c in self.goodIdx:
-            for b in range(regions):
-                binMin = binSize * b
-                binMax = binMin + binSize
-
-                # forward motor maps
-                fracSum = 0
-                valueSum = 0
-                for n in range(repeat):
-                    for k in range(iteration):
-                        if phiAngFW[c, n, k+1] < phiAngFW[c, n, k] or phiAngFW[c, n, k+1] > phiStops[c, n]:
-                            # hit hard stop or somethings went wrong, then skip it
-                            continue
-                        if phiAngFW[c, n, k] < binMax and phiAngFW[c, n, k+1] > binMin:
-                            moveSizeInBin = np.min([phiAngFW[c, n, k+1], binMax]) - np.max([phiAngFW[c, n, k], binMin])
-                            entireMoveSize = phiAngFW[c, n, k+1] - phiAngFW[c, n, k]
-                            fraction = moveSizeInBin * moveSizeInBin / entireMoveSize
-                            fracSum += fraction
-                            valueSum += fraction * entireMoveSize / steps
-                if fracSum > 0:
-                    phiMMFW[c, b] = valueSum / fracSum
-                else:
-                    phiMMFW[c, b] = 0
-
-                # reverse motor maps
-                fracSum = 0
-                valueSum = 0
-                for n in range(repeat):
-                    for k in range(iteration):
-                        if phiAngRV[c, n, k+1] > phiAngRV[c, n, k] or phiAngRV[c, n, k+1] < delta:
-                            # hit hard stop or somethings went wrong, then skip it
-                            continue
-                        if phiAngRV[c, n, k] > binMin and phiAngRV[c, n, k+1] < binMax:
-                            moveSizeInBin = np.min([phiAngRV[c, n, k], binMax]) - np.max([phiAngRV[c, n, k+1], binMin])
-                            entireMoveSize = phiAngRV[c, n, k] - phiAngRV[c, n, k+1]
-                            fraction = moveSizeInBin * moveSizeInBin / entireMoveSize
-                            fracSum += fraction
-                            valueSum += fraction * entireMoveSize / steps
-                if fracSum > 0:
-                    phiMMRV[c, b] = valueSum / fracSum
-                else:
-                    phiMMRV[c, b] = 0
-
-            # fill the zeros closed to hard stops
-            nz = np.nonzero(phiMMFW[c])[0]
-            if nz.size > 0:
-                phiMMFW[c, :nz[0]] = phiMMFW[c, nz[0]]
-                phiMMFW[c, nz[-1]+1:] = phiMMFW[c, nz[-1]]
-            else:
-                bad[c] = True
-
-            nz = np.nonzero(phiMMRV[c])[0]
-            if nz.size > 0:
-                phiMMRV[c, :nz[0]] = phiMMRV[c, nz[0]]
-                phiMMRV[c, nz[-1]+1:] = phiMMRV[c, nz[-1]]
-            else:
-                bad[c] = True
-
-            # calculate average speed
-            mSteps = 0
-            mAngle = 0
-            for n in range(repeat):
-                for k in range(iteration):
-                    if phiAngFW[c, n, k+1] > phiStops[c, n]:
-                        break
-                mAngle += phiAngFW[c, n, k] - phiAngFW[c, n, 0]
-                mSteps += k * steps
-            phiSpeedFW[c] = mAngle / mSteps
-
-            mSteps = 0
-            mAngle = 0
-            for n in range(repeat):
-                for k in range(iteration):
-                    if phiAngRV[c, n, k+1] < delta:
-                        break
-                mAngle += phiAngRV[c, n, 0] - phiAngRV[c, n, k]
-                mSteps += k * steps
-            phiSpeedRV[c] = mAngle / mSteps
-
-            # calculate motor maps based on average step counts
-            cnt[:] = 0
-            for n in range(repeat):
-                for k in range(iteration):
-                    if phiAngFW[c, n, k+1] < phiAngFW[c, n, k] or phiAngFW[c, n, k+1] > phiStops[c, n]:
-                        # hit hard stop or somethings went wrong, stop here
-                        break
-                x = np.arange(regions+1) * binSize
-                xp = phiAngFW[c, n, :k+1]
-                fp = np.arange(k+1) * steps
-                mm = np.interp(x, xp, fp)
-                diff = mm[1:] - mm[:-1]
-                nz = np.nonzero(diff)[0]
-                if nz.size > 0:
-                    phiMMFW2[c] += diff
-                    cnt[nz[:-1]] += 1
-                    if phiAngFW[c, n, k] % binSize != 0:
-                        cnt[nz[-1]] += (phiAngFW[c, n, k] % binSize) / binSize
-                    else:
-                        cnt[nz[-1]] += 1
-            nz = np.nonzero(cnt)[0]
-            if nz.size > 0:
-                phiMMFW2[c, nz] = binSize / (phiMMFW2[c, nz] / cnt[nz])
-                phiMMFW2[c, nz[-1]+1:] = phiMMFW2[c, nz[-1]]
-            else:
-                bad[c] = True
-
-            cnt[:] = 0
-            for n in range(repeat):
-                first = 0
-                for k in range(iteration):
-                    if phiAngRV[c, n, k+1] - phiAngRV[c, n, k] > 0 or phiAngRV[c, n, k+1] < delta:
-                        if k == 0:
-                            # sticky at hard stops ???, skip this point
-                            first = 1
-                        else:
-                            # hit hard stop or somethings went wrong, stop here
-                            break
-                x = np.arange(regions+1) * binSize
-                xp = np.flip(phiAngRV[c, n, first:k+1], 0)
-                fp = np.arange(k+1-first) * steps
-                mm = np.interp(x, xp, fp)
-                diff = mm[1:] - mm[:-1]
-                nz = np.nonzero(diff)[0]
-                if nz.size > 0:
-                    phiMMRV2[c] += diff
-                    cnt[nz[1:-1]] += 1
-                    cnt[nz[0]] += 1 - (phiAngRV[c, n, k] % binSize) / binSize
-                    if phiAngRV[c, n, first] % binSize != 0:
-                        cnt[nz[-1]] += (phiAngRV[c, n, first] % binSize) / binSize
-                    else:
-                        cnt[nz[-1]] += 1
-            nz = np.nonzero(cnt)[0]
-            if nz.size > 0:
-                phiMMRV2[c, nz] = binSize / (phiMMRV2[c, nz] / cnt[nz])
-                phiMMRV2[c, :nz[0]] = phiMMRV2[c, nz[0]]
-                phiMMRV2[c, nz[-1]+1:] = phiMMRV2[c, nz[-1]]
-            else:
-                bad[c] = True
-
-        # save calculation result
-        np.save(dataPath + '/phiMMFW', phiMMFW)
-        np.save(dataPath + '/phiMMRV', phiMMRV)
-        np.save(dataPath + '/phiMMFW2', phiMMFW2)
-        np.save(dataPath + '/phiMMRV2', phiMMRV2)
+        # calculate average speeds
+        phiSpeedFW, phiSpeedRV = self.cal.speed(phiAngFW, phiAngRV, steps, delta)
         np.save(dataPath + '/phiSpeedFW', phiSpeedFW)
         np.save(dataPath + '/phiSpeedRV', phiSpeedRV)
+
+        # calculate motor maps by Johannes weighting
+        phiMMFW, phiMMRV, bad = self.cal.motorMaps(phiAngFW, phiAngRV, steps, delta)
+        np.save(dataPath + '/phiMMFW', phiMMFW)
+        np.save(dataPath + '/phiMMRV', phiMMRV)
         np.save(dataPath + '/bad', np.where(bad)[0])
 
-        # update XML configuration
-        new = self.pfi.calibModel
-        idx = np.array([c for c in self.goodIdx if not bad[c]])
+        # calculate motor maps by average speeds
+        phiMMFW2, phiMMRV2, bad2 = self.cal.motorMaps2(phiAngFW, phiAngRV, steps, delta)
+        np.save(dataPath + '/phiMMFW2', phiMMFW2)
+        np.save(dataPath + '/phiMMRV2', phiMMRV2)
+        np.save(dataPath + '/bad2', np.where(bad2)[0])
 
-        sPhiFW = binSize / new.S2Pm
-        sPhiRV = binSize / new.S2Nm
-        fPhiFW = binSize / new.F2Pm
-        fPhiRV = binSize / new.F2Nm
-
+        # update XML file, using Johannes weighting
+        slow = not fast
+        self.cal.updatePhiMotorMaps(phiMMFW, phiMMRV, bad, slow)
         if phiOnTime is not None:
-            # update motor maps, fast: Johannes, slow: simple
-            fPhiFW[idx] = phiMMFW[idx]
-            fPhiRV[idx] = phiMMRV[idx]
-            new.updateMotorMaps(phiFwd=fPhiFW, phiRev=fPhiRV, useSlowMaps=False)
-
-            sPhiFW[idx] = phiMMFW2[idx]
-            sPhiRV[idx] = phiMMRV2[idx]
-            new.updateMotorMaps(phiFwd=sPhiFW, phiRev=sPhiRV, useSlowMaps=True)
-
-            # set fast on-time
-            self.pfi.calibModel.updateOntimes(*(defaultOnTime[:2] + slowOnTime[2:]), fast=True)
-
-        elif fast:
-            # update fast motor maps, Johannes weighting
-            fPhiFW[idx] = phiMMFW[idx]
-            fPhiRV[idx] = phiMMRV[idx]
-            new.updateMotorMaps(phiFwd=fPhiFW, phiRev=fPhiRV, useSlowMaps=False)
-
-            # restore on-time
-            self.pfi.calibModel.updateOntimes(*defaultOnTime, fast=True)
-            self.pfi.calibModel.updateOntimes(*defaultOnTimeSlow, fast=False)
-
-        else:
-            # update slow motor maps, Johanees weighting
-            sPhiFW[idx] = phiMMFW[idx]
-            sPhiRV[idx] = phiMMRV[idx]
-            new.updateMotorMaps(phiFwd=sPhiFW, phiRev=sPhiRV, useSlowMaps=True)
-
-            # restore on-time
-            self.pfi.calibModel.updateOntimes(*defaultOnTime, fast=True)
-
-        # create a new XML file
-        new.createCalibrationFile(dataPath + '/' + newXml)
+            onTime = np.full(57, phiOnTime)
+            self.cal.calibModel.updateOntimes(phiFwd=onTime, phiRev=onTime, fast=fast)
+        self.cal.calibModel.createCalibrationFile(dataPath + '/' + newXml)
+        self.cal.restoreConfig()
 
         # restore default setting
         self.pfi.loadModel(self.xml)
@@ -608,253 +378,39 @@ class ModuleTest():
         np.save(dataPath + '/thetaFW', thetaFW)
         np.save(dataPath + '/thetaRV', thetaRV)
 
-        # variable declaration for theta angles
-        thetaCenter = np.zeros(57, dtype=complex)
-        thetaRadius = np.zeros(57, dtype=float)
-        thetaAngFW = np.zeros((57, repeat, iteration+1), dtype=float)
-        thetaAngRV = np.zeros((57, repeat, iteration+1), dtype=float)
-
-        # measure centers
-        for c in self.goodIdx:
-            data = np.concatenate((thetaFW[c].flatten(), thetaRV[c].flatten()))
-            x, y, r = circle_fitting(data)
-            thetaCenter[c] = x + y*(1j)
-            thetaRadius[c] = r
-
-        # measure theta angles
-        for c in self.goodIdx:
-            for n in range(repeat):
-                for k in range(iteration+1):
-                    thetaAngFW[c, n, k] = np.angle(thetaFW[c, n, k] - thetaCenter[c])
-                    thetaAngRV[c, n, k] = np.angle(thetaRV[c, n, k] - thetaCenter[c])
-                home1 = thetaAngFW[c, n, 0]
-                home2 = thetaAngRV[c, n, -1]
-                thetaAngFW[c, n] = (thetaAngFW[c, n] - home1 + 0.1) % (np.pi*2)
-                thetaAngRV[c, n] = (thetaAngRV[c, n] - home2 + 0.1) % (np.pi*2)
-
-                # fix over 2*pi angle issue
-                diff = thetaAngFW[c, n, 1:] - thetaAngFW[c, n, :-1]
-                t = np.where(diff < -np.pi/2)
-                if t[0].size != 0:
-                    thetaAngFW[c, n, t[0][0]+1:] += np.pi*2
-                thetaAngFW[c, n] -= 0.1
-
-                diff = thetaAngRV[c, n, 1:] - thetaAngRV[c, n, :-1]
-                t = np.where(diff > np.pi/2)
-                if t[0].size != 0:
-                    thetaAngRV[c, n, :t[0][0]+1] += np.pi*2
-                thetaAngRV[c, n] += (home2 - home1 + 0.1) % (np.pi*2) - 0.2
-
-        # mark bad cobras by checking hard stops
-        badRange = np.where(np.any(thetaAngRV[:, :, 0] < np.pi*2, axis=1))[0]
-
-        # save calculation result
+        # calculate centers and theta angles
+        thetaCenter, thetaRadius, thetaAngFW, thetaAngRV, badRange = self.cal.thetaCenterAngles(thetaFW, thetaRV)
         np.save(dataPath + '/thetaCenter', thetaCenter)
         np.save(dataPath + '/thetaRadius', thetaRadius)
         np.save(dataPath + '/thetaAngFW', thetaAngFW)
         np.save(dataPath + '/thetaAngRV', thetaAngRV)
         np.save(dataPath + '/badRange', badRange)
 
-        # use both Johannes way and average steps for motor maps
-        binSize = np.deg2rad(3.6)
-        regions = 112
-        thetaMMFW = np.zeros((57, regions), dtype=float)
-        thetaMMRV = np.zeros((57, regions), dtype=float)
-        thetaMMFW2 = np.zeros((57, regions), dtype=float)
-        thetaMMRV2 = np.zeros((57, regions), dtype=float)
-        thetaSpeedFW = np.zeros(57, dtype=float)
-        thetaSpeedRV = np.zeros(57, dtype=float)
-        thetaStops = thetaAngRV[:, :, 0] - delta
-        cnt = np.zeros(regions)
-        bad = np.full(57, False)
-
-        for c in self.goodIdx:
-            # calculate theta motor maps in Jonhannes way
-            for b in range(regions):
-                binMin = binSize * b
-                binMax = binMin + binSize
-
-                # forward motor maps
-                fracSum = 0
-                valueSum = 0
-                for n in range(repeat):
-                    for k in range(iteration):
-                        if thetaAngFW[c, n, k+1] < thetaAngFW[c, n, k] or thetaAngFW[c, n, k+1] > thetaStops[c, n]:
-                            # hit hard stop or somethings went wrong, then skip it
-                            continue
-                        if thetaAngFW[c, n, k] < binMax and thetaAngFW[c, n, k+1] > binMin:
-                            moveSizeInBin = np.min([thetaAngFW[c, n, k+1], binMax]) - np.max([thetaAngFW[c, n, k], binMin])
-                            entireMoveSize = thetaAngFW[c, n, k+1] - thetaAngFW[c, n, k]
-                            fraction = moveSizeInBin * moveSizeInBin / entireMoveSize
-                            fracSum += fraction
-                            valueSum += fraction * entireMoveSize / steps
-                if fracSum > 0:
-                    thetaMMFW[c, b] = valueSum / fracSum
-                else:
-                    thetaMMFW[c, b] = 0
-
-                # reverse motor maps
-                fracSum = 0
-                valueSum = 0
-                for n in range(repeat):
-                    for k in range(iteration):
-                        if thetaAngRV[c, n, k+1] > thetaAngRV[c, n, k] or thetaAngRV[c, n, k+1] < delta:
-                            # hit hard stop or somethings went wrong, then skip it
-                            continue
-                        if thetaAngRV[c, n, k] > binMin and thetaAngRV[c, n, k+1] < binMax:
-                            moveSizeInBin = np.min([thetaAngRV[c, n, k], binMax]) - np.max([thetaAngRV[c, n, k+1], binMin])
-                            entireMoveSize = thetaAngRV[c, n, k] - thetaAngRV[c, n, k+1]
-                            fraction = moveSizeInBin * moveSizeInBin / entireMoveSize
-                            fracSum += fraction
-                            valueSum += fraction * entireMoveSize / steps
-                if fracSum > 0:
-                    thetaMMRV[c, b] = valueSum / fracSum
-                else:
-                    thetaMMRV[c, b] = 0
-
-            # fill the zeros closed to hard stops
-            nz = np.nonzero(thetaMMFW[c])[0]
-            if nz.size > 0:
-                thetaMMFW[c, :nz[0]] = thetaMMFW[c, nz[0]]
-                thetaMMFW[c, nz[-1]+1:] = thetaMMFW[c, nz[-1]]
-            else:
-                bad[c] = True
-
-            nz = np.nonzero(thetaMMRV[c])[0]
-            if nz.size > 0:
-                thetaMMRV[c, :nz[0]] = thetaMMRV[c, nz[0]]
-                thetaMMRV[c, nz[-1]+1:] = thetaMMRV[c, nz[-1]]
-            else:
-                bad[c] = True
-
-            # calculate average speed
-            mSteps = 0
-            mAngle = 0
-            for n in range(repeat):
-                for k in range(iteration):
-                    if thetaAngFW[c, n, k+1] > thetaStops[c, n]:
-                        break
-                mAngle += thetaAngFW[c, n, k] - thetaAngFW[c, n, 0]
-                mSteps += k * steps
-            thetaSpeedFW[c] = mAngle / mSteps
-
-            mSteps = 0
-            mAngle = 0
-            for n in range(repeat):
-                for k in range(iteration):
-                    if thetaAngRV[c, n, k+1] < delta:
-                        break
-                mAngle += thetaAngRV[c, n, 0] - thetaAngRV[c, n, k]
-                mSteps += k * steps
-            thetaSpeedRV[c] = mAngle / mSteps
-
-            # calculate motor maps based on average step counts
-            cnt[:] = 0
-            for n in range(repeat):
-                for k in range(iteration):
-                    if thetaAngFW[c, n, k+1] < thetaAngFW[c, n, k] or thetaAngFW[c, n, k+1] > thetaStops[c, n]:
-                        # hit hard stop or somethings went wrong, stop here
-                        break
-                x = np.arange(regions+1) * binSize
-                xp = thetaAngFW[c, n, :k+1]
-                fp = np.arange(k+1) * steps
-                mm = np.interp(x, xp, fp)
-                diff = mm[1:] - mm[:-1]
-                nz = np.nonzero(diff)[0]
-                if nz.size > 0:
-                    thetaMMFW2[c] += diff
-                    cnt[nz[:-1]] += 1
-                    if thetaAngFW[c, n, k] % binSize != 0:
-                        cnt[nz[-1]] += (thetaAngFW[c, n, k] % binSize) / binSize
-                    else:
-                        cnt[nz[-1]] += 1
-            nz = np.nonzero(cnt)[0]
-            if nz.size > 0:
-                thetaMMFW2[c, nz] = binSize / (thetaMMFW2[c, nz] / cnt[nz])
-                thetaMMFW2[c, nz[-1]+1:] = thetaMMFW2[c, nz[-1]]
-            else:
-                bad[c] = True
-
-            cnt[:] = 0
-            for n in range(repeat):
-                for k in range(iteration):
-                    if thetaAngRV[c, n, k+1] > thetaAngRV[c, n, k] or thetaAngRV[c, n, k+1] < delta:
-                        # hit hard stop or somethings went wrong, stop here
-                        break
-                x = np.arange(regions+1) * binSize
-                xp = np.flip(thetaAngRV[c, n, :k+1], 0)
-                fp = np.arange(k+1) * steps
-                mm = np.interp(x, xp, fp)
-                diff = mm[1:] - mm[:-1]
-                nz = np.nonzero(diff)[0]
-                if nz.size > 0:
-                    thetaMMRV2[c] += diff
-                    cnt[nz[1:-1]] += 1
-                    cnt[nz[0]] += 1 - (thetaAngRV[c, n, k] % binSize) / binSize
-                    if thetaAngRV[c, n, 0] % binSize != 0:
-                        cnt[nz[-1]] += (thetaAngRV[c, n, 0] % binSize) / binSize
-                    else:
-                        cnt[nz[-1]] += 1
-            nz = np.nonzero(cnt)[0]
-            if nz.size > 0:
-                thetaMMRV2[c, nz] = binSize / (thetaMMRV2[c, nz] / cnt[nz])
-                thetaMMRV2[c, :nz[0]] = thetaMMRV2[c, nz[0]]
-                thetaMMRV2[c, nz[-1]+1:] = thetaMMRV2[c, nz[-1]]
-            else:
-                bad[c] = True
-
-        # save calculation result
-        np.save(dataPath + '/thetaMMFW', thetaMMFW)
-        np.save(dataPath + '/thetaMMRV', thetaMMRV)
-        np.save(dataPath + '/thetaMMFW2', thetaMMFW2)
-        np.save(dataPath + '/thetaMMRV2', thetaMMRV2)
+        # calculate average speeds
+        thetaSpeedFW, thetaSpeedRV = self.cal.speed(thetaAngFW, thetaAngRV, steps, delta)
         np.save(dataPath + '/thetaSpeedFW', thetaSpeedFW)
         np.save(dataPath + '/thetaSpeedRV', thetaSpeedRV)
+
+        # calculate motor maps in Johannes weighting
+        thetaMMFW, thetaMMRV, bad = self.cal.motorMaps(thetaAngFW, thetaAngRV, steps, delta)
+        np.save(dataPath + '/thetaMMFW', thetaMMFW)
+        np.save(dataPath + '/thetaMMRV', thetaMMRV)
         np.save(dataPath + '/bad', np.where(bad)[0])
 
-        # update XML configuration
-        new = self.pfi.calibModel
-        idx = np.array([c for c in self.goodIdx if not bad[c]])
+        # calculate motor maps by average speeds
+        thetaMMFW2, thetaMMRV2, bad2 = self.cal.motorMaps2(thetaAngFW, thetaAngRV, steps, delta)
+        np.save(dataPath + '/thetaMMFW2', thetaMMFW2)
+        np.save(dataPath + '/thetaMMRV2', thetaMMRV2)
+        np.save(dataPath + '/bad2', np.where(bad2)[0])
 
-        sThetaFW = binSize / new.S2Pm
-        sThetaRV = binSize / new.S2Nm
-        fThetaFW = binSize / new.F2Pm
-        fThetaRV = binSize / new.F2Nm
-
+        # update XML file, using Johannes weighting
+        slow = not fast
+        self.cal.updateThetaMotorMaps(thetaMMFW, thetaMMRV, bad, slow)
         if thetaOnTime is not None:
-            # update motor maps, fast: Johannes, slow: simple
-            fThetaFW[idx] = thetaMMFW[idx]
-            fThetaRV[idx] = thetaMMRV[idx]
-            new.updateMotorMaps(thtFwd=fThetaFW, thtRev=fThetaRV, useSlowMaps=False)
-
-            sThetaFW[idx] = thetaMMFW2[idx]
-            sThetaRV[idx] = thetaMMRV2[idx]
-            new.updateMotorMaps(thtFwd=sThetaFW, thtRev=sThetaRV, useSlowMaps=True)
-
-            # set fast on-time
-            self.pfi.calibModel.updateOntimes(*(defaultOnTime[:2] + slowOnTime[2:]), fast=True)
-
-        elif fast:
-            # update fast motor maps, Johannes weighting
-            fThetaFW[idx] = thetaMMFW[idx]
-            fThetaRV[idx] = thetaMMRV[idx]
-            new.updateMotorMaps(thtFwd=fTHetaFW, thtRev=fThetaRV, useSlowMaps=False)
-
-            # restore on-time
-            self.pfi.calibModel.updateOntimes(*defaultOnTime, fast=True)
-            self.pfi.calibModel.updateOntimes(*defaultOnTimeSlow, fast=False)
-
-        else:
-            # update slow motor maps, Johannes weighting
-            sThetaFW[idx] = thetaMMFW[idx]
-            sThetaRV[idx] = thetaMMRV[idx]
-            new.updateMotorMaps(thtFwd=sThetaFW, thtRev=sThetaRV, useSlowMaps=True)
-
-            # restore on-time
-            self.pfi.calibModel.updateOntimes(*defaultOnTime, fast=True)
-
-        # create a new XML file
-        new.createCalibrationFile(dataPath + '/' + newXml)
+            onTime = np.full(57, thetaOnTime)
+            self.cal.calibModel.updateOntimes(thtFwd=onTime, thtRev=onTime, fast=fast)
+        self.cal.calibModel.createCalibrationFile(dataPath + '/' + newXml)
+        self.cal.restoreConfig()
 
         # restore default setting
         self.pfi.loadModel(self.xml)
@@ -919,7 +475,7 @@ class ModuleTest():
         # measure centers
         for c in self.goodIdx:
             data = np.concatenate((phiFW[c].flatten(), phiRV[c].flatten()))
-            x, y, r = circle_fitting(data)
+            x, y, r = calculation.circle_fitting(data)
             phiCenter[c] = x + y*(1j)
             phiRadius[c] = r
 
@@ -1024,7 +580,7 @@ class ModuleTest():
         # measure centers
         for c in self.goodIdx:
             data = np.concatenate((thetaFW[c].flatten(), thetaRV[c].flatten()))
-            x, y, r = circle_fitting(data)
+            x, y, r = calculation.circle_fitting(data)
             thetaCenter[c] = x + y*(1j)
             thetaRadius[c] = r
 
@@ -1093,24 +649,3 @@ def getCobras(cobs):
     # cobs is 0-indexed list
     return pfiControl.PFI.allocateCobraList(zip(np.full(len(cobs), 1), np.array(cobs) + 1))
 
-def lazyIdentification(centers, spots, radii=None):
-    n = len(centers)
-    if radii is not None and len(radii) != n:
-        raise RuntimeError("number of centers must match number of radii")
-    ans = np.empty(n, dtype=int)
-    for i in range(n):
-        dist = np.absolute(spots - centers[i])
-        j = np.argmin(dist)
-        if radii is not None and np.absolute(centers[i] - spots[j]) > radii[i]:
-            ans[i] = -1
-        else:
-            ans[i] = j
-    return ans
-
-def circle_fitting(p):
-    x = np.real(p)
-    y = np.imag(p)
-    m = np.vstack([x, y, np.ones(len(p))]).T
-    n = np.array(x*x + y*y)
-    a, b, c = np.linalg.lstsq(m, n, rcond=None)[0]
-    return a/2, b/2, np.sqrt(c+(a*a+b*b)/4)

@@ -247,6 +247,7 @@ class PFI(object):
         self.logger.info(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
         self.moveSteps(cobras, cThetaSteps, cPhiSteps, thetaFast=thetaFast, phiFast=phiFast)
 
+
     def thetaToGlobal(self, cobras, thetaLocals):
         """ Convert theta angles from relative to hard stops to global coordinate
 
