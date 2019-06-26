@@ -71,10 +71,11 @@ class ModuleTest():
         self.badCobras = getCobras(self.badIdx)
         self.goodCobras = getCobras(self.goodIdx)
 
-        self.cal.setBrokenCobras(brokens)
+        if hasattr(self, 'cal'):
+            self.cal.setBrokenCobras(brokens)
 
     def extractPositions(self, data1, data2, guess=None, tolerance=None):
-        self.cal.extractPositions(data1, data2, guess, tolerance)
+        return self.cal.extractPositions(data1, data2, guess, tolerance)
 
     def moveToXYfromHome(self, idx, targets, threshold=3.0, maxTries=8):
         """ function to move cobras to target positions """

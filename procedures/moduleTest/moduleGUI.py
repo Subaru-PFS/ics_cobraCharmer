@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QPushButton, QMainWindow, QHBoxLayout, QLineEdit, QSplitter,
     QSizePolicy, QLabel, QCheckBox, QVBoxLayout, QWidget, QApplication)
-from PyQt5.QtGui import QIntValidator
+from PyQt5.QtGui import QIntValidator, QDoubleValidator
 from PyQt5.QtCore import Qt
 import sys
 import os
@@ -110,13 +110,33 @@ class MainWindow(QMainWindow):
         self.btn_speed.clicked[bool].connect(self.click_speed)
         block5.addWidget(self.btn_speed)
 
+        block6 = QHBoxLayout()
+        block6.addWidget(QLabel('Enter theta/phi angles in degree'), QSizePolicy.Expanding)
+        self.cb_home = QCheckBox('From home')
+        block6.addWidget(self.cb_home)
+        self.cb_global = QCheckBox('Global')
+        block6.addWidget(self.cb_global)
+        block6.addWidget(QLabel('theta:'))
+        self.theta_angle = QLineEdit('0')
+        onlyDouble = QDoubleValidator()
+        self.theta_angle.setValidator(onlyDouble)
+        block6.addWidget(self.theta_angle)
+        block6.addWidget(QLabel('phi:'))
+        self.phi_angle = QLineEdit('0')
+        self.phi_angle.setValidator(onlyDouble)
+        block6.addWidget(self.phi_angle)
+        btn = QPushButton('GO')
+        self.control_btn.append(btn)
+        btn.clicked.connect(self.move_angles)
+        block6.addWidget(btn)
+
         layout = QVBoxLayout()
         layout.addLayout(block1)
-        layout.addWidget(QSplitter())
         layout.addLayout(block2)
         layout.addLayout(block5)
         layout.addLayout(block3)
         layout.addLayout(block4)
+        layout.addLayout(block6)
 
         cw = QWidget()
         cw.setLayout(layout)
@@ -247,6 +267,64 @@ class MainWindow(QMainWindow):
             ax.text(c[s+n].real-20, c[s+n].imag-70, f'{np.rad2deg((p-t)[s+n]+np.pi):.1f}')
 
         plt.show()
+
+    def move_angles(self):
+        if self.mt is None:
+            self.statusBar().showMessage('Load XML file first!')
+            return
+        cIdx = [idx for idx, c in enumerate(active_cobras) if c]
+        if not self.cb_use_bad.isChecked():
+            cIdx = [idx for idx in cIdx if not bad_cobras[idx]]
+        elif not self.cb_home.isChecked():
+            self.statusBar().showMessage('Please un-check the bad cobras checkbox!')
+            return
+        if len(cIdx) <= 0:
+            self.statusBar().showMessage('No cobras selected!')
+            return
+
+        cobras = getCobras(cIdx)
+        theta_angle = float(self.theta_angle.text())
+        if theta_angle < 0.1 or theta_angle > 360.0:
+            self.statusBar().showMessage('Theta angle should beyween (0.1, 360.0) degrees')
+            return
+        phi_angle = float(self.phi_angle.text())
+        if phi_angle < 10.0 or phi_angle > 80.0:
+            self.statusBar().showMessage('Phi angle should between (10.0, 80.0) degrees')
+            return
+        theta_angle = np.deg2rad(theta_angle)
+        phi_angle = np.deg2rad(phi_angle)
+
+        self.statusBar().showMessage('Start to moving cobra...')
+        for btn in self.control_btn:
+            btn.setEnabled(False)
+
+        ones = np.full(len(cobras), 1.0)
+        if self.btn_speed.isChecked():
+            threshold = 1000.0
+        else:
+            threshold = -1.0
+        if self.cb_global.isChecked():
+            theta_angles = self.pfi.thetaToLocal(cobras, theta_angle * ones)
+        else:
+            theta_angles = theta_angle * ones
+        targets = self.pfi.anglesToPositions(cobras, theta_angles, phi_angle * ones)
+
+        if self.cb_home.isChecked():
+            self.pfi.moveXYfromHome(cobras, targets, thetaThreshold=threshold, phiThreshold=threshold)
+        else:
+            data1 = self.mt.cam1.expose()
+            data2 = self.mt.cam2.expose()
+            pos = np.array(57, dtype=complex)
+            pos[self.mt.goodIdx] = self.mt.extractPositions(data1, data2)
+            self.pfi.moveXY(cobras, pos[cIdx], targets, thetaThreshold=threshold, phiThreshold=threshold)
+
+        self.statusBar().showMessage('Moving cobra (angle) succeed!')
+        for btn in self.control_btn:
+            btn.setEnabled(True)
+        if self.cb_home.isChecked:
+            self.cb_home.setChecked(False)
+        if self.cb_refresh.isChecked():
+            self.check_positions()
 
 
 if __name__ == '__main__':
