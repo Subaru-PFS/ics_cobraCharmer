@@ -645,6 +645,48 @@ class ModuleTest():
         angles = (np.angle(curPos - centers) - homes) % (np.pi*2)
         return angles, curPos
 
+    def convertXML(self, newXml):
+        """ convert old XML to a new coordinate by taking 'phi homed' images
+            assuming the cobra module is in horizontal setup
+        """
+        idx = self.goodIdx
+        idx1 = idx[idx <= self.camSplit]
+        idx2 = idx[idx > self.camSplit]
+        oldPos = self.cal.calibModel.centers
+        newPos = np.zeros(57, dtype=complex)
+
+        # go home and measure new positions
+        self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
+        data1 = sep.extract(self.cam1.expose().astype(float), 200)
+        data2 = sep.extract(self.cam2.expose().astype(float), 200)
+        home1 = np.array(sorted([(c['x'], c['y']) for c in data1], key=lambda t: t[0], reverse=True))
+        home2 = np.array(sorted([(c['x'], c['y']) for c in data2], key=lambda t: t[0], reverse=True))
+        newPos[idx1] = home1[:len(idx1), 0] + home1[:len(idx1), 1] * (1j)
+        newPos[idx2] = home2[-len(idx2):, 0] + home2[-len(idx2):, 1] * (1j)
+
+        # calculation tranformation
+        offset1, scale1, tilt1, convert1 = calculation.transform(oldPos[idx1], newPos[idx1])
+        offset2, scale2, tilt2, convert2 = calculation.transform(oldPos[idx2], newPos[idx2])
+
+        new = deepcopy(self.cal.calibModel)
+        new.centers[idx1] = convert1(new.centers[idx1])
+        new.tht0[idx1] = (new.tht0[idx1]+tilt1) % (2*np.pi)
+        new.tht1[idx1] = (new.tht1[idx1]+tilt1) % (2*np.pi)
+        new.L1[idx1] = new.L1[idx1] * scale1
+        new.L2[idx1] = new.L2[idx1] * scale1
+        new.centers[idx2] = convert2(new.centers[idx2])
+        new.tht0[idx2] = (new.tht0[idx2]+tilt2) % (2*np.pi)
+        new.tht1[idx2] = (new.tht1[idx2]+tilt2) % (2*np.pi)
+        new.L1[idx2] = new.L1[idx2] * scale2
+        new.L2[idx2] = new.L2[idx2] * scale2
+
+        # create a new XML file
+        old = self.cal.calibModel
+        old.updateGeometry(new.centers, new.L1, new.L2)
+        old.updateThetaHardStops(new.tht0, new.tht1)
+        old.createCalibrationFile(newXml)
+        self.cal.restoreConfig()
+
 
 def getCobras(cobs):
     # cobs is 0-indexed list

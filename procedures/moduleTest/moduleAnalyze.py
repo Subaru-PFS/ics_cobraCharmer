@@ -2,6 +2,8 @@ import os
 import sys
 import numpy as np
 from astropy.io import fits
+import sep
+from copy import deepcopy
 import calculation
 
 class moduleAnalyze():
@@ -237,4 +239,54 @@ class moduleAnalyze():
         new.createCalibrationFile(dataPath + '/' + newXml)
 
         # restore default setting
+        self.cal.restoreConfig()
+
+    def convertXML(self, newXml, dataPath, image1=None, image2=None):
+        """ convert old XML to a new coordinate by using the 'phi homed' images
+            assuming the cobra module is in horizontal setup
+            One can use the path for generating phi motor maps
+        """
+        idx = self.cal.goodIdx
+        idx1 = idx[idx <= self.cal.camSplit]
+        idx2 = idx[idx > self.cal.camSplit]
+        oldPos = self.cal.calibModel.centers
+        newPos = np.zeros(57, dtype=complex)
+
+        # read data and measure new positions
+        if image1 is None:
+            src1 = fits.getdata(dataPath + '/phi1Begin0.fits.gz')
+        else:
+            src1 = fits.getdata(dataPath + '/' + image1)
+        if image2 is None:
+            src2 = fits.getdata(dataPath + '/phi2Begin0.fits.gz')
+        else:
+            src2 = fits.getdata(dataPath + '/' + image2)
+        data1 = sep.extract(src1.astype(float), 200)
+        data2 = sep.extract(src2.astype(float), 200)
+        home1 = np.array(sorted([(c['x'], c['y']) for c in data1], key=lambda t: t[0], reverse=True))
+        home2 = np.array(sorted([(c['x'], c['y']) for c in data2], key=lambda t: t[0], reverse=True))
+        newPos[idx1] = home1[:len(idx1), 0] + home1[:len(idx1), 1] * (1j)
+        newPos[idx2] = home2[-len(idx2):, 0] + home2[-len(idx2):, 1] * (1j)
+
+        # calculation tranformation
+        offset1, scale1, tilt1, convert1 = calculation.transform(oldPos[idx1], newPos[idx1])
+        offset2, scale2, tilt2, convert2 = calculation.transform(oldPos[idx2], newPos[idx2])
+
+        new = deepcopy(self.cal.calibModel)
+        new.centers[idx1] = convert1(new.centers[idx1])
+        new.tht0[idx1] = (new.tht0[idx1]+tilt1) % (2*np.pi)
+        new.tht1[idx1] = (new.tht1[idx1]+tilt1) % (2*np.pi)
+        new.L1[idx1] = new.L1[idx1] * scale1
+        new.L2[idx1] = new.L2[idx1] * scale1
+        new.centers[idx2] = convert2(new.centers[idx2])
+        new.tht0[idx2] = (new.tht0[idx2]+tilt2) % (2*np.pi)
+        new.tht1[idx2] = (new.tht1[idx2]+tilt2) % (2*np.pi)
+        new.L1[idx2] = new.L1[idx2] * scale2
+        new.L2[idx2] = new.L2[idx2] * scale2
+
+        # create a new XML file
+        old = self.cal.calibModel
+        old.updateGeometry(new.centers, new.L1, new.L2)
+        old.updateThetaHardStops(new.tht0, new.tht1)
+        old.createCalibrationFile(dataPath + '/' + newXml)
         self.cal.restoreConfig()

@@ -29,6 +29,20 @@ def circle_fitting(p):
     a, b, c = np.linalg.lstsq(m, n, rcond=None)[0]
     return a/2, b/2, np.sqrt(c+(a*a+b*b)/4)
 
+def transform(origPoints, newPoints):
+    """ return the tranformation parameters and a function that can convert origPoints to newPoints """
+    origCenter = np.mean(origPoints)
+    newCenter = np.mean(newPoints)
+    origVectors = origPoints - origCenter
+    newVectors = newPoints - newCenter
+    scale = np.sum(np.abs(newVectors)) / np.sum(np.abs(origVectors))
+    diffAngles = ((np.angle(newVectors) - np.angle(origVectors)) + np.pi) % (2*np.pi) - np.pi
+    tilt = np.sum(diffAngles * np.abs(origVectors)) / np.sum(np.abs(origVectors))
+    offset = -origCenter * scale * np.exp(tilt * (1j)) + newCenter
+    def tr(x):
+        return x * scale * np.exp(tilt * (1j)) + offset
+    return offset, scale, tilt, tr
+
 class Calculation():
     def __init__(self, xml, brokens, camSplit):
         if not os.path.exists(xml):
