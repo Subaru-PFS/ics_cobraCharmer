@@ -272,20 +272,21 @@ class moduleAnalyze():
         offset1, scale1, tilt1, convert1 = calculation.transform(oldPos[idx1], newPos[idx1])
         offset2, scale2, tilt2, convert2 = calculation.transform(oldPos[idx2], newPos[idx2])
 
+        split = self.cal.camSplit + 1
+        old = self.cal.calibModel
         new = deepcopy(self.cal.calibModel)
-        new.centers[idx1] = convert1(new.centers[idx1])
-        new.tht0[idx1] = (new.tht0[idx1]+tilt1) % (2*np.pi)
-        new.tht1[idx1] = (new.tht1[idx1]+tilt1) % (2*np.pi)
-        new.L1[idx1] = new.L1[idx1] * scale1
-        new.L2[idx1] = new.L2[idx1] * scale1
-        new.centers[idx2] = convert2(new.centers[idx2])
-        new.tht0[idx2] = (new.tht0[idx2]+tilt2) % (2*np.pi)
-        new.tht1[idx2] = (new.tht1[idx2]+tilt2) % (2*np.pi)
-        new.L1[idx2] = new.L1[idx2] * scale2
-        new.L2[idx2] = new.L2[idx2] * scale2
+        new.centers[:split] = convert1(old.centers[:split])
+        new.tht0[:split] = (old.tht0[:split]+tilt1) % (2*np.pi)
+        new.tht1[:split] = (old.tht1[:split]+tilt1) % (2*np.pi)
+        new.L1[:split] = old.L1[:split] * scale1
+        new.L2[:split] = old.L2[:split] * scale1
+        new.centers[split:] = convert2(old.centers[split:])
+        new.tht0[split:] = (old.tht0[split:]+tilt2) % (2*np.pi)
+        new.tht1[split:] = (old.tht1[split:]+tilt2) % (2*np.pi)
+        new.L1[split:] = old.L1[split:] * scale2
+        new.L2[split:] = old.L2[split:] * scale2
 
         # create a new XML file
-        old = self.cal.calibModel
         old.updateGeometry(new.centers, new.L1, new.L2)
         old.updateThetaHardStops(new.tht0, new.tht1)
         old.createCalibrationFile(dataPath + '/' + newXml)
