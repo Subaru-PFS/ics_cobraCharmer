@@ -314,7 +314,7 @@ class MainWindow(QMainWindow):
         else:
             data1 = self.mt.cam1.expose()
             data2 = self.mt.cam2.expose()
-            pos = np.array(57, dtype=complex)
+            pos = np.zeros(57, dtype=complex)
             pos[self.mt.goodIdx] = self.mt.extractPositions(data1, data2)
             self.pfi.moveXY(cobras, pos[cIdx], targets, thetaThreshold=threshold, phiThreshold=threshold)
 
