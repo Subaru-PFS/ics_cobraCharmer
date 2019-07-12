@@ -66,11 +66,12 @@ class moduleAnalyze():
         np.save(dataPath + '/phiRV_A', phiRV)
 
         # calculate centers and phi angles
-        phiCenter, phiRadius, phiAngFW, phiAngRV = self.cal.phiCenterAngles(phiFW, phiRV)
+        phiCenter, phiRadius, phiAngFW, phiAngRV, badRange = self.cal.phiCenterAngles(phiFW, phiRV)
         np.save(dataPath + '/phiCenter_A', phiCenter)
         np.save(dataPath + '/phiRadius_A', phiRadius)
         np.save(dataPath + '/phiAngFW_A', phiAngFW)
         np.save(dataPath + '/phiAngRV_A', phiAngRV)
+        np.save(dataPath + '/badRange_A', badRange)
 
         # calculate average speeds
         phiSpeedFW, phiSpeedRV = self.cal.speed(phiAngFW, phiAngRV, steps, delta)
@@ -79,12 +80,14 @@ class moduleAnalyze():
 
         # calculate motor maps in Johannes weighting
         phiMMFW, phiMMRV, bad = self.cal.motorMaps(phiAngFW, phiAngRV, steps, delta)
+        bad[badRange] = True
         np.save(dataPath + '/phiMMFW_A', phiMMFW)
         np.save(dataPath + '/phiMMRV_A', phiMMRV)
         np.save(dataPath + '/bad_A', np.where(bad)[0])
 
         # calculate motor maps by average speeds
         phiMMFW2, phiMMRV2, bad2 = self.cal.motorMaps2(phiAngFW, phiAngRV, steps, delta)
+        bad2[badRange] = True
         np.save(dataPath + '/phiMMFW2_A', phiMMFW2)
         np.save(dataPath + '/phiMMRV2_A', phiMMRV2)
         np.save(dataPath + '/bad2_A', np.where(bad2)[0])
@@ -164,12 +167,14 @@ class moduleAnalyze():
 
         # calculate motor maps in Johannes weighting
         thetaMMFW, thetaMMRV, bad = self.cal.motorMaps(thetaAngFW, thetaAngRV, steps, delta)
+        bad[badRange] = True
         np.save(dataPath + '/thetaMMFW_A', thetaMMFW)
         np.save(dataPath + '/thetaMMRV_A', thetaMMRV)
         np.save(dataPath + '/bad_A', np.where(bad)[0])
 
         # calculate motor maps by average speeds
         thetaMMFW2, thetaMMRV2, bad2 = self.cal.motorMaps2(thetaAngFW, thetaAngRV, steps, delta)
+        bad2[badRange] = True
         np.save(dataPath + '/thetaMMFW2_A', thetaMMFW2)
         np.save(dataPath + '/thetaMMRV2_A', thetaMMRV2)
         np.save(dataPath + '/bad2_A', np.where(bad2)[0])

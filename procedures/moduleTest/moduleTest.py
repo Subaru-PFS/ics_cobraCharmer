@@ -160,7 +160,7 @@ class ModuleTest():
             totalSteps=5000,
             fast=True,
             phiOnTime=None,
-            limitOnTime=0.08,
+            limitOnTime=0.06,
             delta=0.1
         ):
         """ generate phi motor maps, it accepts custom phiOnTIme parameter.
@@ -249,11 +249,12 @@ class ModuleTest():
         np.save(dataPath + '/phiRV', phiRV)
 
         # calculate centers and phi angles
-        phiCenter, phiRadius, phiAngFW, phiAngRV = self.cal.phiCenterAngles(phiFW, phiRV)
+        phiCenter, phiRadius, phiAngFW, phiAngRV, badRange = self.cal.phiCenterAngles(phiFW, phiRV)
         np.save(dataPath + '/phiCenter', phiCenter)
         np.save(dataPath + '/phiRadius', phiRadius)
         np.save(dataPath + '/phiAngFW', phiAngFW)
         np.save(dataPath + '/phiAngRV', phiAngRV)
+        np.save(dataPath + '/badRange', badRange)
 
         # calculate average speeds
         phiSpeedFW, phiSpeedRV = self.cal.speed(phiAngFW, phiAngRV, steps, delta)
@@ -262,12 +263,14 @@ class ModuleTest():
 
         # calculate motor maps by Johannes weighting
         phiMMFW, phiMMRV, bad = self.cal.motorMaps(phiAngFW, phiAngRV, steps, delta)
+        bad[badRange] = True
         np.save(dataPath + '/phiMMFW', phiMMFW)
         np.save(dataPath + '/phiMMRV', phiMMRV)
         np.save(dataPath + '/bad', np.where(bad)[0])
 
         # calculate motor maps by average speeds
         phiMMFW2, phiMMRV2, bad2 = self.cal.motorMaps2(phiAngFW, phiAngRV, steps, delta)
+        bad2[badRange] = True
         np.save(dataPath + '/phiMMFW2', phiMMFW2)
         np.save(dataPath + '/phiMMRV2', phiMMRV2)
         np.save(dataPath + '/bad2', np.where(bad2)[0])
@@ -293,7 +296,7 @@ class ModuleTest():
             totalSteps=10000,
             fast=True,
             thetaOnTime=None,
-            limitOnTime=0.08,
+            limitOnTime=0.06,
             delta=np.deg2rad(5.0)
         ):
         # generate theta motor maps, it accepts custom thetaOnTIme parameter.
@@ -394,12 +397,14 @@ class ModuleTest():
 
         # calculate motor maps in Johannes weighting
         thetaMMFW, thetaMMRV, bad = self.cal.motorMaps(thetaAngFW, thetaAngRV, steps, delta)
+        bad[badRange] = True
         np.save(dataPath + '/thetaMMFW', thetaMMFW)
         np.save(dataPath + '/thetaMMRV', thetaMMRV)
         np.save(dataPath + '/bad', np.where(bad)[0])
 
         # calculate motor maps by average speeds
         thetaMMFW2, thetaMMRV2, bad2 = self.cal.motorMaps2(thetaAngFW, thetaAngRV, steps, delta)
+        bad2[badRange] = True
         np.save(dataPath + '/thetaMMFW2', thetaMMFW2)
         np.save(dataPath + '/thetaMMRV2', thetaMMRV2)
         np.save(dataPath + '/bad2', np.where(bad2)[0])
@@ -424,7 +429,7 @@ class ModuleTest():
         phiRV = np.zeros((57, iteration+1), dtype=complex)
 
         #record the phi movements
-        self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
+        self.pfi.moveAllSteps(self.goodCobras, 0, -5000, phiFast=True)
         data1 = self.cam1.expose()
         data2 = self.cam2.expose()
         phiFW[self.goodIdx, 0] = self.extractPositions(data1, data2)
@@ -432,7 +437,7 @@ class ModuleTest():
         stack_image2 = data2
 
         for k in range(iteration):
-            self.pfi.moveAllSteps(self.goodCobras, 0, steps)
+            self.pfi.moveAllSteps(self.goodCobras, 0, steps, phiFast=False)
             data1 = self.cam1.expose()
             data2 = self.cam2.expose()
             phiFW[self.goodIdx, k+1] = self.extractPositions(data1, data2, guess=phiFW[self.goodIdx, k])
@@ -442,7 +447,7 @@ class ModuleTest():
         fits.writeto(dataPath + f'/phi2ForwardStack.fits.gz', stack_image2, overwrite=True)
 
         # make sure it goes to the limit
-        self.pfi.moveAllSteps(self.goodCobras, 0, 5000)
+        self.pfi.moveAllSteps(self.goodCobras, 0, 5000, phiFast=True)
 
         # reverse phi motors
         data1 = self.cam1.expose()
@@ -452,7 +457,7 @@ class ModuleTest():
         stack_image2 = data2
 
         for k in range(iteration):
-            self.pfi.moveAllSteps(self.goodCobras, 0, -steps)
+            self.pfi.moveAllSteps(self.goodCobras, 0, -steps, phiFast=False)
             data1 = self.cam1.expose()
             data2 = self.cam2.expose()
             phiRV[self.goodIdx, k+1] = self.extractPositions(data1, data2, guess=phiRV[self.goodIdx, k])
@@ -462,7 +467,7 @@ class ModuleTest():
         fits.writeto(dataPath + f'/phi2ReverseStack.fits.gz', stack_image2, overwrite=True)
 
         # At the end, make sure the cobra back to the hard stop
-        self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
+        self.pfi.moveAllSteps(self.goodCobras, 0, -5000, phiFast=True)
 
         # save calculation result
         np.save(dataPath + '/phiFW', phiFW)
@@ -501,14 +506,14 @@ class ModuleTest():
                 angle = np.deg2rad(margin + (180 - 2 * margin) * i / (runs - 1))
             else:
                 angle = np.deg2rad(90)
-            self.moveThetaPhi(self.goodCobras, zeros, zeros + angle, phiFast=fast)
+            self.pfi.moveThetaPhi(self.goodCobras, zeros, zeros + angle, phiFast=fast)
             cAngles, cPositions = self.measureAngles(centers, homes)
             phiData[goodIdx, i, 0, 0] = cAngles
             phiData[goodIdx, i, 0, 1] = np.real(cPositions)
             phiData[goodIdx, i, 0, 2] = np.imag(cPositions)
 
             for j in range(tries - 1):
-                self.moveThetaPhi(self.goodCobras, zeros, angle - cAngles, phiFroms=cAngles, phiFast=fast)
+                self.pfi.moveThetaPhi(self.goodCobras, zeros, angle - cAngles, phiFroms=cAngles, phiFast=fast)
                 cAngles, cPositions = self.measureAngles(centers, homes)
                 cAngles[cAngles>np.pi*(3/2)] -= np.pi*2
                 phiData[goodIdx, i, j+1, 0] = cAngles
@@ -516,7 +521,7 @@ class ModuleTest():
                 phiData[goodIdx, i, j+1, 2] = np.imag(cPositions)
 
             # home phi
-            self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
+            self.pfi.moveAllSteps(self.goodCobras, 0, -5000, phiFast=True)
 
         # save calculation result
         np.save(dataPath + '/phiData', phiData)
@@ -529,7 +534,7 @@ class ModuleTest():
         thetaRV = np.zeros((57, iteration+1), dtype=complex)
 
         #record the theta movements
-        self.pfi.moveAllSteps(self.goodCobras, -10000, 0)
+        self.pfi.moveAllSteps(self.goodCobras, -10000, 0, thetaFast=True)
         data1 = self.cam1.expose()
         data2 = self.cam2.expose()
         thetaFW[self.goodIdx, 0] = self.extractPositions(data1, data2)
@@ -537,7 +542,7 @@ class ModuleTest():
         stack_image2 = data2
 
         for k in range(iteration):
-            self.pfi.moveAllSteps(self.goodCobras, steps, 0)
+            self.pfi.moveAllSteps(self.goodCobras, steps, 0, thetaFast=False)
             data1 = self.cam1.expose()
             data2 = self.cam2.expose()
             thetaFW[self.goodIdx, k+1] = self.extractPositions(data1, data2)
@@ -547,7 +552,7 @@ class ModuleTest():
         fits.writeto(dataPath + f'/theta2ForwardStack.fits.gz', stack_image2, overwrite=True)
 
         # make sure it goes to the limit
-        self.pfi.moveAllSteps(self.goodCobras, 10000, 0)
+        self.pfi.moveAllSteps(self.goodCobras, 10000, 0, thetaFast=True)
 
         # reverse theta motors
         data1 = self.cam1.expose()
@@ -557,7 +562,7 @@ class ModuleTest():
         stack_image2 = data2
 
         for k in range(iteration):
-            self.pfi.moveAllSteps(self.goodCobras, -steps, 0)
+            self.pfi.moveAllSteps(self.goodCobras, -steps, 0, thetaFast=False)
             data1 = self.cam1.expose()
             data2 = self.cam2.expose()
             thetaRV[self.goodIdx, k+1] = self.extractPositions(data1, data2)
@@ -567,7 +572,7 @@ class ModuleTest():
         fits.writeto(dataPath + f'/theta2ReverseStack.fits.gz', stack_image2, overwrite=True)
 
         # At the end, make sure the cobra back to the hard stop
-        self.pfi.moveAllSteps(self.goodCobras, -10000, 0)
+        self.pfi.moveAllSteps(self.goodCobras, -10000, 0, thetaFast=True)
 
         # save calculation result
         np.save(dataPath + '/thetaFW', thetaFW)
@@ -607,7 +612,7 @@ class ModuleTest():
                 angle = np.deg2rad(margin + (360 - 2 * margin) * i / (runs - 1))
             else:
                 angle = np.deg2rad(180)
-            self.moveThetaPhi(self.goodCobras, zeros + angle, zeros, thetaFast=fast)
+            self.pfi.moveThetaPhi(self.goodCobras, zeros + angle, zeros, thetaFast=fast)
             cAngles, cPositions = self.measureAngles(centers, homes)
             for k in range(len(goodIdx)):
                 if angle > np.pi + tGaps[k] and cAngles[k] < tGaps[k] + 0.1:
@@ -618,7 +623,7 @@ class ModuleTest():
 
             for j in range(tries - 1):
                 dirs = angle > cAngles
-                self.moveThetaPhi(self.goodCobras, angle - cAngles, zeros, thetaFroms=cAngles, thetaFast=fast)
+                self.pfi.moveThetaPhi(self.goodCobras, angle - cAngles, zeros, thetaFroms=cAngles, thetaFast=fast)
                 cAngles, cPositions = self.measureAngles(centers, homes)
                 for k in range(len(goodIdx)):
                     lastAngle = thetaData[goodIdx[k], i, j, 0]
@@ -631,7 +636,7 @@ class ModuleTest():
                 thetaData[goodIdx, i, j+1, 2] = np.imag(cPositions)
 
             # home theta
-            self.pfi.moveAllSteps(self.goodCobras, -10000, 0)
+            self.pfi.moveAllSteps(self.goodCobras, -10000, 0, thetaFast=True)
 
         # save calculation result
         np.save(dataPath + '/thetaData', thetaData)

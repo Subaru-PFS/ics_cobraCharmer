@@ -123,7 +123,12 @@ class Calculation():
             phiAngFW[c] = (phiAngFW[c] - home + np.pi/2) % (np.pi*2) - np.pi/2
             phiAngRV[c] = (phiAngRV[c] - home + np.pi/2) % (np.pi*2) - np.pi/2
 
-        return phiCenter, phiRadius, phiAngFW, phiAngRV
+        # mark bad cobras by checking hard stops
+        bad = np.any(phiAngRV[:, :, 0] < np.pi*0.8, axis=1)
+        bad[np.std(phiAngRV[:, :, 0], axis=1) > 0.1] = True
+        badRange = np.where(bad)[0]
+
+        return phiCenter, phiRadius, phiAngFW, phiAngRV, badRange
 
     def thetaCenterAngles(self, thetaFW, thetaRV):
         # variable declaration for theta angles
@@ -152,21 +157,24 @@ class Calculation():
                 # fix over 2*pi angle issue
                 diff = thetaAngFW[c, n, 1:] - thetaAngFW[c, n, :-1]
                 t = np.where(diff < -np.pi/2)
-                if t[0].size != 0:
+                if t[0].size > 0:
                     thetaAngFW[c, n, t[0][0]+1:] += np.pi*2
                 thetaAngFW[c, n] -= 0.1
 
                 diff = thetaAngRV[c, n, 1:] - thetaAngRV[c, n, :-1]
                 t = np.where(diff > np.pi/2)
-                if t[0].size != 0:
+                if t[0].size > 0:
                     thetaAngRV[c, n, :t[0][0]+1] += np.pi*2
                 thetaAngRV[c, n] += (home2 - home1 + 0.1) % (np.pi*2) - 0.2
+
                 # in case only travel in overlapping region
                 if thetaAngRV[c, n, 0] - thetaAngFW[c, n, -1] < -0.1:
                     thetaAngRV[c, n] += np.pi*2
 
         # mark bad cobras by checking hard stops
-        badRange = np.where(np.any(thetaAngRV[:, :, 0] < np.pi*2, axis=1))[0]
+        bad = np.any(thetaAngRV[:, :, 0] < np.pi*2, axis=1)
+        bad[np.std(thetaAngRV[:, :, 0], axis=1) > 0.1] = True
+        badRange = np.where(bad)[0]
 
         return thetaCenter, thetaRadius, thetaAngFW, thetaAngRV, badRange
 
