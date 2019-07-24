@@ -159,7 +159,10 @@ class Camera(object):
         """ Return the next free sequence number. """
 
         sequenceNumberFile = pathlib.Path(self.dataRoot, self.sequenceNumberFilename)
-
+        if not sequenceNumberFile.exists():
+            with open(sequenceNumberFile, 'wt') as sf:
+                sf.write("1\n")
+                sf.close()
         try:
             sf = open(sequenceNumberFile, "rt")
             seq = sf.readline()
