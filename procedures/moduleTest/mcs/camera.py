@@ -116,10 +116,12 @@ class Camera(object):
 
         return pyfits.getdata(nextFile)
 
-    def dark(self, exptime=None):
+    def takeDark(self, exptime=None):
         """ Take and save a dark frame. """
 
-        im, filename = self.expose(exptime=exptime, noCentroids=True, _takeDark=True)
+        if exptime is None:
+            exptime = self.exptime
+        im = self._camExpose(exptime, _takeDark=True)
         self.dark = im
 
     def expose(self, exptime=None, name=None, _takeDark=False, doCentroid=True):
@@ -128,15 +130,14 @@ class Camera(object):
         else:
             if exptime is None:
                 exptime = self.exptime
-            im = self._camExpose(exptime, _takeDark=_takeDark)
+            im = self._camExpose(exptime)
 
-        if not _takeDark and self.dark is not None:
-            im -= self.dark
+            if self.dark is not None:
+                im -= self.dark
 
-        filename = self.saveImage(im, name)
-
-        if _takeDark:
-            return im, filename
+        filename = self.saveImage(im)
+        if name is not None:
+            filename = self.saveImage(im, name)
 
         if doCentroid:
             t0 = time.time()
