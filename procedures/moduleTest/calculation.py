@@ -61,7 +61,10 @@ class Calculation():
         self.badIdx = np.array(brokens, dtype=int) - 1
         self.goodIdx = np.array(visibles, dtype=int) - 1
 
-    def extractPositions(self, data1, data2, guess=None, tolerance=None):
+    def extractPositions(self, data1, data2=None, guess=None, tolerance=None):
+        if data2 is None:
+            return self.extractPositions1(data, guess=guess, tolerance=tolerance)
+
         idx = self.goodIdx
         idx1 = idx[idx <= self.camSplit]
         idx2 = idx[idx > self.camSplit]
@@ -99,6 +102,31 @@ class Calculation():
                 pos[m] = self.calibModel.centers[idx[m]]
             else:
                 pos[m] = pos2[k]
+        return pos
+
+    def extractPositions1(self, data, guess=None, tolerance=None):
+        idx = self.goodIdx
+        if tolerance is not None:
+            radii = (self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance)
+        else:
+            radii = None
+
+        if guess is None:
+            centers = self.calibModel.centers[idx]
+        else:
+            centers = guess[:len(idx)]
+
+        ext = sep.extract(data.astype(float), 200)
+        pos = np.array(ext['x'] + ext['y']*(1j))
+        target = lazyIdentification(centers, pos, radii=radii)
+
+        pos = np.zeros(len(idx), dtype=complex)
+        for n, k in enumerate(target):
+            if k < 0:
+                pos[n] = self.calibModel.centers[idx[n]]
+            else:
+                pos[n] = pos[k]
+
         return pos
 
     def phiCenterAngles(self, phiFW, phiRV):
