@@ -6,8 +6,6 @@ import time
 import numpy as np
 
 import astropy.io.fits as pyfits
-from . import spots
-reload(spots)
 
 # Configure the default formatter and logger.
 logging.basicConfig(datefmt = "%Y-%m-%d %H:%M:%S", level=logging.DEBUG,
@@ -124,7 +122,39 @@ class Camera(object):
         im = self._camExpose(exptime, _takeDark=True)
         self.dark = im
 
-    def expose(self, exptime=None, name=None, _takeDark=False, doCentroid=True):
+        filename = self.saveImage(im)
+        self.darkFile = filename
+
+    def getObjects(self, im, sigma=20.0):
+        import sep
+
+        t0 = time.time()
+        data = im.astype('f4')
+        bkg = sep.Background(data)
+        bkg.subfrom(data)
+        data_sub = data
+
+        # thresh = np.percentile(data_sub, percentile)
+        std = np.std(data_sub)
+        thresh = std*sigma
+        t1 = time.time()
+        objects = sep.extract(data_sub,
+                              thresh=thresh,
+                              filter_type='conv', clean=False,
+                              deblend_cont=1.0)
+        self.logger.warn(f'median={np.median(data_sub)} std={np.std(data_sub)} thresh={thresh} {len(objects)} objects')
+
+        keep_w = self.trim(objects['x'], objects['y'])
+        if len(keep_w) != len(objects):
+            self.logger.info(f'trimming {len(objects)} objects to {len(keep_w)}')
+        objects = objects[keep_w]
+        t2 = time.time()
+        self.logger.info(f'spots, bknd: {t1-t0:0.3f} spots: {t2-t1:0.3f} total: {t2-t0:0.3f}')
+
+        return objects, data_sub, bkg
+
+    def expose(self, name=None, exptime=None, doCentroid=True, steps=None, guess=None):
+        t0 = time.time()
         if self.simulationPath is not None:
             im = self._readNextSimulatedImage()
         else:
@@ -141,14 +171,16 @@ class Camera(object):
 
         if doCentroid:
             t0 = time.time()
-            objects = spots.getObjects(im)
+            objects, data_sub, bkgd = self.getObjects(im)
             t1 = time.time()
-            self.appendSpots(filename, objects)
+            self.appendSpots(filename, objects, steps=steps, guess=guess)
             t2=time.time()
 
             self.logger.info(f'{filename.stem}: {len(objects)} spots, get: {t1-t0:0.3f} save: {t2-t1:0.3f} total: {t2-t0:0.3f}')
+        else:
+            objects = None
 
-        return im, filename
+        return objects, filename, bkgd
 
     def trim(self, x=None, y=None):
         """ Returns mask of valid points. """
