@@ -13,6 +13,45 @@ class moduleAnalyze():
             sys.exit()
         self.cal = calculation.Calculation(xml, brokens, camSplit)
 
+    def loadPhiData(self, dataPath, goodIdx, iterations, repeats=1, reCenter=False):
+        if not reCenter:
+            phiFW = np.load(dataPath + '/phiFW')
+            phiRV = np.load(dataPath + '/phiRV')
+            nCobras, nRepeats, nIterations = phiFW.shape
+            if nCobras != len(goodIdx) or nRepeats != repeats or nIterations != iterations:
+                raise RuntimeError("saved data shape is not expected shape")
+
+            return phiFW, phiRV
+
+        # calculate the phi movements
+        phiFW = np.zeros((57, repeats, iterations+1), dtype=complex)
+        phiRV = np.zeros((57, repeats, iterations+1), dtype=complex)
+        for n in range(repeats):
+            # forward phi motor maps
+            data1 = fits.getdata(dataPath + f'/phi1Begin{n}.fits.gz')
+            data2 = fits.getdata(dataPath + f'/phi2Begin{n}.fits.gz')
+            phiFW[goodIdx, n, 0] = self.cal.extractPositions(data1, data2)
+
+            for k in range(iterations):
+                data1 = fits.getdata(dataPath + f'/phi1Forward{n}N{k}.fits.gz')
+                data2 = fits.getdata(dataPath + f'/phi2Forward{n}N{k}.fits.gz')
+                phiFW[goodIdx, n, k+1] = self.cal.extractPositions(data1, data2,
+                                                                   guess=phiFW[goodIdx, n, k])
+
+            # reverse phi motor maps
+            data1 = fits.getdata(dataPath + f'/phi1End{n}.fits.gz')
+            data2 = fits.getdata(dataPath + f'/phi2End{n}.fits.gz')
+            phiRV[goodIdx, n, 0] = self.cal.extractPositions(data1, data2,
+                                                             guess=phiFW[goodIdx, n, iterations])
+
+            for k in range(iterations):
+                data1 = fits.getdata(dataPath + f'/phi1Reverse{n}N{k}.fits.gz')
+                data2 = fits.getdata(dataPath + f'/phi2Reverse{n}N{k}.fits.gz')
+                phiRV[goodIdx, n, k+1] = self.cal.extractPositions(data1, data2,
+                                                                   guess=phiRV[goodIdx, n, k])
+
+        return phiFW, phiRV
+
     def makePhiMotorMap(
             self,
             newXml,
@@ -22,8 +61,9 @@ class moduleAnalyze():
             totalSteps=5000,
             fast=True,
             phiOnTime=None,
-            delta=0.1
-        ):
+            delta=0.1,
+            reCenter=False):
+
         # generate phi motor maps, it accepts custom phiOnTIme parameter.
         # it assumes that theta arms have been move to up/down positions to avoid collision
         # if phiOnTime is not None, fast parameter is ignored. Otherwise use fast/slow ontime
@@ -34,32 +74,10 @@ class moduleAnalyze():
         #     makePhiMotorMap(xml, path, phiOnTime=0.06)        // motor maps for on-time=0.06
 
         # variable declaration for position measurement
-        iteration = totalSteps // steps
-        phiFW = np.zeros((57, repeat, iteration+1), dtype=complex)
-        phiRV = np.zeros((57, repeat, iteration+1), dtype=complex)
+        iterations = totalSteps // steps
         goodIdx = self.cal.goodIdx
 
-        # calculate the phi movements
-        for n in range(repeat):
-            # forward phi motor maps
-            data1 = fits.getdata(dataPath + f'/phi1Begin{n}.fits.gz')
-            data2 = fits.getdata(dataPath + f'/phi2Begin{n}.fits.gz')
-            phiFW[goodIdx, n, 0] = self.cal.extractPositions(data1, data2)
-
-            for k in range(iteration):
-                data1 = fits.getdata(dataPath + f'/phi1Forward{n}N{k}.fits.gz')
-                data2 = fits.getdata(dataPath + f'/phi2Forward{n}N{k}.fits.gz')
-                phiFW[goodIdx, n, k+1] = self.cal.extractPositions(data1, data2, guess=phiFW[goodIdx, n, k])
-
-            # reverse phi motor maps
-            data1 = fits.getdata(dataPath + f'/phi1End{n}.fits.gz')
-            data2 = fits.getdata(dataPath + f'/phi2End{n}.fits.gz')
-            phiRV[goodIdx, n, 0] = self.cal.extractPositions(data1, data2, guess=phiFW[goodIdx, n, iteration])
-
-            for k in range(iteration):
-                data1 = fits.getdata(dataPath + f'/phi1Reverse{n}N{k}.fits.gz')
-                data2 = fits.getdata(dataPath + f'/phi2Reverse{n}N{k}.fits.gz')
-                phiRV[goodIdx, n, k+1] = self.cal.extractPositions(data1, data2, guess=phiRV[goodIdx, n, k])
+        phiFW, phiRV = self.loadPhiData(dataPath, repeat, goodIdx, iterations, recenter=reCenter)
 
         # save calculation result
         np.save(dataPath + '/phiFW_A', phiFW)
