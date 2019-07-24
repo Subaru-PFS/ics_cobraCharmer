@@ -11,6 +11,22 @@ import astropy.io.fits as pyfits
 logging.basicConfig(datefmt = "%Y-%m-%d %H:%M:%S", level=logging.DEBUG,
                     format = "%(asctime)s.%(msecs)03dZ %(name)-16s %(levelno)s %(filename)s:%(lineno)d %(message)s")
 
+def whereAmI():
+    """ Guess our location/camera.
+
+    For now we only look for the CIT cube and the ASRD bench. Windows v. Unix.
+
+    """
+    import platform
+
+    if platform.system() == 'Windows':
+        return 'cit'
+
+    # Need to distinguish the ASRD bench, the ASRD MCS, the Subaru MCS.
+    # Can use network address for Subaru
+
+    return 'asrd'
+
 def cameraFactory(name=None, doClear=False, simulationPath=None, dataRoot=None):
     if doClear or simulationPath is not None:
         try:
@@ -20,6 +36,8 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, dataRoot=None):
     try:
         return cameraFactory.__camera
     except:
+        if name is None:
+            name = whereAmI()
         if name == 'cit':
             from . import citCam
             reload(citCam)
