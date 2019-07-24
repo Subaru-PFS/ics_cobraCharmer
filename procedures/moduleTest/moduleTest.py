@@ -5,7 +5,11 @@ from astropy.io import fits
 import sep
 from copy import deepcopy
 import calculation
-from idsCamera import idsCamera
+try:
+    from idsCamera import idsCamera
+except ImportError:
+    from mcs import camera
+
 from ics.cobraCharmer import pfi as pfiControl
 
 class Camera():
@@ -42,10 +46,10 @@ class ModuleTest():
         self.evenCobras = moduleCobras[2]
 
         # Initializing COBRA module
-        self.pfi = pfiControl.PFI(fpgaHost=fpgaHost, doLoadModel=False)
         if not os.path.exists(xml):
             print(f"Error: {xml} is not presented!")
             sys.exit()
+        self.pfi = pfiControl.PFI(fpgaHost=fpgaHost, doLoadModel=False)
         self.xml = xml
         self.pfi.loadModel(xml)
         self.pfi.setFreq(self.allCobras)
@@ -54,9 +58,10 @@ class ModuleTest():
         self.setBrokenCobras(brokens)
 
         # initialize cameras
-        self.cam1 = Camera(cam1Id)
-        self.cam2 = Camera(cam2Id)
-        self.camSplit = camSplit
+        self.cam = camera.cameraFactory('cit')
+        # self.cam1 = Camera(cam1Id)
+        # self.cam2 = Camera(cam2Id)
+        # self.camSplit = camSplit
 
         # init calculation library
         self.cal = calculation.Calculation(xml, brokens, camSplit)
@@ -74,8 +79,13 @@ class ModuleTest():
         if hasattr(self, 'cal'):
             self.cal.setBrokenCobras(brokens)
 
-    def extractPositions(self, data1, data2, guess=None, tolerance=None):
+    def extractPositions(self, data1, data2=None, guess=None, tolerance=None):
         return self.cal.extractPositions(data1, data2, guess, tolerance)
+
+    def exposeAndExtractPositions(self, name=None, guess=None, tolerance=None):
+        data = self.cam.expose(name)
+        positions = self.extractPositions(data, guess=guess, tolerance=tolerance)
+        return positions
 
     def moveToXYfromHome(self, idx, targets, threshold=3.0, maxTries=8):
         """ function to move cobras to target positions """
@@ -84,12 +94,8 @@ class ModuleTest():
 
         ntries = 1
         while True:
-            # check current positions
-            data1 = self.cam1.expose()
-            data2 = self.cam2.expose()
-
             # extract sources and fiber identification
-            curPos = self.extractPositions(data1, data2, tolerance=0.2)
+            curPos = self.exposeAndExtractPositions(tolerance=0.2)
             print(curPos)
 
             # check position errors
@@ -200,46 +206,31 @@ class ModuleTest():
         phiRV = np.zeros((57, repeat, iteration+1), dtype=complex)
 
         #record the phi movements
-        self.cam1.reload()
-        self.cam2.reload()
+        dirpath = self.cam.setDirpath()
         self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
         for n in range(repeat):
+            self.resetStack(f'phiForwardStack{n}.fits')
+
             # forward phi motor maps
-            data1 = self.cam1.expose(dataPath + f'/phi1Begin{n}.fits.gz')
-            data2 = self.cam2.expose(dataPath + f'/phi2Begin{n}.fits.gz')
-            phiFW[self.goodIdx, n, 0] = self.extractPositions(data1, data2)
-            stack_image1 = data1
-            stack_image2 = data2
+            phiFW[self.goodIdx, n, 0] = self.exposeAndExtractPositions(f'phiBegin{n}.fits')
 
             for k in range(iteration):
                 self.pfi.moveAllSteps(self.goodCobras, 0, steps, phiFast=False)
-                data1 = self.cam1.expose(dataPath + f'/phi1Forward{n}N{k}.fits.gz')
-                data2 = self.cam2.expose(dataPath + f'/phi2Forward{n}N{k}.fits.gz')
-                phiFW[self.goodIdx, n, k+1] = self.extractPositions(data1, data2, guess=phiFW[self.goodIdx, n, k])
-                stack_image1 += data1
-                stack_image2 += data2
-            fits.writeto(dataPath + f'/phi1ForwardStack{n}.fits.gz', stack_image1, overwrite=True)
-            fits.writeto(dataPath + f'/phi2ForwardStack{n}.fits.gz', stack_image2, overwrite=True)
+                phiFW[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'ph1Forward{n}N{k}.fits',
+                                                                             guess=phiFW[self.goodIdx, n, k])
 
             # make sure it goes to the limit
             self.pfi.moveAllSteps(self.goodCobras, 0, 5000)
 
             # reverse phi motor maps
-            data1 = self.cam1.expose(dataPath + f'/phi1End{n}.fits.gz')
-            data2 = self.cam2.expose(dataPath + f'/phi2End{n}.fits.gz')
-            phiRV[self.goodIdx, n, 0] = self.extractPositions(data1, data2, guess=phiFW[self.goodIdx, n, iteration])
-            stack_image1 = data1
-            stack_image2 = data2
+            self.resetStack(f'phiReverseStack{n}.fits')
+            phiRV[self.goodIdx, n, 0] = self.exposeAndExtractPositions(f'phiEnd{n}.fits',
+                                                                       guess=phiFW[self.goodIdx, n, iteration])
 
             for k in range(iteration):
                 self.pfi.moveAllSteps(self.goodCobras, 0, -steps, phiFast=False)
-                data1 = self.cam1.expose(dataPath + f'/phi1Reverse{n}N{k}.fits.gz')
-                data2 = self.cam2.expose(dataPath + f'/phi2Reverse{n}N{k}.fits.gz')
-                phiRV[self.goodIdx, n, k+1] = self.extractPositions(data1, data2, guess=phiRV[self.goodIdx, n, k])
-                stack_image1 += data1
-                stack_image2 += data2
-            fits.writeto(dataPath + f'/phi1ReverseStack{n}.fits.gz', stack_image1, overwrite=True)
-            fits.writeto(dataPath + f'/phi2ReverseStack{n}.fits.gz', stack_image2, overwrite=True)
+                phiRV[self.goodIdx, n, k+1] = self.extractPositions(f'/phiReverse{n}N{k}.fits',
+                                                                    guess=phiRV[self.goodIdx, n, k])
 
             # At the end, make sure the cobra back to the hard stop
             self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
