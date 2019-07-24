@@ -53,6 +53,7 @@ class Camera(object):
         self.dataRoot = dataRoot
         self.dirpath = None
         self.sequenceNumberFilename = "nextSequenceNumber"
+        self.doStack = False
 
         if simulationPath is not None:
             simulationPath = pathlib.Path(simulationPath)
@@ -63,7 +64,7 @@ class Camera(object):
     def _now(self):
         return time.strftime('%Y%m%d_%H%M%S')
 
-    def setDirpath(self, dirname=None):
+    def setDirpath(self, dirname=None, doStack=True):
         """ Set the directory for output files (images and spots). Created if does not exist. """
 
         if dirname is None:
@@ -72,6 +73,12 @@ class Camera(object):
         dirpath = dirpath.expanduser().resolve()
         dirpath.mkdir(parents=True)
         self.dirpath = dirpath
+        self.resetStack(doStack=doStack)
+
+        return dirpath
+
+    def resetStack(self, doStack=False):
+        self.doStack = "stack.fits" if doStack is True else doStack
 
     def __repr__(self):
         if self.simulationPath is None:
@@ -181,6 +188,23 @@ class Camera(object):
         return pathlib.Path(self.dirpath,
                             f'{self.filePrefix}{self.seqno:08d}.fits')
 
+    def _updateStack(self, img):
+        if self.doStack is False:
+            return
+        stackPath = pathlib.Path(self.dirpath, self.doStack)
+
+        try:
+            stackFits = pyfits.open(stackPath, mode="update")
+            stack = stackFits['IMAGE'].data
+            stack += img
+        except FileNotFoundError:
+            stackFits = pyfits.open(stackPath, mode="append")
+            stackFits.append(pyfits.CompImageHDU(img, name='IMAGE'))
+
+        stackFits.flush()
+        stackFits.close()
+        del stackFits
+
     def saveImage(self, img, name=None):
         if name is None:
             name = self._getNextName()
@@ -190,9 +214,11 @@ class Camera(object):
 
         hdus.writeto(name, overwrite=True)
 
+        self._updateStack(img)
+
         return name
 
-    def appendSpots(self, filename, spots):
+    def appendSpots(self, filename, spots, guess=None, steps=None):
         """ Add spots to existing image file and append them to summary spot file.
 
             This is not done efficiently.
