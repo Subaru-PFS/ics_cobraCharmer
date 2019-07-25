@@ -1,6 +1,7 @@
 from importlib import reload
 import logging
 import pathlib
+import platform
 import time
 
 import numpy as np
@@ -149,8 +150,10 @@ class Camera(object):
         im = self._camExpose(exptime, _takeDark=True)
         self.dark = im
 
-        filename = self.saveImage(im)
+        filename = self.saveImage(im, doStack=False)
         self.darkFile = filename
+
+        return filename
 
     def getObjects(self, im, sigma=20.0):
         import sep
@@ -169,7 +172,8 @@ class Camera(object):
                               thresh=thresh,
                               filter_type='conv', clean=False,
                               deblend_cont=1.0)
-        self.logger.warn(f'median={np.median(data_sub)} std={np.std(data_sub)} thresh={thresh} {len(objects)} objects')
+        self.logger.warn(f'median={np.median(data_sub)} std={np.std(data_sub)} '
+                         f'thresh={thresh} {len(objects)} objects')
 
         keep_w = self.trim(objects['x'], objects['y'])
         if len(keep_w) != len(objects):
@@ -192,9 +196,7 @@ class Camera(object):
             if self.dark is not None:
                 im -= self.dark
 
-        filename = self.saveImage(im)
-        if name is not None:
-            filename = self.saveImage(im, name)
+        filename = self.saveImage(im, extraName=name)
 
         if doCentroid:
             t0 = time.time()
@@ -268,18 +270,25 @@ class Camera(object):
         stackFits.close()
         del stackFits
 
-    def saveImage(self, img, name=None):
-        if name is None:
-            name = self._getNextName()
+    def saveImage(self, img, extraName=None, doStack=True):
+        filename = self._getNextName()
 
         hdus = pyfits.HDUList()
         hdus.append(pyfits.CompImageHDU(img, name='IMAGE', uint=True))
 
-        hdus.writeto(name, overwrite=True)
+        hdus.writeto(filename, overwrite=True)
 
-        self._updateStack(img)
+        if extraName is not None:
+            linkname = filename.parent / extraName
+            if platform.system() == 'Windows':
+                hdus.writeto(linkname)  # Creating sylink requires admin!
+            else:
+                linkname.symlink_to(filename.name)
 
-        return name
+        if doStack:
+            self._updateStack(img)
+
+        return filename
 
     def appendSpots(self, filename, spots, guess=None, steps=None):
         """ Add spots to existing image file and append them to summary spot file.
