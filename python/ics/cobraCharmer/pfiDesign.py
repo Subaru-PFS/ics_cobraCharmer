@@ -172,6 +172,17 @@ class PFIDesign():
             self.positionerIds[i] = int(header.find("Positioner_Id").text)
             self.serialIds[i] = int(header.find("Serial_Number").text, base=10)
 
+            # Check for conflicts:
+            for check_i in range(i):
+                if (self.moduleIds[i] == self.moduleIds[check_i] and
+                    self.positionerIds[i] == self.positionerIds[check_i]):
+
+                    raise KeyError(f"duplicate cobra id: module={self.moduleIds[i]} "
+                                   f"positioner={self.positionerIds[i]}")
+
+                if self.serialIds[i] == self.serialIds[check_i]:
+                    raise KeyError(f"duplicate cobra with serial={self.serialIds[i]}")
+
             # Save some of the kinematics information
             kinematics = dataContainers[i].find("KINEMATICS")
             self.centers[i] = float(kinematics.find("Global_base_pos_x").text) + float(kinematics.find("Global_base_pos_y").text) * 1j
