@@ -23,8 +23,9 @@ class PFIDesign():
     """
 
     def __init__(self, fileName):
-        """Constructs a new cobras calibration product using the information
-        contained in an XML calibration file.
+        """
+        Constructs a new cobras calibration product using the information
+        contained in a single XML calibration file.
 
         Parameters
         ----------
@@ -36,23 +37,27 @@ class PFIDesign():
         object
             The cobras calibration product.
 
+        Notes
+        -----
+
+        Since we are loading a single module, assume that we are
+        directly connected to an FPGA, and thus that the module ID
+        must be set to 1. If you want to _keep_ the module IDs, use
+        PFIDesign.loadPFI().
         """
 
         if fileName is None:
             return
+
         self.loadModelFiles([fileName])
+        self.moduleIds[:] = 1
 
     @classmethod
-    def loadModules(cls, moduleNames, version=None):
+    def loadModule(cls, moduleName, version=None):
         """ """
-        modulePaths = []
-        for m in moduleNames:
-            modulePaths.append(cls.mapPath(m.strip(), version=version))
+        modulePath = butler.mapPathForModule(moduleName, version=version)
 
-        self = cls(None)
-        self.loadModelFiles(modulePaths)
-
-        return self
+        return cls(modulePath)
 
     @classmethod
     def loadPfi(cls, version=None, moduleVersion=None):
@@ -61,16 +66,12 @@ class PFIDesign():
 
         modulePaths = []
         for m in moduleNames:
-            modulePaths.append(cls.mapPath(m, version=moduleVersion))
+            modulePaths.append(butler.mapPathForModule(m, version=moduleVersion))
 
         self = cls(None)
         self.loadModelFiles(modulePaths)
 
         return self
-
-    @staticmethod
-    def mapPath(moduleName, version=None):
-        return butler.mapPathForModule(moduleName, version=version)
 
     def _loadCobrasFromModelFile(self, fileName):
         """Loads the per-cobra structures from the given model file
@@ -253,6 +254,115 @@ class PFIDesign():
             self.negThtSteps = np.hstack((zeros, np.cumsum(self.F1Nm, axis=1)))
             self.posPhiSteps = np.hstack((zeros, np.cumsum(self.F2Pm, axis=1)))
             self.negPhiSteps = np.hstack((zeros, np.cumsum(self.F2Nm, axis=1)))
+
+    def findAllCobras(self):
+        return range(self.nCobras)
+
+    def findCobraByModuleAndPositioner(self, moduleId, positionerId):
+        """ Find cobra at a given module and positioner.
+
+        Args
+        ----
+        moduleId : int
+          The 1..42 number of a PFI module
+        positionerId : int
+          The 1..57 number of a module cobra
+
+        Returns
+        -------
+        id : int
+          The index into our data for the given cobra
+        """
+
+        return np.where((self.moduleIds == moduleId) & (self.positionerIds == positionerId))[0][0]
+
+    def findCobraBySerialNumber(self, serialNumber):
+        """ Find cobra with the given serial number.
+
+        Args
+        ----
+        serialNumber : str
+           The serial number of a cobra.
+
+        Returns
+        -------
+        id : int
+          The index into our data for the given cobra
+        """
+
+        return np.where(self.serialIds == serialNumber)[0][0]
+
+    @staticmethod
+    def getRealModuleId(moduleId):
+        """ Get the canonical module id for a module id or name
+
+        Args
+        ---
+        moduleId : int or str
+          A module number (1..42), "SCxx", "Spare[12]"
+
+        Spare[12] are assigned moduleIds 43 and 44.
+        """
+
+        if isinstance(moduleId, str):
+            modName = moduleId.upper()
+            if modName.startswith('SC'):
+                moduleId = int(modName[2:], base=10)
+            elif modName.startswith('SPARE'):
+                spareId = int(modName[5:], base=10)
+                moduleId = spareId + 42
+            else:
+                raise ValueError(f'invalid module name: {moduleId}')
+
+        if moduleId < 1 or moduleId > 44:
+            raise ValueError(f'module id out of range (1..44): {moduleId}')
+
+        return moduleId
+
+    def findCobrasForModule(self, moduleId):
+        """ Find all cobras for a given module.
+
+        Args
+        ----
+        moduleId : int
+          The 1..42 number of a PFI module
+
+        Returns
+        -------
+        ids : array
+          The indices into our data for all cobras in the module
+        """
+        moduleId = self.getRealModuleId(moduleId)
+        return np.where(self.moduleIds == moduleId)[0]
+
+    def setModuleId(self, moduleId, forModule=None, setOurModuleIds=False):
+        """Update moduleIds
+
+        Args
+        ----
+        moduleId: int or str
+            The moduleId to set ourselves to.
+        forModule: int
+            If set, the module's IDs to (re)set.
+        setOurModuleIds : bool
+            Set both the container's module id AND our id (the ID on the FPGA bus).
+        """
+
+        moduleId = self.getRealModuleId(moduleId)
+        if forModule is not None:
+            idx = self.findCobrasForModule(forModule)
+        else:
+            idx = range(self.nCobras)
+
+        # A length test is probably sufficient
+        if len(idx) != 57:
+            raise RuntimeError("Will not set moduleId to anything other that all cobras in a single module")
+        for i in idx:
+            header = self.dataContainers[i].find("DATA_HEADER")
+            header.find("Module_Id").text = str(moduleId)
+
+            if setOurModuleIds:
+                self.moduleIds[i] = moduleId
 
     def updateMotorMaps(self, thtFwd=None, thtRev=None, phiFwd=None, phiRev=None, useSlowMaps=True):
         """Update cobra motor maps
