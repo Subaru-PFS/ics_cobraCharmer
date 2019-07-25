@@ -6,15 +6,19 @@ is no pixel scaling or phi home hacking. The coordinate
 system here should be in F3C.
 
 """
+from importlib import reload
 
 import numpy as np
 import xml.etree.ElementTree as ElementTree
 from copy import deepcopy
 
+from .utils import butler
+reload(butler)
+
 class PFIDesign():
     """
 
-    Class describing a cobras calibration product.
+    Class describing a cobras calibration product, the "motor map"
 
     """
 
@@ -33,11 +37,83 @@ class PFIDesign():
             The cobras calibration product.
 
         """
+
+        if fileName is None:
+            return
+        self.loadModelFiles([fileName])
+
+    @classmethod
+    def loadModules(cls, moduleNames, version=None):
+        """ """
+        modulePaths = []
+        for m in moduleNames:
+            modulePaths.append(cls.mapPath(m.strip(), version=version))
+
+        self = cls(None)
+        self.loadModelFiles(modulePaths)
+
+        return self
+
+    @classmethod
+    def loadPfi(cls, version=None, moduleVersion=None):
+        """ """
+        moduleNames = butler.modulesForPfi(version=version)
+
+        modulePaths = []
+        for m in moduleNames:
+            modulePaths.append(cls.mapPath(m, version=moduleVersion))
+
+        self = cls(None)
+        self.loadModelFiles(modulePaths)
+
+        return self
+
+    @staticmethod
+    def mapPath(moduleName, version=None):
+        return butler.mapPathForModule(moduleName, version=version)
+
+    def _loadCobrasFromModelFile(self, fileName):
+        """Loads the per-cobra structures from the given model file
+
+        Parameters
+        ----------
+        fileName: object
+            The path to the XML calibration file.
+
+        Returns
+        -------
+        arms : list of ARM_DATA_CONTAINERs
+            The cobras calibration product.
+        """
+
         # Load the XML calibration file
         calibrationFileRootElement = ElementTree.parse(fileName).getroot()
 
         # Get all the data container elements
         dataContainers = calibrationFileRootElement.findall("ARM_DATA_CONTAINER")
+
+        return dataContainers
+
+    def loadModelFiles(self, fileList):
+        """Constructs a new cobras calibration product using the information
+        contained in a list of XML calibration file.
+
+        Parameters
+        ----------
+        fileNames: list
+            The full paths to the XML calibration files.
+
+        Returns
+        -------
+        object
+            The cobras calibration product.
+
+        """
+
+        dataContainers = []
+        for f in fileList:
+            dataContainers.extend(self._loadCobrasFromModelFile(f))
+
         self.origin_dataContainers = dataContainers
         self.dataContainers = deepcopy(dataContainers)
 
