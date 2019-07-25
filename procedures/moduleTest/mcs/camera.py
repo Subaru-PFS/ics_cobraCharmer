@@ -66,7 +66,7 @@ class Camera(object):
 
         if dataRoot is None:
             dataRoot = '/data/MCS'
-        self.dataRoot = dataRoot
+        self.dataRoot = pathlib.Path(dataRoot)
         self.dirpath = None
         self.sequenceNumberFilename = "nextSequenceNumber"
         self.doStack = False
@@ -80,11 +80,20 @@ class Camera(object):
     def _now(self):
         return time.strftime('%Y%m%d_%H%M%S')
 
-    def setDirpath(self, dirname=None, doStack=True):
-        """ Set the directory for output files (images and spots). Created if does not exist. """
+    def _nextDir(self):
+        day = time.strftime('%Y%m%d')
+        todayDirs = sorted(self.dataRoot.glob(f'{day}_[0-9][0-9][0-9]'))
+        if len(todayDirs) == 0:
+            return self.dataRoot / f'{day}_000'
+        _, lastRev = todayDirs[-1].name.split('_')
+        nextRev = int(lastRev, base=10) + 1
+        return self.dataRoot / f'{day}_{nextRev:03d}'
+
+    def newDir(self, dirname=None, doStack=True):
+        """ Change the directory for output files (images and spots). """
 
         if dirname is None:
-            dirname = pathlib.Path(self.dataRoot, self._now())
+            dirname = self._nextDir()
         dirpath = pathlib.Path(dirname)
         dirpath = dirpath.expanduser().resolve()
         dirpath.mkdir(parents=True)
@@ -236,7 +245,7 @@ class Camera(object):
 
     def _getNextName(self):
         if self.dirpath is None:
-            self.setDirpath()
+            self.newDir(doStack=False)
 
         self.seqno = self._consumeNextSeqno()
         return pathlib.Path(self.dirpath,
