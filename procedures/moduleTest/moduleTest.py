@@ -58,10 +58,10 @@ class ModuleTest():
         self.setBrokenCobras(brokens)
 
         # initialize cameras
-        self.cam = camera.cameraFactory('cit')
+        self.cam = camera.cameraFactory()
         # self.cam1 = Camera(cam1Id)
         # self.cam2 = Camera(cam2Id)
-        # self.camSplit = camSplit
+        self.camSplit = camSplit
 
         # init calculation library
         self.cal = calculation.Calculation(xml, brokens, camSplit)
@@ -83,8 +83,8 @@ class ModuleTest():
         return self.cal.extractPositions(data1, data2, guess, tolerance)
 
     def exposeAndExtractPositions(self, name=None, guess=None, tolerance=None):
-        data = self.cam.expose(name)
-        positions = self.extractPositions(data, guess=guess, tolerance=tolerance)
+        centroids, img, _ = self.cam.expose(name)
+        positions = self.extractPositions(img, guess=guess, tolerance=tolerance)
         return positions
 
     def moveToXYfromHome(self, idx, targets, threshold=3.0, maxTries=8):
@@ -160,15 +160,14 @@ class ModuleTest():
     def makePhiMotorMap(
             self,
             newXml,
-            dataPath,
+            dataPath=None,
             repeat=3,
             steps=200,
             totalSteps=5000,
             fast=True,
             phiOnTime=None,
             limitOnTime=0.06,
-            delta=0.1
-        ):
+            delta=0.1):
         """ generate phi motor maps, it accepts custom phiOnTIme parameter.
             it assumes that theta arms have been move to up/down positions to avoid collision
             if phiOnTime is not None, fast parameter is ignored. Otherwise use fast/slow ontime
@@ -206,7 +205,7 @@ class ModuleTest():
         phiRV = np.zeros((57, repeat, iteration+1), dtype=complex)
 
         #record the phi movements
-        dirpath = self.cam.setDirpath()
+        dataPath = self.cam.setDirpath()
         self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
         for n in range(repeat):
             self.resetStack(f'phiForwardStack{n}.fits')
