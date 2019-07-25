@@ -271,7 +271,7 @@ class ModuleTest():
         if phiOnTime is not None:
             onTime = np.full(57, phiOnTime)
             self.cal.calibModel.updateOntimes(phiFwd=onTime, phiRev=onTime, fast=fast)
-        self.cal.calibModel.createCalibrationFile(dataPath + '/' + newXml)
+        self.cal.calibModel.createCalibrationFile(dataPath / newXml)
         self.cal.restoreConfig()
 
         # restore default setting
@@ -686,6 +686,37 @@ class ModuleTest():
         new.tht1[split:] = (old.tht1[split:]+tilt2) % (2*np.pi)
         new.L1[split:] = old.L1[split:] * scale2
         new.L2[split:] = old.L2[split:] * scale2
+
+        # create a new XML file
+        old.updateGeometry(new.centers, new.L1, new.L2)
+        old.updateThetaHardStops(new.tht0, new.tht1)
+        old.createCalibrationFile(newXml)
+        self.cal.restoreConfig()
+
+    def convertXML1(self, newXml):
+        """ convert old XML to a new coordinate by taking 'phi homed' images
+            assuming the cobra module is in horizontal setup
+        """
+        idx = self.goodIdx
+        oldPos = self.cal.calibModel.centers
+        newPos = np.zeros(57, dtype=complex)
+
+        # go home and measure new positions
+        self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
+        data = sep.extract(self.cam.expose().astype(float), 200)
+        home = np.array(sorted([(c['x'], c['y']) for c in data1], key=lambda t: t[0], reverse=True))
+        newPos[idx] = home[:len(idx), 0] + home[:len(idx), 1] * (1j)
+
+        # calculation tranformation
+        offset, scale, tilt, convert = calculation.transform(oldPos[idx], newPos[idx])
+
+        old = self.cal.calibModel
+        new = deepcopy(self.cal.calibModel)
+        new.centers[:] = convert(old.centers)
+        new.tht0[:] = (old.tht0 + tilt) % (2*np.pi)
+        new.tht1[:] = (old.tht1 + tilt) % (2*np.pi)
+        new.L1[:] = old.L1*scale
+        new.L2[:] = old.L2*scale
 
         # create a new XML file
         old.updateGeometry(new.centers, new.L1, new.L2)
