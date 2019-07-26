@@ -85,6 +85,8 @@ class PFIDesign():
         -------
         arms : list of ARM_DATA_CONTAINERs
             The cobras calibration product.
+        info : dictionary
+            Some metadata which might be useful.
         """
 
         # Load the XML calibration file
@@ -93,7 +95,18 @@ class PFIDesign():
         # Get all the data container elements
         dataContainers = calibrationFileRootElement.findall("ARM_DATA_CONTAINER")
 
-        return dataContainers
+        # Grab "metadata"
+        info = dict()
+        try:
+            info['name'] = calibrationFileRootElement.find('ARM_DATA_NAME').text
+        except AttributeError:
+            info['name'] = fileName.stem
+        try:
+            info['site'] = calibrationFileRootElement.find('ARM_DATA_SITE').text
+        except AttributeError:
+            info['site'] = 'unknown'
+
+        return dataContainers, info
 
     def loadModelFiles(self, fileList):
         """Constructs a new cobras calibration product using the information
@@ -112,8 +125,11 @@ class PFIDesign():
         """
 
         dataContainers = []
+        self.modelInfo = {}
         for f in fileList:
-            dataContainers.extend(self._loadCobrasFromModelFile(f))
+            fileArms, fileInfo = self._loadCobrasFromModelFile(f)
+            dataContainers.extend(fileArms)
+            self.modelInfo[f] = fileInfo
 
         self.origin_dataContainers = dataContainers
         self.dataContainers = deepcopy(dataContainers)
@@ -605,19 +621,31 @@ class PFIDesign():
                     self.motorOntimeSlowRev2[i] = phiRev[i]
                     kinematics.find("Link2_rev_Duration_Slow").text = str(phiRev[i])
 
-    def createCalibrationFile(self, outputFileName):
+    def createCalibrationFile(self, outputFileName, name=None, site=None):
         """Creates a new XML calibration file based on current configuration
 
         Parameters
         ----------
         outputFileName: object
             The path where the output XML calibration file should be saved.
-
+        name : str
+            A string to put into a top_level ARM_DATA_NAME element
+        site : str
+            A string to put into a top_level ARM_DATA_SITE element
         """
 
         # Create the output XML tree
         newXmlTree = ElementTree.ElementTree(ElementTree.Element("ARM_DATA"))
         newRootElement = newXmlTree.getroot()
+        if name is not None:
+            node = ElementTree.Element("ARM_DATA_NAME")
+            node.text = name
+            newRootElement.append(node)
+
+        if site is not None:
+            node = ElementTree.Element("ARM_DATA_SITE")
+            node.text = site
+            newRootElement.append(node)
 
         # Fill the calibration file
         for i in range(self.nCobras):
