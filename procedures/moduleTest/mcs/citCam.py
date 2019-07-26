@@ -10,7 +10,7 @@ class CitCamera(camera.Camera):
 
     def __init__(self, **kw):
         super().__init__(**kw)
-        self.logger.warn('cit...')
+        self.logger.info('cit...')
         self._exptime = 0.25
 
     def _camConnect(self):
