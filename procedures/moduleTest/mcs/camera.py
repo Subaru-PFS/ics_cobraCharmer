@@ -8,6 +8,8 @@ import numpy as np
 
 import astropy.io.fits as pyfits
 
+from ics.cobraCharmer.utils import butler
+
 # Configure the default formatter and logger.
 logging.basicConfig(datefmt = "%Y-%m-%d %H:%M:%S", level=logging.DEBUG,
                     format = "%(asctime)s.%(msecs)03dZ %(name)-16s %(levelno)s %(filename)s:%(lineno)d %(message)s")
@@ -28,7 +30,7 @@ def whereAmI():
 
     return 'asrd'
 
-def cameraFactory(name=None, doClear=False, simulationPath=None, dataRoot=None):
+def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None):
     if doClear or simulationPath is not None:
         try:
             del cameraFactory.__camera
@@ -42,13 +44,16 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, dataRoot=None):
         if name == 'cit':
             from . import citCam
             reload(citCam)
-            cameraFactory.__camera = citCam.CitCamera(simulationPath=simulationPath, dataRoot=dataRoot)
+            cameraFactory.__camera = citCam.CitCamera(simulationPath=simulationPath,
+                                                      runManager=runManager)
         elif name == 'asrd':
             from . import asrdCam
             reload(asrdCam)
-            cameraFactory.__camera = asrdCam.AsrdCamera(simulationPath=simulationPath, dataRoot=dataRoot)
+            cameraFactory.__camera = asrdCam.AsrdCamera(simulationPath=simulationPath,
+                                                        runManager=runManager)
         elif name == 'sim':
-            cameraFactory.__camera = SimCamera(simulationPath=simulationPath, dataRoot=dataRoot)
+            cameraFactory.__camera = SimCamera(simulationPath=simulationPath,
+                                               runManager=runManager)
         else:
             raise ValueError(f'camera type must be specified and known, not {name}')
 
@@ -57,7 +62,7 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, dataRoot=None):
 class Camera(object):
     filePrefix = 'PFXC'
 
-    def __init__(self, simulationPath=None, dataRoot=None, logLevel=logging.INFO):
+    def __init__(self, runManager=None, simulationPath=None, logLevel=logging.INFO):
         self.logger = logging.getLogger('camera')
         self.logger.setLevel(logLevel)
 
@@ -65,10 +70,11 @@ class Camera(object):
         self.dark = None
         self.exptime = 0.25
 
-        if dataRoot is None:
-            dataRoot = '/data/MCS'
-        self.dataRoot = pathlib.Path(dataRoot)
-        self.dirpath = None
+        if runManager is None:
+            runManager = butler.RunTree()
+        self.runManager = runManager
+        self.dataRoot = runManager.rootDir
+        self.imageDir = None
         self.sequenceNumberFilename = "nextSequenceNumber"
         self.doStack = False
 
@@ -78,39 +84,21 @@ class Camera(object):
         else:
             self.simulationPath = None
 
-    def _now(self):
-        return time.strftime('%Y%m%d_%H%M%S')
-
-    def _nextDir(self):
-        day = time.strftime('%Y%m%d')
-        todayDirs = sorted(self.dataRoot.glob(f'{day}_[0-9][0-9][0-9]'))
-        if len(todayDirs) == 0:
-            return self.dataRoot / f'{day}_000'
-        _, lastRev = todayDirs[-1].name.split('_')
-        nextRev = int(lastRev, base=10) + 1
-        return self.dataRoot / f'{day}_{nextRev:03d}'
-
-    def newDir(self, dirname=None, doStack=True):
+    def newDir(self, doStack=True):
         """ Change the directory for output files (images and spots). """
 
-        if dirname is None:
-            dirname = self._nextDir()
-        dirpath = pathlib.Path(dirname)
-        dirpath = dirpath.expanduser().resolve()
-        dirpath.mkdir(parents=True)
-        self.dirpath = dirpath
+        self.runManager.newRun()
+        self.imageDir = self.runManager.dataDir
         self.resetStack(doStack=doStack)
-
-        return dirpath
 
     def resetStack(self, doStack=False):
         self.doStack = "stack.fits" if doStack is True else doStack
 
     def __repr__(self):
         if self.simulationPath is None:
-            return f"{self.__class__.__name__}(dir={self.dirpath})"
+            return f"{self.__class__.__name__}(dir={self.imageDir})"
         else:
-            return f"{self.__class__.__name__}(dir={self.dirpath}, simulationPath={self.simulationPath})"
+            return f"{self.__class__.__name__}(dir={self.imageDir}, simulationPath={self.simulationPath})"
 
     @property
     def cam(self):
@@ -205,7 +193,7 @@ class Camera(object):
             self.appendSpots(filename, objects, steps=steps, guess=guess)
             t2=time.time()
 
-            self.logger.info(f'{filename.stem}: {len(objects)} spots, get: {t1-t0:0.3f} save: {t2-t1:0.3f} total: {t2-t0:0.3f}')
+            self.logger.info(f'{filename}: {len(objects)} spots, get: {t1-t0:0.3f} save: {t2-t1:0.3f} total: {t2-t0:0.3f}')
         else:
             objects = None
 
@@ -232,7 +220,6 @@ class Camera(object):
         except Exception as e:
             raise RuntimeError("could not read sequence integer from %s: %s" %
                                (sequenceNumberFile, e))
-
         nextSeqno = seqno+1
         try:
             sf = open(sequenceNumberFile, "wt")
@@ -246,17 +233,17 @@ class Camera(object):
         return seqno
 
     def _getNextName(self):
-        if self.dirpath is None:
+        if self.imageDir is None:
             self.newDir(doStack=False)
 
         self.seqno = self._consumeNextSeqno()
-        return pathlib.Path(self.dirpath,
+        return pathlib.Path(self.imageDir,
                             f'{self.filePrefix}{self.seqno:08d}.fits')
 
     def _updateStack(self, img):
         if self.doStack is False:
             return
-        stackPath = pathlib.Path(self.dirpath, self.doStack)
+        stackPath = pathlib.Path(self.imageDir, self.doStack)
 
         try:
             stackFits = pyfits.open(stackPath, mode="update")
@@ -301,7 +288,7 @@ class Camera(object):
         hdulist.append(pyfits.BinTableHDU(spots, name='SPOTS'))
         hdulist.close()
 
-        spotfile = self.dirpath / 'spots.npz'
+        spotfile = self.imageDir / 'spots.npz'
         if spotfile.exists():
             with open(spotfile, 'rb') as f:
                 oldData = np.load(f)
