@@ -7,34 +7,58 @@ import astropy.io.fits as pyfits
 from .camera import Camera
 
 class AsrdCamera(Camera):
-    filePrefix = 'PFBC'
+    filePrefix = 'PFAC'
 
-def expose(exptime=None, dataPath=None):
-    if dataPath is None:
-        raise ValueError('need a filepath')
+    def __init__(self, **kw):
+        super().__init__(**kw)
 
-    p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-f", pathlib.Path(dataPath, "cam1_")], stdout=PIPE)
-    p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-f", pathlib.Path(dataPath, "cam2_")], stdout=PIPE)
-    p1.communicate()
-    p2.communicate()
+        self.devIds = 1,2
+        self.data = None
+        self.logger.info('asrd...')
 
-    data1 = pyfits.getdata(pathlib.Path(dataPath, 'cam1_0001.fits'))
-    data2 = pyfits.getdata(pathlib.Path(dataPath, 'cam2_0001.fits'))
-    data = np.stack((data1, data2), axis=1)
+    def _camConnect(self):
+        if self.simulationPath is not None:
+            return None
 
-    filename = saveImage(dataPath, data)
-    return data, filename
+        from idsCamera import idsCamera
+        cams = []
+        for devId in devIds:
+            cam = idsCamera(devId)
+            cam.setExpoureTime(20)
+            cams.append(cam)
 
-def trim(objects):
-    """ Return indices or mask of all valid points. """
+        self.data = None
+        self._cams = cams
 
-    return np.arange(len(objects))
+    def _camExpose(self, exptime, _takeDark=False):
+        cams = self.cam
 
-def saveImage(name, img):
-    hdus = pyfits.HDUList()
-    hdus.append(pyfits.CompImageHDU(img, name='IMAGE', uint=True))
+        data1 = cams[0].getCurrentFrame()
+        data2 = cams[1].getCurrentFrame()
+        data = np.stack((data1, data2), axis=1)
+        self.data = data
 
-    filename = name+'.fits'
-    hdus.writeto(filename, overwrite=True)
+        return data
 
-    return filename
+    def reload(self):
+        self._camClose()
+        self._camConnect()
+
+    @property
+    def im1(self):
+        if self.data is None:
+            return None
+        h, w = self.data.shape
+        return self.data[:, :w//2]
+
+    @property
+    def im2(self):
+        if self.data is None:
+            return None
+        h, w = self.data.shape
+        return self.data[:, w//2:]
+
+    def trim(objects):
+        """ Return indices or mask of all valid points. """
+
+        return np.arange(len(objects))
