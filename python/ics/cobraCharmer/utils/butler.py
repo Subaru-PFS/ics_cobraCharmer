@@ -94,8 +94,8 @@ def configPathForPfi(version=None, rootDir=None):
     """
 
     if rootDir is None:
-        instDataRoot = os.environ['PFS_INSTDATA_DIR']
-        rootDir = pathlib.Path(instDataRoot) / 'data' / 'pfi'
+        instDataRoot = _instDataDir()
+        rootDir = instDataRoot / 'data' / 'pfi'
 
     if version is None:
         fname = 'PFI.yaml'
@@ -133,8 +133,8 @@ def mapPathForModule(moduleName, version=None, rootDir=None):
 
     moduleName = moduleName.strip()
     if rootDir is None:
-        instDataRoot = os.environ['PFS_INSTDATA_DIR']
-        rootDir = pathlib.Path(instDataRoot) / 'data' / 'pfi' / 'modules' / moduleName
+        instDataRoot = _instDataDir()
+        rootDir = instDataRoot / 'data' / 'pfi' / 'modules' / moduleName
 
     if version is None:
         fname = f'{moduleName}.xml'
