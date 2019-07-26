@@ -128,19 +128,35 @@ class PFI(object):
         elif np.isscalar(modules):
             modules = [modules]
 
-        for m in modules:
+        errors = np.full((len(modules), 2), False)
+        temps = np.zeros((len(modules), 2, 2))
+        voltages = np.zeros((len(modules), 2))
+        freqs1 = np.zeros((len(modules), self.nCobrasPerModule))
+        currents1 = np.zeros((len(modules), self.nCobrasPerModule))
+        freqs2 = np.zeros((len(modules), self.nCobrasPerModule))
+        currents2 = np.zeros((len(modules), self.nCobrasPerModule))
+
+        for k, m in enumerate(modules):
             self.logger.info(f'HK command for Cobra module #{m}')
-            for board in [1, 2]:
+            for board in range(2):
                 # two boards in one module
-                cobra_num = np.arange(board, self.nCobrasPerModule+1, 2)
+                cobra_num = np.arange(board+1, self.nCobrasPerModule+1, 2)
                 cobras = self.allocateCobraRange(m, cobra_num)
                 for c in cobras:
                     c.p = func.HkParams(m0, m1, temps, cur, volt)
-                err = func.HK(cobras)
+                err, t1, t2, v, f1, c1, f2, c2 = func.HK(cobras, feedback=True)
+                errors[k, board] = err
+                temps[k, board] = [t1, t2]
+                voltages[k, board] = v
+                freqs1[k, board::2] = f1
+                currents1[k, board::2] = c1
+                freqs2[k, board::2] = f2
+                currents2[k, board::2] = c2
                 if err:
-                    self.logger.error(f'send HK command failed')
+                    self.logger.error(f'Module {m}:{board} send HK command failed')
                 else:
-                    self.logger.info(f'send HK command succeeded')
+                    self.logger.info(f'Module {m}:{board} send HK command succeeded')
+        return errors, temps, voltages, freqs1, currents1, freqs2, currents2
 
     def moveAllThetaPhiFromHome(self, cobras, thetaMove, phiMove, thetaFast=True, phiFast=True):
         """ Move all cobras by theta and phi angles from home

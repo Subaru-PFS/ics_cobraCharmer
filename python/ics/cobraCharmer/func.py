@@ -282,7 +282,7 @@ def DIA():
     return boards_per_sector
     
     
-def HK( cobras, export=0 ):
+def HK( cobras, export=0, feedback=False ):
     if not cobrasAreType(cobras, 'Hk'):
         return True # error
     board = cobras[0].board
@@ -296,9 +296,12 @@ def HK( cobras, export=0 ):
     er1 = tlm_chk(resp)
     
     resp = sock.recv(HK_TLM_LEN, eth_hex_logger, 'h')
-    er2 = hk_chk(resp, cobras, export)
-    
-    return er1 or er2
+    if feedback:
+        er2, t1, t2, v, f1, c1, f2, c2 = hk_chk(resp, cobras, export, feedback)
+        return er1 or er2, t1, t2, v, f1, c1, f2, c2
+    else:
+        er2 = hk_chk(resp, cobras, export)
+        return er1 or er2
 
 def CAL( cobras, timeout=0 ):
     if not cobrasAreType(cobras, 'Cal'):
@@ -412,7 +415,7 @@ def tlm_chk(data):
         error = True
     return error
     
-def hk_chk(data, cobras, export):
+def hk_chk(data, cobras, export, feedback=False):
     error = False
     trange = cobras[0].p.trange
     vrange = cobras[0].p.vrange
@@ -449,16 +452,25 @@ def hk_chk(data, cobras, export):
     if not (inrange(t1, trange) and inrange(t2, trange)):
         short_log.log("Error! Temps %d,%dC outside %s." %(t1, t2, trange) )
         error = True
-    
+
     # Error Logging Payload
     i = HK_TLM_HDR_LEN
-    for c in cobras:
+    freq1 = np.zeros(len(cobras))
+    current1 = np.zeros(len(cobras))
+    freq2 = np.zeros(len(cobras))
+    current2 = np.zeros(len(cobras))
+    for k, c in enumerate(cobras):
         p1 = int(data[i]<<8) + int(data[i+1])
         c1 = int(data[i+2]<<8) + int(data[i+3])
         p2 = int(data[i+4]<<8) + int(data[i+5])
         c2 = int(data[i+6]<<8) + int(data[i+7])
         i += 8
-        
+
+        freq1[k] = get_freq(p1)
+        current1[k] = conv_current(c1)
+        freq2[k] = get_freq(p2)
+        current2[k] = conv_current(c2)
+
         logtxt = "%d 3.4mm(%.1fKhz,%.3fAmps) 2.4mm(%.1fKhz,%.3fAmps)" \
                 %(c.cobra, get_freq(p1), conv_current(c1), \
                 get_freq(p2), conv_current(c2))
@@ -474,5 +486,7 @@ def hk_chk(data, cobras, export):
 
         error |= c.p.chk(p1, p2, c1, c2, en_log= not error)
 
-    return error
-    
+    if not feedback:
+        return error
+    else:
+        return error, t1, t2, v, freq1, current1, freq2, current2
