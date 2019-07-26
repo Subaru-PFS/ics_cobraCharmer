@@ -41,14 +41,11 @@ class PFI(object):
         ethernet.sock = ethernet.Sock()
         self.ioLogger.info(f'FPGA connection closed')
 
-    def loadModel(self, filename=None):
+    def loadModel(self):
         """ Load a motormap XML file. """
         import ics.cobraCharmer.pfiDesign as pfiDesign
         reload(pfiDesign)
 
-        if filename is None:
-            filename = os.path.dirname(sys.modules[__name__].__file__)
-            filename += '../../../xml/updatedLinksAndMaps.xml'
         self.calibModel = pfiDesign.PFIDesign(filename)
         self.logger.info(f'load cobra model from {filename}')
 
