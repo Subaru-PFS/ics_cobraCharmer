@@ -771,3 +771,16 @@ class PFI(object):
             cobras.append(func.Cobra(m, c))
 
         return cobras
+
+    @classmethod
+    def allocateCobraModule(cls, moduleId=1):
+        import ics.cobraCharmer.pfiDesign as pfiDesign
+        reload(pfiDesign)
+
+        moduleId = pfiDesign.PFIDesign.getRealModuleId(moduleId)
+        cobraIds = range(1,cls.nCobrasPerModule+1)
+        cobras = []
+        for c in cobraIds:
+            cobras.append(func.Cobra(moduleId, c))
+
+        return cobras
