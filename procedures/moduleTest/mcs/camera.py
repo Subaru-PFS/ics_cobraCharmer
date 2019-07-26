@@ -205,7 +205,11 @@ class Camera(object):
         return np.arange(len(x))
 
     def _consumeNextSeqno(self):
-        """ Return the next free sequence number. """
+        """ Return the next free sequence number.
+
+        We manage this sequence number using a file in our root
+        directory.
+        """
 
         sequenceNumberFile = pathlib.Path(self.dataRoot, self.sequenceNumberFilename)
         if not sequenceNumberFile.exists():
@@ -264,6 +268,7 @@ class Camera(object):
         hdus.append(pyfits.CompImageHDU(img, name='IMAGE', uint=True))
 
         hdus.writeto(filename, overwrite=True)
+        self.logger.info('saveImage: %s', filename)
 
         if extraName is not None:
             linkname = filename.parent / extraName
