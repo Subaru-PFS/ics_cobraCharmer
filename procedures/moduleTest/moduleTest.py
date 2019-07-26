@@ -5,15 +5,14 @@ from astropy.io import fits
 import sep
 from copy import deepcopy
 import calculation
-try:
-    from idsCamera import idsCamera
-except ImportError:
-    from mcs import camera
 
+from mcs import camera
 from ics.cobraCharmer import pfi as pfiControl
+from ics.cobraCharmer.utils import butler
 
 class Camera():
     def __init__(self, devId):
+        from idsCamera import idsCamera
         self.devId = devId
         self.camera = idsCamera(devId)
         self.camera.setExpoureTime(20)
@@ -33,8 +32,11 @@ class Camera():
 
 class ModuleTest():
     def __init__(self, fpgaHost, xml, brokens=None, cam1Id=1, cam2Id=2, camSplit=26):
+
+        self.runManager = butler.RunTree()
+
         """ Init module 1 cobras """
-        self.allCobras = pfiControl.PFI.allocateCobraRange(range(1, 2))
+        self.allCobras = pfiControl.PFI.allocateCobraModule(1)
 
         # partition module 1 cobras into odd and even sets
         moduleCobras = {}
@@ -49,7 +51,8 @@ class ModuleTest():
         if not os.path.exists(xml):
             print(f"Error: {xml} is not presented!")
             sys.exit()
-        self.pfi = pfiControl.PFI(fpgaHost=fpgaHost, doLoadModel=False)
+        self.pfi = pfiControl.PFI(fpgaHost=fpgaHost, doLoadModel=False,
+                                  logDir=self.runManager.logDir)
         self.xml = xml
         self.pfi.loadModel(xml)
         self.pfi.setFreq(self.allCobras)
@@ -58,10 +61,7 @@ class ModuleTest():
         self.setBrokenCobras(brokens)
 
         # initialize cameras
-        self.cam = camera.cameraFactory()
-        # self.cam1 = Camera(cam1Id)
-        # self.cam2 = Camera(cam2Id)
-        self.camSplit = camSplit
+        self.cam = camera.cameraFactory(runManager)
 
         # init calculation library
         self.cal = calculation.Calculation(xml, brokens, camSplit)
