@@ -1,7 +1,83 @@
+import logging
 import os
 import pathlib
+import time
 
 import yaml
+
+logger = logging.getLogger('butler')
+
+dataRoot = pathlib.Path("/data/MCS")
+
+class RunTree(object):
+    def __init__(self, rootDir=None, doCreate=True):
+        """ Create and track "runs": sequences of exposures taken as a unit, plus some output.
+
+        Args
+        ----
+        rootName : str
+           The directory under which everything goes. default=/data/MCS
+        doCreate: : bool
+           Whether to create a run now.
+        """
+
+        if rootDir is None:
+            rootDir = dataRoot
+        self.rootDir = pathlib.Path(rootDir)
+
+        self.logger = logger
+        self.logger.setLevel(logging.DEBUG)
+
+        if not self.rootDir.is_dir():
+            raise RuntimeError(f'{self.rootDir} is not an existing directory')
+
+        self.runDir = None
+        if doCreate:
+            self.newRun()
+
+    def newRun(self):
+        """ Create a new run directory, plus children. """
+
+        day = time.strftime('%Y%m%d')
+        todayDirs = sorted(self.rootDir.glob(f'{day}_[0-9][0-9][0-9]'))
+        if len(todayDirs) == 0:
+            self.runDir = self.rootDir / f'{day}_000'
+        else:
+            _, lastRev = todayDirs[-1].name.split('_')
+            nextRev = int(lastRev, base=10) + 1
+            self.runDir = self.rootDir / f'{day}_{nextRev:03d}'
+
+        self.runDir.mkdir(mode=0o2775, parents=True)
+        for d in self.allDirs:
+            d.mkdir(mode=0x2775)
+
+        self.logger.warn('newRun: %s', self.runDir)
+        return self.runDir
+
+    @property
+    def logDir(self):
+        return self.runDir / 'logs'
+
+    @property
+    def dataDir(self):
+        return self.runDir / 'data'
+
+    @property
+    def outputDir(self):
+        return self.runDir / 'output'
+    xmlDir = outputDir
+
+    @property
+    def allDirs(self):
+        return self.logDir, self.dataDir, self.outputDir
+
+def _instDataDir():
+    """ Return the directory under which instrument configuration is stored. """
+
+    instDataRoot = os.environ['PFS_INSTDATA_DIR']
+    if not instDataRoot:
+        raise ValueError("PFS_INSTDATA_DIR environment variable must be set!")
+    return pathlib.Path(instDataRoot)
 
 def configPathForPfi(version=None, rootDir=None):
     """ Return the pathname for a PFI config file.
