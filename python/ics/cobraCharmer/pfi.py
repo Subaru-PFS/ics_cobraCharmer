@@ -282,7 +282,6 @@ class PFI(object):
         self.logger.info(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
         self.moveSteps(cobras, cThetaSteps, cPhiSteps, thetaFast=thetaFast, phiFast=phiFast)
 
-
     def thetaToGlobal(self, cobras, thetaLocals):
         """ Convert theta angles from relative to hard stops to global coordinate
 
@@ -793,13 +792,51 @@ class PFI(object):
 
     @classmethod
     def allocateCobraModule(cls, moduleId=1):
-        import ics.cobraCharmer.pfiDesign as pfiDesign
-        reload(pfiDesign)
-
         moduleId = pfiDesign.PFIDesign.getRealModuleId(moduleId)
         cobraIds = range(1,cls.nCobrasPerModule+1)
         cobras = []
         for c in cobraIds:
             cobras.append(func.Cobra(moduleId, c))
+
+        return cobras
+
+    @classmethod
+    def allocateCobraBoard(cls, module, board):
+        module = pfiDesign.PFIDesign.getRealModuleId(module)
+        if module < 1 or module > cls.nModules:
+            raise IndexError(f'module numbers are 1..{cls.nModules}')
+        if board not in (1,2):
+            raise IndexError('board numbers are 1 or 2.')
+        cobras = []
+        for c in range(1,cls.nCobrasPerModule+1):
+            if (c%2 == 1 and board == 1) or (c%2 == 0 and board == 2):
+                cobras.append(func.Cobra(module, c))
+
+        return cobras
+
+    def getAllDefinedCobras(self):
+        cobras = []
+        for i in self.calibModel.findAllCobras():
+            c = func.Cobra(self.calibModel.moduleIds[i],
+                           self.calibModel.positionerIds[i])
+            cobras.append(c)
+
+        return cobras
+
+    def getAllConnectedCobras(self):
+        res = func.DIA()
+
+        boards = 0
+        for i in range(len(res)):
+            boardsInSector = res[i]
+            if boards%14 != 0 and boardsInSector != 0:
+                raise RuntimeError("sectors are not left-packed with boards.")
+            boards += boardsInSector
+
+        cobras = []
+        for b in range(1,boards+1):
+            mod = (b-1)//2 + 1
+            brd = (b-1)%2 + 1
+            cobras.extend(self.allocateCobraBoard(mod, brd))
 
         return cobras
