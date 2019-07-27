@@ -94,8 +94,25 @@ class PFI(object):
         else:
             self.logger.info(f'send POW command succeeded')
 
-    def setFreq(self, cobras, thetaFreq=None, phiFreq=None):
+    def hk(self, module, board, updateModel=False):
+        """ Fetch housekeeping info for a board.
+
+        Note:
+
+        The FPGA deals with _boards_, but the original code deals with _modules_. Wrap that.
+        """
+        cobras = self.allocateCobraBoard(module, board)
+        err = func.HK(cobras, updateModel=(self.calibModel if updateModel else None))
+        if err:
+            self.logger.error(f'send HK command failed')
+        else:
+            self.logger.debug(f'send HK command succeeded')
+
+    def setFreq(self, cobras=None, thetaFreq=None, phiFreq=None):
         """ Set COBRA motor frequency """
+        if cobras is None:
+            cobras = self.getAllDefinedCobras()
+
         if thetaFreq is not None and len(cobras) != len(thetaFreq):
             raise RuntimeError("number of theta frquencies must match number of cobras")
         if phiFreq is not None and len(cobras) != len(phiFreq):
