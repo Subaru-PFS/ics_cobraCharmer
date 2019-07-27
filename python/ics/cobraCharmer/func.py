@@ -283,11 +283,24 @@ def DIA():
     return boards_per_sector
     
     
+<<<<<<< HEAD
 def HK( cobras, export=0, feedback=False ):
     if not cobrasAreType(cobras, 'Hk'):
         return True # error
+||||||| merged common ancestors
+def HK( cobras, export=0 ):
+    if not cobrasAreType(cobras, 'Hk'):
+        return True # error
+=======
+def HK(cobras, export=False, updateModel=None):
+>>>>>>> All the housekeeping responses to update the motormap
     board = cobras[0].board
-    
+    nCobras = NCOBRAS_BRD
+    nBoardCobras = nCobras if (board%2 == 1) else nCobras-1
+
+    if nBoardCobras != len(cobras) or not all([(c.board == board) for c in cobras]):
+        raise ValueError("Can only fetch housekeeping for one single board.")
+
     short_log.log("--- ISSUE HK & VERIFY (brd:%d) ---" %board)      
     
     cmd = CMD_hk(board, timeout=2000)
@@ -295,6 +308,7 @@ def HK( cobras, export=0, feedback=False ):
     
     resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
     er1 = tlm_chk(resp)
+<<<<<<< HEAD
     
     resp = sock.recv(HK_TLM_LEN, eth_hex_logger, 'h')
     if feedback:
@@ -303,6 +317,20 @@ def HK( cobras, export=0, feedback=False ):
     else:
         er2 = hk_chk(resp, cobras, export)
         return er1 or er2
+||||||| merged common ancestors
+    
+    resp = sock.recv(HK_TLM_LEN, eth_hex_logger, 'h')
+    er2 = hk_chk(resp, cobras, export)
+    
+    return er1 or er2
+=======
+
+    tlmLen = HK_TLM_HDR_LEN + nCobras*8
+    resp = sock.recv(tlmLen, eth_hex_logger, 'h')
+    er2 = hk_chk(resp, cobras, export, updateModel=updateModel)
+    
+    return er1 or er2
+>>>>>>> All the housekeeping responses to update the motormap
 
 def CAL( cobras, timeout=0 ):
     if not cobrasAreType(cobras, 'Cal'):
@@ -412,12 +440,24 @@ def tlm_chk(data):
         short_log.log("Error! Error code %d." %code)
         error = True
     return error
-    
-def hk_chk(data, cobras, export, feedback=False):
+
+def hk_chk(data, cobras, export=False, feedback=False, updateModel=None):
+    """ Consume a housedkeeping response.
+
+    Args
+    ----
+    data : (byte)array
+      the entire HK TLM packet.
+    cobras : list of Cobras
+      the identities of the cobras (module, board, cobra)
+    feedback : bool
+      return HK data if True
+    updateModel : PfiDesign or None
+      if set, design to update
+    """
+
     error = False
-    trange = cobras[0].p.trange
-    vrange = cobras[0].p.vrange
-    
+
     op = data[0]
     code = int(data[2] << 8) + int(data[3])
     b = int(data[4]<<8) + int(data[5])
@@ -468,6 +508,12 @@ def hk_chk(data, cobras, export, feedback=False):
         current1[k] = conv_current(c1)
         freq2[k] = get_freq(p2)
         current2[k] = conv_current(c2)
+
+        if updateModel is not None:
+            updateModel.updateMotorFrequency(theta=[get_freq(p1)*1000],
+                                             phi=[get_freq(p2)*1000],
+                                             moduleId=c.module,
+                                             cobraId=c.cobraNum)
 
         logtxt = "%d 3.4mm(%.1fKhz,%.3fAmps) 2.4mm(%.1fKhz,%.3fAmps)" \
                 %(c.cobra, get_freq(p1), conv_current(c1), \
