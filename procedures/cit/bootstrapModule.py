@@ -92,7 +92,7 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
 
     if clearGeometry:
         tht0 = pfiModel.tht0[:] * 0.0
-        tht1 = pfiModel.tht1[:] * 0.0 + 380.0 * np.pi/180
+        tht1 = pfiModel.tht1[:] * 0.0 + 20.0 * np.pi/180
 
         phiIn = pfiModel.phiIn[:] * 0.0
         phiOut = pfiModel.phiOut[:] * 0.0 + 180.0 * np.pi/180
