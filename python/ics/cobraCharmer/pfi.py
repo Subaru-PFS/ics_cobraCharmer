@@ -91,6 +91,14 @@ class PFI(object):
         else:
             self.logger.info(f'send RST command succeeded')
 
+    def diag(self):
+        """ Get fpga board inventory"""
+        err = func.DIA()
+        if err:
+            self.logger.error(f'send DIA command failed')
+        else:
+            self.logger.debug(f'send DIA command succeeded')
+
     def power(self, sectors=0x3f):
         """ Set COBRA PSU on/off """
         err = func.POW(sectors)
@@ -248,6 +256,12 @@ class PFI(object):
             phiFast: a boolean value for fast/slow phi movement
 
         """
+
+        nCobras = len(cobras)
+        if np.ndim(thetaMoves) == 0:
+            thetaMoves = np.zeros(nCobras) + thetaMoves
+        if np.ndim(phiMoves) == 0:
+            phiMoves = np.zeros(nCobras) + phiMoves
 
         if len(cobras) != len(thetaMoves):
             raise RuntimeError("number of theta moves must match number of cobras")
