@@ -1,27 +1,41 @@
 from importlib import reload
 import logging
 import numpy as np
-import sys
-import os
 
 from ics.cobraCharmer import ethernet
 from ics.cobraCharmer import func
+from ics.cobraCharmer import log
 from ics.cobraCharmer.log import Logger
+
+from ics.cobraCharmer import pfiDesign
+from ics.cobraCharmer import fpgaLogger
+
+reload(pfiDesign)
 
 class PFI(object):
     nCobrasPerModule = 57
     nModules = 42
 
-    def __init__(self, fpgaHost='localhost', doConnect=True, doLoadModel=True, debug=False):
+    def __init__(self, fpgaHost='localhost', logDir=None, doConnect=True, doLoadModel=False, debug=False):
         """ Initialize a PFI class
         Args:
            fpgaHost    - fpga device
+           logDir      - directory name for logs
            doConnect   - do connection or not
            doLoadModel - load data model or not
         """
         self.logger = Logger.getLogger('fpga', debug)
         self.ioLogger = Logger.getLogger('fpgaIO', debug)
+        if logDir is not None:
+            log.setupLogPaths(logDir)
 
+        self.protoLogger = fpgaLogger.FPGAProtocolLogger(logRoot=logDir)
+
+        self.calibModel = None
+        self.motorMap = None
+
+        if fpgaHost == 'fpga':
+            fpgaHost = '128.149.77.24'  # A JPL address which somehow got burned into the FPGAs.
         self.fpgaHost = fpgaHost
         if doConnect:
             self.connect()
@@ -32,16 +46,18 @@ class PFI(object):
         """ Connect to COBRA fpga device """
         if fpgaHost is not None:
             self.fpgaHost = fpgaHost
-        ethernet.sock.connect(self.fpgaHost, 4001)
+        ethernet.sock.connect(self.fpgaHost, 4001, protoLogger=self.protoLogger)
         self.ioLogger.info(f'FPGA connection to {self.fpgaHost}')
+        self.protoLogger.logger.info('FPGA connection to {self.fpgaHost}')
 
     def disconnect(self):
         """ Disconnect from COBRA fpga device """
         ethernet.sock.close()
         ethernet.sock = ethernet.Sock()
         self.ioLogger.info(f'FPGA connection closed')
+        self.protoLogger.logger.info('FPGA connection closed')
 
-    def loadModel(self):
+    def loadModel(self, filename=None):
         """ Load a motormap XML file. """
         import ics.cobraCharmer.pfiDesign as pfiDesign
         reload(pfiDesign)
