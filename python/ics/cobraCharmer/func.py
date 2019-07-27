@@ -177,8 +177,9 @@ def calibrate(cobras, thetaLow=60.4, thetaHigh=70.3, phiLow=94.4, phiHigh=108.2,
 
     spin = CW_DIR if clockwise else CCW_DIR
     for c in cobras:
-        c.p = CalParams(m0=(thetaLow,thetaHigh),
-                        m1=(phiLow, phiHigh), en=(True,True), dir=spin)
+        c.p = CalParams(m0=(convert.get_per(thetaLow),convert.get_per(thetaHigh)),
+                        m1=(convert.get_per(phiLow), convert.get_per(phiHigh)),
+                        en=(True,True), dir=spin)
 
     err = CAL(cobras)
     if err:
