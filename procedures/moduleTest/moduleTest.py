@@ -1,10 +1,10 @@
-import sys
-import os
+from importlib import reload
 import numpy as np
 from astropy.io import fits
 import sep
 from copy import deepcopy
 import calculation
+reload(calculation)
 
 from mcs import camera
 from ics.cobraCharmer import pfi as pfiControl
@@ -33,10 +33,12 @@ class Camera():
 class ModuleTest():
     def __init__(self, fpgaHost, xml, brokens=None, cam1Id=1, cam2Id=2, camSplit=26):
 
-        self.runManager = butler.RunTree()
+        self.runManager = butler.RunTree(doCreate=False)
 
         """ Init module 1 cobras """
         self.allCobras = pfiControl.PFI.allocateCobraModule(1)
+        self.fpgaHost = fpgaHost
+        self.xml = xml
 
         # partition module 1 cobras into odd and even sets
         moduleCobras = {}
@@ -47,24 +49,26 @@ class ModuleTest():
         self.oddCobras = moduleCobras[1]
         self.evenCobras = moduleCobras[2]
 
+        self.pfi = None
+        self.cam = None
+
+    def _connect(self):
+        self.runManager.newRun()
         # Initializing COBRA module
-        if not os.path.exists(xml):
-            print(f"Error: {xml} is not presented!")
-            sys.exit()
-        self.pfi = pfiControl.PFI(fpgaHost=fpgaHost, doLoadModel=False,
+        self.pfi = pfiControl.PFI(fpgaHost=self.fpgaHost,
+                                  doLoadModel=False,
                                   logDir=self.runManager.logDir)
-        self.xml = xml
-        self.pfi.loadModel(xml)
-        self.pfi.setFreq(self.allCobras)
+        self.pfi.loadModel(self.xml)
+        self.pfi.setFreq()
 
         # define the broken/good cobras
-        self.setBrokenCobras(brokens)
+        self.setBrokenCobras()
 
         # initialize cameras
-        self.cam = camera.cameraFactory(runManager)
+        self.cam = camera.cameraFactory(doClear=True, runManager=self.runManager)
 
         # init calculation library
-        self.cal = calculation.Calculation(xml, brokens, camSplit)
+        self.cal = calculation.Calculation(self.xml, None, None)
 
     def setBrokenCobras(self, brokens=None):
         """ define the broken/good cobras """
@@ -83,8 +87,8 @@ class ModuleTest():
         return self.cal.extractPositions(data1, data2, guess, tolerance)
 
     def exposeAndExtractPositions(self, name=None, guess=None, tolerance=None):
-        centroids, img, _ = self.cam.expose(name)
-        positions = self.extractPositions(img, guess=guess, tolerance=tolerance)
+        centroids, filename, bkgd = self.cam.expose(name)
+        positions = self.cal.matchPositions(centroids, guess=guess, tolerance=tolerance)
         return positions
 
     def moveToXYfromHome(self, idx, targets, threshold=3.0, maxTries=8):
@@ -160,9 +164,8 @@ class ModuleTest():
     def makePhiMotorMap(
             self,
             newXml,
-            dataPath=None,
             repeat=3,
-            steps=200,
+            steps=100,
             totalSteps=5000,
             fast=True,
             phiOnTime=None,
@@ -177,6 +180,7 @@ class ModuleTest():
                 makePhiMotorMap(xml, path, fast=False)            // update slow motor maps
                 makePhiMotorMap(xml, path, phiOnTime=0.06)        // motor maps for on-time=0.06
         """
+        self._connect()
         defaultOnTime = deepcopy([self.pfi.calibModel.motorOntimeFwd1,
                                   self.pfi.calibModel.motorOntimeRev1,
                                   self.pfi.calibModel.motorOntimeFwd2,
@@ -205,10 +209,10 @@ class ModuleTest():
         phiRV = np.zeros((57, repeat, iteration+1), dtype=complex)
 
         #record the phi movements
-        dataPath = self.cam.setDirpath()
+        dataPath = self.runManager.dataDir
         self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
         for n in range(repeat):
-            self.resetStack(f'phiForwardStack{n}.fits')
+            self.cam.resetStack(f'phiForwardStack{n}.fits')
 
             # forward phi motor maps
             phiFW[self.goodIdx, n, 0] = self.exposeAndExtractPositions(f'phiBegin{n}.fits')
@@ -222,14 +226,14 @@ class ModuleTest():
             self.pfi.moveAllSteps(self.goodCobras, 0, 5000)
 
             # reverse phi motor maps
-            self.resetStack(f'phiReverseStack{n}.fits')
+            self.cam.resetStack(f'phiReverseStack{n}.fits')
             phiRV[self.goodIdx, n, 0] = self.exposeAndExtractPositions(f'phiEnd{n}.fits',
                                                                        guess=phiFW[self.goodIdx, n, iteration])
 
             for k in range(iteration):
                 self.pfi.moveAllSteps(self.goodCobras, 0, -steps, phiFast=False)
-                phiRV[self.goodIdx, n, k+1] = self.extractPositions(f'/phiReverse{n}N{k}.fits',
-                                                                    guess=phiRV[self.goodIdx, n, k])
+                phiRV[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'/phiReverse{n}N{k}.fits',
+                                                                             guess=phiRV[self.goodIdx, n, k])
 
             # At the end, make sure the cobra back to the hard stop
             self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
@@ -271,7 +275,7 @@ class ModuleTest():
         if phiOnTime is not None:
             onTime = np.full(57, phiOnTime)
             self.cal.calibModel.updateOntimes(phiFwd=onTime, phiRev=onTime, fast=fast)
-        self.cal.calibModel.createCalibrationFile(dataPath / newXml)
+        self.cal.calibModel.createCalibrationFile(self.runManager.outputDir / newXml, name='phiModel')
         self.cal.restoreConfig()
 
         # restore default setting
