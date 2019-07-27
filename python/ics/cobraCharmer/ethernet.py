@@ -4,8 +4,12 @@ import struct
 
 from .hexprint import arr2Hex
 
+# TODO:
+#  Replace all array with bytearray
+#  Have timeouts mean something, packet-by-packet.
+
 def bytesAsString(msg, type=''):
-    if type == 'h':
+    if type == 'h' or type == 'B':
         s = arr2Hex(msg, seperator='')
         length = len(s)
         newstr = ''
@@ -38,9 +42,10 @@ class Sock:
         self._s.settimeout(30)
 
         if logger is not None:
-            logger.log("(ETH)Connection Made. %s:%s \n" %(ip,port))
+            logger.log("(ETH)Connection Made. %s:%s" %(ip,port))
 
-    def send(self, msg, logger=None, type=''):
+    def send(self, msg, logger=None, type=None):
+        type='B'
         # msg is a byteArray
         if logger is None:
             logger = self.logger
@@ -52,15 +57,27 @@ class Sock:
 
         self._s.send(msg)
 
-    def recv(self, tgt_len, logger=None, type=''):
+    def recv(self, tgt_len, logger=None, type=None):
+        type='B'
         if logger is None:
             logger = self.logger
 
-            # msg is a byteArray
+        if logger is not None:
+            logger.debug("(ETH)Looking for %d bytes)" % (tgt_len))
+
+        # msg is a byteArray
         remaining = tgt_len
         msg = array.array('B')
+
         while remaining > 0:
-            chunk = self._s.recv(remaining)
+            try:
+                chunk = self._s.recv(remaining)
+                if logger is not None:
+                    logger.debug("(ETH)Rcvd %d bytes on socket:%s" % (len(chunk), chunk))
+            except socket.timeout:
+                raise RuntimeError("timed out waiting for %d bytes. Received %d bytes: %s" % (tgt_len,
+                                                                                              tgt_len-remaining,
+                                                                                              msg))
             msg.frombytes(chunk)
             remaining -= len(chunk)
 
@@ -71,19 +88,6 @@ class Sock:
             self.protoLogger.logRecv(msg.tobytes())
 
         return msg
-
-    def recv_byte(self, logger=None, type='h'):
-        if logger is None:
-            logger = self.logger
-
-        d = self._s.recv(1)
-        by = struct.unpack('B', d)[0]
-
-        if logger is not None:
-            s = bytesAsString(msg, type)
-            logger.log("(ETH)Rcvd byte on socket.(%s)" %s)
-
-        return by
 
     def close(self, logger=None):
         if logger is None:
