@@ -104,8 +104,14 @@ class PFI(object):
         else:
             self.logger.info(f'send SET command succeeded')
 
-    def calibrateFreq(self, cobras, thetaLow=60.4, thetaHigh=70.3, phiLow=94.4, phiHigh=108.2, clockwise=True):
+    def calibrateFreq(self, cobras=None,
+                      thetaLow=60.4, thetaHigh=70.3, phiLow=94.4, phiHigh=108.2,
+                      clockwise=True,
+                      enabled=(True,True)):
         """ Calibrate COBRA motor frequency """
+        if cobras is None:
+            cobras = self.getAllDefinedCobras()
+
         spin = func.CW_DIR if clockwise else func.CCW_DIR
         m0 = (self._freqToPeriod(thetaHigh), self._freqToPeriod(thetaLow))
         m1 = (self._freqToPeriod(phiHigh), self._freqToPeriod(phiLow))
