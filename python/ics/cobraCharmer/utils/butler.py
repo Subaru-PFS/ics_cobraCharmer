@@ -104,6 +104,31 @@ def configPathForPfi(version=None, rootDir=None):
 
     return rootDir / fname
 
+def configPathForModule(module, version=None, rootDir=None):
+    """ Return the pathname for a module config file.
+
+    Args
+    ----
+    version : str
+       An identifying string. If not set, the "latest" one.
+       SC03.yaml or SCO3_$version.yaml
+    rootDir : str/Path
+       If set, where to look for the config file.
+       By default $PFS_INSTDATA_DIR/data/pfi/modules/$module
+
+    """
+
+    if rootDir is None:
+        instDataRoot = _instDataDir()
+        rootDir = instDataRoot / 'data' / 'pfi' / 'modules'
+
+    if version is None:
+        fname = 'PFI.yaml'
+    else:
+        fname = f'PFI_{version}.yaml'
+
+    return rootDir / fname
+
 def modulesForPfi(version=None, rootDir=None):
     """ Return the list of active modules in the PFI.
 
