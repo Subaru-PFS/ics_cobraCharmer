@@ -26,9 +26,10 @@ class Sock:
     def __init__(self):
         self._s = socket.socket()
 
-    def connect(self, ip, port, logger=None):
+    def connect(self, ip, port, logger=None, protoLogger=None):
         self._s = socket.socket()
         self.logger = logger
+        self.protoLogger = protoLogger
         if logger is not None:
             logger.log("(ETH)Connecting...")
 
@@ -45,7 +46,9 @@ class Sock:
             logger = self.logger
         if logger is not None:
             s = bytesAsString(msg, type)
-            logger.log("(ETH)Sent msg on socket.\n(%s)"%s)
+            logger.log("(ETH)Sent msg on socket.(%s)"%s)
+        if self.protoLogger is not None:
+            self.protoLogger.logSend(msg.tobytes())
 
         self._s.send(msg)
 
@@ -63,7 +66,9 @@ class Sock:
 
         if logger is not None:
             s = bytesAsString(msg, type)
-            logger.log("(ETH)Rcvd msg on socket.\n(%s)"%s)
+            logger.log("(ETH)Rcvd msg on socket.(%s)"%s)
+        if self.protoLogger is not None:
+            self.protoLogger.logRecv(msg.tobytes())
 
         return msg
 
