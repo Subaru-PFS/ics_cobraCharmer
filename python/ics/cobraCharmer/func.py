@@ -378,17 +378,14 @@ def RUN( cobras, timeout=0, inter=0 ):
 def SET( cobras ):
     if not cobrasAreType(cobras, 'Set'):
         return True # error
-    board = cobras[0].board
-    
-    short_log.log("--- ISSUE SETFREQ & VERIFY (brd:%d) ---" %board)
-    
+
     payload = []
     for c in cobras:
         payload += c.p.toList(c.board, c.cobra)
 
     cmd = CMD_set(payload, cmds=len(cobras), timeout=2000)
     sock.send(cmd, eth_hex_logger, 'h')
-    
+
     error = False
     for i in range(2):
         resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
@@ -431,7 +428,7 @@ def hk_chk(data, cobras, export, feedback=False):
     t1 = conv_temp( raw_t1 )
     t2 = conv_temp( raw_t2 )
     v = conv_volt( raw_v )
-    
+
     medium_log.log("%s data tlm rx'd. (Brd:%d) (code:0x%04x) (Temps:%.1fC,%.1fC) (Voltage:%.3fV)" \
             %(CMD_NAMES[op], b, code, t1, t2, v))
 
