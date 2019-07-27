@@ -162,7 +162,7 @@ class PFI(object):
         m0 = (self._freqToPeriod(thetaHigh), self._freqToPeriod(thetaLow))
         m1 = (self._freqToPeriod(phiHigh), self._freqToPeriod(phiLow))
         for c in cobras:
-            c.p = func.CalParams(m0=m0, m1=m1, en=(True,True), dir=spin)
+            c.p = func.CalParams(m0=m0, m1=m1, en=enabled, dir=spin)
         err = func.CAL(cobras, timeout=65535)
         if err:
             self.logger.error(f'send Calibrate command failed')
