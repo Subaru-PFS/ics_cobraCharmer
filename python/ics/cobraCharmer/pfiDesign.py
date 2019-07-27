@@ -453,7 +453,7 @@ class PFIDesign():
                 body = list(map(f2s, np.rad2deg(phiRev[i])))
                 calTable.find("Joint2_rev_stepsizes").text = ','.join(head + body) + ','
 
-    def updateMotorFrequency(self, theta=None, phi=None):
+    def XXupdateMotorFrequency(self, theta=None, phi=None):
         """Update cobra motor frequency
 
         Parameters
@@ -478,6 +478,59 @@ class PFIDesign():
             if phi is not None:
                 self.motorFreq2[i] = phi[i]
                 header.find('Motor2_Run_Frequency').text = str(phi[i])
+
+    def updateMotorFrequency(self, theta=None, phi=None, moduleId=None, cobraId=None):
+        """Update cobra motor frequency
+
+        Parameters
+        ----------
+        theta: object
+            A numpy array with the theta motor frequency.
+        phi: object
+            A numpy array with the phi motor frequency.
+        moduleId: int
+            If set, the module for the cobras
+        cobraId: int
+            If set, the per-module id for the (single) cobra
+            Note that moduleId must also be set.
+
+        We want to allow updating individual cobra, board, or modules
+        """
+
+        # Normalize lengths
+        if theta is None and phi is None:
+            return
+
+        if moduleId is not None:
+            if cobraId is not None:
+                idx = [self.findCobraByModuleAndPositioner(moduleId, cobraId)]
+            else:
+                idx = self.findCobrasForModule(moduleId)
+        else:
+            if cobraId is not None:
+                raise ValueError("if cobraId is specified, moduleId must also be.")
+            idx = range(self.nCobras)
+
+        # Allow passing in values.
+        if theta is None or np.isscalar(theta):
+            theta = [theta]*len(idx)
+        if phi is None or np.isscalar(phi):
+            phi = [phi]*len(idx)
+
+        if len(phi) != len(theta):
+            raise ValueError(f"length of phi and theta arrays must match. Found {len(phi)} and {len(theta)}")
+
+        if len(theta) != len(idx):
+            raise RuntimeError(f"number of motor frequencies ({len(theta)}) must match number of cobras ({len(idx)})")
+
+        for i_i, i in enumerate(idx):
+            header = self.dataContainers[i].find("DATA_HEADER")
+            if theta[i_i] is not None:
+                self.motorFreq1[i] = theta[i_i]
+                header.find('Motor1_Run_Frequency').text = str(theta[i_i])
+            if phi is not None:
+                self.motorFreq2[i] = phi[i_i]
+                header.find('Motor2_Run_Frequency').text = str(phi[i_i])
 
     def updateGeometry(self, centers=None, thetaArms=None, phiArms=None):
         """Update cobra centres.
