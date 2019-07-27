@@ -7,13 +7,17 @@ from ics.cobraCharmer import pfi as pfiControl
 from ics.cobraCharmer.utils import butler
 from ics.cobraCharmer.utils import coordinates
 from procedures.moduleTest.mcs import camera
+from procedures.cit import calibrateMotorFrequencies
+
 reload(butler)
 reload(camera)
 
 def bootstrapModule(moduleName, initialXml=None, outputName=None,
                     fpgaHost=None,
                     simulationPath=None,
-                    setCenters=True, clearGeometry=True,
+                    setCenters=True,
+                    clearGeometry=True,
+                    doCalibrate=True,
                     setModuleId=True):
 
     run = butler.RunTree()
@@ -32,7 +36,16 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
         pfi.loadModel(initialXml)
         pfiModel = pfi.calibModel
         pfi.reset()
-        pfi.setFreq()
+
+        # if we need to calibrate motor frequencies, assume the worst
+        # (as seen in the assembly station init files): the values
+        # would leave the motors not working. So calibrate phi now, so
+        # that we can reliably move it to home.
+        if doCalibrate:
+            calibrateMotorFrequencies.calibrateMotorFrequencies(pfi,
+                                                                enabled=(False, True))
+        else:
+            pfi.setFreq()
 
     cam = camera.cameraFactory(runManager=run, simulationPath=simulationPath)
     cam.resetStack(doStack=False)
@@ -96,6 +109,9 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
     pfiModel.updateThetaHardStops(tht0, tht1)
     pfiModel.updatePhiHardStops(phiIn, phiOut)
 
+    if doCalibrate:
+        calibrateMotorFrequencies.calibrateMotorFrequencies(pfi)
+
     xmlDir = run.outputDir
     outPath = xmlDir / outputName
     pfiModel.createCalibrationFile(outPath, name='bootstrap')
@@ -125,6 +141,8 @@ def main(args=None):
                         help='leave the existing module id.')
     parser.add_argument('--noClearGeometry', action='store_true',
                         help='transform the old geometry intsead of clearing it.')
+    parser.add_argument('--noCalibrate', action='store_true',
+                        help='do not calibrate the motor frequencies.')
 
     opts = parser.parse_args(args)
 
@@ -134,6 +152,7 @@ def main(args=None):
                     simulationPath=opts.simulationPath,
                     setModuleId=not opts.noSetModuleId,
                     setCenters=not opts.noSetCenters,
+                    doCalibrate=not opts.noCalibrate,
                     clearGeometry=not opts.noClearGeometry)
 
 if __name__ == "__main__":
