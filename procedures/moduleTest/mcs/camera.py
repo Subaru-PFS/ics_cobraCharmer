@@ -74,9 +74,9 @@ class Camera(object):
             runManager = butler.RunTree()
         self.runManager = runManager
         self.dataRoot = runManager.rootDir
-        self.imageDir = None
+        self.imageDir = runManager.dataDir
         self.sequenceNumberFilename = "nextSequenceNumber"
-        self.doStack = False
+        self.resetStack(doStack=False)
 
         if simulationPath is not None:
             simulationPath = pathlib.Path(simulationPath)
@@ -239,6 +239,7 @@ class Camera(object):
     def _getNextName(self):
         if self.imageDir is None:
             self.newDir(doStack=False)
+        self.imageDir = self.runManager.dataDir
 
         self.seqno = self._consumeNextSeqno()
         return pathlib.Path(self.imageDir,
