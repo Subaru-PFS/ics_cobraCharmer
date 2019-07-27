@@ -3,7 +3,7 @@ import logging
 import struct
 import asyncio
 
-from .convert import get_freq
+from . import convert
 from . import fpgaProtocol as proto
 from .fpgaLogger import FPGAProtocolLogger
 
@@ -206,8 +206,10 @@ class FPGAProtocol(asyncio.Protocol):
 
             self.logger.info('    cobra: %2d %2d  Theta: %d %s %0.2f %0.2f  Phi: %d %s %0.2f %0.2f' %
                              (boardId, cobraId,
-                              setTheta, dirName[thetaDir], get_freq(thetaRangeLo), get_freq(thetaRangeHi),
-                              setPhi, dirName[phiDir], get_freq(phiRangeLo), get_freq(phiRangeHi)))
+                              setTheta, dirName[thetaDir],
+                              convert.get_freq(thetaRangeLo), convert.get_freq(thetaRangeHi),
+                              setPhi, dirName[phiDir],
+                              convert.get_freq(phiRangeLo), convert.get_freq(phiRangeHi)))
         self.respond()
         self.respond()
 
@@ -216,15 +218,22 @@ class FPGAProtocol(asyncio.Protocol):
 
         boardNum, timeLimit, CRC = struct.unpack('>HHH',
                                                  header[2:proto.HOUSEKEEPING_HEADER_SIZE])
-        temp1 = 23; temp2 = 24
-        mot = struct.pack('>%s' % ('H'*(4*28)),
-                          *([1234, 12, 2345, 23] * 28))
-        TLMheader = struct.pack('>BBHHH', self.cmdCode, self.cmdNum, boardNum, temp1, temp2)
+        nCobras = 29
+
+        temp1 = convert.tempToAdc(23.1);
+        temp2 = convert.tempToAdc(24.0);
+        v = convert.voltToAdc(9.89)
+        self.logger.debug(f'temps=0x{temp1:x},0x{temp2:x} volts=0x{v:x}')
+
+        mot = struct.pack('>%s' % ('H'*(4*nCobras)),
+                          *([convert.get_per(65.0), 30000,
+                             convert.get_per(100.0), 30000] * nCobras))
+        TLMheader = struct.pack('>BBHHHHH', self.cmdCode, self.cmdNum, 0, boardNum, temp1, temp2, v)
         TLM = TLMheader + mot
         self._respond(TLM)
 
     def diagHandler(self):
-        counts = [5,4,3,2,1,0]
+        counts = [5,0,0,0,0,0]
         TLM = struct.pack('>BBBBBBBBHH', self.cmdCode, self.cmdNum, *counts, 0, 0)
         self._respond(TLM)
 
