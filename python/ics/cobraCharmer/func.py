@@ -282,18 +282,10 @@ def DIA():
     short_log.log("Board Counts: %s" %(boards_per_sector) )
     return boards_per_sector
     
-    
-<<<<<<< HEAD
-def HK( cobras, export=0, feedback=False ):
+def HK(cobras, export=0, feedback=False, updateModel=None):
     if not cobrasAreType(cobras, 'Hk'):
         return True # error
-||||||| merged common ancestors
-def HK( cobras, export=0 ):
-    if not cobrasAreType(cobras, 'Hk'):
-        return True # error
-=======
-def HK(cobras, export=False, updateModel=None):
->>>>>>> All the housekeeping responses to update the motormap
+
     board = cobras[0].board
     nCobras = NCOBRAS_BRD
     nBoardCobras = nCobras if (board%2 == 1) else nCobras-1
@@ -308,29 +300,17 @@ def HK(cobras, export=False, updateModel=None):
     
     resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
     er1 = tlm_chk(resp)
-<<<<<<< HEAD
-    
-    resp = sock.recv(HK_TLM_LEN, eth_hex_logger, 'h')
-    if feedback:
-        er2, t1, t2, v, f1, c1, f2, c2 = hk_chk(resp, cobras, export, feedback)
-        return er1 or er2, t1, t2, v, f1, c1, f2, c2
-    else:
-        er2 = hk_chk(resp, cobras, export)
-        return er1 or er2
-||||||| merged common ancestors
-    
-    resp = sock.recv(HK_TLM_LEN, eth_hex_logger, 'h')
-    er2 = hk_chk(resp, cobras, export)
-    
-    return er1 or er2
-=======
 
     tlmLen = HK_TLM_HDR_LEN + nCobras*8
     resp = sock.recv(tlmLen, eth_hex_logger, 'h')
-    er2 = hk_chk(resp, cobras, export, updateModel=updateModel)
-    
-    return er1 or er2
->>>>>>> All the housekeeping responses to update the motormap
+    if feedback:
+        er2, t1, t2, v, f1, c1, f2, c2 = hk_chk(resp, cobras, export, feedback,
+                                                updateModel=updateModel)
+        return er1 or er2, t1, t2, v, f1, c1, f2, c2
+    else:
+        er2 = hk_chk(resp, cobras, export,
+                     updateModel=updateModel)
+        return er1 or er2
 
 def CAL( cobras, timeout=0 ):
     if not cobrasAreType(cobras, 'Cal'):
@@ -464,7 +444,7 @@ def hk_chk(data, cobras, export=False, feedback=False, updateModel=None):
     raw_t1 = int(data[6]<<8) + int(data[7]) 
     raw_t2 = int(data[8]<<8) + int(data[9])
     raw_v = int(data[10]<<8) + int(data[11])
-    
+
     t1 = conv_temp( raw_t1 )
     t2 = conv_temp( raw_t2 )
     v = conv_volt( raw_v )
@@ -481,6 +461,8 @@ def hk_chk(data, cobras, export=False, feedback=False, updateModel=None):
             filewriter.writerow([b, t1, t2, v])
 
     #Error Logging
+    vrange = [9.7, 10.2]
+    trange = [-10, 35]
     if code != 0:
         short_log.log("Error! Error Code %d." %code)
         error = True
@@ -493,11 +475,17 @@ def hk_chk(data, cobras, export=False, feedback=False, updateModel=None):
 
     # Error Logging Payload
     i = HK_TLM_HDR_LEN
+
     freq1 = np.zeros(len(cobras))
     current1 = np.zeros(len(cobras))
     freq2 = np.zeros(len(cobras))
     current2 = np.zeros(len(cobras))
     for k, c in enumerate(cobras):
+    hkParams = HkParams()
+    for c in cobras:
+        # Note that this loop conveniently skips the 29th cobra on the
+        # 2nd board. That is the unconnected one for which we actually
+        # get a (dummy) reading for.
         p1 = int(data[i]<<8) + int(data[i+1])
         c1 = int(data[i+2]<<8) + int(data[i+3])
         p2 = int(data[i+4]<<8) + int(data[i+5])
@@ -521,14 +509,14 @@ def hk_chk(data, cobras, export=False, feedback=False, updateModel=None):
         
         medium_log.log(logtxt)
 
-		# Write motor data to .csv file
+	# Write motor data to .csv file
         if export:
             with open(path_to_file, "a", newline="") as csvfile:
                 filewriter = csv.writer(csvfile, delimiter=",", quotechar="|")
                 filewriter.writerow([c.cobra, get_freq(p1), conv_current(c1), \
                     get_freq(p2), conv_current(c2)])
 
-        error |= c.p.chk(p1, p2, c1, c2, en_log= not error)
+        error |= hkParams.chk(p1, p2, c1, c2, en_log= not error)
 
     if not feedback:
         return error
