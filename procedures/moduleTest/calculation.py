@@ -116,15 +116,15 @@ class Calculation():
         else:
             centers = guess[:len(idx)]
 
-        pos = np.array(objects['x'] + objects['y']*(1j))
-        target = lazyIdentification(centers, pos, radii=radii)
+        measPos = np.array(objects['x'] + objects['y']*(1j))
+        target = lazyIdentification(centers, measPos, radii=radii)
 
         pos = np.zeros(len(idx), dtype=complex)
         for n, k in enumerate(target):
             if k < 0:
                 pos[n] = self.calibModel.centers[idx[n]]
             else:
-                pos[n] = pos[k]
+                pos[n] = measPos[k]
 
         return pos
 
