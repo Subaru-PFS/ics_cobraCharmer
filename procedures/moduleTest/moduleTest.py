@@ -232,42 +232,42 @@ class ModuleTest():
 
             for k in range(iteration):
                 self.pfi.moveAllSteps(self.goodCobras, 0, -steps, phiFast=False)
-                phiRV[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'/phiReverse{n}N{k}.fits',
+                phiRV[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'phiReverse{n}N{k}.fits',
                                                                              guess=phiRV[self.goodIdx, n, k])
 
             # At the end, make sure the cobra back to the hard stop
             self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
 
         # save calculation result
-        np.save(dataPath + '/phiFW', phiFW)
-        np.save(dataPath + '/phiRV', phiRV)
+        np.save(dataPath / 'phiFW', phiFW)
+        np.save(dataPath / 'phiRV', phiRV)
 
         # calculate centers and phi angles
         phiCenter, phiRadius, phiAngFW, phiAngRV, badRange = self.cal.phiCenterAngles(phiFW, phiRV)
-        np.save(dataPath + '/phiCenter', phiCenter)
-        np.save(dataPath + '/phiRadius', phiRadius)
-        np.save(dataPath + '/phiAngFW', phiAngFW)
-        np.save(dataPath + '/phiAngRV', phiAngRV)
-        np.save(dataPath + '/badRange', badRange)
+        np.save(dataPath / 'phiCenter', phiCenter)
+        np.save(dataPath / 'phiRadius', phiRadius)
+        np.save(dataPath / 'phiAngFW', phiAngFW)
+        np.save(dataPath / 'phiAngRV', phiAngRV)
+        np.save(dataPath / 'badRange', badRange)
 
         # calculate average speeds
         phiSpeedFW, phiSpeedRV = self.cal.speed(phiAngFW, phiAngRV, steps, delta)
-        np.save(dataPath + '/phiSpeedFW', phiSpeedFW)
-        np.save(dataPath + '/phiSpeedRV', phiSpeedRV)
+        np.save(dataPath / 'phiSpeedFW', phiSpeedFW)
+        np.save(dataPath / 'phiSpeedRV', phiSpeedRV)
 
         # calculate motor maps by Johannes weighting
         phiMMFW, phiMMRV, bad = self.cal.motorMaps(phiAngFW, phiAngRV, steps, delta)
         bad[badRange] = True
-        np.save(dataPath + '/phiMMFW', phiMMFW)
-        np.save(dataPath + '/phiMMRV', phiMMRV)
-        np.save(dataPath + '/bad', np.where(bad)[0])
+        np.save(dataPath / 'phiMMFW', phiMMFW)
+        np.save(dataPath / 'phiMMRV', phiMMRV)
+        np.save(dataPath / 'bad', np.where(bad)[0])
 
         # calculate motor maps by average speeds
         phiMMFW2, phiMMRV2, bad2 = self.cal.motorMaps2(phiAngFW, phiAngRV, steps, delta)
         bad2[badRange] = True
-        np.save(dataPath + '/phiMMFW2', phiMMFW2)
-        np.save(dataPath + '/phiMMRV2', phiMMRV2)
-        np.save(dataPath + '/bad2', np.where(bad2)[0])
+        np.save(dataPath / 'phiMMFW2', phiMMFW2)
+        np.save(dataPath / 'phiMMRV2', phiMMRV2)
+        np.save(dataPath / 'bad2', np.where(bad2)[0])
 
         # update XML file, using Johannes weighting
         slow = not fast
@@ -373,35 +373,35 @@ class ModuleTest():
             self.pfi.moveAllSteps(self.goodCobras, -10000, 0)
 
         # save calculation result
-        np.save(dataPath + '/thetaFW', thetaFW)
-        np.save(dataPath + '/thetaRV', thetaRV)
+        np.save(dataPath / 'thetaFW', thetaFW)
+        np.save(dataPath / 'thetaRV', thetaRV)
 
         # calculate centers and theta angles
         thetaCenter, thetaRadius, thetaAngFW, thetaAngRV, badRange = self.cal.thetaCenterAngles(thetaFW, thetaRV)
-        np.save(dataPath + '/thetaCenter', thetaCenter)
-        np.save(dataPath + '/thetaRadius', thetaRadius)
-        np.save(dataPath + '/thetaAngFW', thetaAngFW)
-        np.save(dataPath + '/thetaAngRV', thetaAngRV)
-        np.save(dataPath + '/badRange', badRange)
+        np.save(dataPath / 'thetaCenter', thetaCenter)
+        np.save(dataPath / 'thetaRadius', thetaRadius)
+        np.save(dataPath / 'thetaAngFW', thetaAngFW)
+        np.save(dataPath / 'thetaAngRV', thetaAngRV)
+        np.save(dataPath / 'badRange', badRange)
 
         # calculate average speeds
         thetaSpeedFW, thetaSpeedRV = self.cal.speed(thetaAngFW, thetaAngRV, steps, delta)
-        np.save(dataPath + '/thetaSpeedFW', thetaSpeedFW)
-        np.save(dataPath + '/thetaSpeedRV', thetaSpeedRV)
+        np.save(dataPath / 'thetaSpeedFW', thetaSpeedFW)
+        np.save(dataPath / 'thetaSpeedRV', thetaSpeedRV)
 
         # calculate motor maps in Johannes weighting
         thetaMMFW, thetaMMRV, bad = self.cal.motorMaps(thetaAngFW, thetaAngRV, steps, delta)
         bad[badRange] = True
-        np.save(dataPath + '/thetaMMFW', thetaMMFW)
-        np.save(dataPath + '/thetaMMRV', thetaMMRV)
-        np.save(dataPath + '/bad', np.where(bad)[0])
+        np.save(dataPath / 'thetaMMFW', thetaMMFW)
+        np.save(dataPath / 'thetaMMRV', thetaMMRV)
+        np.save(dataPath / 'bad', np.where(bad)[0])
 
         # calculate motor maps by average speeds
         thetaMMFW2, thetaMMRV2, bad2 = self.cal.motorMaps2(thetaAngFW, thetaAngRV, steps, delta)
         bad2[badRange] = True
-        np.save(dataPath + '/thetaMMFW2', thetaMMFW2)
-        np.save(dataPath + '/thetaMMRV2', thetaMMRV2)
-        np.save(dataPath + '/bad2', np.where(bad2)[0])
+        np.save(dataPath / 'thetaMMFW2', thetaMMFW2)
+        np.save(dataPath / 'thetaMMRV2', thetaMMRV2)
+        np.save(dataPath / 'bad2', np.where(bad2)[0])
 
         # update XML file, using Johannes weighting
         slow = not fast
@@ -409,7 +409,7 @@ class ModuleTest():
         if thetaOnTime is not None:
             onTime = np.full(57, thetaOnTime)
             self.cal.calibModel.updateOntimes(thtFwd=onTime, thtRev=onTime, fast=fast)
-        self.cal.calibModel.createCalibrationFile(dataPath + '/' + newXml)
+        self.cal.calibModel.createCalibrationFile(dataPath / '' + newXml)
         self.cal.restoreConfig()
 
         # restore default setting
@@ -464,8 +464,8 @@ class ModuleTest():
         self.pfi.moveAllSteps(self.goodCobras, 0, -5000, phiFast=True)
 
         # save calculation result
-        np.save(dataPath + '/phiFW', phiFW)
-        np.save(dataPath + '/phiRV', phiRV)
+        np.save(dataPath / 'phiFW', phiFW)
+        np.save(dataPath / 'phiRV', phiRV)
 
         # variable declaration
         phiCenter = np.zeros(57, dtype=complex)
@@ -484,9 +484,9 @@ class ModuleTest():
             phiHS[c] = np.angle(phiFW[c, 0] - phiCenter[c])
 
         # save calculation result
-        np.save(dataPath + '/phiCenter', phiCenter)
-        np.save(dataPath + '/phiRadius', phiRadius)
-        np.save(dataPath + '/phiHS', phiHS)
+        np.save(dataPath / 'phiCenter', phiCenter)
+        np.save(dataPath / 'phiRadius', phiRadius)
+        np.save(dataPath / 'phiHS', phiHS)
 
         # convergence test
         phiData = np.zeros((57, runs, tries, 3))
@@ -518,7 +518,7 @@ class ModuleTest():
             self.pfi.moveAllSteps(self.goodCobras, 0, -5000, phiFast=True)
 
         # save calculation result
-        np.save(dataPath + '/phiData', phiData)
+        np.save(dataPath / 'phiData', phiData)
 
         if finalAngle is not None:
             angle = np.deg2rad(finalAngle)
@@ -579,8 +579,8 @@ class ModuleTest():
         self.pfi.moveAllSteps(self.goodCobras, -10000, 0, thetaFast=True)
 
         # save calculation result
-        np.save(dataPath + '/thetaFW', thetaFW)
-        np.save(dataPath + '/thetaRV', thetaRV)
+        np.save(dataPath / 'thetaFW', thetaFW)
+        np.save(dataPath / 'thetaRV', thetaRV)
 
         # variable declaration
         thetaCenter = np.zeros(57, dtype=complex)
@@ -599,9 +599,9 @@ class ModuleTest():
             thetaHS[c] = np.angle(thetaFW[c, 0] - thetaCenter[c])
 
         # save calculation result
-        np.save(dataPath + '/thetaCenter', thetaCenter)
-        np.save(dataPath + '/thetaRadius', thetaRadius)
-        np.save(dataPath + '/thetaHS', thetaHS)
+        np.save(dataPath / 'thetaCenter', thetaCenter)
+        np.save(dataPath / 'thetaRadius', thetaRadius)
+        np.save(dataPath / 'thetaHS', thetaHS)
 
         # convergence test
         thetaData = np.zeros((57, runs, tries, 3))
@@ -643,7 +643,7 @@ class ModuleTest():
             self.pfi.moveAllSteps(self.goodCobras, -10000, 0, thetaFast=True)
 
         # save calculation result
-        np.save(dataPath + '/thetaData', thetaData)
+        np.save(dataPath / 'thetaData', thetaData)
 
     def measureAngles(self, centers, homes):
         """ measure positions and angles for good cobras """
