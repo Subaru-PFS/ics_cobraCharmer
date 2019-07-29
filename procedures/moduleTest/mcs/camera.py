@@ -160,15 +160,15 @@ class Camera(object):
                               thresh=thresh,
                               filter_type='conv', clean=False,
                               deblend_cont=1.0)
-        self.logger.warn(f'median={np.median(data_sub)} std={np.std(data_sub)} '
-                         f'thresh={thresh} {len(objects)} objects')
+        self.logger.debug(f'median={np.median(data_sub)} std={np.std(data_sub)} '
+                          f'thresh={thresh} {len(objects)} objects')
 
         keep_w = self.trim(objects['x'], objects['y'])
         if len(keep_w) != len(objects):
             self.logger.info(f'trimming {len(objects)} objects to {len(keep_w)}')
         objects = objects[keep_w]
         t2 = time.time()
-        self.logger.info(f'spots, bknd: {t1-t0:0.3f} spots: {t2-t1:0.3f} total: {t2-t0:0.3f}')
+        self.logger.debug(f'spots, bknd: {t1-t0:0.3f} spots: {t2-t1:0.3f} total: {t2-t0:0.3f}')
 
         return objects, data_sub, bkg
 
@@ -193,7 +193,7 @@ class Camera(object):
             self.appendSpots(filename, objects, steps=steps, guess=guess)
             t2=time.time()
 
-            self.logger.info(f'{filename}: {len(objects)} spots, get: {t1-t0:0.3f} save: {t2-t1:0.3f} total: {t2-t0:0.3f}')
+            self.logger.info(f'{filename.stem}: {len(objects)} spots, get: {t1-t0:0.3f} save: {t2-t1:0.3f} total: {t2-t0:0.3f}')
         else:
             objects = None
 
