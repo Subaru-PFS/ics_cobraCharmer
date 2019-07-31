@@ -35,7 +35,7 @@ class PFI(object):
         self.motorMap = None
 
         if fpgaHost == 'fpga':
-            fpgaHost = '128.149.77.24'  # A JPL address which somehow got burned into the FPGAs.
+            fpgaHost = '128.149.77.24'  # A JPL address which somehow got burned into the FPGAs. See INSTRM-464
         self.fpgaHost = fpgaHost
         if doConnect:
             self.connect()
