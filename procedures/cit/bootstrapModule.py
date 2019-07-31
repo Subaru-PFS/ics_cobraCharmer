@@ -23,7 +23,7 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
     run = butler.RunTree()
 
     if fpgaHost == 'fpga':
-        fpgaHost = '128.149.77.24'
+        fpgaHost = '128.149.77.24' # See INSTRM-464
     if initialXml is None:
         initialXml = butler.mapPathForModule(moduleName, 'init')
 
@@ -37,7 +37,7 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
         pfiModel = pfi.calibModel
         pfi.reset()
 
-        # if we need to calibrate motor frequencies, assume the worst
+        # if we need to calibrate motor frequencies , assume the worst
         # (as seen in the assembly station init files): the values
         # would leave the motors not working. So calibrate phi now, so
         # that we can reliably move it to home.

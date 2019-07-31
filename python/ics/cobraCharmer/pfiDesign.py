@@ -22,15 +22,15 @@ class PFIDesign():
 
     """
 
-    def __init__(self, fileName):
+    def __init__(self, fileName=None):
         """
         Constructs a new cobras calibration product using the information
         contained in a single XML calibration file.
 
         Parameters
         ----------
-        fileName: object
-            The path to the XML calibration file.
+        fileName: str
+            a path to an XML calibration file. [Deprecated]
 
         Returns
         -------
@@ -48,6 +48,9 @@ class PFIDesign():
 
         if fileName is None:
             return
+        import warnings
+
+        warnings.warn('please use PFIDesign.loadModule() or PFIDesign.loadPFI()')
 
         self.loadModelFiles([fileName])
         self.moduleIds[:] = 1
