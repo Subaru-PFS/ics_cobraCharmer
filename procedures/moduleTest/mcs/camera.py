@@ -145,7 +145,32 @@ class Camera(object):
 
         return filename
 
-    def getObjects(self, im, sigma=20.0):
+    def getObjects(self, im, expid, sigma=10.0):
+        """ Measure the centroids in the image.
+
+        Args
+        ----
+        im : `ndarray`
+           The image to process. Possibly ISR'ed
+        expid : `str`
+           Some unique exposure identifier. Expected to be `pathlib.Path.stem`.
+        sigma : `float`
+           Bullshit.
+
+        Returns
+        -------
+        objects : `ndarray`
+           The measured centroids, along with IDs.
+           For now, full `sep.extract` output, along with the `expid` and a spot index.
+        data_sub : `ndarray`
+           The background-subtracted image.
+        background : `sep.Background`
+           The background image.
+
+        Notes
+        -----
+        `background` is probably st
+        """
         import sep
 
         t0 = time.time()
@@ -174,7 +199,41 @@ class Camera(object):
 
         return objects, data_sub, bkg
 
-    def expose(self, name=None, exptime=None, doCentroid=True, steps=None, guess=None):
+    def expose(self, name=None, exptime=None, doCentroid=True):
+        """Take an exposure, usually measure centroids, and save the outputs.
+
+        Args
+        ----
+        name : `pathlib.Path` or `str`
+          An optional _extra_ name to assign to the image file. By
+          default, just uses the automatica PFS-compliant filename.
+
+        exptime : `float`
+          Override the camera's default exposure time.
+
+        doCentroid: `bool`
+          Whether to measure and save centroids.
+
+        Returns
+        -------
+        objects : `ndarray`
+           All the measured centroids. Note that this might include fiducials, etc.
+        filename : `pathlib.Path`
+           The full path of the PFS-compliant image file.
+        background : `sep.Background`
+           The background which was subracted.
+
+        Notes
+        -----
+
+        The image saved in the image file is raw: not dark or
+        background subtracted. I think the only time you would _look_
+        at the image file is when there is a problem, and so you want
+        the raw image.
+
+        Returns the background, only because that is otherwise
+        unavailable. I think this is probably stupid.
+        """
         t0 = time.time()
         if self.simulationPath is not None:
             im = self._readNextSimulatedImage()
@@ -211,6 +270,8 @@ class Camera(object):
 
         We manage this sequence number using a file in our root
         directory.
+
+        This functionality should be pulled out into pfs_utils
         """
 
         sequenceNumberFile = pathlib.Path(self.dataRoot, self.sequenceNumberFilename)
@@ -248,6 +309,8 @@ class Camera(object):
                             f'{self.filePrefix}{self.seqno:08d}.fits')
 
     def _updateStack(self, img):
+        """ Add an image to a "stack" image file.
+        """
         if self.doStack is False:
             return
         stackPath = pathlib.Path(self.imageDir, self.doStack)
@@ -288,7 +351,16 @@ class Camera(object):
     def appendSpots(self, filename, spots, guess=None, steps=None):
         """ Add spots to existing image file and append them to summary spot file.
 
-            This is not done efficiently.
+        Args
+        ----
+        filename : `pathlib.Path` or `str`
+          The existing FITS file to append a new Binary Table to.
+        spots : `ndarray`
+          The array of spots to write.
+
+        This is not done efficiently, but it turns out that loading a
+        numpy save file, appending to the array, and writing it back
+        out is not bad.
         """
 
         t0 = time.time()
