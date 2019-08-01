@@ -5,6 +5,7 @@ import platform
 import time
 
 import numpy as np
+import numpy.lib.recfunctions as recfuncs
 
 import astropy.io.fits as pyfits
 
@@ -194,6 +195,15 @@ class Camera(object):
         if len(keep_w) != len(objects):
             self.logger.info(f'trimming {len(objects)} objects to {len(keep_w)}')
         objects = objects[keep_w]
+
+        # Add exposure and spot IDs
+        expids = np.zeros((len(objects)), dtype='U12')
+        expids[:] = expid
+        spotIds = np.arange(len(objects))
+        objects = recfuncs.append_fields(objects,
+                                         ['expId','spotId'], [expids,spotIds], dtypes=['U12','i4'],
+                                         usemask=False)
+
         t2 = time.time()
         self.logger.debug(f'spots, bknd: {t1-t0:0.3f} spots: {t2-t1:0.3f} total: {t2-t0:0.3f}')
 
@@ -249,9 +259,9 @@ class Camera(object):
 
         if doCentroid:
             t0 = time.time()
-            objects, data_sub, bkgd = self.getObjects(im)
+            objects, data_sub, bkgd = self.getObjects(im, filename.stem)
             t1 = time.time()
-            self.appendSpots(filename, objects, steps=steps, guess=guess)
+            self.appendSpots(filename, objects)
             t2=time.time()
 
             self.logger.info(f'{filename.stem}: {len(objects)} spots, get: {t1-t0:0.3f} save: {t2-t1:0.3f} total: {t2-t0:0.3f}')
@@ -348,7 +358,7 @@ class Camera(object):
 
         return filename
 
-    def appendSpots(self, filename, spots, guess=None, steps=None):
+    def appendSpots(self, filename, spots):
         """ Add spots to existing image file and append them to summary spot file.
 
         Args
