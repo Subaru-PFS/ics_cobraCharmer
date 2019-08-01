@@ -75,6 +75,7 @@ class Camera(object):
         self.runManager = runManager
         self.dataRoot = runManager.rootDir
         self.imageDir = runManager.dataDir
+        self.outputDir = runManager.outputDir
         self.sequenceNumberFilename = "nextSequenceNumber"
         self.resetStack(doStack=False)
 
@@ -89,6 +90,7 @@ class Camera(object):
 
         self.runManager.newRun()
         self.imageDir = self.runManager.dataDir
+        self.outputDir = runManager.dataDir
         self.resetStack(doStack=doStack)
 
     def resetStack(self, doStack=False):
@@ -294,7 +296,7 @@ class Camera(object):
         hdulist.append(pyfits.BinTableHDU(spots, name='SPOTS'))
         hdulist.close()
 
-        spotfile = self.imageDir / 'spots.npz'
+        spotfile = self.outputDir / 'spots.npz'
         if spotfile.exists():
             with open(spotfile, 'rb') as f:
                 oldData = np.load(f)
