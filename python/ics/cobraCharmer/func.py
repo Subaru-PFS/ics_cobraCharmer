@@ -9,6 +9,7 @@ from .ethernet import sock
 from .log import full_log, medium_log, short_log, eth_hex_logger
 from .convert import *
 from .cmds import *
+from .fpgaState import fpgaState
 
 CCW_DIR = ('ccw','ccw')
 CW_DIR = ('cw','cw')
@@ -373,7 +374,8 @@ def RUN( cobras, timeout=0, inter=0 ):
     payload = []
     for c in cobras:
         payload += c.p.toList(c.board, c.cobra)
-        
+        fpgaState.runCobra(c)
+
     cmd = CMD_run(payload, cmds=len(cobras), timeout=timeout, inter=inter)
     sock.send(cmd, eth_hex_logger, 'h')
     
@@ -480,9 +482,8 @@ def hk_chk(data, cobras, export=False, feedback=False, updateModel=None):
     current1 = np.zeros(len(cobras))
     freq2 = np.zeros(len(cobras))
     current2 = np.zeros(len(cobras))
-    for k, c in enumerate(cobras):
     hkParams = HkParams()
-    for c in cobras:
+    for k, c in enumerate(cobras):
         # Note that this loop conveniently skips the 29th cobra on the
         # 2nd board. That is the unconnected one for which we actually
         # get a (dummy) reading for.
