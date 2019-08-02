@@ -421,7 +421,7 @@ class ModuleTest():
         # restore default setting
         self.pfi.loadModel(self.xml)
 
-    def phiConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, fast=True):
+    def phiConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, fast=True, finalAngle=None):
         # variable declaration for center measurement
         steps = 200
         iteration = 4000 // steps
@@ -525,6 +525,16 @@ class ModuleTest():
 
         # save calculation result
         np.save(dataPath + '/phiData', phiData)
+
+        if finalAngle is not None:
+            angle = np.deg2rad(finalAngle)
+            self.pfi.moveThetaPhi(self.goodCobras, zeros, zeros + angle, phiFast=fast)
+            cAngles, cPositions = self.measureAngles(centers, homes)
+
+            for j in range(tries - 1):
+                self.pfi.moveThetaPhi(self.goodCobras, zeros, angle - cAngles, phiFroms=cAngles, phiFast=fast)
+                cAngles, cPositions = self.measureAngles(centers, homes)
+                cAngles[cAngles>np.pi*(3/2)] -= np.pi*2
 
     def thetaConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, fast=True):
         # variable declaration for center measurement
