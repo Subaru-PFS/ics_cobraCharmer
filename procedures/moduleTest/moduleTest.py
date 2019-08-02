@@ -1,4 +1,5 @@
 from importlib import reload
+import logging
 import numpy as np
 from astropy.io import fits
 import sep
@@ -9,6 +10,7 @@ reload(calculation)
 from mcs import camera
 from ics.cobraCharmer import pfi as pfiControl
 from ics.cobraCharmer.utils import butler
+from ics.cobraCharmer.fpgaState import fpgaState
 
 class Camera():
     def __init__(self, devId):
@@ -33,9 +35,14 @@ class Camera():
 class ModuleTest():
     def __init__(self, fpgaHost, xml, brokens=None, cam1Id=1, cam2Id=2, camSplit=26):
 
+        self.logger = logging.getLogger('moduleTest')
+        self.logger.setLevel(logging.DEBUG)
+
         self.runManager = butler.RunTree(doCreate=False)
 
         """ Init module 1 cobras """
+
+        # NO, not 1!! Pass in moduleName, etc. -- CPL
         self.allCobras = pfiControl.PFI.allocateCobraModule(1)
         self.fpgaHost = fpgaHost
         self.xml = xml
@@ -83,12 +90,86 @@ class ModuleTest():
         if hasattr(self, 'cal'):
             self.cal.setBrokenCobras(brokens)
 
+    movesDtype = np.dtype(dict(names=['expId', 'spotId',
+                                      'module', 'cobra',
+                                      'phiSteps', 'phiOntime',
+                                      'thetaSteps','thetaOntime'],
+                               formats=['U12', 'i4',
+                                        'i2', 'i2',
+                                        'f4', 'f4',
+                                        'f4', 'f4']))
+
+    def _saveMoveTable(self, expId, positions, indexMap):
+        """ Save cobra move and spot information to a file.
+
+        Args
+        ----
+        expId : `str`
+          An exposure identifier. We want "PFxxNNNNNNNN".
+        positions : `ndarray` of complex coordinates.
+          What the matcher thinks is the cobra position.
+        indexMap : `ndarray` of `int`
+          For each of our cobras, the index of measured spot
+
+        """
+        moveTable = np.zeros(len(positions), dtype=self.movesDtype)
+        moveTable['expId'][:] = expId
+        if len(positions) != len(self.allCobras):
+            raise RuntimeError("Craig is confused about cobra lists")
+
+        for pos_i, pos in enumerate(positions):
+            cobraInfo = self.allCobras[pos_i]
+            moveInfo = fpgaState.cobraLastMove(cobraInfo)
+
+            moveTable['spotId'][pos_i] = indexMap[pos_i]
+            moveTable['module'][pos_i] = cobraInfo.module
+            moveTable['cobra'][pos_i] = cobraInfo.cobraNum
+            for field in ('phiSteps', 'phiOntime',
+                          'thetaSteps', 'thetaOntime'):
+                moveTable[field][pos_i] = moveInfo[field]
+
+        movesPath = self.runManager.outputDir / "moves.npz"
+        self.logger.info(f'saving {len(moveTable)} moves to {movesPath}')
+        if movesPath.exists():
+            with open(movesPath, 'rb') as f:
+                oldMoves = np.load(f)['moves']
+            allMoves = np.concatenate([oldMoves, moveTable])
+        else:
+            allMoves = moveTable
+
+        with open(movesPath, 'wb') as f:
+            np.savez_compressed(f, moves=allMoves)
+
     def extractPositions(self, data1, data2=None, guess=None, tolerance=None):
         return self.cal.extractPositions(data1, data2, guess, tolerance)
 
     def exposeAndExtractPositions(self, name=None, guess=None, tolerance=None):
+        """ Take an exposure, measure centroids, match to cobras, save info.
+
+        Args
+        ----
+        name : `str`
+           Additional name for saved image file. File _always_ gets PFS-compliant name.
+        guess : `ndarray` of complex coordinates
+           Where to center searches. By default uses the cobra center.
+        tolerance : `float`
+           Additional factor to scale search region by. 1 = cobra radius (phi+theta)
+
+        Returns
+        -------
+        positions : `ndarray` of complex
+           The measured positions of our cobras.
+           If no matching spot found, return the cobra center.
+
+        Note
+        ----
+        Not at all convinced that we should return anything if no matching spot found.
+
+        """
         centroids, filename, bkgd = self.cam.expose(name)
-        positions = self.cal.matchPositions(centroids, guess=guess, tolerance=tolerance)
+        positions, indexMap = self.cal.matchPositions(centroids, guess=guess, tolerance=tolerance)
+        self._saveMoveTable(filename.stem, positions, indexMap)
+
         return positions
 
     def moveToXYfromHome(self, idx, targets, threshold=3.0, maxTries=8):

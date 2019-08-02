@@ -105,6 +105,30 @@ class Calculation():
         return pos
 
     def matchPositions(self, objects, guess=None, tolerance=None):
+        """ Given a set of measured spots, return the measured positions of our cobras.
+
+        Args
+        ----
+        objects : `ndarray`, which includes an x and a y column.
+           The _measured_ positions, from the camera.
+
+        guess : `ndarray` of complex coordinates.
+           Close to where we expect the spots to be. Uses the the cobra center if None
+
+        tolerance : `float`
+           A expansion factor to apply to the cobra geometry, for matching.
+
+        Returns
+        -------
+        pos : `ndarray` of complex coordinates
+           The measured positions of the cobras.
+           Note that (hmm), the cobra center is returned of there is not matching spot.
+
+        indexMap : `ndarray` of ints
+           Indices from our cobra array to the matching spots.
+           -1 if there is no matching spot.
+        """
+
         idx = self.goodIdx
         if tolerance is not None:
             radii = (self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance)
@@ -126,7 +150,7 @@ class Calculation():
             else:
                 pos[n] = measPos[k]
 
-        return pos
+        return pos, target
 
     def extractPositions1(self, data, guess=None, tolerance=None):
         idx = self.goodIdx
