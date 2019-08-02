@@ -362,6 +362,8 @@ class ModuleTest():
         # restore default setting
         self.pfi.loadModel(self.xml)
 
+        return self.runManager.runDir
+
     def makeThetaMotorMap(
             self,
             newXml,
