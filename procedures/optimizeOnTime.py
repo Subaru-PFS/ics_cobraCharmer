@@ -213,7 +213,7 @@ myCobras = getCobras(goodIdx)
 
 # Loading XML file once again.  Changing XML file name if you want to loading 
 #  special setting.
-ontimeXML=cobraCharmerPath+'/xml/updateOntime_20190124n.xml'
+ontimeXML=cobraCharmerPath+'/xml/updateOntime_20190220.xml'
 pfi.loadModel(ontimeXML)
 pfi.setFreq(allCobras)
 
@@ -552,7 +552,7 @@ old.updateMotorMaps(fThetaFW, fThetaRV, fPhiFW, fPhiRV, useSlowMaps=False)
 
 # write to a new XML file
 #old.createCalibrationFile('../xml/motormaps.xml')
-old.createCalibrationFile(cobraCharmerPath+'/xml/motormap_'+datetoday+'n.xml')
+old.createCalibrationFile(cobraCharmerPath+'/xml/motormap_'+datetoday+'.xml')
 
 
 print(cobraCharmerPath+'/xml/motormap_'+datetoday+'n.xml  produced!')

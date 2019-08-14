@@ -80,9 +80,9 @@ def moveToXYfromHome(idx, targets, dataPath, threshold=3.0, maxTries=8):
 
 
 
-#datetoday=datetime.datetime.now().strftime("%Y%m%d")
-datetoday='20181219'
-cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
+datetoday=datetime.datetime.now().strftime("%Y%m%d")
+#datetoday='20181219'
+cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
 storagePath = '/data/pfs/'+datetoday
 dataPath = storagePath+'/image'
 prodctPath = storagePath+'/product'
@@ -131,13 +131,18 @@ evenCobras = moduleCobras2[2]
 
 # Initializing COBRA module
 pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-coaseXML=cobraCharmerPath+'/xml/coarse'+datetoday+'.xml'
+coaseXML=cobraCharmerPath+'/xml/coarse_spare02_'+datetoday+'.xml'
 if not os.path.exists(coaseXML):
     sys.exit()
     
 pfi.loadModel(coaseXML)
 pfi.setFreq(allCobras)
 
+
+# Using fast on-time (70 us) for geometry measurement
+fastOnTime = [np.full(57, 0.070),np.full(57, 0.070), np.full(57, 0.070),np.full(57, 0.070)] 
+pfi.calibModel.updateOntimes(*fastOnTime)
+pfi.setFreq(allCobras)
 
 # Calculate up/down(outward) angles
 oddMoves = pfi.thetaToLocal(oddCobras, [np.deg2rad(270)]*len(oddCobras))
@@ -153,7 +158,7 @@ allMoves[1::2] = evenMoves
 allSteps, _ = pfi.calculateSteps(np.zeros(57), allMoves, np.zeros(57), np.zeros(57))
 
 # define the broken/good cobras
-brokens = [1, 39, 43, 54]
+brokens = []
 visibles= [e for e in range(1,58) if e not in brokens]
 badIdx = np.array(brokens) - 1
 goodIdx = np.array(visibles) - 1
@@ -186,7 +191,7 @@ pfi.moveAllSteps(allCobras, 0, -5000)
 pfi.moveAllSteps(allCobras, -10000, 0)
 
 # Move the bad cobras to up/down positions
-pfi.moveSteps(getCobras(badIdx), allSteps[badIdx], np.zeros(len(brokens)))
+#pfi.moveSteps(getCobras(badIdx), allSteps[badIdx], np.zeros(len(brokens)))
 
 
 
@@ -200,10 +205,10 @@ outTargets = pfi.anglesToPositions(allCobras, thetas, phis)
 
 
 # move to outTargets
-moveToXYfromHome(goodIdx, outTargets[goodIdx], dataPath)
+#moveToXYfromHome(goodIdx, outTargets[goodIdx], dataPath)
 
 # move phi arms in
-pfi.moveAllSteps(getCobras(goodIdx), 0, -5000)
+#pfi.moveAllSteps(getCobras(goodIdx), 0, -5000)
 
 # record the theta and phi arm movements for three non-interfering sets
 for g in range(3):
@@ -214,7 +219,7 @@ for g in range(3):
     pfi.moveAllSteps(myCobras, -10000, -5000)
     pfi.moveAllSteps(myCobras, -10000, 0)
 
-    # take one image at limit
+    # take one image at limit1
     p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-f", dataPath+f"/cam1G{g}P1_"], stdout=PIPE)
     p1.communicate()
     p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-f", dataPath+f"/cam2G{g}P1_"], stdout=PIPE)
@@ -222,6 +227,8 @@ for g in range(3):
     time.sleep(1.0)
 
     # move phi out and capture the video
+    p1.kill()
+    p2.kill()
     p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-i", "100", "-l", "9999", "-f", dataPath+f"/phi1G{g}_"], stdout=PIPE)
     p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-i", "100", "-l", "9999", "-f", dataPath+f"/phi2G{g}_"], stdout=PIPE)
     time.sleep(5.0)
@@ -240,6 +247,8 @@ for g in range(3):
     p2.communicate()
     time.sleep(1.0)
 
+    p1.kill()
+    p2.kill()
     # move theta for a circle and capture the video
     p1 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "1", "-e", "18", "-i", "100", "-l", "9999", "-f", dataPath+f"/theta1G{g}_"], stdout=PIPE)
     p2 = Popen(["/home/pfs/IDSControl/idsexposure", "-d", "2", "-e", "18", "-i", "100", "-l", "9999", "-f", dataPath+f"/theta2G{g}_"], stdout=PIPE)
@@ -259,11 +268,11 @@ for g in range(3):
     p2.communicate()
 
     # move back
-    pfi.moveAllSteps(myCobras, 0, -5000)
-    pfi.moveAllSteps(myCobras, -10000, 0)
+    #pfi.moveAllSteps(myCobras, 0, -5000)
+    #pfi.moveAllSteps(myCobras, -10000, 0)
     pfi.moveAllSteps(myCobras, -10000, -5000)
-    moveToXYfromHome(myIdx, outTargets[myIdx],dataPath)
-    pfi.moveAllSteps(myCobras, 0, -5000)
+    #moveToXYfromHome(myIdx, outTargets[myIdx],dataPath)
+    #pfi.moveAllSteps(myCobras, 0, -5000)
 
     print("Finishing Group "+str(g))
 
@@ -343,6 +352,7 @@ for g in range(3):
     myIdx = goodGroupIdx[g][goodGroupIdx[g] > cam_split]
     homes = pfi.calibModel.centers[myIdx]
     cnt = len(glob.glob(dataPath+f'/theta2G{g}_*')) - 2
+
     pos = np.zeros((len(myIdx), cnt, 2))
 
     for i in range(cnt):
@@ -446,8 +456,8 @@ myConfig.phiIn[idx] = phiCCW[idx] - np.pi
 myConfig.phiOut[idx] = phiCW[idx] - np.pi
 
 old.updateGeometry(myConfig.centers, myConfig.L1, myConfig.L2)
-#old.updateThetaHardStops(myConfig.tht0, myConfig.tht1)
-#old.updatePhiHardStops(myConfig.phiIn + np.pi, myConfig.phiOut + np.pi)
+old.updateThetaHardStops(myConfig.tht0, myConfig.tht1)
+old.updatePhiHardStops(myConfig.phiIn + np.pi, myConfig.phiOut + np.pi)
 
 old.createCalibrationFile(cobraCharmerPath+'/xml/precise'+datetoday+'.xml')
 

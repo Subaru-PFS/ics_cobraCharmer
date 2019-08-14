@@ -94,7 +94,7 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
     
     #datetoday=datetime.datetime.now().strftime("%Y%m%d")
     #datetoday='20181219'
-    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
+    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
     
     #storagePath = '/data/pfs/'+datetoday
     dataPath = storagePath+'/image'
@@ -138,7 +138,7 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
 
     # Initializing COBRA module
     pfi = pfiControl.PFI(fpgaHost='128.149.77.24') #'fpga' for real device.
-    preciseXML=cobraCharmerPath+'/xml/precise6.xml'
+    preciseXML=cobraCharmerPath+'/xml/precise_20190304.xml'
     #preciseXML=cobraCharmerPath+'/xml/updateOntime_'+datetoday+'.xml'
 
     if not os.path.exists(preciseXML):
@@ -186,8 +186,9 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
     pfi.moveAllSteps(allCobras, -5000, 0)
 
     # Move the bad cobras to up/down positions
-    pfi.moveSteps(getCobras(badIdx), allSteps[badIdx], np.zeros(len(brokens)))
-
+    #pfi.moveSteps(getCobras(badIdx), allSteps[badIdx], np.zeros(len(brokens)))
+    pfi.moveSteps(getCobras([0,38,42,53]), [3200,800,4200,5000], np.zeros(4))
+    
     # move visible positioners to outwards positions, phi arms are moved out for 60 degrees
     # (outTargets) otherwise we can't measure the theta angles
     thetas = np.empty(57, dtype=float)
@@ -209,8 +210,8 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
     # parameters declared here
     #repeat = 3
     #steps = 200
-    thetaSteps = 10000
-    phiSteps = 5000
+    thetaSteps = 15000
+    phiSteps = 7000
     myCobras = getCobras(goodIdx)
 
     OnTime = deepcopy([pfi.calibModel.motorOntimeFwd1,
@@ -247,7 +248,7 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
 
     # move phi arms out for 60 degrees then home theta
     pfi.moveAllSteps(myCobras, -10000, -5000)
-    pfi.moveAllSteps(myCobras, -5000, -5000)
+    pfi.moveAllSteps(myCobras, -5000, -7000)
     moveToXYfromHome(pfi, goodIdx, outTargets[goodIdx], dataPath)
     pfi.moveAllSteps(myCobras, -10000, 0)
     pfi.moveAllSteps(myCobras, -5000, 0)
@@ -544,12 +545,13 @@ def runMotorMap(repeat, steps, storagePath, outputXML):
 
 def main():
     datetoday=datetime.datetime.now().strftime("%Y%m%d")
-    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer.cwen/'
+    cobraCharmerPath='/home/pfs/mhs/devel/ics_cobraCharmer/'
 
-    for steps in [50,100,200,400]:
-        storagePath = '/data/pfs/'+datetoday+f'_step{steps}/'
-        outputXML = cobraCharmerPath+'/xml/motormap_'+datetoday+f'_step{steps}.xml'
-        runMotorMap(3, steps, storagePath, outputXML)
+    #for steps in [50,100]:
+    storagePath = '/data/pfs/'+datetoday+'/'
+    outputXML = cobraCharmerPath+'/xml/motormap_'+datetoday+f'.xml'
+    
+    runMotorMap(3, 100, storagePath, outputXML)
 
 
 if __name__ == '__main__':
