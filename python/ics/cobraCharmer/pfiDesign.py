@@ -17,11 +17,11 @@ from .utils import butler
 reload(butler)
 
 class PFIDesign():
-    """
+    """ Class describing a cobras calibration product, the "motor map"  """
 
-    Class describing a cobras calibration product, the "motor map"
-
-    """
+    COBRA_OK_MASK       = 0x0001  # a synthetic summary bit: 1 for good, 0 for bad.
+    COBRA_BROKEN_MASK   = 0x0002  # 1 if the motors do not work
+    COBRA_INVISBLE_MASK = 0x0004  # 1 if the fiber is not visible
 
     def __init__(self, fileName=None):
         """
@@ -141,10 +141,11 @@ class PFIDesign():
         self.nCobras = len(dataContainers)
 
         # Create some of the calibration data arrays
-        self.moduleIds = np.empty(self.nCobras, dtype="int")
-        self.positionerIds = np.empty(self.nCobras, dtype="int")
-        self.serialIds = np.empty(self.nCobras, dtype="int")
+        self.moduleIds = np.empty(self.nCobras, dtype="u2")
+        self.positionerIds = np.empty(self.nCobras, dtype="u2")
+        self.serialIds = np.empty(self.nCobras, dtype="u2")
         self.centers = np.empty(self.nCobras, dtype="complex")
+        self.status = np.empty(self.nCobras, dtype="u2")
         self.tht0 = np.empty(self.nCobras)
         self.tht1 = np.empty(self.nCobras)
         self.phiIn = np.empty(self.nCobras)
@@ -191,6 +192,7 @@ class PFIDesign():
             self.moduleIds[i] = int(header.find("Module_Id").text)
             self.positionerIds[i] = int(header.find("Positioner_Id").text)
             self.serialIds[i] = int(header.find("Serial_Number").text, base=10)
+            self.status[i] = int(header.find("Status").text, base=10)
 
             # Check for conflicts:
             for check_i in range(i):
@@ -354,8 +356,43 @@ class PFIDesign():
         moduleId = self.getRealModuleId(moduleId)
         return np.where(self.moduleIds == moduleId)[0]
 
+    def setCobraStatus(self, cobraId, broken=False, invisible=False):
+        """ Set the operational status of a cobra.
+
+        bit 0 - a synthetic summary bit: 1 for good, 0 for bad.
+        bit 1 - 1 if the motors do not work
+        bit 2 - 1 if the fiber is not visible
+        """
+
+        if broken:
+            self.status |= self.COBRA_BROKEN_MASK
+            self.status &= ~self.COBRA_OK_MASK
+        if invisible:
+            self.status |= self.COBRA_INVISBLE_MASK
+            self.status &= ~self.COBRA_OK_MASK
+
+    def getGoodMask(self):
+        """ Return mask of operational cobras. """
+
+        return self.status == self.COBRA_OK_MASK
+
+    def getBadMask(self):
+        """ Return mask of unuseable cobras. """
+
+        return self.status != self.COBRA_OK_MASK
+
+    def getBrokenMask(self):
+        """ Return mask of cobras with inoperable motors """
+
+        return (self.status & self.COBRA_BROKEN_MASK) != 0
+
+    def getInvisibleMask(self):
+        """ Return mask of cobras with broken/non-visible fibers """
+
+        return (self.status & self.COBRA_INVISBLE_MASK) != 0
+
     def setModuleId(self, moduleId, forModule=None, setOurModuleIds=False):
-        """Update moduleIds
+        """ Update moduleIds
 
         Args
         ----
