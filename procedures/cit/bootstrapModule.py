@@ -19,6 +19,7 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
                     setCenters=True,
                     clearGeometry=True,
                     doCalibrate=True,
+                    numberCobrasFromRight=False,
                     setModuleId=True):
 
     run = butler.RunTree()
@@ -78,13 +79,21 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
     imIdx, _ = coordinates.laydown(imCenters)
     modelIdx, _ = coordinates.laydown(modelCenters)
 
-    # These are now sorted descending by x, or alternating between top
+    # These are now sorted descending by x, alternating between top
     # and bottom cobras. But the cobras centers in the xml files can
     # have real trash coordinates. For all the existing science
-    # modules at CIT, several cobras have the same coordinates.
+    # modules at CIT, several cobras have the same coordinates.  So do
+    # _not_ use the model coordinates by default. Simply assign the
+    # cobras by increasing/decreasing X.
     #
-    imIdx = imIdx[::-1]         # The CIT and ASRD cameras have cobra 1 in the top-right.
+    # We want the cobras to be numbered from the left by default.
+    #
+    if numberCobrasFromRight:
+        imIdx = imIdx[::-1]         # The ASRD camera has cobra 1 in the top-right.
     homes = imCenters[imIdx,0] + imCenters[imIdx,1]*(1j)
+
+    # Usually only use scale from this. Only use the reset if we neither assign new centers nor
+    # clear the geometry.
     offset1, scale1, tilt1, convert1 = coordinates.makeTransform(oldCenters[modelIdx], homes)
 
     if setModuleId:
@@ -149,9 +158,10 @@ def main(args=None):
                         help='transform the old geometry intsead of clearing it.')
     parser.add_argument('--noCalibrate', action='store_true',
                         help='do not calibrate the motor frequencies.')
+    parser.add_argument('--numberCobrasFromRight', action='store_true',
+                        help='have the cobras be numbered with decreasing X')
 
     opts = parser.parse_args(args)
-
     bootstrapModule(opts.moduleName,
                     opts.modelName, opts.saveModelFile,
                     fpgaHost=opts.fpgaHost,
@@ -159,6 +169,7 @@ def main(args=None):
                     setModuleId=not opts.noSetModuleId,
                     setCenters=not opts.noSetCenters,
                     doCalibrate=not opts.noCalibrate,
+                    numberCobrasFromRight=opts.numberCobrasFromRight,
                     clearGeometry=not opts.noClearGeometry)
 
 if __name__ == "__main__":
