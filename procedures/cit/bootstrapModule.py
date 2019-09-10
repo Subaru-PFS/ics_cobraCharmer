@@ -11,6 +11,7 @@ from procedures.cit import calibrateMotorFrequencies
 
 reload(butler)
 reload(camera)
+reload(calibrateMotorFrequencies)
 
 def bootstrapModule(moduleName, initialXml=None, outputName=None,
                     fpgaHost='fpga',
@@ -42,7 +43,7 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
 
         # if we need to calibrate motor frequencies , assume the worst
         # (as seen in the assembly station init files): the values
-        # would leave the motors not working. So calibrate phi now, so
+        # would leave the motors not safe to run. So calibrate phi now, so
         # that we can reliably move it to home.
         if doCalibrate:
             calibrateMotorFrequencies.calibrateMotorFrequencies(pfi,
@@ -55,6 +56,7 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
 
     _ = cam.expose() # Leave out of no-PFI block so that simulationPath reads always work.
     if pfi is not None:
+            pfi.moveAllSteps(None, 0, -4000)
 
         # Define the cobra range.
         allCobras = pfiControl.PFI.allocateCobraModule(1)
@@ -113,8 +115,9 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
     pfiModel.updatePhiHardStops(phiIn, phiOut)
 
     if doCalibrate:
-        calibrateMotorFrequencies.calibrateMotorFrequencies(pfi)
-
+        # Now can calibrate theta motors.
+        calibrateMotorFrequencies.calibrateMotorFrequencies(pfi,
+                                                            enabled=(True, False))
     xmlDir = run.outputDir
     outPath = xmlDir / outputName
     pfiModel.createCalibrationFile(outPath, name='bootstrap')
