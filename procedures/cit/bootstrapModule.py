@@ -13,7 +13,7 @@ reload(butler)
 reload(camera)
 
 def bootstrapModule(moduleName, initialXml=None, outputName=None,
-                    fpgaHost=None,
+                    fpgaHost='fpga',
                     simulationPath=None,
                     setCenters=True,
                     clearGeometry=True,
@@ -26,6 +26,9 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
         fpgaHost = '128.149.77.24' # See INSTRM-464
     if initialXml is None:
         initialXml = butler.mapPathForModule(moduleName, 'init')
+    elif fpgaHost == 'None' or fpgaHost == '':
+        fpgaHost = None
+
 
     if fpgaHost is None:
         pfi = None
@@ -127,8 +130,8 @@ def main(args=None):
     parser.add_argument('moduleName', type=str,
                         help='the name of the module (e.g. "SC03", "Spare1", or "PFI")')
 
-    parser.add_argument('--fpgaHost', type=str, default=None,
-                        help='connect to the given FPGA host instead of the simulator.')
+    parser.add_argument('--fpgaHost', type=str, default='fpga',
+                        help='connect to the given FPGA host instead of real one.')
     parser.add_argument('--modelName', type=str, default=None,
                         help='load the given model before calibrating.')
     parser.add_argument('--saveModelFile', type=str, default='',
