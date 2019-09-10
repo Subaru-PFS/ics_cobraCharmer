@@ -26,11 +26,18 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
 
     if fpgaHost == 'fpga':
         fpgaHost = '128.149.77.24' # See INSTRM-464
-    if initialXml is None:
-        initialXml = butler.mapPathForModule(moduleName, 'init')
     elif fpgaHost == 'None' or fpgaHost == '':
         fpgaHost = None
 
+    if initialXml is None:
+        initialXml = butler.mapPathForModule(moduleName, 'init')
+    if outputName is None:
+        outputName = f"{moduleName}_bootstrap.xml"
+
+    cam = camera.cameraFactory(runManager=run, simulationPath=simulationPath,
+                               doClear=True)
+    cam.resetStack(doStack=False)
+    _ = cam.expose() # Just to record in case calibrartion moves far.
 
     if fpgaHost is None:
         pfi = None
@@ -131,6 +138,8 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
     outPath = xmlDir / outputName
     pfiModel.createCalibrationFile(outPath, name='bootstrap')
 
+    return outPath
+
 def main(args=None):
     if isinstance(args, str):
         import shlex
@@ -146,7 +155,7 @@ def main(args=None):
                         help='connect to the given FPGA host instead of real one.')
     parser.add_argument('--modelName', type=str, default=None,
                         help='load the given model before calibrating.')
-    parser.add_argument('--saveModelFile', type=str, default='',
+    parser.add_argument('--saveModelFile', type=str, default=None,
                         help='save the updated model in the given file.')
     parser.add_argument('--simulationPath', type=str, default=None,
                         help='use the given path to get camera images from.')
