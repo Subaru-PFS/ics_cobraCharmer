@@ -56,23 +56,14 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
         if doCalibrate:
             calibrateMotorFrequencies.calibrateMotorFrequencies(pfi,
                                                                 enabled=(False, True))
+            pfi.moveAllSteps(None, 0, -4000)
         else:
             pfi.setFreq()
-
-    cam = camera.cameraFactory(runManager=run, simulationPath=simulationPath)
-    cam.resetStack(doStack=False)
-
-    _ = cam.expose() # Leave out of no-PFI block so that simulationPath reads always work.
-    if pfi is not None:
-            pfi.moveAllSteps(None, 0, -4000)
-
-        # Define the cobra range.
-        allCobras = pfiControl.PFI.allocateCobraModule(1)
-        pfi.moveAllSteps(allCobras, 0, -5000)
 
     cs, im, _ = cam.expose()
     imCenters = np.stack((cs['x'], cs['y']), 1)
 
+    # Needs to come from pfiDesign.nVisibleCobras, etc.
     nspots = len(cs)
     if nspots != 57:
         raise RuntimeError(f'need 57 spots, got {nspots}')
