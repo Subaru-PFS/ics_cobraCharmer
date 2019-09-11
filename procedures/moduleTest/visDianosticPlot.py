@@ -6,6 +6,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
+from bokeh.io import output_notebook, show, export_png,export_svgs
+from bokeh.plotting import figure, show, output_file
+import bokeh.palettes
+from bokeh.layouts import column,gridplot
+from bokeh.models import HoverTool, ColumnDataSource, LinearColorMapper
+from bokeh.models.glyphs import Text
+
+from bokeh.transform import linear_cmap
+from bokeh.palettes import Category20
+
 
 class VisDianosticPlot(object):
 
@@ -68,7 +78,7 @@ class VisDianosticPlot(object):
         if arm is None:
             raise Exception('Define the arm')
 
-    def visPlotGeometry(self, arm=None):
+    def visPlotGeometry(self, arm=None, pngfile=None):
         try:
             self.centers
         except AttributeError:
@@ -77,7 +87,7 @@ class VisDianosticPlot(object):
         if arm is None:
             raise Exception('Define the arm')
 
-        plt.figure(1)
+        plt.figure(figsize=(10, 20))
         plt.clf()
 
         plt.subplot(211)
@@ -100,7 +110,10 @@ class VisDianosticPlot(object):
             ax.add_artist(c)
         ax.set_title(f'2nd camera')
 
-        plt.show()
+        if pngfile is not None:
+            plt.savefig(pngfile)
+        else:
+            plt.show()
 
     def visPlotFiberDot(self, arm = None):
         try:
@@ -111,7 +124,7 @@ class VisDianosticPlot(object):
         if arm is None:
             raise Exception('Define the arm')
 
-        plt.figure(2)
+        plt.figure(figsize=(10, 20))
         plt.clf()
 
         plt.subplot(211)
@@ -204,40 +217,117 @@ class VisDianosticPlot(object):
 
 
     
-    def visCobraMotorMap(self):
+    def visCobraMotorMap(self, stepsize=50, figpath=None, arm=None):
+        try:
+            self.mf
+        except AttributeError:
+            self._loadCobraData(arm=arm)
+        
+        if arm is None:
+            raise Exception('Define the arm')
+        
+        ymax = 1.1*np.rad2deg(np.max(self.mf))
+        ymin = -1.1*np.rad2deg(np.max(self.mr))
 
-        x=np.arange(112)*3.6
-        c = 4
+        for fiber in self.goodIdx:
+            x=np.arange(112)*3.6
+            c = fiber
 
-        plt.figure(4)
-        plt.clf()
-        ax = plt.gca()
-        ax.set_title(f'#{c}')
-
-
-        daf = np.zeros(len(af[c][0])-1)
-        dar = np.zeros(len(ar[c][0])-1)
-
-
-
-        for data in af[c]: 
-            for i,item in enumerate(data):
-                if i < len(daf):
-                    daf[i] = np.rad2deg(data[i+1] - data[i])/50.0
-                    ax.plot([np.rad2deg(data[i+1]),np.rad2deg(data[i])],[daf[i],daf[i]],color='grey')
-        ax.plot(x,np.rad2deg(mf[c]), 'r')        
-        ax.plot(x,np.rad2deg(mf2[c]), 'pink')
+            plt.figure(figsize=(8,6))
+            plt.clf()
+            ax = plt.gca()
+            ax.set_title(f'Fiber {arm} #{c+1}')
 
 
-        for data in ar[c]: 
-            for i,item in enumerate(data):
-                if i < len(daf):
-                    dar[i] = np.rad2deg(data[i+1] - data[i])/50.0
-                    ax.plot([np.rad2deg(data[i+1]),np.rad2deg(data[i])],[dar[i],dar[i]],color='grey')
-        ax.plot(x,-np.rad2deg(mr[c]), 'r')
-        ax.plot(x,-np.rad2deg(mr2[c]), color='pink')
-        ax.set_xlim([0,200])
+            daf = np.zeros(len(self.af[c][0])-1)
+            dar = np.zeros(len(self.ar[c][0])-1)
+
+            for data in self.af[c]: 
+                for i,item in enumerate(data):
+                    if i < len(daf):
+                        daf[i] = np.rad2deg(data[i+1] - data[i])/stepsize
+                        ax.plot([np.rad2deg(data[i+1]),np.rad2deg(data[i])],[daf[i],daf[i]],color='grey')
+            ax.plot(x,np.rad2deg(self.mf[c]), 'r')        
+            ax.plot(x,np.rad2deg(self.mf2[c]), 'pink')
 
 
+            for data in self.ar[c]: 
+                for i,item in enumerate(data):
+                    if i < len(daf):
+                        dar[i] = np.rad2deg(data[i+1] - data[i])/stepsize
+                        ax.plot([np.rad2deg(data[i+1]),np.rad2deg(data[i])],[dar[i],dar[i]],color='grey')
+            ax.plot(x,-np.rad2deg(self.mr[c]), 'r')
+            ax.plot(x,-np.rad2deg(self.mr2[c]), color='pink')
+            ax.set_ylim([ymin,ymax])
+            if arm is 'phi':
+                ax.set_xlim([0,200])
+            else:
+                ax.set_xlim([0,400])
+            
+            if figpath is not None:
+                plt.ioff()
+                plt.savefig(f'{figpath}/motormap_{arm}_{c+1}.png')
+            else:
+                plt.show()
+            plt.close()
 
-        pass
+    def _visSpeedHistogram(self, avg1, Title, Legend1):
+        
+        hist1, edges1 = np.histogram(avg1, bins=np.arange(0.0, 0.3, 0.01))
+        #hist2, edges2 = np.histogram(avg2, bins=np.arange(0.0, 0.3, 0.01))
+
+        TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
+        p = figure(title=Title, tools=TOOLS, background_fill_color="#fafafa")
+        #p.quad(top=hist1, bottom=0, left=edges1[:-1], right=edges1[1:],
+        #    fill_color="navy", line_color="white", alpha=0.3,legend=Legend1)
+
+        p.step(x=edges1[0:-2],y=hist1[0:-1], color='black',legend=Legend1,line_width=2,mode="after")
+
+        return p
+
+
+    def _visSpeedStdHistogram(self, std,Title, Legend1):
+            
+        hist1, edges1 = np.histogram(std, bins=np.arange(0.0, 0.1, 0.005))
+        #hist2, edges2 = np.histogram(avg2, bins=np.arange(0.0, 0.1, 0.005))
+
+        TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
+        p = figure(title=Title, tools=TOOLS, background_fill_color="#fafafa")
+        #p.quad(top=hist1, bottom=0, left=edges1[:-1], right=edges1[1:],
+        #    fill_color="navy", line_color="white", alpha=0.3,legend=Legend1)
+
+        p.step(x=edges1[0:-2],y=hist1[0:-1], color='black',legend=Legend1,line_width=2,mode="after")
+
+        return p
+
+    def visSpeedHisto(self, arm=None, figpath=None):
+        try:
+            self.sf
+        except AttributeError:
+            self._loadCobraData(arm=arm)
+
+        p1=self._visSpeedHistogram(np.rad2deg(self.sf), f'{arm} Fwd', 'ASIAA')
+        p2=self._visSpeedHistogram(np.rad2deg(self.sr), f'{arm} Rev', 'ASIAA')
+        
+        fwdstd = []
+        revstd = []
+
+        for i in self.mf:
+            fwdstd.append(np.std(np.rad2deg(i)))
+        for i in self.mr:
+            revstd.append(np.std(np.rad2deg(i)))
+        
+        fwdstd = np.array(fwdstd)
+        revstd = np.array(revstd)
+
+        q1=self._visSpeedStdHistogram(fwdstd, f'{arm} Fwd Std', 'ASIAA')
+        q2=self._visSpeedStdHistogram(revstd, f'{arm} Rev Std', 'ASIAA')
+        #q3=makeStdHistoPlot(j2fwd_std1, j2fwd_std2, 'Phi Fwd Std', 'Caltech', 'ASIAA')
+        #q4=makeStdHistoPlot(j2rev_std1, j2rev_std2, 'Phi Rev Std', 'Caltech', 'ASIAA')
+        #show(column(p1,p2,p3,p4))
+        grid = gridplot([[p1, p2]])
+        qgrid = gridplot([[q1, q2]])
+
+        if figpath is not None:
+            export_png(grid,filename=figpath+"motor_speed_histogram.png")
+            export_png(qgrid,filename=figpath+"motor_speed_std.png")
