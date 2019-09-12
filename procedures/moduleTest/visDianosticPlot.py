@@ -61,7 +61,7 @@ class VisDianosticPlot(object):
 
         if arm == 'theta':
             self.centers = np.load(path + 'thetaCenter.npy')
-            self.radius = np.load(path + 'theta`Radius.npy')
+            self.radius = np.load(path + 'thetaRadius.npy')
             self.fw = np.load(path + 'thetaFW.npy')
             self.rv = np.load(path + 'thetaRV.npy')
             self.af = np.load(path + 'thetaAngFW.npy')
