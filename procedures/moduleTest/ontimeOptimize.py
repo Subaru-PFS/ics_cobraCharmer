@@ -291,7 +291,14 @@ class OntimeOptimize(object):
 
         SlowOntimeFwd, SlowOntimeRev = self.solveForSlowSpeed()
         OntimeFwd, OntimeRev = self.solveForFastSpeed()
+        
+        # If there is a broken fiber, set on-time to original value 
+        SlowOntimeFwd[self.badIdx] = self.fwdOntimeModel(model)[self.badIdx]
+        SlowOntimeRev[self.badIdx] = self.revOntimeModel(model)[self.badIdx]
 
+        OntimeFwd[self.badIdx] = self.minOntime
+        OntimeRev[self.badIdx] = self.minOntime
+        
         if table is not None:
             pid=range(len(OntimeFwd))
             t=Table([pid, self.fwdOntimeModel(model), self.fwd_int, self.fwd_slope, SlowOntimeFwd,
