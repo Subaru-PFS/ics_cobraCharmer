@@ -252,8 +252,6 @@ class OntimeOptimize(object):
         dd=self.dataframe.loc[self.dataframe['fiberNo'] == fiberNo+1]
 
         
-
-
         TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
         title_string=f"Fiber {fiberNo+1} Theta {direction}"
         
@@ -322,15 +320,18 @@ class OntimeOptimize(object):
                 formats={'Fiber No':'%i','Ori Fwd OT': '%10.5f', 'FWD int': '%10.5f', 'FWD slope': '%10.5f', 'New Fwd OT': '%10.5f',\
                 'Ori Rev OT': '%10.5f', 'REV int': '%10.5f', 'REV slope': '%10.5f', 'New Rev OT': '%10.5f'})
 
-
-        model.updateOntimes(thtFwd=SlowOntimeFwd, thtRev=SlowOntimeRev, fast=False)
-        model.updateOntimes(thtFwd=OntimeFwd, thtRev=OntimeRev, fast=True)
+        if self.axisNum == 1:
+            model.updateOntimes(thtFwd=SlowOntimeFwd, thtRev=SlowOntimeRev, fast=False)
+            model.updateOntimes(thtFwd=OntimeFwd, thtRev=OntimeRev, fast=True)
+        else:
+            model.updateOntimes(phiFwd=SlowOntimeFwd, phiRev=SlowOntimeRev, fast=False)
+            model.updateOntimes(phiFwd=OntimeFwd, phiRev=OntimeRev, fast=True)
 
         model.createCalibrationFile(newXML)
 
         pass
 
-    def visMaps(self, direction, filename=None):
+    def visMaps(self, direction, filename=None, pngfile= None):
         if filename is not None:
             output_file(filename)
 
@@ -340,5 +341,9 @@ class OntimeOptimize(object):
             parray.append(p)
 
         grid = gridplot(parray, ncols=3, plot_width=400, plot_height=400)
-        show(grid)
+        
+        if pngfile is not None:
+            export_png(grid, filename=pngfile)
+        else:
+            show(grid)
         
