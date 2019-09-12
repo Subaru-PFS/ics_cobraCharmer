@@ -112,17 +112,29 @@ class OntimeOptimize(object):
     def getRevSlope(self, pid):
         return self.getSlope(pid, 'Rev')
 
-    def fwdOntimeModel(self, model):
+    def fwdOntimesSlowModel(self, model):
         if self.axisNum == 1:
             return model.motorOntimeSlowFwd1[self.goodIdx]
         else:
             return model.motorOntimeSlowFwd2[self.goodIdx]
 
-    def revOntimeModel(self, model):
+    def revOntimeSlowModel(self, model):
         if self.axisNum == 1:
             return model.motorOntimeSlowRev1[self.goodIdx]
         else:
             return model.motorOntimeSlowRev2[self.goodIdx]
+    
+    def fwdOntimesModel(self, model):
+        if self.axisNum == 1:
+            return model.motorOntimeFwd1[self.goodIdx]
+        else:
+            return model.motorOntimeFwd2[self.goodIdx]
+
+    def revOntimeModel(self, model):
+        if self.axisNum == 1:
+            return model.motorOntimeRev1[self.goodIdx]
+        else:
+            return model.motorOntimeRev2[self.goodIdx]
    
     def _buildDataFramefromData(self):
         pidarray=[]
@@ -152,8 +164,8 @@ class OntimeOptimize(object):
             xml = glob.glob(f'{i}'+'/*.xml')[0]
             model = pfiDesign.PFIDesign(xml)
             
-            ontimeFwd = self.fwdOntimeModel(model)
-            ontimeRev = self.revOntimeModel(model)
+            ontimeFwd = self.fwdOntimeSlowModel(model)
+            ontimeRev = self.revOntimeSlowModel(model)
 
             pid=np.array(self.visibles)
             pidarray.append(pid)
@@ -293,16 +305,16 @@ class OntimeOptimize(object):
         OntimeFwd, OntimeRev = self.solveForFastSpeed()
         
         # If there is a broken fiber, set on-time to original value 
-        SlowOntimeFwd[self.badIdx] = self.fwdOntimeModel(model)[self.badIdx]
-        SlowOntimeRev[self.badIdx] = self.revOntimeModel(model)[self.badIdx]
+        SlowOntimeFwd[self.badIdx] = self.fwdOntimeSlowModel(model)[self.badIdx]
+        SlowOntimeRev[self.badIdx] = self.revOntimeSlowModel(model)[self.badIdx]
 
         OntimeFwd[self.badIdx] = self.minOntime
         OntimeRev[self.badIdx] = self.minOntime
-        
+
         if table is not None:
             pid=range(len(OntimeFwd))
-            t=Table([pid, self.fwdOntimeModel(model), self.fwd_int, self.fwd_slope, SlowOntimeFwd,
-                self.revOntimeModel(model),self.rev_int, self.rev_slope, SlowOntimeRev],
+            t=Table([pid, self.fwdOntimeSlowModel(model), self.fwd_int, self.fwd_slope, SlowOntimeFwd,
+                self.revOntimeSlowModel(model),self.rev_int, self.rev_slope, SlowOntimeRev],
                 names=('Fiber No','Ori Fwd OT', 'FWD int', 'FWD slope', 'New Fwd OT',
                 'Ori Rev OT', 'REV int', 'REV slope', 'New Rev OT'),
                 dtype=('i2','f4', 'f4', 'f4','f4', 'f4', 'f4', 'f4', 'f4'))
