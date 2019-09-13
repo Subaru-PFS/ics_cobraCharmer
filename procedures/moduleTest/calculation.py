@@ -206,6 +206,48 @@ class Calculation():
 
         return phiCenter, phiRadius, phiAngFW, phiAngRV, badRange
 
+    def _dPhi(ang0, ang1):
+        """ Return angle FROM ang0 TO ang1. """
+
+        diff = ang1 - ang0
+        return diff
+
+    def _dTheta(ang0, ang1):
+        """ Return angle FROM ang0 TO ang1. """
+
+        diff = ang1 - ang0
+        diff[diff < 0] += 2*np.pi
+
+        return diff
+
+    def thetaFWAngle(self, thetas, thetaFW, nsteps):
+        """ Return the angles from CCW home. """
+
+        if nsteps < 3:
+            return [], []
+
+        thetaCenter = np.array(len(thetas), dtype='complex')
+        thetaRadius = np.array(len(thetas), dtype='f4')
+
+        for c in self.goodIdx:
+            data = thetaFW[c].flatten()
+            x, y, r = circle_fitting(data)
+            thetaCenter[c] = x + y*(1j)
+            thetaRadius[c] = r
+
+        homeAngles = np.angle(thetaFW[:, 0] - thetaCenter)
+        endAngles = np.angle(thetaFW[:, -1] - thetaCenter)
+        ourAngles = np.angle(thetas - thetaCenter)
+
+        homeDiffs = self._dTheta(homeAngles, ourAngles)
+        endDiffs = self._dTheta(endAngles, ourAngles)
+
+        # We are far enough away from home to maybe be at the limit, and have bounced back from the end.
+        #
+        atEnd = (homeDiffs > np.deg2rad(375)) & (endDiffs < 0)
+
+        return homeDiffs, atEnd
+
     def thetaCenterAngles(self, thetaFW, thetaRV):
         # variable declaration for theta angles
         thetaCenter = np.zeros(57, dtype=complex)
