@@ -251,6 +251,12 @@ class Camera(object):
             if exptime is None:
                 exptime = self.exptime
             im = self._camExpose(exptime)
+            if np.all(im == 0):
+                self.logger.warn('image is all 0s; reconnecting')
+                self._camClose()
+                _ = self.cam
+                time.sleep(2)
+            im = self._camExpose(exptime)
 
             if self.dark is not None:
                 im -= self.dark
