@@ -11,7 +11,7 @@ class CitCamera(camera.Camera):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.logger.info('cit...')
-        self._exptime = 0.25
+        self._exptime = 0.5
 
     def _camConnect(self):
         if self.simulationPath is not None:
@@ -46,12 +46,17 @@ class CitCamera(camera.Camera):
             raise RuntimeError("failed to readout image")
 
         im = np.array(data).astype('u2').reshape(2048,2048)
-        im = np.flipud(im)
+        # im = np.ascontiguousarray(np.rot90(im, 1))
+
+        # The ASRD reduction code curently requires that phi moves go CCW when moving CW.
+        # So make sure we get that.
+        im = np.fliplr(im)
 
         return im
 
     def trim(self, x, y):
         """ Return indices or mask of all valid points. """
 
+        # x = 2000 - x
         w = (y < (x + 500)) & (y > (x - 500))
         return w

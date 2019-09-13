@@ -146,7 +146,7 @@ class Camera(object):
 
         return filename
 
-    def getObjects(self, im, expid, sigma=10.0):
+    def getObjects(self, im, expid, sigma=10.0, threshold=None):
         """ Measure the centroids in the image.
 
         Args
@@ -270,7 +270,8 @@ class Camera(object):
             self.appendSpots(filename, objects)
             t2=time.time()
 
-            self.logger.info(f'{filename.stem}: {len(objects)} spots, get: {t1-t0:0.3f} save: {t2-t1:0.3f} total: {t2-t0:0.3f}')
+            self.logger.debug(f'{filename.stem}: {len(objects)} spots, '
+                              f'get: {t1-t0:0.3f} save: {t2-t1:0.3f} total: {t2-t0:0.3f}')
         else:
             objects = None
 
@@ -337,20 +338,20 @@ class Camera(object):
             stack += img
         except FileNotFoundError:
             stackFits = pyfits.open(stackPath, mode="append")
-            stackFits.append(pyfits.CompImageHDU(img, name='IMAGE'))
+            stackFits.append(pyfits.CompImageHDU(img.astype('i4'), name='IMAGE'))
 
         stackFits.flush()
         stackFits.close()
         del stackFits
 
-    def saveImage(self, img, extraName=None, doStack=True):
+    def saveImage(self, img, cleanImg=None, extraName=None, doStack=True):
         filename = self._getNextName()
 
         hdus = pyfits.HDUList()
         hdus.append(pyfits.CompImageHDU(img, name='IMAGE', uint=True))
 
         hdus.writeto(filename, overwrite=True)
-        self.logger.info('saveImage: %s', filename)
+        self.logger.debug('saveImage: %s', filename)
 
         if extraName is not None:
             linkname = filename.parent / extraName
@@ -360,7 +361,9 @@ class Camera(object):
                 linkname.symlink_to(filename.name)
 
         if doStack:
-            self._updateStack(img)
+            if cleanImg is None:
+                cleanImg = img
+            self._updateStack(cleanImg)
 
         return filename
 
