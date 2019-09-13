@@ -246,6 +246,9 @@ class PFI(object):
 
     def moveAllSteps(self, cobras, thetaSteps, phiSteps, thetaFast=True, phiFast=True):
         """ Move all cobras for some theta and phi steps """
+
+        if cobras is None:
+            cobras = self.getAllDefinedCobras()
         thetaAllSteps = np.zeros(len(cobras)) + thetaSteps
         phiAllSteps = np.zeros(len(cobras)) + phiSteps
 
@@ -320,8 +323,8 @@ class PFI(object):
         thetaIndex =  np.isnan(cThetaSteps)
         phiIndex = np.isnan(cPhiSteps)
         cThetaSteps[thetaIndex] = 0
-        cPhiSteps[[phiIndex]] = 0
-        self.logger.info(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
+        cPhiSteps[phiIndex] = 0
+        self.logger.debug(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
         self.moveSteps(cobras, cThetaSteps, cPhiSteps, thetaFast=thetaFast, phiFast=phiFast)
 
     def thetaToGlobal(self, cobras, thetaLocals):
@@ -652,6 +655,7 @@ class PFI(object):
             stepsRange = np.interp([startPhi[c], startPhi[c] + deltaPhi[c]], self.calibModel.phiOffsets[c], phiSteps)
             nPhiSteps[c] = stepsRange[1] - stepsRange[0]
 
+        self.logger.debug(f'start={startPhi[:3]}, delta={deltaPhi[:3]} move={nPhiSteps[:3]}')
         return (nThtSteps, nPhiSteps)
 
     def anglesToPositions(self, cobras, thetaAngles, phiAngles):
@@ -931,6 +935,18 @@ class PFI(object):
         for c in range(1,cls.nCobrasPerModule+1):
             if (c%2 == 1 and board == 1) or (c%2 == 0 and board == 2):
                 cobras.append(func.Cobra(module, c))
+
+        return cobras
+
+    @classmethod
+    def allocateBoardCobra(cls, module, board, cobra):
+        module = pfiDesign.PFIDesign.getRealModuleId(module)
+        if module < 1 or module > cls.nModules:
+            raise IndexError(f'module numbers are 1..{cls.nModules}')
+        if board not in (1,2):
+            raise IndexError('board numbers are 1 or 2.')
+        cobras = []
+        cobras.append(func.Cobra(module, cobra*2))
 
         return cobras
 

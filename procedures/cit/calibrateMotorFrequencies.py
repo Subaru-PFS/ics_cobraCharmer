@@ -1,8 +1,10 @@
+from importlib import reload
 import pathlib
 import numpy as np
 
 from ics.cobraCharmer import pfi as pfiModule
 from ics.cobraCharmer.utils import butler
+reload(pfiModule)
 
 def calibrateMotorFrequencies(pfi, modules=None, updateModel=True,
                               thetaLow=55.0, thetaHigh=75.0,
@@ -33,7 +35,7 @@ def calibrateMotorFrequencies(pfi, modules=None, updateModel=True,
             c1 = pfi.allocateCobraModule(m)
             cobras.extend(c1)
     else:
-        cobras = pfi.getAllConnectedCobras()
+        cobras = pfi.getAllDefinedCobras()
 
     boards = {(c.module, c.board) for c in cobras}
 

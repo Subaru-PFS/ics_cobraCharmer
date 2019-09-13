@@ -621,14 +621,14 @@ class PFIDesign():
                 self.phiOut[i] = cw[i] - np.pi
                 kinematics.find("Joint2_CW_limit_angle").text = str(np.rad2deg(cw[i]))
 
-    def updateOntimes(self, thtFwd=None, thtRev=None, phiFwd=None, phiRev=None, fast=True):
+    def updateOntimes(self, thetaFwd=None, thetaRev=None, thtFwd=None, thtRev=None, phiFwd=None, phiRev=None, fast=True):
         """Update cobra ontimes
 
         Parameters
         ----------
-        thtFwd: object
+        thetaFwd: object
             A numpy array with the cobras theta forward ontimes.
-        thtRev: object
+        thetaRev: object
             A numpy array with the cobras theta reverse ontimes.
         phiFwd: object
             A numpy array with the cobras phi forward ontimes.
@@ -639,9 +639,9 @@ class PFIDesign():
 
         """
 
-        if thtFwd is not None and len(thtFwd) != self.nCobras:
+        if thetaFwd is not None and len(thetaFwd) != self.nCobras:
             raise RuntimeError("number of cobra theta forward ontimes must match number of cobras")
-        if thtRev is not None and len(thtRev) != self.nCobras:
+        if thetaRev is not None and len(thetaRev) != self.nCobras:
             raise RuntimeError("number of cobra theta reverse ontimes must match number of cobras")
         if phiFwd is not None and len(phiFwd) != self.nCobras:
             raise RuntimeError("number of cobra phi forward ontimes must match number of cobras")
@@ -651,12 +651,12 @@ class PFIDesign():
         for i in range(self.nCobras):
             kinematics = self.dataContainers[i].find("KINEMATICS")
             if fast:
-                if thtFwd is not None:
-                    self.motorOntimeFwd1[i] = thtFwd[i]
-                    kinematics.find("Link1_fwd_Duration").text = str(thtFwd[i])
-                if thtRev is not None:
-                    self.motorOntimeRev1[i] = thtRev[i]
-                    kinematics.find("Link1_rev_Duration").text = str(thtRev[i])
+                if thetaFwd is not None:
+                    self.motorOntimeFwd1[i] = thetaFwd[i]
+                    kinematics.find("Link1_fwd_Duration").text = str(thetaFwd[i])
+                if thetaRev is not None:
+                    self.motorOntimeRev1[i] = thetaRev[i]
+                    kinematics.find("Link1_rev_Duration").text = str(thetaRev[i])
                 if phiFwd is not None:
                     self.motorOntimeFwd2[i] = phiFwd[i]
                     kinematics.find("Link2_fwd_Duration").text = str(phiFwd[i])
@@ -664,12 +664,12 @@ class PFIDesign():
                     self.motorOntimeRev2[i] = phiRev[i]
                     kinematics.find("Link2_rev_Duration").text = str(phiRev[i])
             else:
-                if thtFwd is not None:
-                    self.motorOntimeSlowFwd1[i] = thtFwd[i]
-                    kinematics.find("Link1_fwd_Duration_Slow").text = str(thtFwd[i])
-                if thtRev is not None:
-                    self.motorOntimeSlowRev1[i] = thtRev[i]
-                    kinematics.find("Link1_rev_Duration_Slow").text = str(thtRev[i])
+                if thetaFwd is not None:
+                    self.motorOntimeSlowFwd1[i] = thetaFwd[i]
+                    kinematics.find("Link1_fwd_Duration_Slow").text = str(thetaFwd[i])
+                if thetaRev is not None:
+                    self.motorOntimeSlowRev1[i] = thetaRev[i]
+                    kinematics.find("Link1_rev_Duration_Slow").text = str(thetaRev[i])
                 if phiFwd is not None:
                     self.motorOntimeSlowFwd2[i] = phiFwd[i]
                     kinematics.find("Link2_fwd_Duration_Slow").text = str(phiFwd[i])
