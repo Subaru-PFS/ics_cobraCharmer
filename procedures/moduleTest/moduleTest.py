@@ -102,12 +102,12 @@ class ModuleTest():
 
     movesDtype = np.dtype(dict(names=['expId', 'spotId',
                                       'module', 'cobra',
-                                      'phiSteps', 'phiOntime',
-                                      'thetaSteps','thetaOntime'],
+                                      'phiSteps', 'phiOntime', 'phiOntimeScale',
+                                      'thetaSteps','thetaOntime', 'thetaOntimeScale'],
                                formats=['U12', 'i4',
                                         'i2', 'i2',
-                                        'f4', 'f4',
-                                        'f4', 'f4']))
+                                        'f4', 'f4', 'f4',
+                                        'f4', 'f4', 'f4']))
 
     def _saveMoveTable(self, expId, positions, indexMap):
         """ Save cobra move and spot information to a file.
@@ -129,17 +129,25 @@ class ModuleTest():
 
         for pos_i, pos in enumerate(positions):
             cobraInfo = self.allCobras[pos_i]
+            cobraNum = self.pfi.calibModel.findCobraByModuleAndPositioner(cobraInfo.module,
+                                                                          cobraInfo.cobraNum)
             moveInfo = fpgaState.cobraLastMove(cobraInfo)
 
+            phiMotorId = cobraState.mapId(cobraNum, 'phi', 'ccw' if moveInfo['phiSteps'] < 0 else 'cw')
+            thetaMotorId = cobraState.mapId(cobraNum, 'theta', 'ccw' if moveInfo['thetaSteps'] < 0 else 'cw')
+            phiScale = cobraState.motorScales.get(phiMotorId, 1.0)
+            thetaScale = cobraState.motorScales.get(thetaMotorId, 1.0)
             moveTable['spotId'][pos_i] = indexMap[pos_i]
             moveTable['module'][pos_i] = cobraInfo.module
             moveTable['cobra'][pos_i] = cobraInfo.cobraNum
             for field in ('phiSteps', 'phiOntime',
                           'thetaSteps', 'thetaOntime'):
                 moveTable[field][pos_i] = moveInfo[field]
+            moveTable['thetaOntimeScale'] = thetaScale
+            moveTable['phiOntimeScale'] = phiScale
 
         movesPath = self.runManager.outputDir / "moves.npz"
-        self.logger.info(f'saving {len(moveTable)} moves to {movesPath}')
+        self.logger.debug(f'saving {len(moveTable)} moves to {movesPath}')
         if movesPath.exists():
             with open(movesPath, 'rb') as f:
                 oldMoves = np.load(f)['moves']
