@@ -10,7 +10,10 @@ from ics.cobraCharmer.log import Logger
 from ics.cobraCharmer import pfiDesign
 from ics.cobraCharmer import fpgaLogger
 
+from ics.cobraCharmer import cobraState
+
 reload(pfiDesign)
+reload(func)
 
 class PFI(object):
     nCobrasPerModule = 57
@@ -35,6 +38,7 @@ class PFI(object):
 
         self.calibModel = None
         self.motorMap = None
+        self.ontimeScales = cobraState.motorScales
 
         if fpgaHost == 'fpga':
             fpgaHost = '128.149.77.24'  # A JPL address which somehow got burned into the FPGAs. See INSTRM-464
@@ -357,7 +361,83 @@ class PFI(object):
         thetaLocals = (thetaGlobals - self.calibModel.tht0[cIdx]) % (2 * np.pi)
         return thetaLocals
 
-    def moveSteps(self, cobras, thetaSteps, phiSteps, waitThetaSteps=None, waitPhiSteps=None, interval=2.5, thetaFast=True, phiFast=True):
+    def resetMotorScaling(self, cobras=None, motor=None):
+        """ Declare that we want the scaling for some cobras to be reset to 1.0.
+
+        Args
+        ----
+        cobras : list of `Cobra`s
+           The cobras to reset. All if None.
+        motor : {`theta`, `phi`}
+           The motor to reset. Both if None.
+        """
+
+        if cobras is None:
+            cobras = self.getAllDefinedCobras()
+
+        if motor is None:
+            motors = ['theta', 'phi']
+        else:
+            motors = [motor]
+
+        for c in cobras:
+            for m in motors:
+                self.scaleMotorOntime(c, m, 'cw', 1.0, doReset=True)
+                self.scaleMotorOntime(c, m, 'ccw', 1.0, doReset=True)
+
+    def scaleMotorOntime(self, cobra, motor, direction, scale, doReset=False):
+        """ Declare that we want a given motor's ontime to be scaled after interpolation.
+
+        If there is an existing scaling, the new scaling is applied
+        _that_: we are expecting to be told that the last effective
+        move neeeded adjustment.
+
+        Args
+        ----
+        cobra : internal cobra object FIX -- CPL
+           A single cobra.
+        motor : {'theta', 'phi'}
+           Which motor to adjust
+        direction : {'ccw', 'cw'}
+           Which motor map to adjust
+        scale : `float`
+           Scaling to apply to the theta motor's ontime
+        doReset : `bool`
+           Whether to replace the existing scaling or adjust it.
+        """
+
+        cobraId = self._mapCobraIndex(cobra)
+        mapId = cobraState.mapId(cobraId, motor, direction)
+        if not doReset:
+            existingScale = cobraState.motorScales.get(mapId, 1.0)
+        else:
+            existingScale = 1.0
+
+        newScale = existingScale * scale
+        if newScale < 0.25:
+            self.logger.warn(f'clipping scale adjustment from {newScale} to 0.25')
+            newScale = 0.25
+        if newScale > 3.0:
+            self.logger.warn(f'clipping scale adjustment from {newScale} to 3.0')
+            newScale = 3.0
+
+        cobraState.motorScales[mapId] = newScale
+        self.logger.debug(f'setadjust {mapId} {existingScale:0.2f} -> {newScale:0.2f}')
+
+    def adjustThetaOnTime(self, cobraId, ontime, fast, direction):
+        mapId = cobraState.mapId(cobraId, 'theta', direction)
+        scale = cobraState.motorScales.get(mapId, 1.0)
+        self.logger.debug(f'adjust {mapId} {scale:0.2f}')
+        return ontime*scale
+
+    def adjustPhiOnTime(self, cobraId, ontime, fast, direction):
+        mapId = cobraState.mapId(cobraId, 'phi', direction)
+        scale = cobraState.motorScales.get(mapId, 1.0)
+        self.logger.debug(f'adjust {mapId} {scale:0.2f}')
+        return ontime*scale
+
+    def moveSteps(self, cobras, thetaSteps, phiSteps, waitThetaSteps=None, waitPhiSteps=None,
+                  interval=2.5, thetaFast=True, phiFast=True):
         """ Move cobras with theta and phi steps
 
             thetaSteps: A numpy array with theta steps to go
@@ -413,6 +493,7 @@ class PFI(object):
                     ontime1 = self.calibModel.motorOntimeSlowFwd1[cobraId]
                 else:
                     ontime1 = self.calibModel.motorOntimeSlowRev1[cobraId]
+            ontime1 = self.adjustThetaOnTime(cobraId, ontime1, fast=_thetaFast[c_i], direction=dirs1[0])
 
             if _phiFast[c_i]:
                 if dirs1[1] == 'cw':
@@ -424,6 +505,7 @@ class PFI(object):
                     ontime2 = self.calibModel.motorOntimeSlowFwd2[cobraId]
                 else:
                     ontime2 = self.calibModel.motorOntimeSlowRev2[cobraId]
+            ontime2 = self.adjustPhiOnTime(cobraId, ontime2, fast=_phiFast[c_i], direction=dirs1[1])
 
             # For early-late offsets.
             if waitThetaSteps is not None:

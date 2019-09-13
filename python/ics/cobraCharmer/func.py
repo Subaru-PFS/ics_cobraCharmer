@@ -42,6 +42,11 @@ class Cobra:
         self.cobra = (cobraNum-1)//2 + 1
 
         self.p = None # Params
+
+    def __str__(self):
+        return (f"Cobra(module={self.module} board={self.board} "
+                f"cobraNum={self.cobraNum} cobra={self.cobra}")
+
     def stringify(self):
         s = '(C%s,%s ' % (self.board,self.cobra) + self.p.stringify() + ')'
         return s
@@ -284,9 +289,6 @@ def DIA():
     return boards_per_sector
     
 def HK(cobras, export=0, feedback=False, updateModel=None):
-    if not cobrasAreType(cobras, 'Hk'):
-        return True # error
-
     board = cobras[0].board
     nCobras = NCOBRAS_BRD
     nBoardCobras = nCobras if (board%2 == 1) else nCobras-1
