@@ -8,9 +8,11 @@ import calculation
 reload(calculation)
 
 from mcs import camera
+reload(camera)
 from ics.cobraCharmer import pfi as pfiControl
 from ics.cobraCharmer.utils import butler
 from ics.cobraCharmer.fpgaState import fpgaState
+from ics.cobraCharmer import cobraState
 
 class Camera():
     def __init__(self, devId):
@@ -33,16 +35,17 @@ class Camera():
         self.data = None
 
 class ModuleTest():
-    def __init__(self, fpgaHost, xml, brokens=None, cam1Id=1, cam2Id=2, camSplit=26):
+    def __init__(self, fpgaHost, xml, brokens=None, cam1Id=1, cam2Id=2, camSplit=26, logLevel=logging.INFO):
 
         self.logger = logging.getLogger('moduleTest')
-        self.logger.setLevel(logging.DEBUG)
+        self.logger.setLevel(logLevel)
 
         self.runManager = butler.RunTree(doCreate=False)
 
         """ Init module 1 cobras """
 
         # NO, not 1!! Pass in moduleName, etc. -- CPL
+        reload(pfiControl)
         self.allCobras = pfiControl.PFI.allocateCobraModule(1)
         self.fpgaHost = fpgaHost
         self.xml = xml
@@ -700,7 +703,9 @@ class ModuleTest():
             totalSteps=5000,
             fast=True,
             phiOnTime=None,
+            updateGeometry=False,
             limitOnTime=0.06,
+            resetScaling=True,
             delta=0.1):
         """ generate phi motor maps, it accepts custom phiOnTIme parameter.
             it assumes that theta arms have been move to up/down positions to avoid collision
@@ -739,9 +744,13 @@ class ModuleTest():
         phiFW = np.zeros((57, repeat, iteration+1), dtype=complex)
         phiRV = np.zeros((57, repeat, iteration+1), dtype=complex)
 
-        #record the phi movements
+        if resetScaling:
+            self.pfi.resetMotorScaling(cobras=None, motor='phi')
+
+        # record the phi movements
         dataPath = self.runManager.dataDir
-        self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
+        self.logger.info(f'phi home {-totalSteps} steps')
+        self.pfi.moveAllSteps(self.goodCobras, 0, -totalSteps)
         for n in range(repeat):
             self.cam.resetStack(f'phiForwardStack{n}.fits')
 
