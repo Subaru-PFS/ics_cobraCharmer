@@ -71,6 +71,14 @@ class RunTree(object):
     def allDirs(self):
         return self.logDir, self.dataDir, self.outputDir
 
+def pathForRun(run):
+    runPath = dataRoot / run
+    return runPath
+
+def spotsForRun(run):
+    runPath = pathForRun(run)
+    return runPath / 'output/' / 'spots.npz'
+
 def _instDataDir():
     """ Return the directory under which instrument configuration is stored. """
 
