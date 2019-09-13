@@ -773,12 +773,14 @@ class ModuleTest():
             phiFW[self.goodIdx, n, 0] = self.exposeAndExtractPositions(f'phiBegin{n}.fits')
 
             for k in range(iteration):
+                self.logger.info(f'{n+1}/{repeat} phi forward to {(k+1)*steps}')
                 self.pfi.moveAllSteps(self.goodCobras, 0, steps, phiFast=False)
                 phiFW[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'ph1Forward{n}N{k}.fits',
                                                                              guess=phiFW[self.goodIdx, n, k])
 
             # make sure it goes to the limit
-            self.pfi.moveAllSteps(self.goodCobras, 0, 5000)
+            self.logger.info(f'{n+1}/{repeat} phi forward {totalSteps} to limit')
+            self.pfi.moveAllSteps(self.goodCobras, 0, totalSteps)
 
             # reverse phi motor maps
             self.cam.resetStack(f'phiReverseStack{n}.fits')
@@ -786,12 +788,14 @@ class ModuleTest():
                                                                        guess=phiFW[self.goodIdx, n, iteration])
 
             for k in range(iteration):
+                self.logger.info(f'{n+1}/{repeat} phi backward to {(k+1)*steps}')
                 self.pfi.moveAllSteps(self.goodCobras, 0, -steps, phiFast=False)
                 phiRV[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'phiReverse{n}N{k}.fits',
                                                                              guess=phiRV[self.goodIdx, n, k])
 
             # At the end, make sure the cobra back to the hard stop
-            self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
+            self.logger.info(f'{n+1}/{repeat} phi reverse {-totalSteps} steps to limit')
+            self.pfi.moveAllSteps(self.goodCobras, 0, -totalSteps)
 
         # save calculation result
         np.save(dataPath / 'phiFW', phiFW)
