@@ -172,30 +172,480 @@ class ModuleTest():
 
         return positions
 
-    def moveToXYfromHome(self, idx, targets, threshold=3.0, maxTries=8):
-        """ function to move cobras to target positions """
-        cobras = getCobras(idx)
-        self.pfi.moveXYfromHome(cobras, targets, thetaThreshold=threshold, phiThreshold=threshold)
+    @staticmethod
+    def dPhiAngle(target, source, doWrap=False, doAbs=False):
+        d = np.atleast_1d(target - source)
 
+        if doAbs:
+            d[d<0] += 2*np.pi
+            d[d>=2*np.pi] -= 2*np.pi
+
+            return d
+
+        if doWrap:
+            lim = np.pi
+        else:
+            lim = 2*np.pi
+
+        # d[d > lim] -= 2*np.pi
+        d[d < -lim] += 2*np.pi
+
+        return d
+
+    @staticmethod
+    def dThetaAngle(target, source, doWrap=False, doAbs=False):
+        d = np.atleast_1d(target - source)
+
+        if doAbs:
+            d[d<0] += 2*np.pi
+            d[d>=2*np.pi] -= 2*np.pi
+
+            return d
+
+        return d
+
+    @staticmethod
+    def _fullAngle(toPos, fromPos=None):
+        """ Return ang of vector, 0..2pi """
+        if fromPos is None:
+            fromPos = 0+0j
+        a = np.angle(toPos - fromPos)
+        if np.isscalar(a):
+            if a < 0:
+                a += 2*np.pi
+            if a >= 2*np.pi:
+                a -= 2*np.pi
+        else:
+            a[a<0] += 2*np.pi
+            a[a>=2*np.pi] -= 2*np.pi
+
+        return a
+
+    def getPhiCenters(self, fixOntime=None):
+        outputDir = self.makePhiMotorMap('quickPhiScan.xml',
+                                         repeat=1, phiOnTime=fixOntime, steps=200,
+                                         totalSteps=4000, fast=False)
+        dataDir = outputDir / 'data'
+
+        phiCenters = np.load(dataDir / 'phiCenter.npy')
+        return phiCenters
+
+    def setPhiCentersFromRun(self, geometryRun):
+        self.phiCenters = np.load(geometryRun / 'data' / 'phiCenter.npy')
+
+    def setThetaCentersFromRun(self, geometryRun):
+        self.thetaCenter = np.load(geometryRun / 'data' / 'thetaCenter.npy')
+
+    def setThetaGeometryFromRun(self, geometryRun):
+        self.setThetaCentersFromRun(geometryRun)
+
+        FW = np.load(geometryRun / 'data' / 'thetaFW.npy')
+        RV = np.load(geometryRun / 'data' / 'thetaRV.npy')
+        self.thetaCCWHome = np.angle(FW[:,0,0] - self.thetaCenter)
+        self.thetaCWHome = np.angle(RV[:,0,0] - self.thetaCenter)
+
+    def moveToPhiAngle(self, idx=None, angle=60.0,
+                       keepExistingPosition=False,
+                       tolerance=1.0, maxTries=7, scaleFactor=8,
+                       doFast=False):
+        """
+        Robustly move to a given phi angle.
+
+        This uses only the angle between the phi center and the
+        measured spot to determine where the phi motor is, and only
+        the phi motor is moved. The significant drawback is that it
+        requires the location of the phi center, which is not always
+        known. But for the initial, post-phiMap move, we do.
+
+        EXPECTS TO BE AT PHI HOME.
+
+        Args
+        ----
+        idx : index or index array
+          Which cobras to limit the move to.
+        angle : `float`
+          Degrees we want to move to from the CCW limit.
+        keepExistingPosition : bool
+          Do not reset the phi home position to where we are.
+        tolerance : `float`
+          How close we want to get, in degrees.
+        maxTries: `int`
+          How many moves to attempt.
+        doFast : bool
+          For the first move, use the fast map?
+        """
+
+        dtype = np.dtype(dict(names=['iteration', 'cobra', 'target', 'position', 'left', 'done'],
+                              formats=['i2', 'i2', 'f4', 'f4', 'f4', 'i1']))
+
+        # We do want a new stack of these images.
+        self._connect()
+        self.cam.resetStack(doStack=True)
+
+        cobras = self.goodCobras
+        cobras = np.array(cobras)
+        if idx is not None:
+            cobras = cobras[idx]
+        moveList = []
+        moves0 = np.zeros(len(cobras), dtype=dtype)
+
+        try:
+            phiCenters = self.phiCenters
+        except AttributeError:
+            raise RuntimeError("moduleTest needs to have been to told the phi Centers")
+
+        tolerance = np.deg2rad(tolerance)
+
+        # extract sources and fiber identification
+        curPos = self.exposeAndExtractPositions(tolerance=0.2)
+        if idx is not None:
+            curPos = curPos[idx]
+            phiCenters = phiCenters[idx]
+        if keepExistingPosition:
+            homeAngles = self.phiHomes
+            curAngles = self._fullAngle(curPos, phiCenters)
+            lastAngles = self.dPhiAngle(curAngles, homeAngles, doAbs=True)
+        else:
+            homeAngles = self._fullAngle(curPos, phiCenters)
+            curAngles = homeAngles
+            lastAngles = np.zeros(len(homeAngles))
+            self.phiHomes = homeAngles
+
+        targetAngles = np.full(len(homeAngles), np.deg2rad(angle))
+        thetaAngles = targetAngles*0
         ntries = 1
+        notDone = targetAngles != 0
+        left = self.dPhiAngle(targetAngles,lastAngles, doWrap=True)
+
+        moves = moves0.copy()
+        moveList.append(moves)
+        for i in range(len(cobras)):
+            moveIdx = i
+            cobraNum = cobras[i].cobraNum
+            moves['iteration'][moveIdx] = 0
+            moves['cobra'][moveIdx] = cobraNum
+            moves['target'][moveIdx] = angle
+            moves['position'][moveIdx] = curAngles[i]
+            moves['left'][moveIdx] = left[i]
+            moves['done'][moveIdx] = not notDone[i]
         while True:
+            with np.printoptions(precision=2, suppress=True):
+                self.logger.debug("to: %s", np.rad2deg(targetAngles)[notDone])
+                self.logger.debug("at: %s", np.rad2deg(lastAngles)[notDone])
+                self.logger.info("left try %d/%d, %d/%d: %s",
+                                 ntries, maxTries,
+                                 notDone.sum(), len(cobras),
+                                 np.rad2deg(left)[notDone])
+            self.pfi.moveThetaPhi(cobras[notDone],
+                                  thetaAngles[notDone],
+                                  left[notDone],
+                                  phiFroms=lastAngles[notDone],
+                                  phiFast=(doFast and ntries==1))
+
             # extract sources and fiber identification
             curPos = self.exposeAndExtractPositions(tolerance=0.2)
-            print(curPos)
+            if idx is not None:
+                curPos = curPos[idx]
+            a1 = self._fullAngle(curPos, phiCenters)
+            atAngles = self.dPhiAngle(a1, homeAngles, doAbs=True)
+            left = self.dPhiAngle(targetAngles,atAngles, doWrap=True)
 
             # check position errors
-            done = np.abs(curPos - targets) <= threshold
-            if np.all(done):
-                print('Convergence sequence done')
+            notDone = np.abs(left) > tolerance
+
+            moves = moves0.copy()
+            moveList.append(moves)
+            for i in range(len(cobras)):
+                moveIdx = i
+                cobraNum = cobras[i].cobraNum
+                moves['iteration'][moveIdx] = ntries
+                moves['cobra'][moveIdx] = cobraNum
+                moves['target'][moveIdx] = angle
+                moves['position'][moveIdx] = atAngles[i]
+                moves['left'][moveIdx] = left[i]
+                moves['done'][moveIdx] = not notDone[i]
+
+            if not np.any(notDone):
+                self.logger.info(f'Convergence sequence done after {ntries} iterations')
                 break
-            if ntries > maxTries:
-                print(f'Reach max {maxTries} tries, gave up')
+
+            for c_i in np.where(notDone)[0]:
+
+                tryDist = self.dPhiAngle(targetAngles[c_i], lastAngles[c_i], doWrap=True)[0]
+                gotDist = self.dPhiAngle(atAngles[c_i], lastAngles[c_i], doWrap=True)[0]
+                rawScale = abs(tryDist/gotDist)
+                if abs(tryDist) > np.deg2rad(2) and (rawScale < 0.9 or rawScale > 1.1):
+                    direction = 'ccw' if tryDist < 0 else 'cw'
+
+                    if rawScale > 1:
+                        scale = 1 + (rawScale - 1)/scaleFactor
+                    else:
+                        scale = 1/(1 + (1/rawScale - 1)/scaleFactor)
+
+                    self.logger.info(f'{c_i+1} try={np.rad2deg(tryDist):0.3f} '
+                                     f'at={np.rad2deg(atAngles[c_i]):0.2f} '
+                                     f'got={np.rad2deg(gotDist):0.3f} '
+                                     f'rawScale={rawScale:0.2f} scale={scale:0.2f}')
+                    self.pfi.scaleMotorOntime(cobras[c_i], 'phi', direction, scale)
+
+            lastAngles = atAngles
+            if ntries >= maxTries:
+                self.logger.warn(f'Reached max {maxTries} tries, '
+                                 f'left: {[str(c) for c in cobras[np.where(notDone)]]}: '
+                                 f'{np.rad2deg(left)[notDone]}')
                 break
             ntries += 1
 
+        moves = np.concatenate(moveList)
+        movesPath = self.runManager.outputDir / "phiConvergence.npy"
+        np.save(movesPath, moves)
+
+        return self.runManager.runDir
+
+    def moveToThetaAngle(self, idx=None, angle=60.0,
+                         keepExistingPosition=False,
+                         tolerance=1.0, maxTries=7, scaleFactor=10,
+                         doFast=False):
+        """
+        Robustly move to a given theta angle.
+
+        This uses only the angle between the theta center and the
+        measured spot to determine where the theta motor is, and only
+        the theta motor is moved.
+
+        Args
+        ----
+        idx : index or index array
+          Which cobras to limit the move to.
+        angle : `float`
+          Degrees we want to move to from the CCW limit.
+        tolerance : `float`
+          How close we want to get, in degrees.
+        maxTries: `int`
+          How many moves to attempt.
+        doFast : bool
+          For the first move, use the fast map?
+        """
+
+        dtype = np.dtype(dict(names=['iteration', 'cobra', 'target', 'position', 'left', 'done'],
+                              formats=['i2', 'i2', 'f4', 'f4', 'f4', 'i1']))
+
+        # We do want a new stack of these images.
+        self._connect()
+        self.cam.resetStack(doStack=True)
+
+        cobras = self.goodCobras
+        cobras = np.array(cobras)
+        if idx is not None:
+            cobras = cobras[idx]
+        moveList = []
+        moves0 = np.zeros(len(cobras), dtype=dtype)
+
+        try:
+            thetaCenters = self.thetaCenters
+        except AttributeError:
+            raise RuntimeError("moduleTest needs to have been told the thetaCenters")
+
+        tolerance = np.deg2rad(tolerance)
+
+        # extract sources and fiber identification
+        curPos = self.exposeAndExtractPositions(tolerance=0.2)
+        if idx is not None:
+            curPos = curPos[idx]
+            thetaCenters = thetaCenters[idx]
+        if keepExistingPosition:
+            homeAngles = self.thetaHomes
+            curAngles = self._fullAngle(curPos, thetaCenters)
+            lastAngles = self.dThetaAngle(curAngles, homeAngles, doAbs=True)
+        else:
+            homeAngles = self._fullAngle(curPos, thetaCenters)
+            curAngles = homeAngles
+            lastAngles = np.zeros(len(homeAngles))
+            self.thetaHomes = homeAngles
+
+        targetAngles = np.full(len(homeAngles), np.deg2rad(angle))
+        phiAngles = targetAngles*0
+        ntries = 1
+        notDone = targetAngles != 0
+        left = self.dThetaAngle(targetAngles,lastAngles, doWrap=True)
+
+        moves = moves0.copy()
+        moveList.append(moves)
+        for i in range(len(cobras)):
+            moveIdx = i
+            cobraNum = cobras[i].cobraNum
+            moves['iteration'][moveIdx] = 0
+            moves['cobra'][moveIdx] = cobraNum
+            moves['target'][moveIdx] = angle
+            moves['position'][moveIdx] = curAngles[i]
+            moves['left'][moveIdx] = left[i]
+            moves['done'][moveIdx] = not notDone[i]
+        while True:
+            with np.printoptions(precision=2, suppress=True):
+                self.logger.debug("to: %s", np.rad2deg(targetAngles)[notDone])
+                self.logger.debug("at: %s", np.rad2deg(lastAngles)[notDone])
+                self.logger.info("left try %d/%d, %d/%d: %s",
+                                 ntries, maxTries,
+                                 notDone.sum(), len(cobras),
+                                 np.rad2deg(left)[notDone])
+            self.pfi.moveThetaPhi(cobras[notDone],
+                                  left[notDone],
+                                  phiAngles[notDone],
+                                  thetaFroms=lastAngles[notDone],
+                                  thetaFast=(doFast and ntries==1))
+
+            # extract sources and fiber identification
+            curPos = self.exposeAndExtractPositions(tolerance=0.2)
+            if idx is not None:
+                curPos = curPos[idx]
+            a1 = self._fullAngle(curPos, thetaCenters)
+            atAngles = self.dThetaAngle(a1, homeAngles, doAbs=True)
+            left = self.dThetaAngle(targetAngles,atAngles, doWrap=True)
+
+            # check position errors
+            notDone = np.abs(left) > tolerance
+
+            moves = moves0.copy()
+            moveList.append(moves)
+            for i in range(len(cobras)):
+                moveIdx = i
+                cobraNum = cobras[i].cobraNum
+                moves['iteration'][moveIdx] = ntries
+                moves['cobra'][moveIdx] = cobraNum
+                moves['target'][moveIdx] = angle
+                moves['position'][moveIdx] = atAngles[i]
+                moves['left'][moveIdx] = left[i]
+                moves['done'][moveIdx] = not notDone[i]
+
+            if not np.any(notDone):
+                self.logger.info(f'Convergence sequence done after {ntries} iterations')
+                break
+
+            for c_i in np.where(notDone)[0]:
+
+                tryDist = self.dThetaAngle(targetAngles[c_i], lastAngles[c_i], doWrap=True)[0]
+                gotDist = self.dThetaAngle(atAngles[c_i], lastAngles[c_i], doWrap=True)[0]
+                rawScale = abs(tryDist/gotDist)
+                if abs(tryDist) > np.deg2rad(2) and (rawScale < 0.9 or rawScale > 1.1):
+                    direction = 'ccw' if tryDist < 0 else 'cw'
+
+                    if rawScale > 1:
+                        scale = 1 + (rawScale - 1)/scaleFactor
+                    else:
+                        scale = 1/(1 + (1/rawScale - 1)/scaleFactor)
+
+                    self.logger.info(f'{c_i+1} try={np.rad2deg(tryDist):0.3f} '
+                                     f'at={np.rad2deg(atAngles[c_i]):0.2f} '
+                                     f'got={np.rad2deg(gotDist):0.3f} '
+                                     f'rawScale={rawScale:0.2f} scale={scale:0.2f}')
+                    self.pfi.scaleMotorOntime(cobras[c_i], 'theta', direction, scale)
+
+            lastAngles = atAngles
+            if ntries >= maxTries:
+                self.logger.warn(f'Reached max {maxTries} tries, '
+                                 f'left: {[str(c) for c in cobras[np.where(notDone)]]}: '
+                                 f'{np.rad2deg(left)[notDone]}')
+                break
+            ntries += 1
+
+        moves = np.concatenate(moveList)
+        movesPath = self.runManager.outputDir / "thetaConvergence.npy"
+        np.save(movesPath, moves)
+
+        return self.runManager.runDir
+
+    def moveToXYfromHome(self, idx, targets, threshold=3.0, maxTries=8):
+        """ function to move cobras to target positions """
+
+        cobras = getCobras(idx)
+        if idx is not None:
+            targets = targets[idx]
+
+        self.pfi.moveXYfromHome(cobras, targets, thetaThreshold=threshold, phiThreshold=threshold)
+
+        ntries = 1
+        keepMoving = targets != 0
+        while True:
+            # extract sources and fiber identification
+            curPos = self.exposeAndExtractPositions(tolerance=0.2)
+            if idx is not None:
+                curPos = curPos[idx]
+            # check position errors
+            self.logger.info("to: %s", targets[keepMoving])
+            self.logger.info("at: %s", curPos[keepMoving])
+            self.logger.info("left (%d/%d): %s", keepMoving.sum(), len(targets),
+                             targets[keepMoving] - curPos[keepMoving])
+
+            notDone = np.abs(curPos - targets) > threshold
+            if not np.any(notDone):
+                print('Convergence sequence done')
+                break
+            if ntries > maxTries:
+                print(f'Reach max {maxTries} tries, gave up, gave up on {np.where(notDone)}')
+                break
+            self.logger.info("left (%d/%d)", keepMoving.sum(), len(targets))
+
+            ntries += 1
+
             # move again, skip bad center measurement
+            # Yikes. No! Was wondering where replacement in calculations.py got used. -- CPL
             good = (curPos != self.pfi.calibModel.centers[idx])
-            self.pfi.moveXY(cobras[good], curPos[good], targets[good], thetaThreshold=threshold, phiThreshold=threshold)
+
+            keepMoving = good & notDone
+            self.pfi.moveXY(cobras[keepMoving], curPos[keepMoving], targets[keepMoving],
+                            thetaThreshold=threshold, phiThreshold=threshold)
+
+    def moveToXY(self, idx, theta, phi, threshold=3.0, maxTries=8):
+        """ move positioners to given theta, phi angles.
+        """
+
+        cobras = getCobras(idx)
+        if np.isscalar(theta):
+            thetaAngles = np.full(len(cobras), theta, dtype='f4')
+        elif idx is not None:
+            thetaAngles = theta[idx]
+        else:
+            thetaAngles = theta
+
+        if np.isscalar(phi):
+            phiAngles = np.full(len(cobras), phi, dtype='f4')
+        elif idx is not None:
+            phiAngles = phi[idx]
+        else:
+            phiAngles = phi
+
+        thetaAngles = self.pfi.thetaToLocal(cobras, thetaAngles)
+        outTargets = self.pfi.anglesToPositions(self.allCobras, thetaAngles, phiAngles)
+
+        # move to outTargets
+        self.moveToXYfromHome(self.goodIdx, outTargets, threshold=threshold, maxTries=maxTries)
+
+    def moveToThetaPhi(self, idx, theta, phi, threshold=3.0, maxTries=8):
+        """ move positioners to given theta, phi angles.
+        """
+
+        cobras = getCobras(None)
+        if np.isscalar(theta):
+            thetaAngles = np.full(len(cobras), theta, dtype='f4')
+        else:
+            thetaAngles = theta
+        if len(thetaAngles) != len(cobras):
+            raise RuntimeError('number of thetas must match _total_ number of cobras')
+
+        if np.isscalar(phi):
+            phiAngles = np.full(len(cobras), phi, dtype='f4')
+        else:
+            phiAngles = phi
+        if len(phiAngles) != len(cobras):
+            raise RuntimeError('number of phis must match _total_ number of cobras')
+
+        thetaAngles = self.pfi.thetaToLocal(cobras, thetaAngles)
+        outTargets = self.pfi.anglesToPositions(self.allCobras,
+                                                np.deg2rad(thetaAngles),
+                                                np.deg2rad(phiAngles))
+
+        # move to outTargets
+        self.moveToXYfromHome(idx, outTargets, threshold=threshold, maxTries=maxTries)
 
     def moveBadCobrasOut(self):
         """ move bad cobras to point outwards """
