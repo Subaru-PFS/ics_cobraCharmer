@@ -25,6 +25,8 @@ class PFI(object):
            doLoadModel - load data model or not
         """
         self.logger = Logger.getLogger('fpga', debug)
+        self.logger = logging.getLogger('pfi')
+        self.logger.setLevel(logging.INFO)
         self.ioLogger = Logger.getLogger('fpgaIO', debug)
         if logDir is not None:
             log.setupLogPaths(logDir)
@@ -89,7 +91,7 @@ class PFI(object):
         if err:
             self.logger.error(f'send RST command failed')
         else:
-            self.logger.info(f'send RST command succeeded')
+            self.logger.debug(f'send RST command succeeded')
 
     def diag(self):
         """ Get fpga board inventory"""
@@ -105,7 +107,7 @@ class PFI(object):
         if err:
             self.logger.error(f'send POW command failed')
         else:
-            self.logger.info(f'send POW command succeeded')
+            self.logger.debug(f'send POW command succeeded')
 
     def hk(self, module, board, updateModel=False):
         """ Fetch housekeeping info for a board.
@@ -148,7 +150,7 @@ class PFI(object):
         if err:
             self.logger.error(f'send SET command failed')
         else:
-            self.logger.info(f'send SET command succeeded')
+            self.logger.debug(f'send SET command succeeded')
 
     def calibrateFreq(self, cobras=None,
                       thetaLow=60.4, thetaHigh=70.3, phiLow=94.4, phiHigh=108.2,
@@ -167,7 +169,7 @@ class PFI(object):
         if err:
             self.logger.error(f'send Calibrate command failed')
         else:
-            self.logger.info(f'send Calibrate command succeeded')
+            self.logger.debug(f'send Calibrate command succeeded')
 
     def houseKeeping(self, modules=None, m0=(0,1000), m1=(0,1000), temps=(16.0,31.0), cur=(0.25,1.2), volt=(9.5,10.5)):
         """ HK command """
@@ -186,7 +188,7 @@ class PFI(object):
         currents2 = np.zeros((len(modules), self.nCobrasPerModule))
 
         for k, m in enumerate(modules):
-            self.logger.info(f'HK command for Cobra module #{m}')
+            self.logger.debug(f'HK command for Cobra module #{m}')
             for board in range(2):
                 # two boards in one module
                 cobra_num = np.arange(board+1, self.nCobrasPerModule+1, 2)
@@ -204,7 +206,7 @@ class PFI(object):
                 if err:
                     self.logger.error(f'Module {m}:{board} send HK command failed')
                 else:
-                    self.logger.info(f'Module {m}:{board} send HK command succeeded')
+                    self.logger.debug(f'Module {m}:{board} send HK command succeeded')
         return errors, temps, voltages, freqs1, currents1, freqs2, currents2
 
     def moveAllThetaPhiFromHome(self, cobras, thetaMove, phiMove, thetaFast=True, phiFast=True):
@@ -235,7 +237,7 @@ class PFI(object):
         cIdx = [self._mapCobraIndex(c) for c in cobras]
         cThetaSteps = thetaSteps[cIdx]
         cPhiSteps = phiSteps[cIdx]
-        self.logger.info(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
+        self.logger.debug(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
         self.moveSteps(cobras, cThetaSteps, cPhiSteps, thetaFast=thetaFast, phiFast=phiFast)
 
     def moveAllSteps(self, cobras, thetaSteps, phiSteps, thetaFast=True, phiFast=True):
@@ -444,7 +446,7 @@ class PFI(object):
         if err:
             self.logger.error(f'send RUN command failed')
         else:
-            self.logger.info(f'send RUN command succeeded')
+            self.logger.debug(f'send RUN command succeeded')
 
     def homePhi(self, cobras, nsteps=5000, fast=True):
         # positive/negative steps for CCW/CW limit stops
@@ -754,7 +756,7 @@ class PFI(object):
             self.logger.error("no valid target positions are found")
             return
         elif not np.all(valids):
-            self.logger.info("some target positions are invalid")
+            self.logger.warn("some target positions are invalid")
 
         # define home positions
         phiHomes = np.zeros(len(valid_cobras))
