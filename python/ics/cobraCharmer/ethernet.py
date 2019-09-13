@@ -1,6 +1,7 @@
 import array
 import socket
 import struct
+import time
 
 from .hexprint import arr2Hex
 
@@ -69,15 +70,26 @@ class Sock:
         remaining = tgt_len
         msg = array.array('B')
 
+        # The FPGA? or something? occasionally times out replies, but manually retrying does getthe reply.
+        maxRetries = 1
+        retry = 0
         while remaining > 0:
+            t0 = time.time()
             try:
                 chunk = self._s.recv(remaining)
                 if logger is not None:
                     logger.debug("(ETH)Rcvd %d bytes on socket:%s" % (len(chunk), chunk))
             except socket.timeout:
-                raise RuntimeError("timed out waiting for %d bytes. Received %d bytes: %s" % (tgt_len,
+                t1 = time.time()
+                errMsg = "timed out (%0.3f s) waiting for %d bytes. Received %d bytes: %s" % (t1-t0, tgt_len,
                                                                                               tgt_len-remaining,
-                                                                                              msg))
+                                                                                              msg)
+                if retry >= maxRetries:
+                    raise RuntimeError(errMsg)
+                else:
+                    self.logging.error(errMsg)
+                    retry += 1
+
             msg.frombytes(chunk)
             remaining -= len(chunk)
 
