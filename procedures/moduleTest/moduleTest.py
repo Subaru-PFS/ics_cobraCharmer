@@ -87,8 +87,8 @@ class ModuleTest():
         visibles = [e for e in range(1, 58) if e not in brokens]
         self.badIdx = np.array(brokens) - 1
         self.goodIdx = np.array(visibles) - 1
-        self.badCobras = getCobras(self.badIdx)
-        self.goodCobras = getCobras(self.goodIdx)
+        self.badCobras = np.array(getCobras(self.badIdx))
+        self.goodCobras = np.array(getCobras(self.goodIdx))
 
         if hasattr(self, 'cal'):
             self.cal.setBrokenCobras(brokens)
