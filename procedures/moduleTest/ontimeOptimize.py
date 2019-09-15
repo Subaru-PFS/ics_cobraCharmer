@@ -72,7 +72,7 @@ class OntimeOptimize(object):
         self.maxOntime = 0.08
         self.slowTarget = 0.05
         self.fastTarget = 2.0*self.slowTarget
-        self.minRange = 270
+        self.minRange = 360
         self._buildDataFramefromData()
 
         #return self
@@ -83,22 +83,28 @@ class OntimeOptimize(object):
         loc2 = loc1[dataframe[direction].abs() > self.minSpeed].loc
         ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange]
         
+        if (len(ndf[f'onTime{direction}'].values) == 0):
+            loc1 = dataframe.loc[dataframe['fiberNo'] == pid].loc
+            ndf = loc1[dataframe[direction].abs() > self.minSpeed]
+            
+            slope = ndf[f'{direction}'].values/ndf[f'onTime{direction}'].values
+            intercept = 0
+        # If there is only one data point, selecting second on-time based on motor map
+        elif (len(ndf[f'onTime{direction}'].values) == 1):
+    
+            slope = ndf[f'{direction}'].values/ndf[f'onTime{direction}'].values
+            intercept = 0
         # If there is any exception, assuming the slope to be 1
-
-        if (len(ndf[f'onTime{direction}'].values) >= 2):
-
+        else:
             onTimeArray = ndf[f'onTime{direction}'].values
             angSpdArray = ndf[(f'{direction}')].values
 
             slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
 
-        else:
-            slope = 1.0
-            intercept = 0
 
         if direction == 'Fwd' and slope <= 0:
             slope = 1.0
-            intercept = np.nan
+            intercept = 0
         
         if direction == 'Rev' and slope >= 0:
             slope = -1.0
@@ -112,7 +118,7 @@ class OntimeOptimize(object):
     def getRevSlope(self, pid):
         return self.getSlope(pid, 'Rev')
 
-    def fwdOntimesSlowModel(self, model):
+    def fwdOntimeSlowModel(self, model):
         if self.axisNum == 1:
             return model.motorOntimeSlowFwd1[self.goodIdx]
         else:
@@ -124,7 +130,7 @@ class OntimeOptimize(object):
         else:
             return model.motorOntimeSlowRev2[self.goodIdx]
     
-    def fwdOntimesModel(self, model):
+    def fwdOntimeModel(self, model):
         if self.axisNum == 1:
             return model.motorOntimeFwd1[self.goodIdx]
         else:
@@ -144,24 +150,39 @@ class OntimeOptimize(object):
         rvarray=[]
         dafarray=[]
         dararray=[]
+
+        fwdminarray=[]
+        fwdmaxarray=[]
+        revminarray=[]
+        revmaxarray=[]
         #imageSet = self.datalist
 
         for i in self.datalist:
-            fw_file=f'{i}'+f'/{self.axisName}SpeedFW.npy'
-            rv_file=f'{i}'+f'/{self.axisName}SpeedRV.npy'
-            af = np.load(f'{i}' + f'/{self.axisName}AngFW.npy')
-            ar = np.load(f'{i}' + f'/{self.axisName}AngRV.npy')
+            fw_file=f'{i}'+f'{self.axisName}SpeedFW.npy'
+            rv_file=f'{i}'+f'{self.axisName}SpeedRV.npy'
+            af = np.load(f'{i}' + f'{self.axisName}AngFW.npy')
+            ar = np.load(f'{i}' + f'{self.axisName}AngRV.npy')
+            fwdmm = np.rad2deg(np.load(f'{i}' + f'{self.axisName}MMFW.npy'))
+            revmm = np.rad2deg(np.load(f'{i}' + f'{self.axisName}MMRV.npy'))
             fwd=np.load(fw_file)*180.0/math.pi 
             rev=-np.load(rv_file)*180.0/math.pi
             
             daf=[]
             dar=[]
+
+            fwdmin = []
+            fwdmax = []
+            revmin = []
+            revmax = []
             for p in self.goodIdx:
                 daf.append((af[p,0,-1]-af[p,0,0])*180/3.14159)
                 dar.append((ar[p,0,-1]-ar[p,0,0])*180/3.14159)
+                fwdmin.append(np.min(fwdmm[p]))
+                fwdmax.append(np.max(fwdmm[p]))
+                revmin.append(-np.min(revmm[p]))
+                revmax.append(-np.max(revmm[p]))
 
-
-            xml = glob.glob(f'{i}'+'/*.xml')[0]
+            xml = glob.glob(f'{i}'+'*.xml')[0]
             model = pfiDesign.PFIDesign(xml)
             
             ontimeFwd = self.fwdOntimeSlowModel(model)
@@ -173,18 +194,43 @@ class OntimeOptimize(object):
             otrarray.append(ontimeRev)
             dafarray.append(daf)
             dararray.append(dar)
+            fwdminarray.append(fwdmin)
+            fwdmaxarray.append(fwdmax)
+            revminarray.append(revmin)
+            revmaxarray.append(revmax)
             fwarray.append(fwd[self.goodIdx])
             rvarray.append(rev[self.goodIdx])
             
         d={'fiberNo': np.array(pidarray).flatten(),
            'onTimeFwd': np.array(otfarray).flatten(),
            'onTimeRev': np.array(otrarray).flatten(),
+           'minFwd':np.array(fwdminarray).flatten(),
+           'maxFwd':np.array(fwdmaxarray).flatten(),
+           'minRev':np.array(revminarray).flatten(),
+           'maxRev':np.array(revmaxarray).flatten(),
            'rangeFwd':np.array(dafarray).flatten(),
            'rangeRev':np.array(dararray).flatten(),           
            'Fwd': np.array(fwarray).flatten(),
            'Rev': np.array(rvarray).flatten()}
         
         self.dataframe = pd.DataFrame(d)
+
+        self.groupMotors('Fwd')
+        self.groupMotors('Rev')
+
+    # This function separate motors into two groups, motors with small and large 
+    #  speed variation.   
+    def groupMotors(self,direction):
+        try:
+            self.dataframe
+        except AttributeError:
+            raise Exception('Dataframe is not existing')
+
+        self.dataframe[f'dev{direction}'] = (self.dataframe[f'max{direction}']-
+            self.dataframe[f'min{direction}'])/np.abs(self.dataframe[f'{direction}'])   
+        
+        self.dataframe[f'group{direction}'] = np.zeros(len(self.dataframe['fiberNo'])).astype(int)
+        self.dataframe.loc[self.dataframe[f'dev{direction}'].abs() > 1.0, f'group{direction}'] = 1
 
     def _buildModel(self):
 
@@ -195,18 +241,16 @@ class OntimeOptimize(object):
         self.rev_int = rev_int = np.zeros(57)
 
         for pid in self.visibles:
-            fw_s, fw_i = self.getFwdSlope(pid)
+            if self.dataframe.loc[self.dataframe['fiberNo'] == pid]['groupFwd'].values[0] == 0:
+                
+                fw_s, fw_i = self.getFwdSlope(pid)
+                fwd_slope[pid-1] = fw_s
+                fwd_int[pid-1] = fw_i
+            if self.dataframe.loc[self.dataframe['fiberNo'] == pid]['groupRev'].values[0] == 0:
+                rv_s, rv_i = self.getRevSlope(pid)
+                rev_slope[pid-1] = rv_s
+                rev_int[pid-1] = rv_i
             
-            rv_s, rv_i = self.getRevSlope(pid)
-            #if fw_s <= 0 or rv_s >= 0:
-            #    breakpoint()
-
-            fwd_slope[pid-1] = fw_s
-            fwd_int[pid-1] = fw_i
-
-            rev_slope[pid-1] = rv_s
-            rev_int[pid-1] = rv_i
-        
 
     def _solveForSpeed(self, targetSpeed=None):
         fwd_target = np.full(len(self.fwd_int), targetSpeed)
@@ -215,15 +259,32 @@ class OntimeOptimize(object):
         newOntimeFwd = (fwd_target - self.fwd_int)/self.fwd_slope
         newOntimeRev = (rev_target - self.rev_int)/self.rev_slope
 
+        # New, dealing with inf values.
+        inx = np.where(np.isinf(newOntimeFwd))[0].tolist()
+        for i in inx:
+            if i not in self.badIdx:
+                if self.dataframe.loc[self.dataframe.fiberNo == i+1].Fwd.values[-1] > targetSpeed:
+                    newOntimeFwd[i] = self.dataframe.loc[self.dataframe.fiberNo == i+1].onTimeFwd.values[-1] - 0.005
+                else:
+                    newOntimeFwd[i] = self.dataframe.loc[self.dataframe.fiberNo == i+1].onTimeFwd.values[-1] + 0.005
+            else:
+                newOntimeFwd[i] = self.maxOntime
+
+        inx = np.where(np.isinf(newOntimeRev))[0].tolist()
+        for i in inx:
+            if i not in self.badIdx:
+                if self.dataframe.loc[self.dataframe.fiberNo == i+1].Rev.values[-1] < -targetSpeed:
+                    newOntimeRev[i] = self.dataframe.loc[self.dataframe.fiberNo == i+1].onTimeRev.values[-1] - 0.005
+                else:
+                    newOntimeRev[i] = self.dataframe.loc[self.dataframe.fiberNo == i+1].onTimeRev.values[-1] + 0.005
+            else:
+                newOntimeRev[i] = self.maxOntime
+
+
         fastOnes = np.where((newOntimeFwd > self.maxOntime) | (newOntimeRev > self.maxOntime))
         if len(fastOnes[0]) > 0:
             logging.warn(f'some motors too fast: {fastOnes[0]}: '
                          f'fwd:{newOntimeFwd[fastOnes]} rev:{newOntimeRev[fastOnes]}')
-
-            ind = np.where(newOntimeFwd > self.maxOntime)
-            newOntimeFwd[ind] = self.maxOntime
-            ind = np.where(newOntimeRev > self.maxOntime)
-            newOntimeRev[ind] = self.maxOntime
 
         slowOnes = np.where((newOntimeFwd < self.minOntime) | (newOntimeRev < self.minOntime))
         if len(slowOnes[0]) > 0:
@@ -248,12 +309,12 @@ class OntimeOptimize(object):
 
         return newMaps
 
-    def visBestOntime(self, fiberNo, direction):
-        dd=self.dataframe.loc[self.dataframe['fiberNo'] == fiberNo+1]
+    def visBestOntime(self, fiberInx, direction):
+        dd=self.dataframe.loc[self.dataframe['fiberNo'] == fiberInx+1]
 
         
         TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
-        title_string=f"Fiber {fiberNo+1} Theta {direction}"
+        title_string=f"Fiber {fiberInx+1} Theta {direction}"
         
         xmin = 0
         xmax = 1.5*np.max(dd[f'onTime{direction}'])
@@ -272,27 +333,28 @@ class OntimeOptimize(object):
         p.yaxis.axis_label = 'Speed'
 
         gooddata = dd.loc[dd[f'{direction}'].abs() > 
-            self.minSpeed].loc[dd[f'range{direction}'].abs() > self.minRange]
+             self.minSpeed].loc[dd[f'range{direction}'].abs() > self.minRange]
         
-        xrange = (np.arange(100)/2000) + np.min(gooddata[f'onTime{direction}'])
-        #xrange = range(np.min(gooddata[f'onTime{direction}']).astype(int),
-        #            np.max(gooddata[f'onTime{direction}']).astype(int))
+       
 
         if direction is 'Fwd':
-            newOntime = (self.slowTarget - self.fwd_int[fiberNo])/self.fwd_slope[fiberNo]
-            y_predicted = [self.fwd_slope[fiberNo]*i + self.fwd_int[fiberNo]  for i in xrange]
+            xrange=np.arange(self.newOntimeSlowFwd[fiberInx]*0.8,1.2*np.max(dd[f'onTime{direction}']),0.001)
+            newOntime = self.newOntimeSlowFwd[fiberInx] 
+            y_predicted = [self.fwd_slope[fiberInx]*i + self.fwd_int[fiberInx]  for i in xrange]
             p.circle(x=[newOntime],y=[self.slowTarget],color='red', size=15)
-
+        
+    
         if direction is 'Rev':
-            newOntime = (-self.slowTarget - self.rev_int[fiberNo])/self.rev_slope[fiberNo]
-            y_predicted = [self.rev_slope[fiberNo]*i + self.rev_int[fiberNo]  for i in xrange]
+            xrange=np.arange(self.newOntimeSlowRev[fiberInx]*0.8,1.2*np.max(dd[f'onTime{direction}']),0.001)
+
+            newOntime = self.newOntimeSlowRev[fiberInx]
+            y_predicted = [self.rev_slope[fiberInx]*i + self.rev_int[fiberInx]  for i in xrange]
             p.circle(x=[newOntime],y=[-self.slowTarget],color='red', size=15)
-        #breakpoint()
-        #p.circle(x=[newOntime],y=[self.slowTarget],color='red', size=15)
+        
         p.line(xrange,y_predicted,color='red')
         p.circle(x=gooddata[f'onTime{direction}'],y=gooddata[direction])
         p.circle(x=dd[f'onTime{direction}'],y=dd[f'{direction}'], size=7, color='red',fill_color=None)
-        
+        p.segment(dd[f'onTime{direction}'], dd[f'max{direction}'], dd[f'onTime{direction}'], dd[f'min{direction}'], color="black")
         return p
 
     def updateXML(self, initXML, newXML, table=None):
@@ -306,8 +368,8 @@ class OntimeOptimize(object):
         SlowOntimeFwd[self.badIdx] = self.fwdOntimeSlowModel(model)[self.badIdx]
         SlowOntimeRev[self.badIdx] = self.revOntimeSlowModel(model)[self.badIdx]
 
-        OntimeFwd[self.badIdx] = self.minOntime
-        OntimeRev[self.badIdx] = self.minOntime
+        OntimeFwd[self.badIdx] = self.fwdOntimeModel(model)[self.badIdx]
+        OntimeRev[self.badIdx] = self.revOntimeModel(model)[self.badIdx]
 
         if table is not None:
             pid=range(len(OntimeFwd))
@@ -337,13 +399,15 @@ class OntimeOptimize(object):
 
         parray=[]
         for f in self.goodIdx:
+           
             p=self.visBestOntime(f,direction)
             parray.append(p)
 
         grid = gridplot(parray, ncols=3, plot_width=400, plot_height=400)
+
         
         if pngfile is not None:
             export_png(grid, filename=pngfile)
-        else:
-            show(grid)
+        
+        show(grid)
         
