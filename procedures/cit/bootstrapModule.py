@@ -136,6 +136,7 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
     xmlDir = run.outputDir
     outPath = xmlDir / outputName
     pfiModel.createCalibrationFile(outPath, name='bootstrap')
+    pfiModel.createCalibrationFile(butler.configPathForModule(moduleName, name='bootstrap'))
 
     return outPath
 
