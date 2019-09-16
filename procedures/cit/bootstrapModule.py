@@ -39,6 +39,7 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
     cam.resetStack(doStack=False)
     _ = cam.expose() # Just to record in case calibrartion moves far.
 
+    nCobras = 57
     if fpgaHost is None:
         pfi = None
         pfiModel = pfiDesign.PFIDesign(initialXml)
@@ -48,6 +49,13 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
         pfi.loadModel(initialXml)
         pfiModel = pfi.calibModel
         pfi.reset()
+
+        # Override undependable ontimes. We want fast defaults which will drive full range
+        pfi.calibModel.updateOntimes(phiFwd=[0.07]*nCobras, phiRev=[0.07]*nCobras, fast=True)
+        pfi.calibModel.updateOntimes(phiFwd=[0.05]*nCobras, phiRev=[0.05]*nCobras, fast=False)
+
+        pfi.calibModel.updateOntimes(thetaFwd=[0.08]*nCobras, thetaRev=[0.08]*nCobras, fast=True)
+        pfi.calibModel.updateOntimes(thetaFwd=[0.06]*nCobras, thetaRev=[0.06]*nCobras, fast=False)
 
         # if we need to calibrate motor frequencies , assume the worst
         # (as seen in the assembly station init files): the values
