@@ -54,6 +54,7 @@ class OntimeOptimize(object):
     #@classmethod
     def loadFromPhiData(self, phiList):
         #self = cls(runDirs)
+        self.nPoints = len(phiList)
         self.axisNum = 2
         self.axisName = "Phi"
         self.maxOntime = 0.08
@@ -67,6 +68,7 @@ class OntimeOptimize(object):
     #@classmethod
     def loadFromThetaData(self, thetaList):
         #self = cls(thetaList)
+        self.nPoints = len(thetaList)
         self.axisNum = 1
         self.axisName = "Theta"
         self.maxOntime = 0.08
@@ -83,31 +85,38 @@ class OntimeOptimize(object):
         loc2 = loc1[dataframe[direction].abs() > self.minSpeed].loc
         ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange]
         
-        if (len(ndf[f'onTime{direction}'].values) == 0):
-            loc1 = dataframe.loc[dataframe['fiberNo'] == pid].loc
-            ndf = loc1[dataframe[direction].abs() > self.minSpeed]
+        # When nPoint=1, using simple ratio to determine next point.
+        if self.nPoints == 1:
+            if (len(ndf[f'onTime{direction}'].values) == 0):
+                loc1 = dataframe.loc[dataframe['fiberNo'] == pid].loc
+                ndf = loc1[dataframe[direction].abs() > self.minSpeed]
             
+     
             slope = ndf[f'{direction}'].values/ndf[f'onTime{direction}'].values
             intercept = 0
-        # If there is only one data point, selecting second on-time based on motor map
-        elif (len(ndf[f'onTime{direction}'].values) == 1):
-    
-            slope = ndf[f'{direction}'].values/ndf[f'onTime{direction}'].values
-            intercept = 0
-        # If there is any exception, assuming the slope to be 1
         else:
-            onTimeArray = ndf[f'onTime{direction}'].values
-            angSpdArray = ndf[(f'{direction}')].values
 
-            slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
+            if (len(ndf[f'onTime{direction}'].values) <= 1):
+                loc1 = dataframe.loc[dataframe['fiberNo'] == pid].loc
+                ndf = loc1[dataframe[direction].abs() > self.minSpeed]
+        
+            if len(ndf[f'onTime{direction}'].values) > 1:
 
+                onTimeArray = ndf[f'onTime{direction}'].values
+                angSpdArray = ndf[(f'{direction}')].values
+
+                slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
+            
+            else:
+                slope = 0.0
+                intercept = 0.0
 
         if direction == 'Fwd' and slope <= 0:
-            slope = 1.0
+            slope = 0.0
             intercept = 0
         
         if direction == 'Rev' and slope >= 0:
-            slope = -1.0
+            slope = 0.0
             intercept = 0
 
         return slope,intercept
@@ -241,12 +250,12 @@ class OntimeOptimize(object):
         self.rev_int = rev_int = np.zeros(57)
 
         for pid in self.visibles:
-            if self.dataframe.loc[self.dataframe['fiberNo'] == pid]['groupFwd'].values[0] == 0:
+            if 0 in self.dataframe.loc[self.dataframe['fiberNo'] == pid]['groupFwd'].tolist():
                 
                 fw_s, fw_i = self.getFwdSlope(pid)
                 fwd_slope[pid-1] = fw_s
                 fwd_int[pid-1] = fw_i
-            if self.dataframe.loc[self.dataframe['fiberNo'] == pid]['groupRev'].values[0] == 0:
+            if 0 in self.dataframe.loc[self.dataframe['fiberNo'] == pid]['groupRev'].tolist():
                 rv_s, rv_i = self.getRevSlope(pid)
                 rev_slope[pid-1] = rv_s
                 rev_int[pid-1] = rv_i
@@ -263,20 +272,31 @@ class OntimeOptimize(object):
         inx = np.where(np.isinf(newOntimeFwd))[0].tolist()
         for i in inx:
             if i not in self.badIdx:
-                if self.dataframe.loc[self.dataframe.fiberNo == i+1].Fwd.values[-1] > targetSpeed:
-                    newOntimeFwd[i] = self.dataframe.loc[self.dataframe.fiberNo == i+1].onTimeFwd.values[-1] - 0.005
+                # Make sure if there is any good on-time value in this collection
+                ndf = self.dataframe.loc[self.dataframe.fiberNo == i+1].loc[self.dataframe['Fwd'].abs() > self.minSpeed]
+                ind=np.argmin(np.abs((ndf.Fwd -  targetSpeed).values))
+                if np.abs(ndf['Fwd'].values[ind]-targetSpeed) < 0.01:
+                    newOntimeFwd[i] = ndf['onTimeFwd'].values[ind]
                 else:
-                    newOntimeFwd[i] = self.dataframe.loc[self.dataframe.fiberNo == i+1].onTimeFwd.values[-1] + 0.005
+                    if ndf['Fwd'].values[ind] > targetSpeed:
+                        newOntimeFwd[i] = ndf.onTimeFwd.values[ind] - 0.005
+                    else:
+                        newOntimeFwd[i] = ndf.onTimeFwd.values[ind] + 0.005
             else:
                 newOntimeFwd[i] = self.maxOntime
 
         inx = np.where(np.isinf(newOntimeRev))[0].tolist()
         for i in inx:
             if i not in self.badIdx:
-                if self.dataframe.loc[self.dataframe.fiberNo == i+1].Rev.values[-1] < -targetSpeed:
-                    newOntimeRev[i] = self.dataframe.loc[self.dataframe.fiberNo == i+1].onTimeRev.values[-1] - 0.005
+                ndf = self.dataframe.loc[self.dataframe.fiberNo == i+1].loc[self.dataframe['Rev'].abs() > self.minSpeed]
+                ind=np.argmin(np.abs((ndf.Rev +  targetSpeed).values))
+                if (np.abs(ndf['Rev'].values[ind]+targetSpeed)) < 0.01:
+                    newOntimeRev[i] = ndf['onTimeRev'].values[ind]
                 else:
-                    newOntimeRev[i] = self.dataframe.loc[self.dataframe.fiberNo == i+1].onTimeRev.values[-1] + 0.005
+                    if ndf['Rev'].values[ind] > -targetSpeed:
+                        newOntimeRev[i] = ndf.onTimeRev.values[ind] - 0.005
+                    else:
+                        newOntimeRev[i] = ndf.onTimeRev.values[ind] + 0.005 
             else:
                 newOntimeRev[i] = self.maxOntime
 
@@ -290,6 +310,12 @@ class OntimeOptimize(object):
         if len(slowOnes[0]) > 0:
             logging.warn(f'some motors too slow {slowOnes[0]}: '
                          f'fwd:{newOntimeFwd[slowOnes]} rev:{newOntimeRev[slowOnes]}')
+
+        slowOnes = np.where((newOntimeFwd < 0))
+        if len(slowOnes[0]) > 0: newOntimeFwd[slowOnes] = 0.02
+        
+        slowOnes = np.where((newOntimeRev < 0))
+        if len(slowOnes[0]) > 0: newOntimeRev[slowOnes] = 0.02
 
         return newOntimeFwd, newOntimeRev
 
