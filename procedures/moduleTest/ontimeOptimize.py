@@ -167,12 +167,12 @@ class OntimeOptimize(object):
         #imageSet = self.datalist
 
         for i in self.datalist:
-            fw_file=f'{i}'+f'{self.axisName}SpeedFW.npy'
-            rv_file=f'{i}'+f'{self.axisName}SpeedRV.npy'
-            af = np.load(f'{i}' + f'{self.axisName}AngFW.npy')
-            ar = np.load(f'{i}' + f'{self.axisName}AngRV.npy')
-            fwdmm = np.rad2deg(np.load(f'{i}' + f'{self.axisName}MMFW.npy'))
-            revmm = np.rad2deg(np.load(f'{i}' + f'{self.axisName}MMRV.npy'))
+            fw_file=f'{i}'+f'{self.axisName.lower()}SpeedFW.npy'
+            rv_file=f'{i}'+f'{self.axisName.lower()}SpeedRV.npy'
+            af = np.load(f'{i}' + f'{self.axisName.lower()}AngFW.npy')
+            ar = np.load(f'{i}' + f'{self.axisName.lower()}AngRV.npy')
+            fwdmm = np.rad2deg(np.load(f'{i}' + f'{self.axisName.lower()}MMFW.npy'))
+            revmm = np.rad2deg(np.load(f'{i}' + f'{self.axisName.lower()}MMRV.npy'))
             fwd=np.load(fw_file)*180.0/math.pi 
             rev=-np.load(rv_file)*180.0/math.pi
             
