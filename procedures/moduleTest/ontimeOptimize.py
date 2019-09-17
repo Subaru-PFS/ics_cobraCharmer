@@ -103,13 +103,17 @@ class OntimeOptimize(object):
             if len(ndf[f'onTime{direction}'].values) > 1:
 
                 onTimeArray = ndf[f'onTime{direction}'].values
-                angSpdArray = ndf[(f'{direction}')].values
+                angSpdArray = ndf[f'{direction}'].values
 
                 slope, intercept, r_value, p_value, std_err = stats.linregress(onTimeArray,angSpdArray)
             
             else:
                 slope = 0.0
                 intercept = 0.0
+        
+        if np.isnan(slope):
+            slope = 0.0
+            intercept = 0.0
 
         if direction == 'Fwd' and slope <= 0:
             slope = 0.0
