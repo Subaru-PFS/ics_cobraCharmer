@@ -6,12 +6,15 @@ from scipy import stats
 
 from ics.cobraCharmer import pfiDesign
 from ics.cobraCharmer import cobraState
+from ics.cobraCharmer.utils import butler
 
 class ontimeModel():
 
-    def __init__(self, runDirs):
+    def __init__(self, modelPath, runDirs, logLevel=logging.INFO):
         self.runDirs = runDirs
-        self.model = None
+        self.model = pfiDesign.PFIDesign(butler.mapForRun(modelPath))
+        self.logger = logging.getLogger('ontimeModel')
+        self.logger.setLevel(logLevel)
 
         self.minSpeed = 0.001
         self.minOntime = 0.002
@@ -128,11 +131,17 @@ class ontimeModel():
     def getRevSlope(self, pid):
         return self.getSlope(pid, 'Rev')
 
+    def fwdAngleFile(self, runDir):
+        return runDir / 'data' / f'{self.axisName.lower()}AngFW.npy'
+
+    def revAngleFile(self, runDir):
+        return runDir / 'data' / f'{self.axisName.lower()}AngRV.npy'
+
     def fwdSpeedFile(self, runDir):
-        return runDir / 'data' / f'{self.axisName}SpeedFW.npy'
+        return runDir / 'data' / f'{self.axisName.lower()}SpeedFW.npy'
 
     def revSpeedFile(self, runDir):
-        return runDir / 'data' / f'{self.axisName}SpeedRV.npy'
+        return runDir / 'data' / f'{self.axisName.lower()}SpeedRV.npy'
 
     def fwdOntimeModel(self, model):
         if self.axisNum == 1:
