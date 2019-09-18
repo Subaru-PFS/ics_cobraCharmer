@@ -76,7 +76,12 @@ def unwrappedPosition(pos, center, homeAngle, fromAngle, toAngle,
     rawAngle = np.atleast_1d(rawAngle)
     rawAngle[rawAngle<0] += 2*np.pi
 
-    return unwrappedAngle(rawAngle, fromAngle, toAngle,
+    # Get the angle w.r.t. home, normalized to 0..2pi
+    diffAngle = rawAngle - homeAngle
+    diffAngle[diffAngle<0] += 2*np.pi
+    diffAngle[diffAngle>=2*np.pi] -= 2*np.pi
+
+    return unwrappedAngle(diffAngle, fromAngle, toAngle,
                           tripAngle=tripAngle, allowAngle=allowAngle)
 
 class Camera():
