@@ -101,7 +101,7 @@ class ontimeModel():
 
         return newMaps
 
-    def saveOptMap(self, mapPath):
+    def saveOptMap(self, mapPath, scaleBy=1.1):
         if (self.newOntimeSlowFwd is None or self.newOntimeSlowRev is None or
             self.newOntimeFwd is None or self.newOntimeRev is None):
 
@@ -144,6 +144,93 @@ class ontimeModel():
         else:
             return model.motorOntimeSlowRev2
 
+    def getSlowestGoodOntimes(self, closeEnough=np.deg2rad(2)):
+        """ Return the slowest ontimes for which each cobra completes its range.
+
+        For each cobra, scan the ontime maps looking for the slowest one where the limits are reached.
+        """
+
+        nCobras = 57
+        self.fwOntimes = np.zeros(nCobras, dtype='i4')
+        self.rvOntimes = np.zeros(nCobras, dtype='i4')
+
+        ontimes = sorted(self.fwAngles.keys())
+        for c_i in range(len(self.fwAngles[ontimes[0]])):
+            for ot in ontimes[::-1]:
+                lastFwd = self.fwAngles[ot][c_i, 0, -2]
+                firstRev = self.rvAngles[ot][c_i, 0, 0]
+                lastRev = self.rvAngles[ot][c_i, 0, -2]
+                firstFwd = self.fwAngles[ot][c_i, 0, 0]
+
+                # Basically, we trust the limits as found at the start of the two sweeps.
+                # So we check those against the angles at the _end_ of the other sweeps.
+                fwdOK = np.abs(firstRev - lastFwd) < closeEnough
+                if fwdOK:
+                    self.fwOntimes[c_i] = ot
+
+                revOK = np.abs(firstFwd - lastRev) < closeEnough
+                if revOK:
+                    self.rvOntimes[c_i] = ot
+
+                self.logger.debug(f'{c_i:02d} {ot:0.2f}: '
+                                  f'{np.rad2deg(lastFwd):0.2f} {np.rad2deg(firstRev):0.2f} {fwdOK}    '
+                                  f'{np.rad2deg(lastRev):0.2f} {np.rad2deg(firstFwd):0.2f} {revOK}')
+
+        slowFw_w = np.where(self.fwOntimes == 0)[0]
+        if len(slowFw_w) > 0:
+            self.logger.error(f'no valid forward speed for cobra ids {[i+1 for i in slowFw_w]}. '
+                              f'Setting to {self.maxOntime}')
+            self.fwOntimes[slowFw_w] = self.maxOntime
+        slowRv_w = np.where(self.rvOntimes == 0)[0]
+        if len(slowRv_w) > 0:
+            self.logger.error(f'no valid reverse speed for cobra ids {[i+1 for i in slowRv_w]}. '
+                              f'Setting to {self.maxOntime}')
+            self.rvOntimes[slowRv_w] = self.maxOntime
+
+        self.newOntimeSlowFwd = self.fwOntimes / 1000
+        self.newOntimeSlowRev = self.rvOntimes / 1000
+        self.newOntimeFwd = np.clip(self.newOntimeSlowFwd*2, None, self.maxOntime)
+        self.newOntimeRev = np.clip(self.newOntimeSlowRev*2, None, self.maxOntime)
+
+        return self.fwOntimes, self.rvOntimes
+
+    def saveNewMap(self, mapPath, scaleBy=1.1):
+        if (self.newOntimeSlowFwd is None or self.newOntimeSlowRev is None or
+            self.newOntimeFwd is None or self.newOntimeRev is None):
+
+            raise RuntimeError('for now, will only write all models with all four new maps')
+
+        # Build a new model by selecting the appropriate motor map for each motor.
+        #
+        for i in range(57):
+            fwOntime = self.fwOntimes[i]
+            rvOntime = self.rvOntimes[i]
+            self.model.copyMotorMap(self.models[fwOntime], i,
+                                    doThetaFwd=(self.axisName == "Theta"),
+                                    doPhiFwd=(self.axisName == "Phi"), doFast=False)
+            self.model.copyMotorMap(self.models[rvOntime], i,
+                                    doThetaRev=(self.axisName == "Theta"),
+                                    doPhiRev=(self.axisName == "Phi"), doFast=False)
+            self.model.copyMotorMap(self.models[fwOntime], i,
+                                    doThetaFwd=(self.axisName == "Theta"),
+                                    doPhiFwd=(self.axisName == "Phi"), doFast=True)
+            self.model.copyMotorMap(self.models[rvOntime], i,
+                                    doThetaRev=(self.axisName == "Theta"),
+                                    doPhiRev=(self.axisName == "Phi"), doFast=True)
+
+        motor = self.axisName.lower()
+        updateArgs = dict(fast=True)
+        updateArgs[f'{motor}Fwd'] = np.clip(self.newOntimeFwd*scaleBy, self.maxOntime*0.75, self.maxOntime)
+        updateArgs[f'{motor}Rev'] = np.clip(self.newOntimeRev*scaleBy, self.maxOntime*0.75, self.maxOntime)
+        self.model.updateOntimes(**updateArgs)
+
+        updateArgs = dict(fast=False)
+        updateArgs[f'{motor}Fwd'] = np.clip(self.newOntimeSlowFwd*scaleBy, None, self.maxOntime)
+        updateArgs[f'{motor}Rev'] = np.clip(self.newOntimeSlowRev*scaleBy, None, self.maxOntime)
+        self.model.updateOntimes(**updateArgs)
+
+        self.model.createCalibrationFile(mapPath)
+
     def loadData(self):
         pidarray=[]
         otfarray=[]
@@ -151,14 +238,20 @@ class ontimeModel():
         fwdarray=[]
         revarray=[]
 
-        for runDir in self.runDirs:
+        self.fwAngles = dict()
+        self.rvAngles = dict()
+        self.models = dict()
+
+        for ontime in sorted(self.runDirs.keys())[::-1]:
+            runDir = self.runDirs[ontime]
+            self.fwAngles[ontime] = np.load(self.fwdAngleFile(runDir))
+            self.rvAngles[ontime] = np.load(self.revAngleFile(runDir))
             fwd = np.rad2deg(np.load(self.fwdSpeedFile(runDir)))
             rev = -np.rad2deg(np.load(self.revSpeedFile(runDir)))
 
-            xml = list((runDir / 'output').glob('*.xml'))[0]
+            xml = butler.mapForRun(runDir)
             model = pfiDesign.PFIDesign(xml)
-            if self.model is None:
-                self.model = model
+            self.models[ontime] = model
 
             # Get from model
             try:
