@@ -11,7 +11,7 @@ logger = logging.getLogger('butler')
 dataRoot = pathlib.Path("/data/MCS")
 
 class RunTree(object):
-    def __init__(self, rootDir=None, doCreate=True):
+    def __init__(self, rootDir=None, runDir=None, doCreate=True):
         """ Create and track "runs": sequences of exposures taken as a unit, plus some output.
 
         Args
@@ -21,6 +21,9 @@ class RunTree(object):
         doCreate: : bool
            Whether to create a run now.
         """
+
+        if runDir is not None and doCreate:
+            raise RuntimeError('Cannot create named runs, only open them.')
 
         if rootDir is None:
             rootDir = dataRoot
@@ -32,7 +35,7 @@ class RunTree(object):
         if not self.rootDir.is_dir():
             raise RuntimeError(f'{self.rootDir} is not an existing directory')
 
-        self.runDir = None
+        self.runDir = runDir
         if doCreate:
             self.newRun()
 
@@ -71,6 +74,33 @@ class RunTree(object):
     @property
     def allDirs(self):
         return self.logDir, self.dataDir, self.outputDir
+
+    def mapPath(self, moduleName=None, version=None, doFind=False):
+        mapDir = self.outputDir
+
+        if not doFind:
+            raise NotImplementedError()
+
+        if moduleName is not  None or version is not None:
+            raise RuntimeError("can only look for any map for now")
+
+        mapPaths = tuple(mapDir.glob('*.xml'))
+        if len(mapPaths) == 0:
+            return None
+        elif len(mapPaths) > 1:
+            raise RuntimeError("more than one xml file found")
+        return mapPaths[0]
+
+def mapForRun(runDir):
+    """ Find any model in a run. """
+
+    mapDir = runDir / 'output'
+    mapPaths = tuple(mapDir.glob('*.xml'))
+    if len(mapPaths) == 0:
+        return None
+    elif len(mapPaths) > 1:
+        raise RuntimeError("more than one xml file found")
+    return mapPaths[0]
 
 def pathForRun(run):
     runPath = dataRoot / run
