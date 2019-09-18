@@ -88,8 +88,13 @@ class Sock:
                 if retry >= maxRetries:
                     raise RuntimeError(errMsg)
                 else:
-                    self.logging.error(errMsg)
+                    if logger is not None:
+                        logger.logger.error(errMsg)
+                    else:
+                        print(errMsg)
                     retry += 1
+                    chunk = bytes()
+                    continue
 
             msg.frombytes(chunk)
             remaining -= len(chunk)
