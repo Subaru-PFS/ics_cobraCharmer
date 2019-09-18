@@ -768,8 +768,8 @@ class ModuleTest():
 
         thetaAngles = self.pfi.thetaToLocal(cobras, thetaAngles)
         outTargets = self.pfi.anglesToPositions(self.allCobras,
-                                                np.deg2rad(thetaAngles),
-                                                np.deg2rad(phiAngles))
+                                                thetaAngles,
+                                                phiAngles)
 
         # move to outTargets
         self.moveToXYfromHome(idx, outTargets, threshold=threshold, maxTries=maxTries)
@@ -825,10 +825,10 @@ class ModuleTest():
             repeat=3,
             steps=100,
             totalSteps=5000,
-            fast=True,
+            fast=False,
             phiOnTime=None,
             updateGeometry=False,
-            limitOnTime=0.06,
+            limitOnTime=0.08,
             resetScaling=True,
             delta=0.1):
         """ generate phi motor maps, it accepts custom phiOnTIme parameter.
