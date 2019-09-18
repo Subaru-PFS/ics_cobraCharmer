@@ -288,6 +288,15 @@ class ModuleTest():
         self.thetaCCWHome = np.angle(FW[:,0,0] - self.thetaCenter)
         self.thetaCWHome = np.angle(RV[:,0,0] - self.thetaCenter)
 
+        dAng = self.thetaCWHome - self.thetaCCWHome
+        dAng[dAng<np.pi] += 2*np.pi
+        stopped = np.where(dAng < np.deg2rad(375.0))[0]
+        if len(stopped) > 0:
+            self.logger.error(f"theta ranges for cobras {stopped} are too small: "
+                              f"CW={np.rad2deg(self.thetaCWHome[stopped])} "
+                              f"CCW={np.rad2deg(self.thetaCCWHome[stopped])}")
+            self.logger.error(f"     {np.round(np.rad2deg(dAng[stopped]), 2)}")
+
     def moveToPhiAngle(self, idx=None, angle=60.0,
                        keepExistingPosition=False,
                        tolerance=1.0, maxTries=7, scaleFactor=8,
