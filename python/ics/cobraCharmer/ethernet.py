@@ -70,8 +70,9 @@ class Sock:
         remaining = tgt_len
         msg = array.array('B')
 
-        # The FPGA? or something? occasionally times out replies, but manually retrying does getthe reply.
-        maxRetries = 1
+        # The FPGA? or something? occasionally times out replies, but manually retrying does get the reply.
+        # Wireshark shows that at CIT, at least, the reply can take over a minute.
+        maxRetries = 3
         retry = 0
         while remaining > 0:
             t0 = time.time()
