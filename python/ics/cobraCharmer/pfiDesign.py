@@ -612,9 +612,13 @@ class PFIDesign():
         for i in range(self.nCobras):
             kinematics = self.dataContainers[i].find("KINEMATICS")
             if ccw is not None:
+                if not np.isfinite(ccw[i]):
+                    raise ValueError(f"nan/inf in CCW limit for cobra idx {i}")
                 self.tht0[i] = ccw[i]
                 kinematics.find("CCW_Global_base_ori_z").text = str(np.rad2deg(ccw[i]))
             if cw is not None:
+                if not np.isfinite(cw[i]):
+                    raise ValueError(f"nan/inf in CW limit for cobra idx {i}")
                 self.tht1[i] = cw[i]
                 kinematics.find("CW_Global_base_ori_z").text = str(np.rad2deg(cw[i]))
 
@@ -733,3 +737,4 @@ class PFIDesign():
 
         # Save the new XML calibration file
         newXmlTree.write(outputFileName, encoding="UTF-8", xml_declaration=True)
+        logging.info(f'wrote pfiDesign file for {self.nCobras} cobras and name={name} to {str(outputFileName)}')
