@@ -7,6 +7,7 @@ system here should be in F3C.
 
 """
 from importlib import reload
+import logging
 
 import numpy as np
 import xml.etree.ElementTree as ElementTree
@@ -382,6 +383,28 @@ class PFIDesign():
 
             if setOurModuleIds:
                 self.moduleIds[i] = moduleId
+
+    def copyMotorMap(self, otherModel, motorIndex, doThetaFwd=False, doThetaRev=False,
+                     doPhiFwd=False, doPhiRev=False, doFast=False):
+        """ Copy maps for a given cobra from another model. """
+
+        i = motorIndex
+
+        if doFast:
+            calTable = self.dataContainers[i].find("FAST_CALIBRATION_TABLE")
+            otherTable = otherModel.dataContainers[i].find("FAST_CALIBRATION_TABLE")
+        else:
+            calTable = self.dataContainers[i].find("SLOW_CALIBRATION_TABLE")
+            otherTable = otherModel.dataContainers[i].find("FAST_CALIBRATION_TABLE")
+
+        if doThetaFwd:
+            calTable.find("Joint1_fwd_stepsizes").text = otherTable.find("Joint1_fwd_stepsizes").text
+        if doThetaRev:
+            calTable.find("Joint1_rev_stepsizes").text = otherTable.find("Joint1_rev_stepsizes").text
+        if doPhiFwd:
+            calTable.find("Joint2_fwd_stepsizes").text = otherTable.find("Joint2_fwd_stepsizes").text
+        if doPhiRev:
+            calTable.find("Joint2_rev_stepsizes").text = otherTable.find("Joint2_rev_stepsizes").text
 
     def updateMotorMaps(self, thtFwd=None, thtRev=None, phiFwd=None, phiRev=None, useSlowMaps=True):
         """Update cobra motor maps
