@@ -426,10 +426,15 @@ class ModuleTest():
                     else:
                         scale = 1/(1 + (1/rawScale - 1)/scaleFactor)
 
-                    self.logger.info(f'{c_i+1} try={np.rad2deg(tryDist):0.3f} '
-                                     f'at={np.rad2deg(atAngles[c_i]):0.2f} '
-                                     f'got={np.rad2deg(gotDist):0.3f} '
-                                     f'rawScale={rawScale:0.2f} scale={scale:0.2f}')
+                    if scale <= 0.75 or scale >= 1.25:
+                        logCall = self.logger.info
+                    else:
+                        logCall = self.logger.debug
+
+                    logCall(f'{c_i+1} try={np.rad2deg(tryDist):0.2f} '
+                            f'at={np.rad2deg(atAngles[c_i]):0.2f} '
+                            f'got={np.rad2deg(gotDist):0.2f} '
+                            f'rawScale={rawScale:0.2f} scale={scale:0.2f}')
                     self.pfi.scaleMotorOntime(cobras[c_i], 'phi', direction, scale)
 
             lastAngles = atAngles
@@ -582,10 +587,15 @@ class ModuleTest():
                     else:
                         scale = 1/(1 + (1/rawScale - 1)/scaleFactor)
 
-                    self.logger.info(f'{c_i+1} try={np.rad2deg(tryDist):0.3f} '
-                                     f'at={np.rad2deg(atAngles[c_i]):0.2f} '
-                                     f'got={np.rad2deg(gotDist):0.3f} '
-                                     f'rawScale={rawScale:0.2f} scale={scale:0.2f}')
+                    if scale <= 0.75 or scale >= 1.25:
+                        logCall = self.logger.info
+                    else:
+                        logCall = self.logger.debug
+
+                    logCall(f'{c_i+1} try={np.rad2deg(tryDist):0.2f} '
+                            f'at={np.rad2deg(atAngles[c_i]):0.2f} '
+                            f'got={np.rad2deg(gotDist):0.2f} '
+                            f'rawScale={rawScale:0.2f} scale={scale:0.2f}')
                     self.pfi.scaleMotorOntime(cobras[c_i], 'theta', direction, scale)
 
             lastAngles = atAngles
