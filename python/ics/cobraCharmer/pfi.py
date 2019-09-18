@@ -515,7 +515,7 @@ class PFI(object):
                     ontime1 = self.calibModel.motorOntimeSlowFwd1[cobraId]
                 else:
                     ontime1 = self.calibModel.motorOntimeSlowRev1[cobraId]
-            ontime1 = self.adjustThetaOnTime(cobraId, ontime1, fast=_thetaFast[c_i], direction=dirs1[0])
+                ontime1 = self.adjustThetaOnTime(cobraId, ontime1, fast=_thetaFast[c_i], direction=dirs1[0])
 
             if _phiFast[c_i]:
                 if dirs1[1] == 'cw':
@@ -527,7 +527,7 @@ class PFI(object):
                     ontime2 = self.calibModel.motorOntimeSlowFwd2[cobraId]
                 else:
                     ontime2 = self.calibModel.motorOntimeSlowRev2[cobraId]
-            ontime2 = self.adjustPhiOnTime(cobraId, ontime2, fast=_phiFast[c_i], direction=dirs1[1])
+                ontime2 = self.adjustPhiOnTime(cobraId, ontime2, fast=_phiFast[c_i], direction=dirs1[1])
 
             # For early-late offsets.
             if waitThetaSteps is not None:
