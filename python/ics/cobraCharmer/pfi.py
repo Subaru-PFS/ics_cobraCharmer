@@ -489,6 +489,10 @@ class PFI(object):
         else:
             _phiFast = phiFast
 
+        if len(cobras) == 0:
+            self.logger.debug(f'skipping RUN command: no cobras')
+            return
+
         for c_i, c in enumerate(cobras):
             steps1 = int(np.abs(thetaSteps[c_i])), int(np.abs(phiSteps[c_i]))
             dirs1 = ['cw', 'cw']
