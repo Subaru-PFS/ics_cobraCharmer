@@ -374,6 +374,7 @@ def RUN( cobras, timeout=0, inter=0 ):
     medium_log.log("Timeout:%d, inter:%d" %(timeout,inter) )
         
     payload = []
+    fpgaState.clearMoves()
     for c in cobras:
         payload += c.p.toList(c.board, c.cobra)
         fpgaState.runCobra(c)
