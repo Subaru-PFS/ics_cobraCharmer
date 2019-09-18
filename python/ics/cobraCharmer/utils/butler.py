@@ -1,6 +1,7 @@
 import logging
 import os
 import pathlib
+import shutil
 import time
 
 import yaml
@@ -187,3 +188,14 @@ def mapForModule(moduleName, version=None):
     with open(mapPath, mode='rt') as mapFile:
         content = mapFile.read()
         return content
+
+def publishMapForModule(moduleName, fromRunPath, version=None):
+    """ Copy a run's XML file into the data product.
+
+    Does NOT yet git commit!
+    """
+
+    fromRun = RunTree(runDir=fromRunPath, doCreate=False)
+    inFile = fromRun.mapPath(doFind=True)
+    outFile = mapPathForModule(moduleName, version=version)
+    shutil.copy(inFile, outFile)
