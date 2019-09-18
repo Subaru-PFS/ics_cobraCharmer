@@ -586,31 +586,29 @@ class ModuleTest():
             thetaCenters = thetaCenters[idx]
         if keepExistingPosition:
             homeAngles = self.thetaHomes
-            curAngles = self._fullAngle(curPos, thetaCenters)
-            lastAngles = self.dThetaAngle(curAngles, homeAngles, doAbs=True)
+            lastAngles = self.thetaAngles
         else:
             homeAngles = self._fullAngle(curPos, thetaCenters)
-            curAngles = homeAngles
             lastAngles = np.zeros(len(homeAngles))
             self.thetaHomes = homeAngles
+            self.thetaAngles = lastAngles
 
         targetAngles = np.full(len(homeAngles), np.deg2rad(angle))
         phiAngles = targetAngles*0
         ntries = 1
         notDone = targetAngles != 0
-        left = self.dThetaAngle(targetAngles,lastAngles, doWrap=True)
+        left = targetAngles - lastAngles
 
         moves = moves0.copy()
         moveList.append(moves)
         for i in range(len(cobras)):
-            moveIdx = i
             cobraNum = cobras[i].cobraNum
-            moves['iteration'][moveIdx] = 0
-            moves['cobra'][moveIdx] = cobraNum
-            moves['target'][moveIdx] = angle[i]
-            moves['position'][moveIdx] = curAngles[i]
-            moves['left'][moveIdx] = left[i]
-            moves['done'][moveIdx] = not notDone[i]
+            moves['iteration'][i] = 0
+            moves['cobra'][i] = cobraNum
+            moves['target'][i] = angle[i]
+            moves['position'][i] = lastAngles[i]
+            moves['left'][i] = left[i]
+            moves['done'][i] = not notDone[i]
         while True:
             with np.printoptions(precision=2, suppress=True):
                 self.logger.debug("to: %s", np.rad2deg(targetAngles)[notDone])
@@ -630,6 +628,7 @@ class ModuleTest():
             if idx is not None:
                 curPos = curPos[idx]
 
+            # Get our angle w.r.t. home.
             atAngles = unwrappedPosition(curPos, thetaCenters, homeAngles,
                                          lastAngles, targetAngles)
             left = targetAngles - atAngles
@@ -671,13 +670,14 @@ class ModuleTest():
                     else:
                         logCall = self.logger.debug
 
-                    logCall(f'{c_i+1} try={np.rad2deg(tryDist):0.2f} '
+                    logCall(f'{c_i+1} try={np.rad2deg(tryDist[c_i]):0.2f} '
                             f'at={np.rad2deg(atAngles[c_i]):0.2f} '
-                            f'got={np.rad2deg(gotDist):0.2f} '
+                            f'got={np.rad2deg(gotDist[c_i]):0.2f} '
                             f'rawScale={rawScale:0.2f} scale={scale:0.2f}')
                     self.pfi.scaleMotorOntime(cobras[c_i], 'theta', direction, scale)
 
             lastAngles = atAngles
+            self.thetaAngles = atAngles
             if ntries >= maxTries:
                 self.logger.warn(f'Reached max {maxTries} tries, '
                                  f'left: {[str(c) for c in cobras[np.where(notDone)]]}: '
