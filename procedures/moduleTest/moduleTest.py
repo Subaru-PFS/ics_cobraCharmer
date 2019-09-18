@@ -776,27 +776,23 @@ class ModuleTest():
                 makePhiMotorMap(xml, path, phiOnTime=0.06)        // motor maps for on-time=0.06
         """
         self._connect()
-        defaultOnTime = deepcopy([self.pfi.calibModel.motorOntimeFwd1,
-                                  self.pfi.calibModel.motorOntimeRev1,
-                                  self.pfi.calibModel.motorOntimeFwd2,
-                                  self.pfi.calibModel.motorOntimeRev2])
-        defaultOnTimeSlow = deepcopy([self.pfi.calibModel.motorOntimeSlowFwd1,
-                                      self.pfi.calibModel.motorOntimeSlowRev1,
-                                      self.pfi.calibModel.motorOntimeSlowFwd2,
+        defaultOnTimeFast = deepcopy([self.pfi.calibModel.motorOntimeFwd2,
+                                      self.pfi.calibModel.motorOntimeRev2])
+        defaultOnTimeSlow = deepcopy([self.pfi.calibModel.motorOntimeSlowFwd2,
                                       self.pfi.calibModel.motorOntimeSlowRev2])
 
         # set fast on-time to a large value so it can move over whole range, set slow on-time to the test value.
-        fastOnTime = [np.full(57, limitOnTime)] * 4
+        fastOnTime = [np.full(57, limitOnTime)] * 2
         if phiOnTime is not None:
-            slowOnTime = defaultOnTimeSlow[:2] + [np.full(57, phiOnTime)] * 2
+            slowOnTime = [np.full(57, phiOnTime)] * 2
         elif fast:
-            slowOnTime = defaultOnTimeSlow[:2] + defaultOnTime[2:]
+            slowOnTime = defaultOnTimeFast
         else:
             slowOnTime = defaultOnTimeSlow
 
-        # update one-time for test
-        self.pfi.calibModel.updateOntimes(*fastOnTime, fast=True)
-        self.pfi.calibModel.updateOntimes(*slowOnTime, fast=False)
+        # update ontimes for test
+        self.pfi.calibModel.updateOntimes(phiFwd=fastOnTime[0], phiRev=fastOnTime[1], fast=True)
+        self.pfi.calibModel.updateOntimes(phiFwd=slowOnTime[0], phiRev=slowOnTime[1], fast=False)
 
         # variable declaration for position measurement
         iteration = totalSteps // steps
@@ -932,30 +928,26 @@ class ModuleTest():
         #     makethetaMotorMap(xml, path, fast=False)              // update slow motor maps
         #     makethetaMotorMap(xml, path, thetaOnTime=0.06)        // motor maps for on-time=0.06
         self._connect()
-        defaultOnTime = deepcopy([self.pfi.calibModel.motorOntimeFwd1,
-                                  self.pfi.calibModel.motorOntimeRev1,
-                                  self.pfi.calibModel.motorOntimeFwd2,
-                                  self.pfi.calibModel.motorOntimeRev2])
-        defaultOnTimeSlow = deepcopy([self.pfi.calibModel.motorOntimeSlowFwd1,
-                                      self.pfi.calibModel.motorOntimeSlowRev1,
-                                      self.pfi.calibModel.motorOntimeSlowFwd2,
-                                      self.pfi.calibModel.motorOntimeSlowRev2])
-
         if updateGeometry and phiRunDir is None:
             raise RuntimeError('To write geometry, need to be told the phiRunDir')
 
+        defaultOnTimeFast = deepcopy([self.pfi.calibModel.motorOntimeFwd1,
+                                      self.pfi.calibModel.motorOntimeRev1])
+        defaultOnTimeSlow = deepcopy([self.pfi.calibModel.motorOntimeSlowFwd1,
+                                      self.pfi.calibModel.motorOntimeSlowRev1])
+
         # set fast on-time to a large value so it can move over whole range, set slow on-time to the test value.
-        fastOnTime = [np.full(57, limitOnTime)] * 4
+        fastOnTime = [np.full(57, limitOnTime)] * 2
         if thetaOnTime is not None:
-            slowOnTime = [np.full(57, thetaOnTime)] * 2 + defaultOnTimeSlow[2:]
+            slowOnTime = [np.full(57, thetaOnTime)] * 2
         elif fast:
-            slowOnTime = defaultOnTime[:2] + defaultOnTimeSlow[2:]
+            slowOnTime = defaultOnTimeFast
         else:
             slowOnTime = defaultOnTimeSlow
 
-        # update one-time for test
-        self.pfi.calibModel.updateOntimes(*fastOnTime, fast=True)
-        self.pfi.calibModel.updateOntimes(*slowOnTime, fast=False)
+        # update ontimes for test
+        self.pfi.calibModel.updateOntimes(thetaFwd=fastOnTime[0], thetaRev=fastOnTime[1], fast=True)
+        self.pfi.calibModel.updateOntimes(thetaFwd=slowOnTime[0], thetaRev=slowOnTime[1], fast=False)
 
         # variable declaration for position measurement
         iteration = totalSteps // steps
