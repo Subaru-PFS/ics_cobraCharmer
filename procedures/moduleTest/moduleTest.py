@@ -1244,12 +1244,13 @@ class ModuleTest():
             self.cal.calibModel.updatePhiHardStops(phiCCW, phiCW)
 
             self.cal.calibModel.createCalibrationFile(self.runManager.outputDir / newXml)
-        self.cal.restoreConfig()
 
         # restore default setting
-        self.pfi.loadModel(self.xml)
+        # self.cal.restoreConfig()
+        # self.pfi.loadModel(self.xml)
 
-        return self.runManager.outputDir
+        self.setThetaGeometryFromRun(self.runManager.runDir, onlyIfClear=True)
+        return self.runManager.runDir
 
     def phiConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, fast=True, finalAngle=None):
         # variable declaration for center measurement
