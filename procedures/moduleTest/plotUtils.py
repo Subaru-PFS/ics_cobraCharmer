@@ -1,9 +1,9 @@
+import logging
 import pathlib
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 
-from procedures.moduleTest import calculation
 from ics.cobraCharmer.utils import butler
 
 def plotOntimeSet(moduleName, ontimeRuns, motor, stepSize):
@@ -14,21 +14,47 @@ def plotOntimeSet(moduleName, ontimeRuns, motor, stepSize):
 
     tangs = dict()
     tangrs = dict()
-    speeds = dict()
-    cal = calculation.Calculation(butler.mapPathForModule(moduleName, version='phiOntime'), [], None)
 
-    for ot in ontimeRuns.keys():
+    if motor == 'phi':
+        yrange=(-200,200)
+    else:
+        yrange=(-400,400)
+
+    for ot in sorted(ontimeRuns.keys()):
+        logging.info(f"{ot}: {ontimeRuns[ot]}")
         tangs[ot] = np.load(ontimeRuns[ot] / 'data' / f'{motor}AngFW.npy')
         tangrs[ot] = np.load(ontimeRuns[ot] / 'data' / f'{motor}AngRV.npy')
-        speeds[ot] = cal.speed(tangs[ot], tangrs[ot], stepSize)
+
     for i in range(npl):
         for ot in sorted(ontimeRuns.keys()):
-            setName = f'{ot}us' if f != 999 else 'opt'
-            pl[i].plot(np.rad2deg(tangs[ot][i][0]), '+-', label=f'{setName}: {speeds[ot][0][i]:0.4f}')
+            kw = dict()
+            if ot == 999:
+                setName = 'opt'
+                kw['color'] = 'k'
+                kw['linewidth'] = 1.5
+            else:
+                setName = f'{ot}us'
+                kw['marker'] = '+'
+            fw = np.rad2deg(tangs[ot][i][0])
+            rv = np.rad2deg(tangrs[ot][i][0] - max(tangrs[ot][i][0]))
+
+            if isinstance(stepSize, dict):
+                stepSize1 = stepSize[ot]
+            else:
+                stepSize1 = stepSize
+
+            x = stepSize1 * np.arange(len(fw))
+            ll = pl[i].plot(x, fw, ls='-', label=f'{setName}', **kw)
+            if 'color' in kw:
+                kw.pop('color')
+            pl[i].plot(x, rv, ls='-', color=ll[0].get_color(), **kw)
             pl[i].legend()
+        pl[i].hlines(0, x[0], x[-1], alpha=0.4)
+        pl[i].set_ylim(*yrange)
+        pl[i].set_ylabel('degrees')
         pl[i].set_title(f'{moduleName} {motor} {i+1}')
 
-    return tangs, tangrs, speeds
+    return f
 
 def plotConvergenceRuns(runPaths, motor):
     if isinstance(runPaths, (str, pathlib.Path)):
