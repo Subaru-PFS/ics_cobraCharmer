@@ -359,6 +359,7 @@ class ModuleTest():
 
         dAng = self.thetaCWHome - self.thetaCCWHome
         dAng[dAng<np.pi] += 2*np.pi
+        dAng[dAng<np.pi] += 2*np.pi
         stopped = np.where(dAng < np.deg2rad(375.0))[0]
         if len(stopped) > 0:
             self.logger.error(f"theta ranges for cobras {stopped} are too small: "
@@ -639,26 +640,24 @@ class ModuleTest():
             moves = moves0.copy()
             moveList.append(moves)
             for i in range(len(cobras)):
-                moveIdx = i
                 cobraNum = cobras[i].cobraNum
-                moves['iteration'][moveIdx] = ntries
-                moves['cobra'][moveIdx] = cobraNum
-                moves['target'][moveIdx] = angle[i]
-                moves['position'][moveIdx] = atAngles[i]
-                moves['left'][moveIdx] = left[i]
-                moves['done'][moveIdx] = not notDone[i]
+                moves['iteration'][i] = ntries
+                moves['cobra'][i] = cobraNum
+                moves['target'][i] = angle[i]
+                moves['position'][i] = atAngles[i]
+                moves['left'][i] = left[i]
+                moves['done'][i] = not notDone[i]
 
             if not np.any(notDone):
                 self.logger.info(f'Convergence sequence done after {ntries} iterations')
                 break
 
+            tryDist = targetAngles - lastAngles
+            gotDist = atAngles - lastAngles
             for c_i in np.where(notDone)[0]:
-
-                tryDist = self.dThetaAngle(targetAngles[c_i], lastAngles[c_i], doWrap=True)[0]
-                gotDist = self.dThetaAngle(atAngles[c_i], lastAngles[c_i], doWrap=True)[0]
-                rawScale = abs(tryDist/gotDist)
-                if abs(tryDist) > np.deg2rad(2) and (rawScale < 0.9 or rawScale > 1.1):
-                    direction = 'ccw' if tryDist < 0 else 'cw'
+                rawScale = np.abs(tryDist[c_i]/gotDist[c_i])
+                if abs(tryDist[c_i]) > np.deg2rad(2) and (rawScale < 0.9 or rawScale > 1.1):
+                    direction = 'ccw' if tryDist[c_i] < 0 else 'cw'
 
                     if rawScale > 1:
                         scale = 1 + (rawScale - 1)/scaleFactor
