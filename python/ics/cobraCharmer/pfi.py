@@ -123,7 +123,7 @@ class PFI(object):
         cobras = self.allocateCobraBoard(module, board)
         err = func.HK(cobras, updateModel=(self.calibModel if updateModel else None))
         if err:
-            self.logger.error(f'send HK command failed')
+            self.logger.error(f'send HK command failed: {err}')
         else:
             self.logger.debug(f'send HK command succeeded')
 
