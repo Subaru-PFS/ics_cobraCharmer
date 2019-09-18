@@ -5,7 +5,7 @@ import numpy as np
 import glob
 import pandas as pd
 import math
-
+import pdb
 from scipy import stats
 import matplotlib.pyplot as plt
 from astropy.io import fits
@@ -263,12 +263,11 @@ class OntimeOptimize(object):
                 rev_int[pid-1] = rv_i
             
     def _searchNextGoodSpeed(self, fiberInx, direction, targetSpeed):
-
+        
         dataframe = self.dataframe
         loc1 = dataframe.loc[dataframe['fiberNo'] == fiberInx+1].loc
         loc2 = loc1[dataframe[direction].abs() > self.minSpeed].loc
         ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange]
-        print(fiberInx+1)
         # First, make sure there is good speed data.
         ind=np.argmin(np.abs((ndf[f'{direction}'] -  targetSpeed).values))
         if np.abs(ndf[f'{direction}'].values[ind]-targetSpeed) < 0.02:
@@ -279,6 +278,7 @@ class OntimeOptimize(object):
             else:
                 newOntime = ndf[f'onTime{direction}'].values[ind] + 0.005 
 
+        print(fiberInx+1,newOntime)
         return newOntime
 
     def _solveForSpeed(self, targetSpeed=None):
@@ -299,7 +299,7 @@ class OntimeOptimize(object):
         inx = np.where(np.isinf(newOntimeRev))[0].tolist()
         for i in inx:
             if i not in self.badIdx:
-                newOntimeFwd[i] = self._searchNextGoodSpeed(i, 'Rev', targetSpeed)
+                newOntimeRev[i] = self._searchNextGoodSpeed(i, 'Rev', -targetSpeed)
             else:
                 newOntimeRev[i] = self.maxOntime
 
