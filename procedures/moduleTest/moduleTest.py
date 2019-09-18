@@ -4,10 +4,11 @@ import numpy as np
 from astropy.io import fits
 import sep
 from copy import deepcopy
-import calculation
+
+from procedures.moduleTest import calculation
 reload(calculation)
 
-from mcs import camera
+from procedures.moduleTest.mcs import camera
 reload(camera)
 from ics.cobraCharmer import pfi as pfiControl
 from ics.cobraCharmer.utils import butler
@@ -94,16 +95,16 @@ class ModuleTest():
         visibles = [e for e in range(1, 58) if e not in brokens]
         self.badIdx = np.array(brokens) - 1
         self.goodIdx = np.array(visibles) - 1
-        self.badCobras = np.array(getCobras(self.badIdx))
-        self.goodCobras = np.array(getCobras(self.goodIdx))
+        self.badCobras = np.array(self.getCobras(self.badIdx))
+        self.goodCobras = np.array(self.getCobras(self.goodIdx))
 
         if hasattr(self, 'cal'):
             self.cal.setBrokenCobras(brokens)
 
     movesDtype = np.dtype(dict(names=['expId', 'spotId',
                                       'module', 'cobra',
-                                      'phiSteps', 'phiOntime', 'phiOntimeScale',
-                                      'thetaSteps','thetaOntime', 'thetaOntimeScale'],
+                                      'thetaSteps','thetaOntime', 'thetaOntimeScale',
+                                      'phiSteps', 'phiOntime', 'phiOntimeScale'],
                                formats=['U12', 'i4',
                                         'i2', 'i2',
                                         'f4', 'f4', 'f4',
@@ -477,10 +478,14 @@ class ModuleTest():
         self._connect()
         self.cam.resetStack(doStack=True)
 
+        if np.isscalar(angle):
+            angle = np.full(len(self.allCobras), angle)
+
         cobras = self.goodCobras
         cobras = np.array(cobras)
         if idx is not None:
             cobras = cobras[idx]
+            angle = angle[idx]
         moveList = []
         moves0 = np.zeros(len(cobras), dtype=dtype)
 
@@ -519,7 +524,7 @@ class ModuleTest():
             cobraNum = cobras[i].cobraNum
             moves['iteration'][moveIdx] = 0
             moves['cobra'][moveIdx] = cobraNum
-            moves['target'][moveIdx] = angle
+            moves['target'][moveIdx] = angle[i]
             moves['position'][moveIdx] = curAngles[i]
             moves['left'][moveIdx] = left[i]
             moves['done'][moveIdx] = not notDone[i]
@@ -555,7 +560,7 @@ class ModuleTest():
                 cobraNum = cobras[i].cobraNum
                 moves['iteration'][moveIdx] = ntries
                 moves['cobra'][moveIdx] = cobraNum
-                moves['target'][moveIdx] = angle
+                moves['target'][moveIdx] = angle[i]
                 moves['position'][moveIdx] = atAngles[i]
                 moves['left'][moveIdx] = left[i]
                 moves['done'][moveIdx] = not notDone[i]
@@ -600,14 +605,16 @@ class ModuleTest():
     def moveToXYfromHome(self, idx, targets, threshold=3.0, maxTries=8):
         """ function to move cobras to target positions """
 
-        cobras = getCobras(idx)
+        if idx is None:
+            idx = np.arange(len(self.allCobras))
+        cobras = self.getCobras(idx)
         if idx is not None:
             targets = targets[idx]
 
         self.pfi.moveXYfromHome(cobras, targets, thetaThreshold=threshold, phiThreshold=threshold)
 
         ntries = 1
-        keepMoving = targets != 0
+        keepMoving = np.where(targets != 0)
         while True:
             # extract sources and fiber identification
             curPos = self.exposeAndExtractPositions(tolerance=0.2)
@@ -616,8 +623,6 @@ class ModuleTest():
             # check position errors
             self.logger.info("to: %s", targets[keepMoving])
             self.logger.info("at: %s", curPos[keepMoving])
-            self.logger.info("left (%d/%d): %s", keepMoving.sum(), len(targets),
-                             targets[keepMoving] - curPos[keepMoving])
 
             notDone = np.abs(curPos - targets) > threshold
             if not np.any(notDone):
@@ -626,15 +631,16 @@ class ModuleTest():
             if ntries > maxTries:
                 print(f'Reach max {maxTries} tries, gave up, gave up on {np.where(notDone)}')
                 break
-            self.logger.info("left (%d/%d)", keepMoving.sum(), len(targets))
+            self.logger.info("left (%d/%d): %s", len(keepMoving[0]), len(targets),
+                             targets[keepMoving] - curPos[keepMoving])
 
             ntries += 1
 
             # move again, skip bad center measurement
-            # Yikes. No! Was wondering where replacement in calculations.py got used. -- CPL
+            # Yikes, No!!!! Was wondering where replacement in calculations.py got used. -- CPL
             good = (curPos != self.pfi.calibModel.centers[idx])
 
-            keepMoving = good & notDone
+            keepMoving = np.where(good & notDone)
             self.pfi.moveXY(cobras[keepMoving], curPos[keepMoving], targets[keepMoving],
                             thetaThreshold=threshold, phiThreshold=threshold)
 
@@ -793,7 +799,7 @@ class ModuleTest():
         # record the phi movements
         dataPath = self.runManager.dataDir
         self.logger.info(f'phi home {-totalSteps} steps')
-        self.pfi.moveAllSteps(self.goodCobras, 0, -totalSteps)
+        self.pfi.moveAllSteps(self.goodCobras, 0, -totalSteps)  # default is fast
         for n in range(repeat):
             self.cam.resetStack(f'phiForwardStack{n}.fits')
 
