@@ -1,8 +1,5 @@
 motorScales = dict()
 
-thetaSlopes = dict()
-phiSlopes = dict()
-
 def mapId(cobraId, motor, direction):
     """ Return a hashable key for (cobra, motor, direction) """
 
