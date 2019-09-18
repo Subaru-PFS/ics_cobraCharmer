@@ -812,30 +812,64 @@ class ModuleTest():
             # forward phi motor maps
             phiFW[self.goodIdx, n, 0] = self.exposeAndExtractPositions(f'phiBegin{n}.fits')
 
+            notdoneMask = np.zeros(len(phiFW), 'bool')
+            notdoneMask[self.goodIdx] = True
             for k in range(iteration):
                 self.logger.info(f'{n+1}/{repeat} phi forward to {(k+1)*steps}')
-                self.pfi.moveAllSteps(self.goodCobras, 0, steps, phiFast=False)
+                self.pfi.moveAllSteps(self.goodCobras[np.where(notdoneMask)], 0, steps, phiFast=False)
                 phiFW[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'ph1Forward{n}N{k}.fits',
                                                                              guess=phiFW[self.goodIdx, n, k])
+                doneMask, lastAngles = self.phiFWDone(phiFW, k)
+                if doneMask is not None:
+                    newlyDone = doneMask & notdoneMask
+                    if np.any(newlyDone):
+                        notdoneMask &= ~doneMask
+                        self.logger.info(f'done: {np.where(newlyDone)[0]}, {(notdoneMask == True).sum()} left')
+                if not np.any(notdoneMask):
+                    phiFW[self.goodIdx, n, k+1:] = phiFW[self.goodIdx, n, k+1][:,None]
+                    break
+            if doneMask is not None and np.any(notdoneMask):
+                self.logger.warn(f'{(notdoneMask == True).sum()} cobras did not finish:')
+                for c_i in np.where(notdoneMask)[0]:
+                    c = self.goodCobras[c_i]
+                    d = np.rad2deg(lastAngles[c_i])
+                    self.logger.warn(f'  {str(c)}: {np.round(d, 2)}')
 
             # make sure it goes to the limit
             self.logger.info(f'{n+1}/{repeat} phi forward {totalSteps} to limit')
-            self.pfi.moveAllSteps(self.goodCobras, 0, totalSteps)
+            self.pfi.moveAllSteps(self.goodCobras, 0, totalSteps)  # fast to limit
 
             # reverse phi motor maps
             self.cam.resetStack(f'phiReverseStack{n}.fits')
             phiRV[self.goodIdx, n, 0] = self.exposeAndExtractPositions(f'phiEnd{n}.fits',
                                                                        guess=phiFW[self.goodIdx, n, iteration])
-
+            notdoneMask = np.zeros(len(phiRV), 'bool')
+            notdoneMask[self.goodIdx] = True
             for k in range(iteration):
                 self.logger.info(f'{n+1}/{repeat} phi backward to {(k+1)*steps}')
-                self.pfi.moveAllSteps(self.goodCobras, 0, -steps, phiFast=False)
+                self.pfi.moveAllSteps(self.goodCobras[np.where(notdoneMask)], 0, -steps, phiFast=False)
                 phiRV[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'phiReverse{n}N{k}.fits',
                                                                              guess=phiRV[self.goodIdx, n, k])
+                doneMask, lastAngles = self.phiRVDone(phiRV, k)
+                if doneMask is not None:
+                    newlyDone = doneMask & notdoneMask
+                    if np.any(newlyDone):
+                        notdoneMask &= ~doneMask
+                        self.logger.info(f'done: {np.where(newlyDone)[0]}, {(notdoneMask == True).sum()} left')
+                if not np.any(notdoneMask):
+                    phiRV[self.goodIdx, n, k+1:] = phiRV[self.goodIdx, n, k+1][:,None]
+                    break
+
+            if doneMask is not None and np.any(notdoneMask):
+                self.logger.warn(f'{(notdoneMask == True).sum()} did not finish:')
+                for c_i in np.where(notdoneMask)[0]:
+                    c = self.goodCobras[c_i]
+                    d = np.rad2deg(lastAngles[c_i])
+                    self.logger.warn(f'  {str(c)}: {np.round(d, 2)}')
 
             # At the end, make sure the cobra back to the hard stop
             self.logger.info(f'{n+1}/{repeat} phi reverse {-totalSteps} steps to limit')
-            self.pfi.moveAllSteps(self.goodCobras, 0, -totalSteps)
+            self.pfi.moveAllSteps(self.goodCobras, 0, -totalSteps)  # fast to limit
 
         # save calculation result
         np.save(dataPath / 'phiFW', phiFW)
@@ -877,34 +911,94 @@ class ModuleTest():
         if updateGeometry:
             self.cal.calibModel.updateGeometry(centers=phiCenter, phiArms=phiRadius)
         self.cal.calibModel.createCalibrationFile(self.runManager.outputDir / newXml, name='phiModel')
-        self.cal.restoreConfig()
 
-        # restore default setting
-        self.pfi.loadModel(self.xml)
+        # restore default setting ( really? why? CPL )
+        # self.cal.restoreConfig()
+        # self.pfi.loadModel(self.xml)
 
-        return self.runManager.outputDir
+        self.setPhiGeometryFromRun(self.runManager.runDir, onlyIfClear=True)
+        return self.runManager.runDir
 
-    def thetaFWDone(self, thetas, k, needAtEnd=4, closeEnough=0.01, limitTolerance=np.deg2rad(2)):
+    def thetaFWDone(self, thetas, k, needAtEnd=4,
+                    closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
+        """ Return a mask of the cobras which we deem at the FW theta limit.
+
+        Args
+        ----
+        thetas : `np.array` of `complex`
+          2 or 3d array of measured positions.
+          0th axis is cobra, last axis is iteration
+        k : integer
+          the iteration we just made.
+        needAtEnd : integer
+          how many iterations we require to be at the same position
+        closeEnough : radians
+          how close the last needAtEnd point must be to each other.
+        limitTolerance : radians
+          how close to the known FW limit the last (kth) point must be.
+
+        Returns
+        -------
+        doneMask : array of `bool`
+          True for the cobras which are at the FW limit.
+        endDiffs : array of radians
+          The last `needAtEnd` angles to the limit
+        """
+
         if self.thetaCenter is None or self.thetaCWHome is None or k+1 < needAtEnd:
-            return np.zeros(len(thetas), bool)
+            return None,  None
 
         lastAngles = np.angle(thetas[:,0,k-needAtEnd+1:k+1] - self.thetaCenter[:,None])
         atEnd = np.abs(lastAngles[:,-1] - self.thetaCWHome) <= limitTolerance
         endDiff = np.abs(np.diff(lastAngles, axis=1))
         stable = np.all(endDiff <= closeEnough, axis=1)
 
-        return atEnd & stable
+        return atEnd & stable, endDiff
 
-    def thetaRVDone(self, thetas, k, needAtEnd=4, closeEnough=0.01, limitTolerance=np.deg2rad(2)):
+    def thetaRVDone(self, thetas, k, needAtEnd=4, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
+        """ Return a mask of the cobras which we deem at the RV theta limit.
+
+        See `thetaFWDone`
+        """
         if self.thetaCenter is None or self.thetaCCWHome is None or k+1 < needAtEnd:
-            return np.zeros(len(thetas), bool)
+            return None, None
 
         lastAngles = np.angle(thetas[:,0,k-needAtEnd+1:k+1] - self.thetaCenter[:,None])
         atEnd = np.abs(lastAngles[:,-1] - self.thetaCCWHome) <= limitTolerance
         endDiff = np.abs(np.diff(lastAngles, axis=1))
         stable = np.all(endDiff <= closeEnough, axis=1)
 
-        return atEnd & stable
+        return atEnd & stable, endDiff
+
+    def phiFWDone(self, phis, k, needAtEnd=4, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
+        """ Return a mask of the cobras which we deem at the FW phi limit.
+
+        See `thetaFWDone`
+        """
+        if self.phiCenter is None or self.phiCWHome is None or k+1 < needAtEnd:
+            return None, None
+
+        lastAngles = np.angle(phis[:,0,k-needAtEnd+1:k+1] - self.phiCenter[:,None])
+        atEnd = np.abs(lastAngles[:,-1] - self.phiCWHome) <= limitTolerance
+        endDiff = np.abs(np.diff(lastAngles, axis=1))
+        stable = np.all(endDiff <= closeEnough, axis=1)
+
+        return atEnd & stable, endDiff
+
+    def phiRVDone(self, phis, k, needAtEnd=4, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
+        """ Return a mask of the cobras which we deem at the RV phi limit.
+
+        See `thetaFWDone`
+        """
+        if self.phiCenter is None or self.phiCCWHome is None or k+1 < needAtEnd:
+            return None, None
+
+        lastAngles = np.angle(phis[:,0,k-needAtEnd+1:k+1] - self.phiCenter[:,None])
+        atEnd = np.abs(lastAngles[:,-1] - self.phiCCWHome) <= limitTolerance
+        endDiff = np.abs(np.diff(lastAngles, axis=1))
+        stable = np.all(endDiff <= closeEnough, axis=1)
+
+        return atEnd & stable, endDiff
 
     def makeThetaMotorMap(
             self,
@@ -974,13 +1068,23 @@ class ModuleTest():
                 self.pfi.moveAllSteps(self.goodCobras[np.where(notdoneMask)], steps, 0, thetaFast=False)
                 thetaFW[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaForward{n}N{k}.fits',
                                                                                guess=thetaFW[self.goodIdx, n, k])
-                doneMask = self.thetaFWDone(thetaFW, k)
-                newlyDone = doneMask & notdoneMask
-                if np.any(newlyDone):
-                    notdoneMask &= ~doneMask
-                    self.logger.info(f'done: {np.where(newlyDone)[0]}, {(notdoneMask == True).sum()} left')
+                doneMask, lastAngles = self.thetaFWDone(thetaFW, k)
+                if doneMask is not None:
+                    newlyDone = doneMask & notdoneMask
+                    if np.any(newlyDone):
+                        notdoneMask &= ~doneMask
+                        self.logger.info(f'done: {np.where(newlyDone)[0]}, {(notdoneMask == True).sum()} left')
+                if not np.any(notdoneMask):
+                    thetaFW[self.goodIdx, n, k+1:] = thetaFW[self.goodIdx, n, k+1][:,None]
+                    break
 
-                # Should, if geometry is available,
+            if doneMask is not None and np.any(notdoneMask):
+                self.logger.warn(f'{(notdoneMask == True).sum()} did not finish:')
+                for c_i in np.where(notdoneMask)[0]:
+                    c = self.goodCobras[c_i]
+                    d = np.rad2deg(lastAngles[c_i])
+                    self.logger.warn(f'  {str(c)}: {np.round(d, 2)}')
+
             # make sure it goes to the limit
             self.logger.info(f'{n+1}/{repeat} theta forward {totalSteps} to limit')
             self.pfi.moveAllSteps(self.goodCobras, totalSteps, 0)
@@ -998,11 +1102,22 @@ class ModuleTest():
                 thetaRV[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaReverse{n}N{k}.fits',
                                                                                guess=thetaRV[self.goodIdx, n, k])
 
-                doneMask = self.thetaRVDone(thetaRV, k)
-                newlyDone = doneMask & notdoneMask
-                if np.any(newlyDone):
-                    notdoneMask &= ~doneMask
-                    self.logger.info(f'done: {np.where(newlyDone)[0]}, {(notdoneMask == True).sum()} left')
+                doneMask, lastAngles = self.thetaRVDone(thetaRV, k)
+                if doneMask is not None:
+                    newlyDone = doneMask & notdoneMask
+                    if np.any(newlyDone):
+                        notdoneMask &= ~doneMask
+                        self.logger.info(f'done: {np.where(newlyDone)[0]}, {(notdoneMask == True).sum()} left')
+                if not np.any(notdoneMask):
+                    thetaRV[self.goodIdx, n, k+1:] = thetaRV[self.goodIdx, n, k+1][:,None]
+                    break
+
+            if doneMask is not None and np.any(notdoneMask):
+                self.logger.warn(f'{(notdoneMask == True).sum()} did not finish:')
+                for c_i in np.where(notdoneMask)[0]:
+                    c = self.goodCobras[c_i]
+                    d = np.rad2deg(lastAngles[c_i])
+                    self.logger.warn(f'  {str(c)}: {np.round(d, 2)}')
 
             # At the end, make sure the cobra back to the hard stop
             self.logger.info(f'{n+1}/{repeat} theta reverse {-totalSteps} steps to limit')
