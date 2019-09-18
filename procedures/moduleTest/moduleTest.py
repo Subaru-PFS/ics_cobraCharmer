@@ -629,9 +629,10 @@ class ModuleTest():
             curPos = self.exposeAndExtractPositions(tolerance=0.2)
             if idx is not None:
                 curPos = curPos[idx]
-            a1 = self._fullAngle(curPos, thetaCenters)
-            atAngles = self.dThetaAngle(a1, homeAngles, doAbs=True)
-            left = self.dThetaAngle(targetAngles,atAngles, doWrap=True)
+
+            atAngles = unwrappedPosition(curPos, thetaCenters, homeAngles,
+                                         lastAngles, targetAngles)
+            left = targetAngles - atAngles
 
             # check position errors
             notDone = np.abs(left) > tolerance
