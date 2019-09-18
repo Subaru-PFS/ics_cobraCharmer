@@ -39,7 +39,8 @@ class PFI(object):
         self.calibModel = None
         self.motorMap = None
         self.ontimeScales = cobraState.motorScales
-
+        self.maxThetaOntime = 0.08
+        self.maxPhiOntime = 0.07
         if fpgaHost == 'fpga':
             fpgaHost = '128.149.77.24'  # A JPL address which somehow got burned into the FPGAs. See INSTRM-464
         self.fpgaHost = fpgaHost
@@ -431,13 +432,27 @@ class PFI(object):
         mapId = cobraState.mapId(cobraId, 'theta', direction)
         scale = cobraState.motorScales.get(mapId, 1.0)
         self.logger.debug(f'adjust {mapId} {scale:0.2f}')
-        return ontime*scale
+
+        newOntime = ontime*scale
+        if newOntime > self.maxThetaOntime:
+            newOntime = self.maxThetaOntime
+            cobraState.motorScales[mapId] = newOntime/ontime
+            self.logger.warn(f'clipping {mapId} {scale:0.2f} to {cobraState.motorScales[mapId]}')
+
+        return newOntime
 
     def adjustPhiOnTime(self, cobraId, ontime, fast, direction):
         mapId = cobraState.mapId(cobraId, 'phi', direction)
         scale = cobraState.motorScales.get(mapId, 1.0)
         self.logger.debug(f'adjust {mapId} {scale:0.2f}')
-        return ontime*scale
+
+        newOntime = ontime*scale
+        if newOntime > self.maxPhiOntime:
+            newOntime = self.maxPhiOntime
+            cobraState.motorScales[mapId] = newOntime/ontime
+            self.logger.warn(f'clipping {mapId} {scale:0.2f} to {cobraState.motorScales[mapId]}')
+
+        return newOntime
 
     def moveSteps(self, cobras, thetaSteps, phiSteps, waitThetaSteps=None, waitPhiSteps=None,
                   interval=2.5, thetaFast=True, phiFast=True):
