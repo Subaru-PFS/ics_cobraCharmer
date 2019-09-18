@@ -85,7 +85,9 @@ class OntimeOptimize(object):
         loc2 = loc1[dataframe[direction].abs() > self.minSpeed].loc
         ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange]
         
-        # When nPoint=1, using simple ratio to determine next point.
+        # When nPoint=1, using simple ratio to determine next point.  Otherwise, fitting data 
+        #   with full ROM only
+        
         if self.nPoints == 1:
             if (len(ndf[f'onTime{direction}'].values) == 0):
                 loc1 = dataframe.loc[dataframe['fiberNo'] == pid].loc
@@ -95,11 +97,7 @@ class OntimeOptimize(object):
             slope = ndf[f'{direction}'].values/ndf[f'onTime{direction}'].values
             intercept = 0
         else:
-
-            if (len(ndf[f'onTime{direction}'].values) <= 1):
-                loc1 = dataframe.loc[dataframe['fiberNo'] == pid].loc
-                ndf = loc1[dataframe[direction].abs() > self.minSpeed]
-        
+       
             if len(ndf[f'onTime{direction}'].values) > 1:
 
                 onTimeArray = ndf[f'onTime{direction}'].values
@@ -264,6 +262,24 @@ class OntimeOptimize(object):
                 rev_slope[pid-1] = rv_s
                 rev_int[pid-1] = rv_i
             
+    def _searchNextGoodSpeed(self, fiberInx, direction, targetSpeed):
+
+        dataframe = self.dataframe
+        loc1 = dataframe.loc[dataframe['fiberNo'] == fiberInx+1].loc
+        loc2 = loc1[dataframe[direction].abs() > self.minSpeed].loc
+        ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange]
+        print(fiberInx+1)
+        # First, make sure there is good speed data.
+        ind=np.argmin(np.abs((ndf[f'{direction}'] -  targetSpeed).values))
+        if np.abs(ndf[f'{direction}'].values[ind]-targetSpeed) < 0.02:
+            newOntime = ndf['onTimeFwd'].values[ind]
+        else:
+            if ndf[f'{direction}'].values[ind] > targetSpeed:
+                newOntime = ndf[f'onTime{direction}'].values[ind] - 0.005
+            else:
+                newOntime = ndf[f'onTime{direction}'].values[ind] + 0.005 
+
+        return newOntime
 
     def _solveForSpeed(self, targetSpeed=None):
         fwd_target = np.full(len(self.fwd_int), targetSpeed)
@@ -276,31 +292,14 @@ class OntimeOptimize(object):
         inx = np.where(np.isinf(newOntimeFwd))[0].tolist()
         for i in inx:
             if i not in self.badIdx:
-                # Make sure if there is any good on-time value in this collection
-                ndf = self.dataframe.loc[self.dataframe.fiberNo == i+1].loc[self.dataframe['Fwd'].abs() > self.minSpeed]
-                ind=np.argmin(np.abs((ndf.Fwd -  targetSpeed).values))
-                if np.abs(ndf['Fwd'].values[ind]-targetSpeed) < 0.01:
-                    newOntimeFwd[i] = ndf['onTimeFwd'].values[ind]
-                else:
-                    if ndf['Fwd'].values[ind] > targetSpeed:
-                        newOntimeFwd[i] = ndf.onTimeFwd.values[ind] - 0.005
-                    else:
-                        newOntimeFwd[i] = ndf.onTimeFwd.values[ind] + 0.005
+                newOntimeFwd[i] = self._searchNextGoodSpeed(i, 'Fwd', targetSpeed)
             else:
                 newOntimeFwd[i] = self.maxOntime
 
         inx = np.where(np.isinf(newOntimeRev))[0].tolist()
         for i in inx:
             if i not in self.badIdx:
-                ndf = self.dataframe.loc[self.dataframe.fiberNo == i+1].loc[self.dataframe['Rev'].abs() > self.minSpeed]
-                ind=np.argmin(np.abs((ndf.Rev +  targetSpeed).values))
-                if (np.abs(ndf['Rev'].values[ind]+targetSpeed)) < 0.01:
-                    newOntimeRev[i] = ndf['onTimeRev'].values[ind]
-                else:
-                    if ndf['Rev'].values[ind] > -targetSpeed:
-                        newOntimeRev[i] = ndf.onTimeRev.values[ind] - 0.005
-                    else:
-                        newOntimeRev[i] = ndf.onTimeRev.values[ind] + 0.005 
+                newOntimeFwd[i] = self._searchNextGoodSpeed(i, 'Rev', targetSpeed)
             else:
                 newOntimeRev[i] = self.maxOntime
 
@@ -316,10 +315,10 @@ class OntimeOptimize(object):
                          f'fwd:{newOntimeFwd[slowOnes]} rev:{newOntimeRev[slowOnes]}')
 
         slowOnes = np.where((newOntimeFwd < 0))
-        if len(slowOnes[0]) > 0: newOntimeFwd[slowOnes] = 0.02
+        if len(slowOnes[0]) > 0: newOntimeFwd[slowOnes] = 0.01
         
         slowOnes = np.where((newOntimeRev < 0))
-        if len(slowOnes[0]) > 0: newOntimeRev[slowOnes] = 0.02
+        if len(slowOnes[0]) > 0: newOntimeRev[slowOnes] = 0.01
 
         return newOntimeFwd, newOntimeRev
 
