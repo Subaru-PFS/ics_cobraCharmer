@@ -249,12 +249,37 @@ class ModuleTest():
         return phiCenters
 
     def setPhiCentersFromRun(self, geometryRun):
-        self.phiCenters = np.load(geometryRun / 'data' / 'phiCenter.npy')
+        self.phiCenter = np.load(geometryRun / 'data' / 'phiCenter.npy')
+
+    def setPhiGeometryFromRun(self, geometryRun, onlyIfClear=True):
+        if (onlyIfClear and (self.phiCenter is not None
+                             and self.phiCWHome is not None
+                             and self.phiCCWHome is not None)):
+            return
+        self.setPhiCentersFromRun(geometryRun)
+
+        FW = np.load(geometryRun / 'data' / 'phiFW.npy')
+        RV = np.load(geometryRun / 'data' / 'phiRV.npy')
+        self.phiCCWHome = np.angle(FW[:,0,0] - self.phiCenter)
+        self.phiCWHome = np.angle(RV[:,0,0] - self.phiCenter)
+        dAng = self.phiCWHome - self.phiCCWHome
+        dAng[dAng<0] += 2*np.pi
+        stopped = np.where(dAng < np.deg2rad(182.0))[0]
+        if len(stopped) > 0:
+            self.logger.error(f"phi ranges for cobras {stopped} are too small: "
+                              f"CW={np.rad2deg(self.phiCWHome[stopped])} "
+                              f"CCW={np.rad2deg(self.phiCCWHome[stopped])}")
+            self.logger.error(f"     {np.round(np.rad2deg(dAng[stopped]), 2)}")
 
     def setThetaCentersFromRun(self, geometryRun):
         self.thetaCenter = np.load(geometryRun / 'data' / 'thetaCenter.npy')
 
-    def setThetaGeometryFromRun(self, geometryRun):
+    def setThetaGeometryFromRun(self, geometryRun, onlyIfClear=True):
+        if (onlyIfClear and (self.thetaCenter is not None
+                             and self.thetaCWHome is not None
+                             and self.thetaCCWHome is not None)):
+            return
+
         self.setThetaCentersFromRun(geometryRun)
 
         FW = np.load(geometryRun / 'data' / 'thetaFW.npy')
@@ -308,7 +333,7 @@ class ModuleTest():
         moves0 = np.zeros(len(cobras), dtype=dtype)
 
         try:
-            phiCenters = self.phiCenters
+            phiCenters = self.phiCenter
         except AttributeError:
             raise RuntimeError("moduleTest needs to have been to told the phi Centers")
 
@@ -462,7 +487,7 @@ class ModuleTest():
         try:
             thetaCenters = self.thetaCenters
         except AttributeError:
-            raise RuntimeError("moduleTest needs to have been told the thetaCenters")
+            thetaCenters = self.pfi.calibModel.centers
 
         tolerance = np.deg2rad(tolerance)
 
@@ -617,7 +642,7 @@ class ModuleTest():
         """ move positioners to given theta, phi angles.
         """
 
-        cobras = getCobras(idx)
+        cobras = self.getCobras(idx)
         if np.isscalar(theta):
             thetaAngles = np.full(len(cobras), theta, dtype='f4')
         elif idx is not None:
@@ -642,7 +667,10 @@ class ModuleTest():
         """ move positioners to given theta, phi angles.
         """
 
-        cobras = getCobras(None)
+        if idx is None:
+            idx = np.arange(len(self.allCobras))
+
+        cobras = self.getCobras(None)
         if np.isscalar(theta):
             thetaAngles = np.full(len(cobras), theta, dtype='f4')
         else:
@@ -1348,8 +1376,10 @@ class ModuleTest():
         old.createCalibrationFile(newXml)
         self.cal.restoreConfig()
 
+    def getCobras(self, cobs):
+        # cobs is 0-indexed list
+        if cobs is None:
+            cobs = np.arange(len(self.allCobras))
 
-def getCobras(cobs):
-    # cobs is 0-indexed list
-    return pfiControl.PFI.allocateCobraList(zip(np.full(len(cobs), 1), np.array(cobs) + 1))
-
+        # assumes module == 1 XXX
+        return np.array(pfiControl.PFI.allocateCobraList(zip(np.full(len(cobs), 1), np.array(cobs) + 1)))
