@@ -74,7 +74,7 @@ def unwrappedPosition(pos, center, homeAngle, fromAngle, toAngle,
     # Get the pos angle from the center, normalized to 0..2pi
     rawAngle = np.angle(pos - center)
     rawAngle = np.atleast_1d(rawAngle)
-    assert rawAngle >= 0 and rawAngle < 2*np.pi
+    rawAngle[rawAngle<0] += 2*np.pi
 
     return unwrappedAngle(rawAngle, fromAngle, toAngle,
                           tripAngle=tripAngle, allowAngle=allowAngle)
