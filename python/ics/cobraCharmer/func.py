@@ -84,7 +84,7 @@ class CalParams:
         return p
         
 class HkParams:
-    def __init__(self, m0=(60.0,70.0), m1=(94.0,110.0), \
+    def __init__(self, m0=(60.0,70.0), m1=(100.0,115.0), \
                     temps=(16.0,31.0), cur=(0.25,1.2), volt=(9.5,10.5)
                 ):
         self.type = 'Hk'
