@@ -35,9 +35,13 @@ def unwrappedAngle(angle, fromAngle, toAngle,
        of 0 on the other side, convert `angle` to be continuous with motion from
        `fromAngle` to `toAngle`.
 
-    If tripAngle is 90 and allowAngle is 30:
-      If moving DOWN past 90 , turn 360..330 to 0..-30
-      If moving UP past 270, turn 0..45 to 360..405
+    Given tripAngle is 90 and allowAngle is 30:
+
+    If moving DOWN past 90 or UP from < 0 and target < 90
+      turn 360..330 to 0..-30
+
+    If moving UP past 270 or DOWN from > 360 and target > 270
+      turn 0..45 to 360..405
     """
 
     angle = np.atleast_1d(angle)
@@ -45,19 +49,23 @@ def unwrappedAngle(angle, fromAngle, toAngle,
     motion = toAngle - fromAngle
     motion = np.atleast_1d(motion)
 
+    AND = np.logical_and
+
     # Allow motion down past 0: turn angle negative
-    down_w = (motion < 0) & (toAngle < tripAngle)
+    down_w = AND(motion < 0, toAngle < tripAngle)
+    down_w |= AND(motion > 0, AND(fromAngle < 0, toAngle < tripAngle))
     down_w &= angle > (2*np.pi - allowAngle)
     angle[down_w] -= 2*np.pi
 
     # Allow motion up past 0: let angle go past 360
-    up_w = (motion > 0) & (toAngle > 2*np.pi - tripAngle)
+    up_w = AND(motion > 0, toAngle > 2*np.pi - tripAngle)
+    up_w |= AND(motion < 0, AND(fromAngle > 2*np.pi, toAngle > 2*np.pi - tripAngle))
     up_w &= (angle < allowAngle)
     angle[up_w] += 2*np.pi
 
     return angle
 
-def unwrappedPosition(pos, center, fromAngle, toAngle,
+def unwrappedPosition(pos, center, homeAngle, fromAngle, toAngle,
                       tripAngle=np.pi, allowAngle=np.pi/4):
     """ Return the angle for a given position accounting for overshoots across 0.
 
