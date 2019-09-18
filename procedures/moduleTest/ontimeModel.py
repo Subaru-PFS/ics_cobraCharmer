@@ -24,25 +24,27 @@ class ontimeModel():
         return len(self.dataframe)//len(self.runDirs)
 
     @classmethod
-    def loadFromPhiData(cls, runDirs):
-        self = cls(runDirs)
+    def loadFromPhiData(cls, modelPath, runDirs):
+        self = cls(modelPath, runDirs)
         self.axisNum = 2
         self.axisName = "Phi"
         self.maxOntime = 0.08
         self.slowTarget = 0.09
+        self.minRange = np.deg2rad(182.0)
         self.fastTarget = 2.0*self.slowTarget
         self._buildModel()
 
         return self
 
     @classmethod
-    def loadFromThetaData(cls, runDirs):
-        self = cls(runDirs)
+    def loadFromThetaData(cls, modelPath, runDirs):
+        self = cls(modelPath, runDirs)
         self.axisNum = 1
         self.axisName = "Theta"
-        self.maxOntime = 0.09
+        self.maxOntime = 0.08
         self.slowTarget = 0.07
         self.fastTarget = 2.0*self.slowTarget
+        self.minRange = np.deg2rad(375.0)
         self._buildModel()
 
         return self
@@ -76,12 +78,12 @@ class ontimeModel():
 
         fastOnes = np.where((newOntimeFwd < self.minOntime) | (newOntimeRev < self.minOntime))
         if len(fastOnes[0]) > 0:
-            logging.warn(f'some motors too fast: {fastOnes[0]}: '
-                         f'fwd:{newOntimeFwd[fastOnes]} rev:{newOntimeRev[fastOnes]}')
+            self.logger.warn(f'some motors too fast: {fastOnes[0]}: '
+                             f'fwd:{newOntimeFwd[fastOnes]} rev:{newOntimeRev[fastOnes]}')
         slowOnes = np.where((newOntimeFwd > self.maxOntime) | (newOntimeRev > self.maxOntime))
         if len(slowOnes[0]) > 0:
-            logging.warn(f'some motors too slow {slowOnes[0]}: '
-                         f'fwd:{newOntimeFwd[slowOnes]} rev:{newOntimeRev[slowOnes]}')
+            self.logger.warn(f'some motors too slow {slowOnes[0]}: '
+                             f'fwd:{newOntimeFwd[slowOnes]} rev:{newOntimeRev[slowOnes]}')
 
         return newOntimeFwd, newOntimeRev
 
@@ -109,13 +111,13 @@ class ontimeModel():
 
         motor = self.axisName.lower()
         updateArgs = dict(fast=True)
-        updateArgs[f'{motor}Fwd'] = self.newOntimeFwd
-        updateArgs[f'{motor}Rev'] = self.newOntimeRev
+        updateArgs[f'{motor}Fwd'] = np.clip(self.newOntimeFwd*scaleBy, self.maxOntime*0.75, self.maxOntime)
+        updateArgs[f'{motor}Rev'] = np.clip(self.newOntimeRev*scaleBy, self.maxOntime*0.75, self.maxOntime)
         self.model.updateOntimes(**updateArgs)
 
         updateArgs = dict(fast=False)
-        updateArgs[f'{motor}Fwd'] = self.newOntimeSlowFwd
-        updateArgs[f'{motor}Rev'] = self.newOntimeSlowRev
+        updateArgs[f'{motor}Fwd'] = np.clip(self.newOntimeSlowFwd*scaleBy, None, self.maxOntime)
+        updateArgs[f'{motor}Rev'] = np.clip(self.newOntimeSlowRev*scaleBy, None, self.maxOntime)
         self.model.updateOntimes(**updateArgs)
 
         self.model.createCalibrationFile(mapPath)
