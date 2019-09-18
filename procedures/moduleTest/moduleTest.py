@@ -15,6 +15,62 @@ from ics.cobraCharmer.utils import butler
 from ics.cobraCharmer.fpgaState import fpgaState
 from ics.cobraCharmer import cobraState
 
+def unwrappedAngle(angle, fromAngle, toAngle,
+                   tripAngle=np.pi, allowAngle=np.pi/6):
+    """ Adjust angles near 0 accounting for possible overshoots given the move.
+
+    Args
+    ----
+    angle : radians
+       The angle from CCW limit which we want to adjust.
+    fromAngle : radians
+       The start of the last move
+    toAngle : radians
+       The destination of the last move
+    tripAngle : radians
+       If the destination is within `tripAngle` of 0 or 2pi,
+       possibly adjust `angle` if we believe 0 was crossed.
+    allowAngle : radians
+       If `tripAngle` was crossed and `angle` is within `allowAngle`
+       of 0 on the other side, convert `angle` to be continuous with motion from
+       `fromAngle` to `toAngle`.
+
+    If tripAngle is 90 and allowAngle is 30:
+      If moving DOWN past 90 , turn 360..330 to 0..-30
+      If moving UP past 270, turn 0..45 to 360..405
+    """
+
+    angle = np.atleast_1d(angle)
+
+    motion = toAngle - fromAngle
+    motion = np.atleast_1d(motion)
+
+    # Allow motion down past 0: turn angle negative
+    down_w = (motion < 0) & (toAngle < tripAngle)
+    down_w &= angle > (2*np.pi - allowAngle)
+    angle[down_w] -= 2*np.pi
+
+    # Allow motion up past 0: let angle go past 360
+    up_w = (motion > 0) & (toAngle > 2*np.pi - tripAngle)
+    up_w &= (angle < allowAngle)
+    angle[up_w] += 2*np.pi
+
+    return angle
+
+def unwrappedPosition(pos, center, fromAngle, toAngle,
+                      tripAngle=np.pi, allowAngle=np.pi/4):
+    """ Return the angle for a given position accounting for overshoots across 0.
+
+    See unwrappedAngle.
+    """
+    # Get the pos angle from the center, normalized to 0..2pi
+    rawAngle = np.angle(pos - center)
+    rawAngle = np.atleast_1d(rawAngle)
+    assert rawAngle >= 0 and rawAngle < 2*np.pi
+
+    return unwrappedAngle(rawAngle, fromAngle, toAngle,
+                          tripAngle=tripAngle, allowAngle=allowAngle)
+
 class Camera():
     def __init__(self, devId):
         from idsCamera import idsCamera
