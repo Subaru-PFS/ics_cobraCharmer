@@ -72,7 +72,7 @@ def plotConvergenceRuns(runPaths, motor):
                          figsize=(12, 2*nrows))
 
     for run_i, runPath in enumerate(runPaths):
-        dataPath = sorted(runPath.glob(f'output/{motor}convergence.npy'))
+        dataPath = sorted(runPath.glob(f'output/{motor}Convergence.npy'))
         dataPath = dataPath[0]
         data = np.load(dataPath)
         runName = runPath.stem
@@ -121,7 +121,7 @@ def plotConvergenceRuns(runPaths, motor):
                 p2.set_ylabel('degrees')
                 p2.xaxis.set_major_locator(MaxNLocator(integer=True))
 
-        f.tight_layout()
+        # f.tight_layout()
     return f, data
 
 def plotConvergenceSummary(runPaths):
