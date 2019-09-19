@@ -530,9 +530,25 @@ class ModuleTest():
 
         return self.runManager.runDir
 
+    def gotoSafeFromPhi60(self, phiAngle=60.0):
+        """ Move cobras to nominal safe position: thetas out, phis in.
+        Assumes phi is at 60deg and that we know thetaPositions.
+
+        """
+        brd1Idx = np.arange(0,57,2)
+        brd2Idx = np.arange(1,57,2)
+
+        run1 = self.moveToThetaAngle(brd1Idx, angle=270+phiAngle, tolerance=np.rad2deg(0.05),
+                                     keepExistingPosition=True, globalAngles=True)
+
+        run2 = self.moveToThetaAngle(brd2Idx, angle=90+phiAngle, tolerance=np.rad2deg(0.05),
+                                     keepExistingPosition=True, globalAngles=True)
+
+        return [run1, run2]
     def moveToThetaAngle(self, idx=None, angle=60.0,
                          keepExistingPosition=False,
                          tolerance=1.0, maxTries=7, scaleFactor=10,
+                         globalAngles=False,
                          doFast=False):
         """
         Robustly move to a given theta angle.
