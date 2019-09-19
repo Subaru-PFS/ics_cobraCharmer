@@ -273,12 +273,11 @@ class OntimeOptimize(object):
         if np.abs(ndf[f'{direction}'].values[ind]-targetSpeed) < 0.02:
             newOntime = ndf['onTimeFwd'].values[ind]
         else:
-            if ndf[f'{direction}'].values[ind] > targetSpeed:
+            if np.abs(ndf[f'{direction}'].values[ind]) > np.abs(targetSpeed):
                 newOntime = ndf[f'onTime{direction}'].values[ind] - 0.005
             else:
                 newOntime = ndf[f'onTime{direction}'].values[ind] + 0.005 
 
-        print(fiberInx+1,newOntime)
         return newOntime
 
     def _solveForSpeed(self, targetSpeed=None):
