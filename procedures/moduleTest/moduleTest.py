@@ -563,6 +563,8 @@ class ModuleTest():
           Which cobras to limit the move to.
         angle : `float`
           Degrees we want to move to from the CCW limit.
+        globalAngle : `bool`
+          Whether to use limit-based or module-based angles.
         tolerance : `float`
           How close we want to get, in degrees.
         maxTries: `int`
@@ -611,6 +613,8 @@ class ModuleTest():
             self.thetaAngles = lastAngles
 
         targetAngles = np.full(len(homeAngles), np.deg2rad(angle))
+        if globalAngles:
+            targetAngles = self.pfi.thetaToLocal(cobras, targetAngles)
         phiAngles = targetAngles*0
         ntries = 1
         notDone = targetAngles != 0
