@@ -451,14 +451,18 @@ class ModuleTest():
             moves['position'][moveIdx] = curAngles[i]
             moves['left'][moveIdx] = left[i]
             moves['done'][moveIdx] = not notDone[i]
+
         while True:
             with np.printoptions(precision=2, suppress=True):
                 self.logger.debug("to: %s", np.rad2deg(targetAngles)[notDone])
                 self.logger.debug("at: %s", np.rad2deg(lastAngles)[notDone])
-                self.logger.info("left try %d/%d, %d/%d: %s",
+                self.logger.debug("try %d/%d, %d/%d cobras left: %s",
+                                  ntries, maxTries,
+                                  notDone.sum(), len(cobras),
+                                  np.rad2deg(left)[notDone])
+                self.logger.info("try %d/%d, %d/%d cobras left",
                                  ntries, maxTries,
-                                 notDone.sum(), len(cobras),
-                                 np.rad2deg(left)[notDone])
+                                 notDone.sum(), len(cobras))
             self.pfi.moveThetaPhi(cobras[notDone],
                                   thetaAngles[notDone],
                                   left[notDone],
@@ -545,6 +549,7 @@ class ModuleTest():
                                      keepExistingPosition=True, globalAngles=True)
 
         return [run1, run2]
+
     def moveToThetaAngle(self, idx=None, angle=60.0,
                          keepExistingPosition=False,
                          tolerance=1.0, maxTries=7, scaleFactor=10,
@@ -634,10 +639,13 @@ class ModuleTest():
             with np.printoptions(precision=2, suppress=True):
                 self.logger.debug("to: %s", np.rad2deg(targetAngles)[notDone])
                 self.logger.debug("at: %s", np.rad2deg(lastAngles)[notDone])
-                self.logger.info("left try %d/%d, %d/%d: %s",
+                self.logger.debug("left try %d/%d, %d/%d: %s",
+                                  ntries, maxTries,
+                                  notDone.sum(), len(cobras),
+                                  np.rad2deg(left)[notDone])
+                self.logger.info("left try %d/%d, %d/%d",
                                  ntries, maxTries,
-                                 notDone.sum(), len(cobras),
-                                 np.rad2deg(left)[notDone])
+                                 notDone.sum(), len(cobras))
             self.pfi.moveThetaPhi(cobras[notDone],
                                   left[notDone],
                                   phiAngles[notDone],
