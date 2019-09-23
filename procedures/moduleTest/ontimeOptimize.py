@@ -270,7 +270,7 @@ class OntimeOptimize(object):
         ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange]
         # First, make sure there is good speed data.
         ind=np.argmin(np.abs((ndf[f'{direction}'] - targetSpeed).values))
-        newOntime = ndf['onTimeFwd'].values[ind]
+        newOntime = ndf[f'onTime{direction}'].values[ind]
 
         return newOntime
 
