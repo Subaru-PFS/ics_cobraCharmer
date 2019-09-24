@@ -490,7 +490,7 @@ class OntimeOptimize(object):
             OntimeFwd, OntimeRev = self.solveForFastSpeed()
         else:
             SlowOntimeFwd, SlowOntimeRev = self.pickForSlowSpeed()
-            OntimeFwd, OntimeRev = self.pickForSlowSpeed()
+            OntimeFwd, OntimeRev = self.pickForFastSpeed()
 
 
         # If there is a broken fiber, set on-time to original value
