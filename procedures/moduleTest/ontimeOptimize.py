@@ -393,8 +393,25 @@ class OntimeOptimize(object):
     def pickForFastSpeed(self, targetSpeed=None):
         if targetSpeed is None:
             targetSpeed = self.fastTarget
-        newMaps = self._pickupForSpeed(targetSpeed=targetSpeed)
-        self.newOntimeSlowFwd, self.newOntimeSlowRev = newMaps
+        ontime
+        
+        fastOntimeFwd = np.zeros(57)
+        fastOntimeRev = np.zeros(57)
+
+        pickFastOntimeFwd, pickFastOntimeRev = self._pickupForSpeed(targetSpeed=targetSpeed)
+        sloveFastOntimeFwd, solveFastOntimeRev = self._pickupForSpeed(targetSpeed=targetSpeed)
+        
+        for i in range(57):
+            # Including result from solving fast speed
+            fasOntimeFwd[i]=np.max(pickFastOntimeFwd[i],sloveFastOntimeFwd[i])
+            if np.abs(fasOntimeFwd[i]-self.newOntimeSlowFwd[i])< 0.05:
+                fasOntimeFwd[i]=0.08
+            
+            fasOntimeRev[i]=np.max(pickFastOntimeRev[i],sloveFastOntimeRev[i])
+            if np.abs(fasOntimeRev[i]-self.newOntimeSlowRev[i])< 0.05:
+                fasOntimeRev[i]=0.08
+
+        self.newOntimeFwd, self.newOntimeRev = (fasOntimeFwd,fasOntimeRev)
 
         return newMaps
 
@@ -485,7 +502,7 @@ class OntimeOptimize(object):
         OntimeRev[self.badIdx] = model.motorOntimeRev[self.badIdx]
 
         if table is not None:
-            pid=range(len(OntimeFwd))
+            pid=range(len(OntimeFwd)) 
             t=Table([pid, self.fwdOntimeSlowModel(model), self.fwd_int, self.fwd_slope, SlowOntimeFwd,
                 self.revOntimeSlowModel(model),self.rev_int, self.rev_slope, SlowOntimeRev],
                 names=('Fiber No','Ori Fwd OT', 'FWD int', 'FWD slope', 'New Fwd OT',
