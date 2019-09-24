@@ -478,11 +478,11 @@ class OntimeOptimize(object):
 
 
         # If there is a broken fiber, set on-time to original value 
-        #SlowOntimeFwd[self.badIdx] = self.fwdOntimeSlowModel(model)[self.badIdx]
-        #SlowOntimeRev[self.badIdx] = self.revOntimeSlowModel(model)[self.badIdx]
+        SlowOntimeFwd[self.badIdx] =  model.motorOntimeSlowFwd{self.axisNum}[self.badIdx]
+        SlowOntimeRev[self.badIdx] =  model.motorOntimeSlowRev{self.axisNum}[self.badIdx]
 
-        #OntimeFwd[self.badIdx] = self.fwdOntimeModel(model)[self.badIdx]
-        #OntimeRev[self.badIdx] = self.revOntimeModel(model)[self.badIdx]
+        OntimeFwd[self.badIdx] = model.motorOntimeFwd{self.axisNum}[self.badIdx]
+        OntimeRev[self.badIdx] = model.motorOntimeRev[self.badIdx]
 
         if table is not None:
             pid=range(len(OntimeFwd))
