@@ -19,6 +19,7 @@ from bokeh.models.glyphs import Text
 from bokeh.palettes import Category20
 from bokeh.transform import linear_cmap
 
+import ontimeOptimize 
 from moduleTest import ModuleTest
 from ics.cobraCharmer import pfi as pfiControl
 from ics.cobraCharmer import pfiDesign
@@ -524,62 +525,82 @@ class OntimeOptimize(object):
         show(grid)
         
 
-def exploreModuleOntime(fpgaHost, dataPath, direction=None, 
-    brokens=None, camSplit=28, iteration=4):
+def exploreModuleOntime(fpgaHost, dataPath, arm=None, 
+    brokens=None, camSplit=28, iteration=4, XML=None):
     
     if brokens is None:
         brokens = []
 
-
+    datalist =[]
 
     for itr in range(iteration):
         currentpath = dataPath+f'run{itr}/'
-        nextpath = dataPath+f'run{itr+1}/'
-        
-        outXML = f'temp.xml'
-        curXML = f'science15_20190920_theta_run{itr}.xml'
-        nextXML =  f'science15_20190920_theta_run{itr+1}.xml'
+        if not (os.path.exists(currentpath)):
+            os.mkdir(currentpath)
 
-        fwdhtml = currentpath+f'science15_theta_fwd{itr}.html'
-        revhtml = currentpath+f'science15_theta_rev{itr}.html'
+        outXML = f'temp.xml'
+        curXML = f'science15_20190920_{arm}_run{itr}.xml'
+
+        fwdhtml = currentpath+f'{arm}_fwd{itr}.html'
+        revhtml = currentpath+f'{arm}_rev{itr}.html'
         
-        data.append(currentpath)
+        datalist.append(currentpath)
         
         if itr == 0:
-            mt = ModuleTest('128.149.77.24', 
-                    '/data/chyan/20190920/science15_theta_20190922.xml', 
-                     brokens=brokens,camSplit=28)
-            pfi = mt.pfi
-            pfi.moveAllSteps(mt.allCobras, -10000, 0)
-            pfi.moveAllSteps(mt.allCobras, -2000, 0)
+            curXML = XML
             thetaOntime = np.zeros(57)+0.08
-            mt.makeThetaMotorMap(f'{curXML}',f'{currentpath}',
-                    thetaOnTime=thetaOntime, repeat = 1, fast=False, steps = 100, totalSteps = 12000)
+            phiOntime = np.zeros(57)+0.08
             
-            curXML = '/data/chyan/20190920/science15_theta_20190922.xml'
+            mt = ModuleTest(f'{fpgaHost}', 
+                    f'{XML}', 
+                     brokens=brokens,camSplit=28)
+            
+            pfi = mt.pfi
+
+            if arm is 'phi':
+                pfi.moveAllSteps(mt.allCobras, 0, -5000)
+                pfi.moveAllSteps(mt.allCobras, 0, -1000)
+                mt.makePhiMotorMap(f'{curXML}',f'{currentpath}',
+                        phiOnTime=phiOntime, repeat = 1, fast=False, steps = 50, totalSteps = 60000)
+
+            else:
+                pfi.moveAllSteps(mt.allCobras, -10000, 0)
+                pfi.moveAllSteps(mt.allCobras, -2000, 0)
+
+                mt.makeThetaMotorMap(f'{curXML}',f'{currentpath}',
+                        thetaOnTime=thetaOntime, repeat = 1, fast=False, steps = 100, totalSteps = 12000)
+                
+            
         else:
             
-            mt = ModuleTest('128.149.77.24', 
-                f'{pathprefix}{outXML}', brokens=brokens,camSplit=28)
+            mt = ModuleTest(f'{fpgaHost}', 
+                f'{dataPath}{outXML}', brokens=brokens,camSplit=28)
             print('---------')
-        
             pfi = mt.pfi
-            pfi.moveAllSteps(mt.allCobras, -10000, 0)
-            pfi.moveAllSteps(mt.allCobras, -2000, 0)
 
-            mt.makeThetaMotorMap(f'{curXML}',f'{currentpath}', 
+            if arm is 'phi':
+                pfi.moveAllSteps(mt.allCobras, 0,-5000)
+                pfi.moveAllSteps(mt.allCobras, 0, -1000)
+                mt.makePhiMotorMap(f'{curXML}',f'{currentpath}', 
+                    repeat = 3, fast=False,totalSteps = 6000, limitOnTime = 0.08)
+
+            else:
+                pfi.moveAllSteps(mt.allCobras, -10000, 0)
+                pfi.moveAllSteps(mt.allCobras, -2000, 0)
+
+                mt.makeThetaMotorMap(f'{curXML}',f'{currentpath}', 
                     repeat = 3, fast=False,totalSteps = 12000, limitOnTime = 0.08)
-            print('---------')
-            curXML = f'{currentpath}{curXML}'
+
+                curXML = f'{currentpath}{curXML}'
 
             
-        print(data)
-        otm = ontimeOptimize.OntimeOptimize(brokens=brokens, thetaList = data)
+        print(datalist)
+       
+        otm = ontimeOptimize.OntimeOptimize(brokens=brokens, thetaList = datalist)
         
-
-
-        otm.updateXML(f'{curXML}',f'{pathprefix}{outXML}')
+    
+        otm.updateXML(curXML,f'{dataPath}{outXML}')
         otm.visMaps('Fwd',filename=f'{fwdhtml}')
 
         otm.visMaps('Rev',filename=f'{revhtml}')
-        pass
+        del(mt)
