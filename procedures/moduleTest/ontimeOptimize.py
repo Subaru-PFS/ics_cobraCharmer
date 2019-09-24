@@ -347,7 +347,7 @@ class OntimeOptimize(object):
         # Now, dealing with inf values.  Those values are due to bad fitting results for the
         #  following cases.
         #   1. No data in good motor groups
-        #   2. Negtive slope in Fwd or pasitive slopw in Rev
+        #   2. Negative slope in Fwd or pasitive slope in Rev
         #   3. 
         inx = np.where(np.isinf(newOntimeFwd))[0].tolist()
         for i in inx:
@@ -396,7 +396,7 @@ class OntimeOptimize(object):
         
         fastOntimeFwd = np.zeros(57)
         fastOntimeRev = np.zeros(57)
-
+        _,_=self.pickForSlowSpeed()
         pickFastOntimeFwd, pickFastOntimeRev = self._pickupForSpeed(targetSpeed=targetSpeed)
         sloveFastOntimeFwd, solveFastOntimeRev = self._solveForSpeed(targetSpeed=targetSpeed)
         
@@ -493,12 +493,19 @@ class OntimeOptimize(object):
             OntimeFwd, OntimeRev = self.pickForSlowSpeed()
 
 
-        # If there is a broken fiber, set on-time to original value 
-        SlowOntimeFwd[self.badIdx] =  model.motorOntimeSlowFwd+f'{self.axisNum}'[self.badIdx]
-        SlowOntimeRev[self.badIdx] =  model.motorOntimeSlowRev+f'{self.axisNum}'[self.badIdx]
+        # If there is a broken fiber, set on-time to original value
+        if self.axisNum == 1: 
+            SlowOntimeFwd[self.badIdx] =  model.motorOntimeSlowFwd1[self.badIdx]
+            SlowOntimeRev[self.badIdx] =  model.motorOntimeSlowRev1[self.badIdx]
 
-        OntimeFwd[self.badIdx] = model.motorOntimeFwd+f'{self.axisNum}'[self.badIdx]
-        OntimeRev[self.badIdx] = model.motorOntimeRev+f'{self.axisNum}'[self.badIdx]
+            OntimeFwd[self.badIdx] = model.motorOntimeFwd1[self.badIdx]
+            OntimeRev[self.badIdx] = model.motorOntimeRev1[self.badIdx]
+        else:
+            SlowOntimeFwd[self.badIdx] =  model.motorOntimeSlowFwd2[self.badIdx]
+            SlowOntimeRev[self.badIdx] =  model.motorOntimeSlowRev2[self.badIdx]
+
+            OntimeFwd[self.badIdx] = model.motorOntimeFwd2[self.badIdx]
+            OntimeRev[self.badIdx] = model.motorOntimeRev2[self.badIdx]
 
         if table is not None:
             pid=range(len(OntimeFwd)) 
