@@ -19,6 +19,7 @@ from bokeh.models.glyphs import Text
 from bokeh.palettes import Category20
 from bokeh.transform import linear_cmap
 
+from moduleTest import ModuleTest
 from ics.cobraCharmer import pfi as pfiControl
 from ics.cobraCharmer import pfiDesign
 from astropy.table import Table
@@ -474,12 +475,6 @@ class OntimeOptimize(object):
             SlowOntimeFwd, SlowOntimeRev = self.pickForSlowSpeed()
             OntimeFwd, OntimeRev = self.pickForSlowSpeed()
 
-        # Make sure the on-time does not repeat on the same point.  
-        #dataframe = self.dataframe
-        #for i in self.goodIdx:
-        #    ndf = dataframe.loc[dataframe['fiberNo'] == i+1].loc[dataframe['ontimeFwd'] == OntimeFwd[i]]
-
-
 
         # If there is a broken fiber, set on-time to original value 
         SlowOntimeFwd[self.badIdx] = self.fwdOntimeSlowModel(model)[self.badIdx]
@@ -528,3 +523,63 @@ class OntimeOptimize(object):
         
         show(grid)
         
+
+def exploreModuleOntime(fpgaHost, dataPath, direction=None, 
+    brokens=None, camSplit=28, iteration=4):
+    
+    if brokens is None:
+        brokens = []
+
+
+
+    for itr in range(iteration):
+        currentpath = dataPath+f'run{itr}/'
+        nextpath = dataPath+f'run{itr+1}/'
+        
+        outXML = f'temp.xml'
+        curXML = f'science15_20190920_theta_run{itr}.xml'
+        nextXML =  f'science15_20190920_theta_run{itr+1}.xml'
+
+        fwdhtml = currentpath+f'science15_theta_fwd{itr}.html'
+        revhtml = currentpath+f'science15_theta_rev{itr}.html'
+        
+        data.append(currentpath)
+        
+        if itr == 0:
+            mt = ModuleTest('128.149.77.24', 
+                    '/data/chyan/20190920/science15_theta_20190922.xml', 
+                     brokens=brokens,camSplit=28)
+            pfi = mt.pfi
+            pfi.moveAllSteps(mt.allCobras, -10000, 0)
+            pfi.moveAllSteps(mt.allCobras, -2000, 0)
+            thetaOntime = np.zeros(57)+0.08
+            mt.makeThetaMotorMap(f'{curXML}',f'{currentpath}',
+                    thetaOnTime=thetaOntime, repeat = 1, fast=False, steps = 100, totalSteps = 12000)
+            
+            curXML = '/data/chyan/20190920/science15_theta_20190922.xml'
+        else:
+            
+            mt = ModuleTest('128.149.77.24', 
+                f'{pathprefix}{outXML}', brokens=brokens,camSplit=28)
+            print('---------')
+        
+            pfi = mt.pfi
+            pfi.moveAllSteps(mt.allCobras, -10000, 0)
+            pfi.moveAllSteps(mt.allCobras, -2000, 0)
+
+            mt.makeThetaMotorMap(f'{curXML}',f'{currentpath}', 
+                    repeat = 3, fast=False,totalSteps = 12000, limitOnTime = 0.08)
+            print('---------')
+            curXML = f'{currentpath}{curXML}'
+
+            
+        print(data)
+        otm = ontimeOptimize.OntimeOptimize(brokens=brokens, thetaList = data)
+        
+
+
+        otm.updateXML(f'{curXML}',f'{pathprefix}{outXML}')
+        otm.visMaps('Fwd',filename=f'{fwdhtml}')
+
+        otm.visMaps('Rev',filename=f'{revhtml}')
+        pass
