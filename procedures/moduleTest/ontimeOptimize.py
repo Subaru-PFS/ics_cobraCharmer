@@ -478,11 +478,11 @@ class OntimeOptimize(object):
 
 
         # If there is a broken fiber, set on-time to original value 
-        SlowOntimeFwd[self.badIdx] = self.fwdOntimeSlowModel(model)[self.badIdx]
-        SlowOntimeRev[self.badIdx] = self.revOntimeSlowModel(model)[self.badIdx]
+        #SlowOntimeFwd[self.badIdx] = self.fwdOntimeSlowModel(model)[self.badIdx]
+        #SlowOntimeRev[self.badIdx] = self.revOntimeSlowModel(model)[self.badIdx]
 
-        OntimeFwd[self.badIdx] = self.fwdOntimeModel(model)[self.badIdx]
-        OntimeRev[self.badIdx] = self.revOntimeModel(model)[self.badIdx]
+        #OntimeFwd[self.badIdx] = self.fwdOntimeModel(model)[self.badIdx]
+        #OntimeRev[self.badIdx] = self.revOntimeModel(model)[self.badIdx]
 
         if table is not None:
             pid=range(len(OntimeFwd))
@@ -547,7 +547,7 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
         datalist.append(currentpath)
         
         if itr == 0:
-            curXML = XML
+            
             thetaOntime = np.zeros(57)+0.08
             phiOntime = np.zeros(57)+0.08
             
@@ -561,7 +561,7 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
                 pfi.moveAllSteps(mt.allCobras, 0, -5000)
                 pfi.moveAllSteps(mt.allCobras, 0, -1000)
                 mt.makePhiMotorMap(f'{curXML}',f'{currentpath}',
-                        phiOnTime=phiOntime, repeat = 1, fast=False, steps = 50, totalSteps = 60000)
+                        phiOnTime=phiOntime, repeat = 1, fast=False, steps = 50, totalSteps = 6000)
 
             else:
                 pfi.moveAllSteps(mt.allCobras, -10000, 0)
@@ -570,7 +570,7 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
                 mt.makeThetaMotorMap(f'{curXML}',f'{currentpath}',
                         thetaOnTime=thetaOntime, repeat = 1, fast=False, steps = 100, totalSteps = 12000)
                 
-            
+            curXML = XML
         else:
             
             mt = ModuleTest(f'{fpgaHost}', 
@@ -596,7 +596,10 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
             
         print(datalist)
        
-        otm = ontimeOptimize.OntimeOptimize(brokens=brokens, thetaList = datalist)
+        if arm is 'phi':
+            otm = ontimeOptimize.OntimeOptimize(brokens=brokens, phiList = datalist)
+        else:
+            otm = ontimeOptimize.OntimeOptimize(brokens=brokens, thetaList = datalist)
         
     
         otm.updateXML(curXML,f'{dataPath}{outXML}')
