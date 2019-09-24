@@ -281,9 +281,9 @@ class OntimeOptimize(object):
         newOntimeRev = np.full(len(self.fwd_int), 0.08)
 
         for i in self.goodIdx:
+            
             newOntimeFwd[i]=self._pickCobraBestSpeed(i,'Fwd',targetSpeed)    
             newOntimeRev[i]=self._pickCobraBestSpeed(i,'Rev',targetSpeed)
-
         return newOntimeFwd,newOntimeRev
 
     def _searchNextGoodSpeed(self, fiberInx, direction, targetSpeed):
@@ -393,27 +393,26 @@ class OntimeOptimize(object):
     def pickForFastSpeed(self, targetSpeed=None):
         if targetSpeed is None:
             targetSpeed = self.fastTarget
-        ontime
         
         fastOntimeFwd = np.zeros(57)
         fastOntimeRev = np.zeros(57)
 
         pickFastOntimeFwd, pickFastOntimeRev = self._pickupForSpeed(targetSpeed=targetSpeed)
-        sloveFastOntimeFwd, solveFastOntimeRev = self._pickupForSpeed(targetSpeed=targetSpeed)
+        sloveFastOntimeFwd, solveFastOntimeRev = self._solveForSpeed(targetSpeed=targetSpeed)
         
         for i in range(57):
             # Including result from solving fast speed
-            fasOntimeFwd[i]=np.max(pickFastOntimeFwd[i],sloveFastOntimeFwd[i])
-            if np.abs(fasOntimeFwd[i]-self.newOntimeSlowFwd[i])< 0.05:
-                fasOntimeFwd[i]=0.08
+            fastOntimeFwd[i]=np.max([pickFastOntimeFwd[i],sloveFastOntimeFwd[i]])
+            if np.abs(fastOntimeFwd[i]-self.newOntimeSlowFwd[i])< 0.005:
+                fastOntimeFwd[i]=0.08
             
-            fasOntimeRev[i]=np.max(pickFastOntimeRev[i],sloveFastOntimeRev[i])
-            if np.abs(fasOntimeRev[i]-self.newOntimeSlowRev[i])< 0.05:
-                fasOntimeRev[i]=0.08
+            fastOntimeRev[i]=np.max([pickFastOntimeRev[i],solveFastOntimeRev[i]])
+            if np.abs(fastOntimeRev[i]-self.newOntimeSlowRev[i])< 0.005:
+                fastOntimeRev[i]=0.08
 
-        self.newOntimeFwd, self.newOntimeRev = (fasOntimeFwd,fasOntimeRev)
+        self.newOntimeFwd, self.newOntimeRev = (fastOntimeFwd,fastOntimeRev)
 
-        return newMaps
+        return fastOntimeFwd,fastOntimeRev
 
     def solveForSlowSpeed(self, targetSpeed=None):
         if targetSpeed is None:
@@ -495,11 +494,11 @@ class OntimeOptimize(object):
 
 
         # If there is a broken fiber, set on-time to original value 
-        SlowOntimeFwd[self.badIdx] =  model.motorOntimeSlowFwd{self.axisNum}[self.badIdx]
-        SlowOntimeRev[self.badIdx] =  model.motorOntimeSlowRev{self.axisNum}[self.badIdx]
+        SlowOntimeFwd[self.badIdx] =  model.motorOntimeSlowFwd+f'{self.axisNum}'[self.badIdx]
+        SlowOntimeRev[self.badIdx] =  model.motorOntimeSlowRev+f'{self.axisNum}'[self.badIdx]
 
-        OntimeFwd[self.badIdx] = model.motorOntimeFwd{self.axisNum}[self.badIdx]
-        OntimeRev[self.badIdx] = model.motorOntimeRev[self.badIdx]
+        OntimeFwd[self.badIdx] = model.motorOntimeFwd+f'{self.axisNum}'[self.badIdx]
+        OntimeRev[self.badIdx] = model.motorOntimeRev+f'{self.axisNum}'[self.badIdx]
 
         if table is not None:
             pid=range(len(OntimeFwd)) 
