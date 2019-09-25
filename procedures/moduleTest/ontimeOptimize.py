@@ -562,7 +562,7 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
             os.mkdir(currentpath)
 
         outXML = f'temp.xml'
-        curXML = f'science15_20190920_{arm}_run{itr}.xml'
+        curXML = f'{arm}_run{itr}.xml'
 
         fwdhtml = currentpath+f'{arm}_fwd{itr}.html'
         revhtml = currentpath+f'{arm}_rev{itr}.html'
@@ -584,7 +584,7 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
                 pfi.moveAllSteps(mt.allCobras, 0, -5000)
                 pfi.moveAllSteps(mt.allCobras, 0, -1000)
                 mt.makePhiMotorMap(f'{curXML}',f'{currentpath}',
-                        phiOnTime=phiOntime, repeat = 1, fast=False, steps = 50, totalSteps = 6000)
+                        phiOnTime=phiOntime, repeat = 1, fast=False, steps = 100, totalSteps = 6000)
 
             else:
                 pfi.moveAllSteps(mt.allCobras, -10000, 0)
@@ -605,7 +605,7 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
                 pfi.moveAllSteps(mt.allCobras, 0,-5000)
                 pfi.moveAllSteps(mt.allCobras, 0, -1000)
                 mt.makePhiMotorMap(f'{curXML}',f'{currentpath}', 
-                    repeat = 3, fast=False,totalSteps = 6000, limitOnTime = 0.08)
+                    repeat = 1, fast=False,totalSteps = 6000, limitOnTime = 0.08)
 
             else:
                 pfi.moveAllSteps(mt.allCobras, -10000, 0)
@@ -614,7 +614,7 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
                 mt.makeThetaMotorMap(f'{curXML}',f'{currentpath}', 
                     repeat = 3, fast=False,totalSteps = 12000, limitOnTime = 0.08)
 
-                curXML = f'{currentpath}{curXML}'
+            curXML = f'{currentpath}{curXML}'
 
             
         print(datalist)
@@ -624,7 +624,7 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
         else:
             otm = ontimeOptimize.OntimeOptimize(brokens=brokens, thetaList = datalist)
         
-    
+        
         otm.updateXML(curXML,f'{dataPath}{outXML}')
         otm.visMaps('Fwd',filename=f'{fwdhtml}')
 
