@@ -435,7 +435,7 @@ class OntimeOptimize(object):
 
         
         TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
-        title_string=f"Fiber {fiberInx+1} Theta {direction}"
+        title_string=f"Fiber {fiberInx+1} {self.axisName} {direction}"
         
         xmin = 0
         xmax = 1.5*np.max(dd[f'onTime{direction}'])
@@ -605,7 +605,7 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
                 pfi.moveAllSteps(mt.allCobras, 0,-5000)
                 pfi.moveAllSteps(mt.allCobras, 0, -1000)
                 mt.makePhiMotorMap(f'{curXML}',f'{currentpath}', 
-                    repeat = 1, fast=False,totalSteps = 6000, limitOnTime = 0.08)
+                    repeat = 3, fast=False,totalSteps = 6000, limitOnTime = 0.08)
 
             else:
                 pfi.moveAllSteps(mt.allCobras, -10000, 0)
