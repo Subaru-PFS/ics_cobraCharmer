@@ -1911,3 +1911,47 @@ class ModuleTest():
 
         return onTime
 
+def combineFastSlowMotorMap(inputXML, newXML, arm='phi', brokens=None, fastPath=None, slowPath=None):
+    binSize = np.deg2rad(3.6)
+    model = pfiDesign.PFIDesign(inputXML)
+
+    if fastPath is not None:
+        fastFwdMM = np.load(f'{fastPath}{arm}MMFW.npy')
+        fastRevMM = np.load(f'{fastPath}{arm}MMRV.npy')
+    
+    
+    if slowPath is not None:
+        slowFwdMM = np.load(f'{slowPath}{arm}MMFW.npy')
+        slowRevMM = np.load(f'{slowPath}{arm}MMRV.npy')
+
+ 
+    if brokens is None:
+        brokens = []
+
+    visibles = [e for e in range(1, 58) if e not in brokens]
+    goodIdx = np.array(visibles) - 1
+
+    new = model
+
+        
+    slowFW = binSize / new.S1Pm
+    slowRV = binSize / new.S1Nm
+
+    fastFW = binSize / new.F1Pm
+    fastRV = binSize / new.F1Nm
+    
+    
+    fastFW[goodIdx] = fastFwdMM[goodIdx]
+    fastRV[goodIdx] = fastRevMM[goodIdx]
+    slowFW[goodIdx] = slowFwdMM[goodIdx]
+    slowRV[goodIdx] = slowRevMM[goodIdx]
+
+    if arm is 'phi':
+        new.updateMotorMaps(phiFwd=slowFW, phiRev=slowRV, useSlowMaps=True)
+        new.updateMotorMaps(phiFwd=fastFW, phiRev=fastRV, useSlowMaps=False)
+
+    else:
+        new.updateMotorMaps(thtFwd=slowFW, thtRev=slowRV, useSlowMaps=True)
+        new.updateMotorMaps(thtFwd=fastFW, thtRev=fastRV, useSlowMaps=False)
+
+    new.createCalibrationFile(newXML)
