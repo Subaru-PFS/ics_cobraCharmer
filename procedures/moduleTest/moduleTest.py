@@ -1541,9 +1541,18 @@ class ModuleTest():
             self.pfi.moveAllSteps(self.goodCobras, -10000, 0, thetaFast=True)
             thetaFW[self.goodIdx, 0] = self.exposeAndExtractPositions()
 
+<<<<<<< HEAD
             for k in range(iteration):
                 self.pfi.moveAllSteps(self.goodCobras, steps, 0, thetaFast=False)
                 thetaFW[self.goodIdx, 0] = self.exposeAndExtractPositions()
+=======
+    def thetaConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, fastFirstMove=True):
+        # variable declaration for center measurement
+        steps = 300
+        iteration = 6000 // steps
+        thetaFW = np.zeros((57, iteration+1), dtype=complex)
+        thetaRV = np.zeros((57, iteration+1), dtype=complex)
+>>>>>>> Use fast motor map at first move.
 
             # make sure it goes to the limit
             self.pfi.moveAllSteps(self.goodCobras, 10000, 0, thetaFast=True)
