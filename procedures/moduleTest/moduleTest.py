@@ -537,7 +537,7 @@ class ModuleTest():
                 cAngles, cPositions = self.measureAngles(centers, homes)
                 cAngles[cAngles>np.pi*(3/2)] -= np.pi*2
 
-    def thetaConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, fast=True):
+    def thetaConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, fastFirstMove=True):
         # variable declaration for center measurement
         steps = 300
         iteration = 6000 // steps
@@ -623,7 +623,7 @@ class ModuleTest():
                 angle = np.deg2rad(margin + (360 - 2 * margin) * i / (runs - 1))
             else:
                 angle = np.deg2rad(180)
-            self.pfi.moveThetaPhi(self.goodCobras, zeros + angle, zeros, thetaFast=fast)
+            self.pfi.moveThetaPhi(self.goodCobras, zeros + angle, zeros, thetaFast=fastFirstMove)
             cAngles, cPositions = self.measureAngles(centers, homes)
             for k in range(len(goodIdx)):
                 if angle > np.pi + tGaps[k] and cAngles[k] < tGaps[k] + 0.1:
@@ -634,7 +634,7 @@ class ModuleTest():
 
             for j in range(tries - 1):
                 dirs = angle > cAngles
-                self.pfi.moveThetaPhi(self.goodCobras, angle - cAngles, zeros, thetaFroms=cAngles, thetaFast=fast)
+                self.pfi.moveThetaPhi(self.goodCobras, angle - cAngles, zeros, thetaFroms=cAngles, thetaFast=False)
                 cAngles, cPositions = self.measureAngles(centers, homes)
                 for k in range(len(goodIdx)):
                     lastAngle = thetaData[goodIdx[k], i, j, 0]
