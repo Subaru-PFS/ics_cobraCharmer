@@ -247,7 +247,26 @@ class PFI(object):
         else:
             raise RuntimeError("number of phiFast must match number of cobras")
 
-        thetaSteps, phiSteps = self.calculateSteps(_thetaFroms, _thetaMoves, _phiFroms, _phiMoves, _thetaFast, _phiFast)
+        _thetaFastTrue = np.full(self.calibModel.nCobras, True)
+        _thetaFastFalse = np.full(self.calibModel.nCobras, False)
+        _phiFastTrue = np.full(self.calibModel.nCobras, True)
+        _phiFastFalse = np.full(self.calibModel.nCobras, False)
+
+
+        thetaSteps, phiSteps = self.calculateSteps(_thetaFroms, _thetaMoves,
+                 _phiFroms, _phiMoves, _thetaFastFalse, _phiFastFalse)
+        
+        thetaStepsFast, phiStepsFast = self.calculateSteps(_thetaFroms,
+                 _thetaMoves, _phiFroms, _phiMoves, _thetaFastTrue, _phiFastTrue)
+
+        # If steps is larger than 300, use fast move
+        idx = np.where(thetaSteps > 300)
+        if len(idx[0]) != 0:
+            thetaSteps[idx] = thetaStepsFast[idx]
+        idx = np.where(phiSteps > 300)
+        if len(idx[0]) != 0:
+            phiSteps[idx] = phiStepsFast[idx]
+
 
         cThetaSteps = thetaSteps[cIdx]
         cPhiSteps = phiSteps[cIdx]
@@ -260,6 +279,8 @@ class PFI(object):
         phiIndex = np.isnan(cPhiSteps)
         cThetaSteps[thetaIndex] = 0
         cPhiSteps[[phiIndex]] = 0
+   
+        
         self.logger.info(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
         self.moveSteps(cobras, cThetaSteps, cPhiSteps, thetaFast=thetaFast, phiFast=phiFast)
 
@@ -338,6 +359,15 @@ class PFI(object):
         for c_i, c in enumerate(cobras):
             steps1 = int(np.abs(thetaSteps[c_i])), int(np.abs(phiSteps[c_i]))
             dirs1 = ['cw', 'cw']
+
+            """
+            If the steps is larger than 300 steps, use fast on-ontime
+            """
+            if np.abs(steps1[0]) > 300:
+                _thetaFast[c_i] = True
+            if np.abs(steps1[1]) > 300:
+                _phiFast[c_i] = True
+
 
             if thetaSteps[c_i] < 0:
                 dirs1[0] = 'ccw'
