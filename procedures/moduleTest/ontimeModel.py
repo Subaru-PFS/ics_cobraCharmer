@@ -67,9 +67,6 @@ class ontimeModel():
         if np.isnan(slope):
             slope = 0
 
-        if direction == 'Fwd' and slope <= 0:
-            breakpoint()
-
         return slope,intercept
 
     def solveForSpeed(self, targetSpeed=None):
@@ -300,7 +297,7 @@ class ontimeModel():
             fw_s, fw_i = self.getFwdSlope(pid)
             rv_s, rv_i = self.getRevSlope(pid)
             if fw_s <= 0 or rv_s >= 0:
-                breakpoint()
+                self.logger.warn(f'pid {pid}: fw={fw_s},{fw_i} rv={rv_s},{rv_i}')
 
             fwd_slope[pid-1] = fw_s
             fwd_int[pid-1] = fw_i
