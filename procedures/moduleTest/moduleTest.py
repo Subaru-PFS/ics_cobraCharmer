@@ -281,18 +281,6 @@ class ModuleTest():
         return d
 
     @staticmethod
-    def dThetaAngle(target, source, doWrap=False, doAbs=False):
-        d = np.atleast_1d(target - source)
-
-        if doAbs:
-            d[d<0] += 2*np.pi
-            d[d>=2*np.pi] -= 2*np.pi
-
-            return d
-
-        return d
-
-    @staticmethod
     def _fullAngle(toPos, fromPos=None):
         """ Return ang of vector, 0..2pi """
         if fromPos is None:
@@ -336,7 +324,7 @@ class ModuleTest():
         dAng[dAng<0] += 2*np.pi
         stopped = np.where(dAng < np.deg2rad(182.0))[0]
         if len(stopped) > 0:
-            self.logger.error(f"phi ranges for cobras {stopped} are too small: "
+            self.logger.error(f"phi ranges for cobras {stopped+1} are too small: "
                               f"CW={np.rad2deg(self.phiCWHome[stopped])} "
                               f"CCW={np.rad2deg(self.phiCCWHome[stopped])}")
             self.logger.error(f"     {np.round(np.rad2deg(dAng[stopped]), 2)}")
@@ -362,7 +350,7 @@ class ModuleTest():
         dAng[dAng<np.pi] += 2*np.pi
         stopped = np.where(dAng < np.deg2rad(375.0))[0]
         if len(stopped) > 0:
-            self.logger.error(f"theta ranges for cobras {stopped} are too small: "
+            self.logger.error(f"theta ranges for cobras {stopped+1} are too small: "
                               f"CW={np.rad2deg(self.thetaCWHome[stopped])} "
                               f"CCW={np.rad2deg(self.thetaCCWHome[stopped])}")
             self.logger.error(f"     {np.round(np.rad2deg(dAng[stopped]), 2)}")
@@ -380,7 +368,7 @@ class ModuleTest():
         requires the location of the phi center, which is not always
         known. But for the initial, post-phiMap move, we do.
 
-        EXPECTS TO BE AT PHI HOME.
+        EXPECTS TO BE AT PHI HOME if keepExistingPosition is False.
 
         Args
         ----
@@ -452,6 +440,9 @@ class ModuleTest():
             moves['left'][moveIdx] = left[i]
             moves['done'][moveIdx] = not notDone[i]
 
+        with np.printoptions(precision=2, suppress=True):
+            self.logger.info("to: %s", np.rad2deg(targetAngles)[notDone])
+            self.logger.info("at: %s", np.rad2deg(lastAngles)[notDone])
         while True:
             with np.printoptions(precision=2, suppress=True):
                 self.logger.debug("to: %s", np.rad2deg(targetAngles)[notDone])
@@ -635,6 +626,10 @@ class ModuleTest():
             moves['position'][i] = lastAngles[i]
             moves['left'][i] = left[i]
             moves['done'][i] = not notDone[i]
+
+        with np.printoptions(precision=2, suppress=True):
+            self.logger.info("to: %s", np.rad2deg(targetAngles)[notDone])
+            self.logger.info("at: %s", np.rad2deg(lastAngles)[notDone])
         while True:
             with np.printoptions(precision=2, suppress=True):
                 self.logger.debug("to: %s", np.rad2deg(targetAngles)[notDone])
