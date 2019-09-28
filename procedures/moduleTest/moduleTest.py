@@ -526,17 +526,45 @@ class ModuleTest():
         return self.runManager.runDir
 
     def gotoSafeFromPhi60(self, phiAngle=60.0):
-        """ Move cobras to nominal safe position: thetas out, phis in.
+        """ Move cobras to nominal safe position: thetas OUT, phis in.
         Assumes phi is at 60deg and that we know thetaPositions.
 
         """
         brd1Idx = np.arange(0,57,2)
         brd2Idx = np.arange(1,57,2)
 
+        if not hasattr(self, 'thetaHomes'):
+            self.pfi.moveAllSteps(None, -10000, 0)
+            keepExisting = False
+        else:
+            keepExisting = True
+
         run1 = self.moveToThetaAngle(brd1Idx, angle=270+phiAngle, tolerance=np.rad2deg(0.05),
-                                     keepExistingPosition=True, globalAngles=True)
+                                     keepExistingPosition=keepExisting, globalAngles=True)
 
         run2 = self.moveToThetaAngle(brd2Idx, angle=90+phiAngle, tolerance=np.rad2deg(0.05),
+                                     keepExistingPosition=True, globalAngles=True)
+
+        return [run1, run2]
+
+    def gotoShippingFromPhi60(self, phiAngle=60.0):
+        """ Move cobras to nominal safe shipping position: thetas IN, phis in.
+        Assumes phi is at 60deg and that we know thetaPositions.
+
+        """
+        brd1Idx = np.arange(0,57,2)
+        brd2Idx = np.arange(1,57,2)
+
+        if not hasattr(self, 'thetaHomes'):
+            self.pfi.moveAllSteps(None, -10000, 0)
+            keepExisting = False
+        else:
+            keepExisting = True
+
+        run1 = self.moveToThetaAngle(brd1Idx, angle=90+phiAngle, tolerance=np.rad2deg(0.05),
+                                     keepExistingPosition=keepExisting, globalAngles=True)
+
+        run2 = self.moveToThetaAngle(brd2Idx, angle=270+phiAngle, tolerance=np.rad2deg(0.05),
                                      keepExistingPosition=True, globalAngles=True)
 
         return [run1, run2]
