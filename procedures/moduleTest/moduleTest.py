@@ -579,11 +579,13 @@ class ModuleTest():
         if np.isscalar(angle):
             angle = np.full(len(self.allCobras), angle)
 
-        cobras = self.goodCobras
-        cobras = np.array(cobras)
-        if idx is not None:
-            cobras = cobras[idx]
-            angle = angle[idx]
+        if idx is None:
+            idx = np.arange(len(self.allCobras))
+
+        cobras = np.array(self.allCobras)
+        cobras = cobras[idx]
+        angle = angle[idx]
+
         moveList = []
         moves0 = np.zeros(len(cobras), dtype=dtype)
 
@@ -594,23 +596,23 @@ class ModuleTest():
 
         tolerance = np.deg2rad(tolerance)
 
-        # extract sources and fiber identification
-        curPos = self.exposeAndExtractPositions(tolerance=0.2)
-        if idx is not None:
-            curPos = curPos[idx]
-            thetaCenters = thetaCenters[idx]
-        if keepExistingPosition:
-            homeAngles = self.thetaHomes
-            lastAngles = self.thetaAngles
-        else:
-            homeAngles = self._fullAngle(curPos, thetaCenters)
+        if not keepExistingPosition:
+            # extract sources and fiber identification
+            allCurPos = self.exposeAndExtractPositions(tolerance=0.2)
+
+            homeAngles = self._fullAngle(allCurPos, thetaCenters)
             lastAngles = np.zeros(len(homeAngles))
             self.thetaHomes = homeAngles
             self.thetaAngles = lastAngles
 
-        targetAngles = np.full(len(homeAngles), np.deg2rad(angle))
+        homeAngles = self.thetaHomes[idx]
+        lastAngles = self.thetaAngles[idx]
+        thetaCenters = thetaCenters[idx]
+
+        targetAngles = np.deg2rad(angle)
         if globalAngles:
             targetAngles = self.pfi.thetaToLocal(cobras, targetAngles)
+
         phiAngles = targetAngles*0
         ntries = 1
         notDone = targetAngles != 0
@@ -649,8 +651,7 @@ class ModuleTest():
 
             # extract sources and fiber identification
             curPos = self.exposeAndExtractPositions(tolerance=0.2)
-            if idx is not None:
-                curPos = curPos[idx]
+            curPos = curPos[idx]
 
             # Get our angle w.r.t. home.
             atAngles = unwrappedPosition(curPos, thetaCenters, homeAngles,
@@ -699,7 +700,7 @@ class ModuleTest():
                     self.pfi.scaleMotorOntime(cobras[c_i], 'theta', direction, scale)
 
             lastAngles = atAngles
-            self.thetaAngles = atAngles
+            self.thetaAngles[idx] = atAngles
             if ntries >= maxTries:
                 self.logger.warn(f'Reached max {maxTries} tries, '
                                  f'left: {[str(c) for c in cobras[np.where(notDone)]]}: '
