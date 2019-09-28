@@ -187,13 +187,13 @@ class ontimeModel():
         slowFw_w = np.where(self.fwOntimes == 0)[0]
         if len(slowFw_w) > 0:
             self.logger.error(f'no valid forward speed for cobra ids {[i+1 for i in slowFw_w]}. '
-                              f'Setting to {self.maxOntime}')
-            self.fwOntimes[slowFw_w] = self.maxOntime
+                              f'Setting to {max(ontimes)}')
+            self.fwOntimes[slowFw_w] = max(ontimes)
         slowRv_w = np.where(self.rvOntimes == 0)[0]
         if len(slowRv_w) > 0:
             self.logger.error(f'no valid reverse speed for cobra ids {[i+1 for i in slowRv_w]}. '
-                              f'Setting to {self.maxOntime}')
-            self.rvOntimes[slowRv_w] = self.maxOntime
+                              f'Setting to {max(ontimes)}')
+            self.rvOntimes[slowRv_w] = max(ontimes)
 
         self.newOntimeSlowFwd = self.fwOntimes / 1000
         self.newOntimeSlowRev = self.rvOntimes / 1000
