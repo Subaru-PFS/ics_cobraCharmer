@@ -1542,11 +1542,17 @@ class ModuleTest():
             thetaFW[self.goodIdx, 0] = self.exposeAndExtractPositions()
 
 <<<<<<< HEAD
+<<<<<<< HEAD
             for k in range(iteration):
                 self.pfi.moveAllSteps(self.goodCobras, steps, 0, thetaFast=False)
                 thetaFW[self.goodIdx, 0] = self.exposeAndExtractPositions()
 =======
     def thetaConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, fastFirstMove=True):
+=======
+    def thetaConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, 
+        thetaThreshold = 250, fastFirstMove=True):
+        
+>>>>>>> Adding step threshold for switching between fast and slow maps
         # variable declaration for center measurement
         steps = 300
         iteration = 6000 // steps
@@ -1638,10 +1644,17 @@ class ModuleTest():
 
             for j in range(tries - 1):
                 dirs = angle > cAngles
+<<<<<<< HEAD
                 lastAngle = cAngles
                 nm = notdoneMask[self.goodIdx]
                 self.pfi.moveThetaPhi(self.allCobras[notdoneMask], (angle - cAngles)[nm],
                                       zeros[nm], thetaFroms=cAngles[nm], thetaFast=fast)
+=======
+                
+                self.pfi.moveThetaPhi(self.goodCobras, angle - cAngles, zeros, thetaFroms=cAngles, 
+                    thetaFast=False, thetaThreshold=thetaThreshold)
+                
+>>>>>>> Adding step threshold for switching between fast and slow maps
                 cAngles, cPositions = self.measureAngles(centers, homes)
                 nowDone[:] = False
                 nowDone[self.goodIdx[abs((cAngles - angle + np.pi) % (np.pi*2) - np.pi) < tolerance]] = True

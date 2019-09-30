@@ -255,7 +255,8 @@ class PFI(object):
 
         self.moveSteps(cobras, thetaAllSteps, phiAllSteps, thetaFast=thetaFast, phiFast=phiFast)
 
-    def moveThetaPhi(self, cobras, thetaMoves, phiMoves, thetaFroms=None, phiFroms=None, thetaFast=True, phiFast=True):
+    def moveThetaPhi(self, cobras, thetaMoves, phiMoves, thetaFroms=None, phiFroms=None, 
+    thetaFast=True, phiFast=True, thetaThreshold=250, phiThreshold=250):
         """ Move cobras with theta and phi angles, angles are measured from CCW hard stops
 
             thetaMoves: A numpy array with theta angles to go
@@ -325,10 +326,10 @@ class PFI(object):
                  _thetaMoves, _phiFroms, _phiMoves, _thetaFastTrue, _phiFastTrue)
 
         # If steps is larger than 300, use fast move
-        idx = np.where(thetaSteps > 300)
+        idx = np.where(np.abs(thetaSteps) > thetaThreshold)
         if len(idx[0]) != 0:
             thetaSteps[idx] = thetaStepsFast[idx]
-        idx = np.where(phiSteps > 300)
+        idx = np.where(np.abs(phiSteps) > phiThreshold)
         if len(idx[0]) != 0:
             phiSteps[idx] = phiStepsFast[idx]
 
@@ -517,11 +518,11 @@ class PFI(object):
             dirs1 = ['cw', 'cw']
 
             """
-            If the steps is larger than 300 steps, use fast on-ontime
+            If the steps is larger than threshold steps, use fast on-ontime
             """
-            if np.abs(steps1[0]) > 300:
+            if np.abs(steps1[0]) > thetaThreshold:
                 _thetaFast[c_i] = True
-            if np.abs(steps1[1]) > 300:
+            if np.abs(steps1[1]) > phiThreshold:
                 _phiFast[c_i] = True
 
 
