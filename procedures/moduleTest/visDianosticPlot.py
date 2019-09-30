@@ -331,3 +331,46 @@ class VisDianosticPlot(object):
         if figpath is not None:
             export_png(grid,filename=figpath+"motor_speed_histogram.png")
             export_png(qgrid,filename=figpath+"motor_speed_std.png")
+
+    def visConverge(self, figPath = None, arm = 'phi', runs = 50, margin = 15):
+        
+        if arm is 'phi':
+            phiPath = self.path
+            moveData = np.load(phiPath+'phiData.npy')
+            angleLimit = 180
+        else:
+            thetaPath =  self.path
+            moveData = np.load(thetaPath+'thetaData.npy')
+            angleLimit = 360
+        
+        
+        for fiberIdx in self.goodIdx:
+            xdata=[]
+            ydata=[]
+            z=[]
+            
+            plt.figure()
+            plt.clf()
+            x =np.arange(9)
+            for i in range(runs):
+                angle = margin + (angleLimit - 2 * margin) * i / (runs - 1)
+                
+                xdata.append(np.arange(9))
+                ydata.append(np.full(len(x), angle))
+                z.append(np.log10(np.abs(angle - np.rad2deg(np.append([0], moveData[fiberIdx,i,:,0])))))
+            xdata=np.array(xdata)
+            ydata=np.array(ydata)
+            z=np.array(z)
+
+            sc=plt.pcolor(xdata,ydata,z,cmap='inferno_r',vmin=-1.0,vmax=1.5)
+            plt.xticks(np.arange(8)+0.5,np.arange(8)+1)
+            cbar=plt.colorbar(sc)
+            cbar.ax.set_ylabel('Angle Different (log)')
+            plt.title(f'Fiber No. {fiberIdx+1}',fontsize=15)
+            plt.xlabel("Iteration",fontsize=10)
+            plt.ylabel("Cabra Location (Degree)",fontsize=10)
+            plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
+            plt.close()
+                     
+            #if figPath is not None:
+            #    plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
