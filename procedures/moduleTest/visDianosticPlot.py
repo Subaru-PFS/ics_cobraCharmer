@@ -369,8 +369,13 @@ class VisDianosticPlot(object):
             plt.title(f'Fiber No. {fiberIdx+1}',fontsize=15)
             plt.xlabel("Iteration",fontsize=10)
             plt.ylabel("Cabra Location (Degree)",fontsize=10)
-            plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
+            if figPath is not None:
+                if not (os.path.exists(figPath)):
+                    os.mkdir(figPath)
+                plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
+            else:
+                plt.show()
             plt.close()
-                     
+
             #if figPath is not None:
             #    plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
