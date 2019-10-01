@@ -402,13 +402,19 @@ class OntimeOptimize(object):
         
         for i in range(57):
             # Including result from solving fast speed
-            fastOntimeFwd[i]=np.max([pickFastOntimeFwd[i],sloveFastOntimeFwd[i]])
-            if np.abs(fastOntimeFwd[i]-self.newOntimeSlowFwd[i])< 0.005:
-                fastOntimeFwd[i]=0.08
+            if sloveFastOntimeFwd[i] > 0.08:
+                fastOntimeFwd[i]=pickFastOntimeFwd[i]
+            else:
+                fastOntimeFwd[i]=np.max([pickFastOntimeFwd[i],sloveFastOntimeFwd[i]])
+                if np.abs(fastOntimeFwd[i]-self.newOntimeSlowFwd[i])< 0.005:
+                    fastOntimeFwd[i]=0.08
             
-            fastOntimeRev[i]=np.max([pickFastOntimeRev[i],solveFastOntimeRev[i]])
-            if np.abs(fastOntimeRev[i]-self.newOntimeSlowRev[i])< 0.005:
-                fastOntimeRev[i]=0.08
+            if solveFastOntimeRev[i] > 0.08:
+                fastOntimeRev[i]=pickFastOntimeRev[i]
+            else:    
+                fastOntimeRev[i]=np.max([pickFastOntimeRev[i],solveFastOntimeRev[i]])
+                if np.abs(fastOntimeRev[i]-self.newOntimeSlowRev[i])< 0.005:
+                    fastOntimeRev[i]=0.08
 
         self.newOntimeFwd, self.newOntimeRev = (fastOntimeFwd,fastOntimeRev)
 
