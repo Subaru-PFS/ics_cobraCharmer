@@ -5,6 +5,7 @@ from astropy.io import fits
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import subprocess
 
 from bokeh.io import output_notebook, show, export_png,export_svgs
 from bokeh.plotting import figure, show, output_file
@@ -332,7 +333,7 @@ class VisDianosticPlot(object):
             export_png(grid,filename=figpath+"motor_speed_histogram.png")
             export_png(qgrid,filename=figpath+"motor_speed_std.png")
 
-    def visConverge(self, figPath = None, arm = 'phi', runs = 50, margin = 15):
+    def visConverge(self, figPath = None, arm = 'phi', runs = 50, margin = 15, montage=None):
         
         if arm is 'phi':
             phiPath = self.path
@@ -349,26 +350,35 @@ class VisDianosticPlot(object):
             ydata=[]
             z=[]
             
-            plt.figure()
-            plt.clf()
             x =np.arange(9)
+            fig, (vax, hax) = plt.subplots(1, 2, figsize=(12, 6),sharey='all')
             for i in range(runs):
                 angle = margin + (angleLimit - 2 * margin) * i / (runs - 1)
-                
+                y=np.rad2deg(np.append([0], moveData[fiberIdx,i,:,0]))
                 xdata.append(np.arange(9))
                 ydata.append(np.full(len(x), angle))
                 z.append(np.log10(np.abs(angle - np.rad2deg(np.append([0], moveData[fiberIdx,i,:,0])))))
+                hax.plot(x,y,marker='o',fillstyle='none',markersize=3)
+                #hax.scatter(x,y,marker='o',fillstyle='none')
             xdata=np.array(xdata)
             ydata=np.array(ydata)
             z=np.array(z)
 
-            sc=plt.pcolor(xdata,ydata,z,cmap='inferno_r',vmin=-1.0,vmax=1.5)
-            plt.xticks(np.arange(8)+0.5,np.arange(8)+1)
-            cbar=plt.colorbar(sc)
-            cbar.ax.set_ylabel('Angle Different (log)')
-            plt.title(f'Fiber No. {fiberIdx+1}',fontsize=15)
-            plt.xlabel("Iteration",fontsize=10)
-            plt.ylabel("Cabra Location (Degree)",fontsize=10)
+            sc=vax.pcolor(xdata,ydata,z,cmap='inferno_r',vmin=-1.5,vmax=1.5)
+            
+            #plt.xticks(np.arange(8)+0.5,np.arange(8)+1)
+            cbaxes = fig.add_axes([0.05,0.13,0.01,0.75]) 
+            cb = plt.colorbar(sc, cax = cbaxes,orientation='vertical')
+            #cbar=vax.colorbar(sc)
+            
+            cbaxes.yaxis.set_ticks_position('left')
+            cbaxes.yaxis.set_label_position('left')
+            cb.set_label('Angle Different (log)', labelpad=-1)
+            vax.set_xlabel("Iteration",fontsize=10)
+            vax.set_ylabel("Cabra Location (Degree)",fontsize=10)
+
+            fig.suptitle(f'Fiber No. {fiberIdx+1}',fontsize=15)
+            plt.subplots_adjust(bottom=0.15, wspace=0.05)
             if figPath is not None:
                 if not (os.path.exists(figPath)):
                     os.mkdir(figPath)
@@ -377,5 +387,11 @@ class VisDianosticPlot(object):
                 plt.show()
             plt.close()
 
+        if montage is not None:
+            cmd=f"""montage {figPath}Con*_[0-9].png {figPath}Con*_[0-9]?.png \
+                -tile 4x -geometry +4+4 {montage}"""
+            print(cmd)
+            retcode = subprocess.call(cmd,shell=True)
+            print(retcode)
             #if figPath is not None:
             #    plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
