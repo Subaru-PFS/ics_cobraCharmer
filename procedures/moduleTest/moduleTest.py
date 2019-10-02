@@ -1042,6 +1042,8 @@ class ModuleTest():
             self.cal.calibModel.updateOntimes(phiFwd=onTime, phiRev=onTime, fast=fast)
         if updateGeometry:
             self.cal.calibModel.updateGeometry(centers=phiCenter, phiArms=phiRadius)
+            # These are not really correct, since the inner limit is pinned at 0. But it gives the range.
+            self.cal.calibModel.updatePhiHardStops(ccw=phiAngFW[:,0,0], cw=phiAngFW[:,0,0])
         self.cal.calibModel.createCalibrationFile(self.runManager.outputDir / newXml, name='phiModel')
 
         # restore default setting ( really? why? CPL )
