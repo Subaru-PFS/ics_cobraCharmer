@@ -887,7 +887,7 @@ class ModuleTest():
     def makePhiMotorMap(
             self,
             newXml,
-            repeat=3,
+            repeat=1,
             steps=100,
             totalSteps=5000,
             fast=False,
@@ -1132,7 +1132,7 @@ class ModuleTest():
     def makeThetaMotorMap(
             self,
             newXml,
-            repeat=3,
+            repeat=1,
             steps=100,
             totalSteps=10000,
             fast=True,
