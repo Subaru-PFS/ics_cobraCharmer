@@ -1049,6 +1049,27 @@ class ModuleTest():
         self.setPhiGeometryFromRun(self.runManager.runDir, onlyIfClear=True)
         return self.runManager.runDir
 
+    def _mapDone(self, centers, points, limits, k,
+                 needAtEnd=4, closeEnough=np.deg2rad(1),
+                 limitTolerance=np.deg2rad(2)):
+        """ Return a mask of the cobras which we deem at the axis limit.
+
+        See thetaFWDone.
+        """
+
+        if centers is None or limits is None or k+1 < needAtEnd:
+            return None, None
+
+        lastAngles = np.angle(points[:,0,k-needAtEnd+1:k+1] - centers[:,None])
+        atEnd = np.abs(lastAngles[:,-1] - limits) <= limitTolerance
+        endDiff = np.abs(np.diff(lastAngles, axis=1))
+        stable = np.all(endDiff <= closeEnough, axis=1)
+
+        # Diagnostic: return the needAtEnd distances from the limit.
+        anglesFromEnd = lastAngles - limits[:,None]
+
+        return atEnd & stable, anglesFromEnd
+
     def thetaFWDone(self, thetas, k, needAtEnd=4,
                     closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
         """ Return a mask of the cobras which we deem at the FW theta limit.
@@ -1075,60 +1096,36 @@ class ModuleTest():
           The last `needAtEnd` angles to the limit
         """
 
-        if self.thetaCenter is None or self.thetaCWHome is None or k+1 < needAtEnd:
-            return None,  None
-
-        lastAngles = np.angle(thetas[:,0,k-needAtEnd+1:k+1] - self.thetaCenter[:,None])
-        atEnd = np.abs(lastAngles[:,-1] - self.thetaCWHome) <= limitTolerance
-        endDiff = np.abs(np.diff(lastAngles, axis=1))
-        stable = np.all(endDiff <= closeEnough, axis=1)
-
-        return atEnd & stable, endDiff
+        return self._mapDone(self.thetaCenter, thetas, self.thetaCWHome, k,
+                             needAtEnd=needAtEnd, closeEnough=closeEnough,
+                             limitTolerance=limitTolerance)
 
     def thetaRVDone(self, thetas, k, needAtEnd=4, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
         """ Return a mask of the cobras which we deem at the RV theta limit.
 
         See `thetaFWDone`
         """
-        if self.thetaCenter is None or self.thetaCCWHome is None or k+1 < needAtEnd:
-            return None, None
-
-        lastAngles = np.angle(thetas[:,0,k-needAtEnd+1:k+1] - self.thetaCenter[:,None])
-        atEnd = np.abs(lastAngles[:,-1] - self.thetaCCWHome) <= limitTolerance
-        endDiff = np.abs(np.diff(lastAngles, axis=1))
-        stable = np.all(endDiff <= closeEnough, axis=1)
-
-        return atEnd & stable, endDiff
+        return self._mapDone(self.thetaCenter, thetas, self.thetaCCWHome, k,
+                             needAtEnd=needAtEnd, closeEnough=closeEnough,
+                             limitTolerance=limitTolerance)
 
     def phiFWDone(self, phis, k, needAtEnd=4, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
         """ Return a mask of the cobras which we deem at the FW phi limit.
 
         See `thetaFWDone`
         """
-        if self.phiCenter is None or self.phiCWHome is None or k+1 < needAtEnd:
-            return None, None
-
-        lastAngles = np.angle(phis[:,0,k-needAtEnd+1:k+1] - self.phiCenter[:,None])
-        atEnd = np.abs(lastAngles[:,-1] - self.phiCWHome) <= limitTolerance
-        endDiff = np.abs(np.diff(lastAngles, axis=1))
-        stable = np.all(endDiff <= closeEnough, axis=1)
-
-        return atEnd & stable, endDiff
+        return self._mapDone(self.phiCenter, phis, self.phiCWHome, k,
+                             needAtEnd=needAtEnd, closeEnough=closeEnough,
+                             limitTolerance=limitTolerance)
 
     def phiRVDone(self, phis, k, needAtEnd=4, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
         """ Return a mask of the cobras which we deem at the RV phi limit.
 
         See `thetaFWDone`
         """
-        if self.phiCenter is None or self.phiCCWHome is None or k+1 < needAtEnd:
-            return None, None
-
-        lastAngles = np.angle(phis[:,0,k-needAtEnd+1:k+1] - self.phiCenter[:,None])
-        atEnd = np.abs(lastAngles[:,-1] - self.phiCCWHome) <= limitTolerance
-        endDiff = np.abs(np.diff(lastAngles, axis=1))
-        stable = np.all(endDiff <= closeEnough, axis=1)
-
-        return atEnd & stable, endDiff
+        return self._mapDone(self.phiCenter, phis, self.phiCCWHome, k,
+                             needAtEnd=needAtEnd, closeEnough=closeEnough,
+                             limitTolerance=limitTolerance)
 
     def makeThetaMotorMap(
             self,
