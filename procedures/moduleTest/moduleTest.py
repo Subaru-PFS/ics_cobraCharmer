@@ -959,11 +959,12 @@ class ModuleTest():
                     phiFW[self.goodIdx, n, k+1:] = phiFW[self.goodIdx, n, k+1][:,None]
                     break
             if doneMask is not None and np.any(notdoneMask):
-                self.logger.warn(f'{(notdoneMask == True).sum()} cobras did not finish:')
+                self.logger.warn(f'{(notdoneMask == True).sum()} cobras did not reach phi CW limit:')
                 for c_i in np.where(notdoneMask)[0]:
                     c = self.goodCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
-                    self.logger.warn(f'  {str(c)}: {np.round(d, 2)}')
+                    with np.printoptions(precision=2, suppress=True):
+                        self.logger.warn(f'  {str(c)}: {d}')
 
             # make sure it goes to the limit
             self.logger.info(f'{n+1}/{repeat} phi forward {totalSteps} to limit')
@@ -991,11 +992,12 @@ class ModuleTest():
                     break
 
             if doneMask is not None and np.any(notdoneMask):
-                self.logger.warn(f'{(notdoneMask == True).sum()} did not finish:')
+                self.logger.warn(f'{(notdoneMask == True).sum()} did not reach phi CCW limit:')
                 for c_i in np.where(notdoneMask)[0]:
                     c = self.goodCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
-                    self.logger.warn(f'  {str(c)}: {np.round(d, 2)}')
+                    with np.printoptions(precision=2, suppress=True):
+                        self.logger.warn(f'  {str(c)}: {d}')
 
             # At the end, make sure the cobra back to the hard stop
             self.logger.info(f'{n+1}/{repeat} phi reverse {-totalSteps} steps to limit')
@@ -1139,8 +1141,7 @@ class ModuleTest():
             phiRunDir=None,
             limitOnTime=0.08,
             resetScaling=True,
-            delta=np.deg2rad(5.0)
-        ):
+            delta=np.deg2rad(5.0)):
         # generate theta motor maps, it accepts custom thetaOnTIme parameter.
         # it assumes that phi arms have been move to ~60 degrees out to avoid collision
         # if thetaOnTime is not None, fast parameter is ignored. Otherwise use fast/slow ontime
@@ -1206,11 +1207,12 @@ class ModuleTest():
                     break
 
             if doneMask is not None and np.any(notdoneMask):
-                self.logger.warn(f'{(notdoneMask == True).sum()} did not finish:')
+                self.logger.warn(f'{(notdoneMask == True).sum()} did not reach theta CW limit:')
                 for c_i in np.where(notdoneMask)[0]:
                     c = self.goodCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
-                    self.logger.warn(f'  {str(c)}: {np.round(d, 2)}')
+                    with np.printoptions(precision=2, suppress=True):
+                        self.logger.warn(f'  {str(c)}: {d}')
 
             # make sure it goes to the limit
             self.logger.info(f'{n+1}/{repeat} theta forward {totalSteps} to limit')
@@ -1240,11 +1242,12 @@ class ModuleTest():
                     break
 
             if doneMask is not None and np.any(notdoneMask):
-                self.logger.warn(f'{(notdoneMask == True).sum()} did not finish:')
+                self.logger.warn(f'{(notdoneMask == True).sum()} did not reach theta CCW limit:')
                 for c_i in np.where(notdoneMask)[0]:
                     c = self.goodCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
-                    self.logger.warn(f'  {str(c)}: {np.round(d, 2)}')
+                    with np.printoptions(precision=2, suppress=True):
+                        self.logger.warn(f'  {str(c)}: {d}')
 
             # At the end, make sure the cobra back to the hard stop
             self.logger.info(f'{n+1}/{repeat} theta reverse {-totalSteps} steps to limit')
