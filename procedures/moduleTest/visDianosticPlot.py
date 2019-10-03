@@ -390,8 +390,6 @@ class VisDianosticPlot(object):
         if montage is not None:
             cmd=f"""montage {figPath}Con*_[0-9].png {figPath}Con*_[0-9]?.png \
                 -tile 4x -geometry +4+4 {montage}"""
-            print(cmd)
             retcode = subprocess.call(cmd,shell=True)
-            print(retcode)
             #if figPath is not None:
             #    plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
