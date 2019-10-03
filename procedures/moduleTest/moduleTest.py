@@ -8,6 +8,7 @@ import calculation
 from idsCamera import idsCamera
 from ics.cobraCharmer import pfi as pfiControl
 from ics.cobraCharmer import pfiDesign
+import visDianosticPlot
 
 class Camera():
     def __init__(self, devId):
@@ -760,7 +761,7 @@ def combineFastSlowMotorMap(inputXML, newXML, arm='phi', brokens=None, fastPath=
     new.createCalibrationFile(newXML)
 
 
-def runMotorMap():
+def runMotorMap(dataPath=None,brokens=None,module=None):
     module = 'Science29'
     arm = 'theta'
 
