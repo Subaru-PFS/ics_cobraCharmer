@@ -375,10 +375,14 @@ class OntimeOptimize(object):
                          f'fwd:{newOntimeFwd[slowOnes]} rev:{newOntimeRev[slowOnes]}')
 
         slowOnes = np.where((newOntimeFwd < 0))
-        if len(slowOnes[0]) > 0: newOntimeFwd[slowOnes] = 0.01
+        if len(slowOnes[0]) > 0: 
+            for i in slowOnes[0]:
+                newOntimeFwd[i] = self._searchNextGoodSpeed(i, 'Fwd', targetSpeed)
         
         slowOnes = np.where((newOntimeRev < 0))
-        if len(slowOnes[0]) > 0: newOntimeRev[slowOnes] = 0.01
+        if len(slowOnes[0]) > 0: 
+            for i in slowOnes[0]:
+                newOntimeRev[slowOnes] = self._searchNextGoodSpeed(i, 'Rev', -targetSpeed)
 
         return newOntimeFwd, newOntimeRev
 
