@@ -330,7 +330,19 @@ class OntimeOptimize(object):
                     newOntime = ndf[f'onTime{direction}'].values[ind] + 0.005 
 
         return newOntime
-
+    
+    def checkOnTimeROM(self,fiberInx, Ontime, direction):
+        dataframe = self.dataframe
+        ndf = dataframe.loc[dataframe['fiberNo'] == fiberInx+1]
+        ndd = ndf.loc[ndf[f'onTime{direction}'] == Ontime]
+        if len(ndd[f'range{direction}']) != 0:
+            if np.abs(ndd[f'range{direction}'].values[0]) < self.minRange:
+                newOntime = 0.01 + Ontime
+                return newOntime
+            else:
+                return Ontime    
+        else:
+            return Ontime
     def _solveForSpeed(self, targetSpeed=None):
         fwd_target = np.full(len(self.fwd_int), targetSpeed)
         rev_target = np.full(len(self.fwd_int), -targetSpeed)
@@ -384,6 +396,10 @@ class OntimeOptimize(object):
             for i in slowOnes[0]:
                 newOntimeRev[slowOnes] = self._searchNextGoodSpeed(i, 'Rev', -targetSpeed)
 
+        for i in self.goodIdx:
+            newOntimeFwd[i] = self.checkOnTimeROM(i, newOntimeFwd[i], 'Fwd') 
+            newOntimeRev[i] = self.checkOnTimeROM(i, newOntimeRev[i], 'Rev') 
+
         return newOntimeFwd, newOntimeRev
 
     def pickForSlowSpeed(self, targetSpeed=None):
@@ -423,7 +439,7 @@ class OntimeOptimize(object):
         self.newOntimeFwd, self.newOntimeRev = (fastOntimeFwd,fastOntimeRev)
 
         return fastOntimeFwd,fastOntimeRev
-
+    
     def solveForSlowSpeed(self, targetSpeed=None):
         if targetSpeed is None:
             targetSpeed = self.slowTarget
