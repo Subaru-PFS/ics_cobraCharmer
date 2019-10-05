@@ -520,18 +520,19 @@ class OntimeOptimize(object):
 
 
         # If there is a broken fiber, set on-time to original value
-        if self.axisNum == 1: 
-            SlowOntimeFwd[self.badIdx] =  model.motorOntimeSlowFwd1[self.badIdx]
-            SlowOntimeRev[self.badIdx] =  model.motorOntimeSlowRev1[self.badIdx]
+        if len(self.badIdx) != 0:
+            if self.axisNum == 1: 
+                SlowOntimeFwd[self.badIdx] =  model.motorOntimeSlowFwd1[self.badIdx]
+                SlowOntimeRev[self.badIdx] =  model.motorOntimeSlowRev1[self.badIdx]
 
-            OntimeFwd[self.badIdx] = model.motorOntimeFwd1[self.badIdx]
-            OntimeRev[self.badIdx] = model.motorOntimeRev1[self.badIdx]
-        else:
-            SlowOntimeFwd[self.badIdx] =  model.motorOntimeSlowFwd2[self.badIdx]
-            SlowOntimeRev[self.badIdx] =  model.motorOntimeSlowRev2[self.badIdx]
+                OntimeFwd[self.badIdx] = model.motorOntimeFwd1[self.badIdx]
+                OntimeRev[self.badIdx] = model.motorOntimeRev1[self.badIdx]
+            else:
+                SlowOntimeFwd[self.badIdx] =  model.motorOntimeSlowFwd2[self.badIdx]
+                SlowOntimeRev[self.badIdx] =  model.motorOntimeSlowRev2[self.badIdx]
 
-            OntimeFwd[self.badIdx] = model.motorOntimeFwd2[self.badIdx]
-            OntimeRev[self.badIdx] = model.motorOntimeRev2[self.badIdx]
+                OntimeFwd[self.badIdx] = model.motorOntimeFwd2[self.badIdx]
+                OntimeRev[self.badIdx] = model.motorOntimeRev2[self.badIdx]
 
         if table is not None:
             pid=range(len(OntimeFwd)) 
