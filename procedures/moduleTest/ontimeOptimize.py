@@ -599,7 +599,7 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
         if itr == 0:
             
             thetaOntime = np.zeros(57)+0.08
-            phiOntime = np.zeros(57)+0.08
+            phiOntime = np.zeros(57)+0.05
             
             mt = ModuleTest(f'{fpgaHost}', 
                     f'{XML}', 
