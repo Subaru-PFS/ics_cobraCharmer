@@ -2002,16 +2002,16 @@ def combineFastSlowMotorMap(inputXML, newXML, arm='phi', brokens=None, fastPath=
     new.createCalibrationFile(newXML)
 
 
-def runMotorMap(dataPath=None,brokens=None,module=None):
-    module = 'Science29'
-    arm = 'theta'
-
-    dataPath = '/data/SC29/20190930/'
+def runMotorMap(dataPath=None,brokens=None, arm=None, xml=None, module=None):
+    #module = 'Science29'
+    #arm = 'theta'
+    
+    #dataPath = '/data/SC29/20190930/'
 
     stepList = ['50','400']
     speedList = ['','Fast']
-    brokens = [57]
-    xml = '/data/SC29/20190930/science29_theta_20190930.xml'
+    #brokens = [57]
+    #xml = '/data/SC29/20190930/science29_theta_20190930.xml'
 
     for s in speedList:
         for f in stepList:
@@ -2047,11 +2047,9 @@ def runMotorMap(dataPath=None,brokens=None,module=None):
                     mt.makeThetaMotorMap(f'{module}_{arm}_{f}Step{s}.xml', path, 
                         repeat = 3, steps = int(f), fast=False,totalSteps = 12000)
                 
-            if arm is 'phi':
-                vis.visCobraMotorMap(stepsize=int(f), figpath=figpath, arm='phi')    
-            else:
-                vis.visCobraMotorMap(stepsize=int(f), figpath=figpath, arm='theta')
-                
+            
+            vis.visCobraMotorMap(stepsize=int(f), figpath=figpath, arm=f'{arm}')    
+            
             print(path)
             del(mt)
             del(vis)
