@@ -17,6 +17,8 @@ from bokeh.models.glyphs import Text
 from bokeh.transform import linear_cmap
 from bokeh.palettes import Category20
 
+from ics.cobraCharmer import pfiDesign
+
 
 class VisDianosticPlot(object):
 
@@ -393,3 +395,53 @@ class VisDianosticPlot(object):
             retcode = subprocess.call(cmd,shell=True)
             #if figPath is not None:
             #    plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
+    
+    def visMultiMotorMapfromXML(self, xmlList, figPath=None, arm='phi', pdffile=None):
+        binSize = 3.6
+        x=np.arange(112)*3.6
+        
+        
+        for i in self.goodIdx:
+            plt.figure(figsize=(10, 8))
+            plt.clf()
+
+            ax = plt.gca()
+            
+            for xml in xmlList:
+                model = pfiDesign.PFIDesign(xml)
+
+                if arm is 'phi':
+                    slowFWmm = np.rad2deg(model.angularSteps[i]/model.S2Pm[i])
+                    slowRVmm = np.rad2deg(model.angularSteps[i]/model.S2Nm[i])
+                else:
+                    slowFWmm = np.rad2deg(model.angularSteps[i]/model.S1Pm[i])
+                    slowRVmm = np.rad2deg(model.angularSteps[i]/model.S1Nm[i])
+                
+                labeltext=os.path.basename(os.path.dirname(xml))
+                ln1 = ax.plot(x,slowFWmm,label=f'{labeltext} Fwd')
+                ln2 = ax.plot(x,-slowRVmm,label=f'{labeltext} Rev')
+
+            ax.set_title(f'Fiber {arm} #{i+1}')
+            ax.legend()
+            if arm is 'phi':
+                ax.set_xlim([0,200])
+            else:
+                ax.set_xlim([0,400])
+                ax.set_ylim([-0.3,0.3])
+            
+            if figPath is not None:
+                if not (os.path.exists(figPath)):
+                    os.mkdir(figPath)
+
+                plt.ioff()
+                plt.tight_layout()
+                plt.savefig(f'{figPath}/motormap_{arm}_{i+1}.png')
+            else:
+                plt.show()
+            plt.close()
+
+
+        if pdffile is not None:
+            cmd=f"""convert {figPath}motormap*_[0-9].png {figPath}motormap*_[0-9]?.png {pdffile}"""
+            retcode = subprocess.call(cmd,shell=True)
+            print(cmd)
