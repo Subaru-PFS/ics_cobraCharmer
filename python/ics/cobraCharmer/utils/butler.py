@@ -53,7 +53,7 @@ class RunTree(object):
 
         self.runDir.mkdir(mode=0o2775, parents=True)
         for d in self.allDirs:
-            d.mkdir(mode=0x2775)
+            d.mkdir(mode=0o2775)
 
         self.logger.warn('newRun: %s', self.runDir)
         return self.runDir
