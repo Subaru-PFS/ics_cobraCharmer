@@ -1017,6 +1017,10 @@ class ModuleTest():
 
         # calculate centers and phi angles
         phiCenter, phiRadius, phiAngFW, phiAngRV, badRange = self.cal.phiCenterAngles(phiFW, phiRV)
+        for short in badRange:
+            self.logger.warn(f'phi range for {short+1:-2d} is short: '
+                             f'out={np.rad2deg(phiAngRV[short,0,0]):-6.2f} '
+                             f'back={np.rad2deg(pAngRV[short,0,-1]):-6.2f}')
         np.save(dataPath / 'phiCenter', phiCenter)
         np.save(dataPath / 'phiRadius', phiRadius)
         np.save(dataPath / 'phiAngFW', phiAngFW)
@@ -1290,6 +1294,8 @@ class ModuleTest():
 
         # calculate motor maps in Johannes weighting
         thetaMMFW, thetaMMRV, bad = self.cal.motorMaps(thetaAngFW, thetaAngRV, steps, delta)
+        for bad_i in np.where(bad)[0]:
+            self.logger.warn(f'theta map for {bad_i+1} is bad')
         bad[badRange] = True
         np.save(dataPath / 'thetaMMFW', thetaMMFW)
         np.save(dataPath / 'thetaMMRV', thetaMMRV)
