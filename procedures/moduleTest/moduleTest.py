@@ -157,10 +157,13 @@ class ModuleTest():
         self.setBrokenCobras()
 
         # initialize cameras
-        self.cam = camera.cameraFactory(doClear=True, runManager=self.runManager)
+        try:
+            self.cam = camera.cameraFactory(doClear=True, runManager=self.runManager)
+        except:
+            self.cam = None
 
         # init calculation library
-        self.cal = calculation.Calculation(self.xml, None, None)
+        self.cal = calculation.Calculation(self.pfi.calibModel, None, None)
 
     def setBrokenCobras(self, brokens=None):
         """ define the broken/good cobras """
