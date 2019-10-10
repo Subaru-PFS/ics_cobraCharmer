@@ -1139,30 +1139,16 @@ class ModuleTest():
                              needAtEnd=needAtEnd, closeEnough=closeEnough,
                              limitTolerance=limitTolerance)
 
-    def makeThetaMotorMap(
-            self,
-            newXml,
-            repeat=1,
-            steps=100,
-            totalSteps=10000,
-            fast=True,
-            thetaOnTime=None,
-            updateGeometry=False,
-            phiRunDir=None,
-            limitOnTime=0.08,
-            resetScaling=True,
-            delta=np.deg2rad(5.0)):
-        # generate theta motor maps, it accepts custom thetaOnTIme parameter.
-        # it assumes that phi arms have been move to ~60 degrees out to avoid collision
-        # if thetaOnTime is not None, fast parameter is ignored. Otherwise use fast/slow ontime
-        # Example:
-        #     makethetaMotorMap(xml, path, fast=True)               // update fast motor maps
-        #     makethetaMotorMap(xml, path, fast=False)              // update slow motor maps
-        #     makethetaMotorMap(xml, path, thetaOnTime=0.06)        // motor maps for on-time=0.06
+    def acquireThetaMotorMap(self,
+                             steps=100,
+                             totalSteps=10000,
+                             fast=False,
+                             thetaOnTime=None,
+                             limitOnTime=0.08,
+                             resetScaling=True):
+        """ """
+        repeat = 1
         self._connect()
-        if updateGeometry and phiRunDir is None:
-            raise RuntimeError('To write geometry, need to be told the phiRunDir')
-
         defaultOnTimeFast = deepcopy([self.pfi.calibModel.motorOntimeFwd1,
                                       self.pfi.calibModel.motorOntimeRev1])
         defaultOnTimeSlow = deepcopy([self.pfi.calibModel.motorOntimeSlowFwd1,
@@ -1189,8 +1175,7 @@ class ModuleTest():
         if resetScaling:
             self.pfi.resetMotorScaling(cobras=None, motor='theta')
 
-        #record the theta movements
-        dataPath = self.runManager.dataDir
+        # record the theta movements
         self.logger.info(f'theta home {-totalSteps} steps')
         self.pfi.moveAllSteps(self.goodCobras, -totalSteps, 0)
         for n in range(repeat):
@@ -1264,11 +1249,30 @@ class ModuleTest():
             self.pfi.moveAllSteps(self.goodCobras, -totalSteps, 0)
 
         # save calculation result
+        dataPath = self.runManager.dataDir
         np.save(dataPath / 'thetaFW', thetaFW)
         np.save(dataPath / 'thetaRV', thetaRV)
 
+        return self.runManager.runDir, thetaFW, thetaRV
+
+    def reduceThetaMotorMap(self, newXml, runDir, steps,
+                            thetaOnTime=None,
+                            delta=None, fast=False,
+                            phiRunDir=None,
+                            updateGeometry=False):
+        dataPath = runDir / 'data'
+
+        # load calculation result
+        thetaFW = np.load(dataPath / 'thetaFW.npy')
+        thetaRV = np.load(dataPath / 'thetaRV.npy')
+
         # calculate centers and theta angles
-        thetaCenter, thetaRadius, thetaAngFW, thetaAngRV, badRange = self.cal.thetaCenterAngles(thetaFW, thetaRV)
+        thetaCenter, thetaRadius, thetaAngFW, thetaAngRV, badRange = self.cal.thetaCenterAngles(thetaFW,
+                                                                                                thetaRV)
+        for short in badRange:
+            self.logger.warn(f'theta range for {short+1:-2d} is short: '
+                             f'out={np.rad2deg(thetaAngRV[short,0,0]):-6.2f} '
+                             f'back={np.rad2deg(thetaAngRV[short,0,-1]):-6.2f}')
         np.save(dataPath / 'thetaCenter', thetaCenter)
         np.save(dataPath / 'thetaRadius', thetaRadius)
         np.save(dataPath / 'thetaAngFW', thetaAngFW)
@@ -1314,18 +1318,37 @@ class ModuleTest():
                                                                                thetaFW, thetaRV,
                                                                                phiCenter, phiRadius,
                                                                                phiFW, phiRV)
-            self.cal.calibModel.updateGeometry(thetaCenter, thetaL, phiL)
-            self.cal.calibModel.updateThetaHardStops(thetaCCW, thetaCW)
-            self.cal.calibModel.updatePhiHardStops(phiCCW, phiCW)
+            self.pfi.calibModel.updateGeometry(thetaCenter, thetaL, phiL)
+            self.pfi.calibModel.updateThetaHardStops(thetaCCW, thetaCW)
+            self.pfi.calibModel.updatePhiHardStops(phiCCW, phiCW)
 
-            self.cal.calibModel.createCalibrationFile(self.runManager.outputDir / newXml)
+            self.setThetaGeometryFromRun(runDir)
 
-        # restore default setting
-        # self.cal.restoreConfig()
-        # self.pfi.loadModel(self.xml)
+        self.pfi.calibModel.createCalibrationFile(self.runManager.outputDir / newXml)
 
-        self.setThetaGeometryFromRun(self.runManager.runDir, onlyIfClear=True)
-        return self.runManager.runDir
+        return self.runManager.runDir, np.where(bad)[0]
+
+    def makeThetaMotorMap(self, newXml,
+                          steps=100,
+                          totalSteps=10000,
+                          fast=True,
+                          thetaOnTime=None,
+                          updateGeometry=False,
+                          phiRunDir=None,
+                          limitOnTime=0.08,
+                          resetScaling=True,
+                          delta=np.deg2rad(5.0)):
+
+        runDir, thetaFW, thetaRV = self.acquireThetaMotorMap(steps=steps, totalSteps=totalSteps,
+                                                             fast=fast, thetaOnTime=thetaOnTime,
+                                                             limitOnTime=limitOnTime,
+                                                             resetScaling=resetScaling)
+        runDir, duds = self.reduceThetaMotorMap(newXml, runDir, steps,
+                                                thetaOnTime=thetaOnTime,
+                                                delta=delta, fast=fast,
+                                                phiRunDir=phiRunDir,
+                                                updateGeometry=updateGeometry)
+        return runDir, duds
 
     def phiConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, fast=True, finalAngle=None):
         # variable declaration for center measurement
