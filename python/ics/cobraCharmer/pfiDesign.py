@@ -51,9 +51,6 @@ class PFIDesign():
 
         if fileName is None:
             return
-        import warnings
-
-        warnings.warn('please use PFIDesign.loadModule() or PFIDesign.loadPFI()')
 
         self.loadModelFiles([fileName])
         self.moduleIds[:] = 1

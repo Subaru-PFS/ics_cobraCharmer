@@ -146,6 +146,7 @@ class Calculation():
         pos = np.zeros(len(idx), dtype=complex)
         for n, k in enumerate(target):
             if k < 0:
+                # Is this _really_ what we want to do?
                 pos[n] = self.calibModel.centers[idx[n]]
             else:
                 pos[n] = measPos[k]
@@ -292,6 +293,7 @@ class Calculation():
         # mark bad cobras by checking hard stops
         bad = np.any(thetaAngRV[:, :, 0] < np.pi*2, axis=1)
         bad[np.std(thetaAngRV[:, :, 0], axis=1) > 0.1] = True
+        # bad[np.any(thetaAngRV[:, :, -1] > tolerance)] = True
         badRange = np.where(bad)[0]
 
         return thetaCenter, thetaRadius, thetaAngFW, thetaAngRV, badRange

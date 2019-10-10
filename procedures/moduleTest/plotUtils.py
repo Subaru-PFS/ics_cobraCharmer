@@ -82,7 +82,7 @@ def plotConvergenceRuns(runPaths, motor):
         cobras =  np.unique(data['cobra'])
         lastIteration = np.max(data['iteration'])
 
-        p1.hlines(0, 0, lastIteration + 1, 'k', alpha=0.2)
+        p1.hlines(0, 0, 8, 'k', alpha=0.2)
         for c_i in cobras:
             if c_i == 0:
                 continue
@@ -90,6 +90,7 @@ def plotConvergenceRuns(runPaths, motor):
             p1.plot(np.rad2deg(data['left'][c_w]), '-+', alpha=0.5)
             p1.set_title(runName)
             p1.set_ylabel('degrees')
+            p1.set_xlim(-0.5,8.5)
             p1.xaxis.set_major_locator(MaxNLocator(integer=True))
 
         duds = np.where((data['iteration'] == lastIteration) & (data['done'] == False))

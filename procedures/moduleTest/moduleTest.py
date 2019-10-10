@@ -35,6 +35,11 @@ def unwrappedAngle(angle, fromAngle, toAngle,
        of 0 on the other side, convert `angle` to be continuous with motion from
        `fromAngle` to `toAngle`.
 
+    Returns
+    -------
+    angle : radians
+       The full angle, which can be both slightly negative and slightly above 2pi.
+
     Given tripAngle is 90 and allowAngle is 30:
 
     If moving DOWN past 90 or UP from < 0 and target < 90
@@ -887,7 +892,6 @@ class ModuleTest():
     def makePhiMotorMap(
             self,
             newXml,
-            repeat=1,
             steps=100,
             totalSteps=5000,
             fast=False,
@@ -905,6 +909,7 @@ class ModuleTest():
                 makePhiMotorMap(xml, path, fast=False)            // update slow motor maps
                 makePhiMotorMap(xml, path, phiOnTime=0.06)        // motor maps for on-time=0.06
         """
+        repeat = 1
         self._connect()
         defaultOnTimeFast = deepcopy([self.pfi.calibModel.motorOntimeFwd2,
                                       self.pfi.calibModel.motorOntimeRev2])
