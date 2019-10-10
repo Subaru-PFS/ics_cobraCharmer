@@ -201,7 +201,7 @@ class Calculation():
             phiAngRV[c] = (phiAngRV[c] - home + np.pi/2) % (np.pi*2) - np.pi/2
 
         # mark bad cobras by checking hard stops
-        bad = np.any(phiAngRV[:, :, 0] < np.pi*0.8, axis=1)
+        bad = np.any(phiAngRV[:, :, 0] < np.pi, axis=1)
         bad[np.std(phiAngRV[:, :, 0], axis=1) > 0.1] = True
         badRange = np.where(bad)[0]
 
