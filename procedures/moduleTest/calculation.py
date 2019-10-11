@@ -44,12 +44,8 @@ def transform(origPoints, newPoints):
     return offset, scale, tilt, tr
 
 class Calculation():
-    def __init__(self, xml, brokens, camSplit):
-        if not os.path.exists(xml):
-            print(f"Error: {xml} is not presented!")
-            sys.exit()
-        self.xml = xml
-        self.calibModel = pfiDesign.PFIDesign(xml)
+    def __init__(self, calibModel, brokens, camSplit):
+        self.calibModel = calibModel
         self.setBrokenCobras(brokens)
         self.camSplit = camSplit
 
@@ -485,8 +481,7 @@ class Calculation():
         new.updateMotorMaps(phiFwd=mmFW, phiRev=mmRV, useSlowMaps=slow)
 
     def restoreConfig(self):
-        # restore default setting
-        self.calibModel = pfiDesign.PFIDesign(self.xml)
+        raise NotImplementedError('Create a new cal instance')
 
     def geometry(self, thetaC, thetaR, thetaFW, thetaRV, phiC, phiR, phiFW, phiRV):
         """ calculate geometry from theta and phi motor maps process """
