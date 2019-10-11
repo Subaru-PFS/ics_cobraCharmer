@@ -19,9 +19,12 @@ reload(butler)
 class PFIDesign():
     """ Class describing a cobras calibration product, the "motor map"  """
 
-    COBRA_OK_MASK       = 0x0001  # a synthetic summary bit: 1 for good, 0 for bad.
-    COBRA_BROKEN_MASK   = 0x0002  # 1 if the motors do not work
-    COBRA_INVISBLE_MASK = 0x0004  # 1 if the fiber is not visible
+    COBRA_OK_MASK           = 0x0001  # a synthetic summary bit: 1 for good, 0 for bad.
+    COBRA_INVISIBLE_MASK    = 0x0002  # 1 if the fiber is not visible
+    COBRA_BROKEN_THETA_MASK = 0x0004  # 1 if the phi motor do not work
+    COBRA_BROKEN_PHI_MASK   = 0x0008  # 1 if the theta motor does not work
+
+    COBRA_BROKEN_MOTOR_MASK = COBRA_BROKEN_THETA_MASK | COBRA_BROKEN_PHI_MASK
 
     def __init__(self, fileName=None):
         """
@@ -356,38 +359,39 @@ class PFIDesign():
         moduleId = self.getRealModuleId(moduleId)
         return np.where(self.moduleIds == moduleId)[0]
 
-    def setCobraStatus(self, cobraId, broken=False, invisible=False):
+    def setCobraStatus(self, cobraId, brokenTheta=False, brokenPhi=False, invisible=False):
         """ Set the operational status of a cobra.
 
-        bit 0 - a synthetic summary bit: 1 for good, 0 for bad.
-        bit 1 - 1 if the motors do not work
-        bit 2 - 1 if the fiber is not visible
+
         """
 
-        if broken:
-            self.status |= self.COBRA_BROKEN_MASK
-            self.status &= ~self.COBRA_OK_MASK
         if invisible:
             self.status |= self.COBRA_INVISBLE_MASK
             self.status &= ~self.COBRA_OK_MASK
+        if brokenTheta:
+            self.status |= self.COBRA_BROKEN_THETA_MASK
+            self.status &= ~self.COBRA_OK_MASK
+        if brokenPhi:
+            self.status |= self.COBRA_BROKEN_PHI_MASK
+            self.status &= ~self.COBRA_OK_MASK
 
-    def getGoodMask(self):
-        """ Return mask of operational cobras. """
+    def cobraIsGood(self):
+        """ Return True if we believe cobra can/should be used. """
 
         return self.status == self.COBRA_OK_MASK
 
-    def getBadMask(self):
-        """ Return mask of unuseable cobras. """
+    def cobraIsBad(self):
+        """ Return True if we believe cobra can/should NOT be used. """
 
-        return self.status != self.COBRA_OK_MASK
+        return not self.cobraIsGood()
 
-    def getBrokenMask(self):
-        """ Return mask of cobras with inoperable motors """
+    def motorIsBroken(self):
+        """ Return True if we believe cobra can/should NOT be moved. """
 
-        return (self.status & self.COBRA_BROKEN_MASK) != 0
+        return (self.status & self.COBRA_BROKEN_MOTOR_MASK) != 0
 
-    def getInvisibleMask(self):
-        """ Return mask of cobras with broken/non-visible fibers """
+    def fiberIsBroken(self):
+        """ Return True if we believe fiber cannot be seen. """
 
         return (self.status & self.COBRA_INVISBLE_MASK) != 0
 

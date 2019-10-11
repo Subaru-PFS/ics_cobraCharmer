@@ -455,7 +455,7 @@ class PFI(object):
         return newOntime
 
     def moveSteps(self, cobras, thetaSteps, phiSteps, waitThetaSteps=None, waitPhiSteps=None,
-                  interval=2.5, thetaFast=True, phiFast=True):
+                  interval=2.5, thetaFast=True, phiFast=True, force=False):
         """ Move cobras with theta and phi steps
 
             thetaSteps: A numpy array with theta steps to go
@@ -465,6 +465,7 @@ class PFI(object):
             interval: the FPGA interval parameter for RUN command
             thetaFast: a boolean value for using fast/slow theta movement
             phiFast: a boolean value for using fast/slow phi movement
+            force: ignore disabled cobra status
 
         """
 
@@ -494,6 +495,8 @@ class PFI(object):
             return
 
         for c_i, c in enumerate(cobras):
+            cobraId = self._mapCobraIndex(c)
+
             steps1 = int(np.abs(thetaSteps[c_i])), int(np.abs(phiSteps[c_i]))
             dirs1 = ['cw', 'cw']
 
@@ -503,7 +506,9 @@ class PFI(object):
                 dirs1[1] = 'ccw'
 
             en = (steps1[0] != 0, steps1[1] != 0)
-            cobraId = self._mapCobraIndex(c)
+            isBad = self.calibModel.cobraIsBad(cobraId)
+            if isBad and not force:
+                en = (False, False)
 
             if _thetaFast[c_i]:
                 if dirs1[0] == 'cw':
