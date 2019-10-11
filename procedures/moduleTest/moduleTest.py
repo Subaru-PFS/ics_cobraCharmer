@@ -324,12 +324,12 @@ class ModuleTest():
             return
         self.setPhiCentersFromRun(geometryRun)
 
-        FW = np.load(geometryRun / 'data' / 'phiFW.npy')
-        RV = np.load(geometryRun / 'data' / 'phiRV.npy')
-        self.phiCCWHome = np.angle(FW[:,0,0] - self.phiCenter)
-        self.phiCWHome = np.angle(RV[:,0,0] - self.phiCenter)
+        phiFW = np.load(geometryRun / 'data' / 'phiFW.npy')
+        phiRV = np.load(geometryRun / 'data' / 'phiRV.npy')
+        self.phiCCWHome = np.angle(phiFW[:,0,0] - self.phiCenter[:])
+        self.phiCWHome = np.angle(phiRV[:,0,0] - self.phiCenter[:])
         dAng = self.phiCWHome - self.phiCCWHome
-        dAng[dAng<0] += 2*np.pi
+        dAng[dAng < 0] += 2*np.pi
         stopped = np.where(dAng < np.deg2rad(182.0))[0]
         if len(stopped) > 0:
             self.logger.error(f"phi ranges for cobras {stopped+1} are too small: "
@@ -348,15 +348,14 @@ class ModuleTest():
 
         self.setThetaCentersFromRun(geometryRun)
 
-        FW = np.load(geometryRun / 'data' / 'thetaFW.npy')
-        RV = np.load(geometryRun / 'data' / 'thetaRV.npy')
-        self.thetaCCWHome = np.angle(FW[:,0,0] - self.thetaCenter)
-        self.thetaCWHome = np.angle(RV[:,0,0] - self.thetaCenter)
+        thetaFW = np.load(geometryRun / 'data' / 'thetaFW.npy')
+        thetaRV = np.load(geometryRun / 'data' / 'thetaRV.npy')
+        self.thetaCCWHome = np.angle(thetaFW[:,0,0] - self.thetaCenter[:])
+        self.thetaCWHome = np.angle(thetaRV[:,0,0] - self.thetaCenter[:])
 
         dAng = self.thetaCWHome - self.thetaCCWHome
         dAng[dAng<np.pi] += 2*np.pi
-        dAng[dAng<np.pi] += 2*np.pi
-        stopped = np.where(dAng < np.deg2rad(375.0))[0]
+        stopped = np.where(dAng < np.deg2rad(10.0))[0]
         if len(stopped) > 0:
             self.logger.error(f"theta ranges for cobras {stopped+1} are too small: "
                               f"CW={np.rad2deg(self.thetaCWHome[stopped])} "
@@ -1051,19 +1050,19 @@ class ModuleTest():
         self.cal.updatePhiMotorMaps(phiMMFW, phiMMRV, bad, slow)
         if phiOnTime is not None:
             onTime = np.full(57, phiOnTime)
-            self.cal.calibModel.updateOntimes(phiFwd=onTime, phiRev=onTime, fast=fast)
+            self.pfi.calibModel.updateOntimes(phiFwd=onTime, phiRev=onTime, fast=fast)
         if updateGeometry:
-            self.cal.calibModel.updateGeometry(centers=phiCenter, phiArms=phiRadius)
+            self.pfi.calibModel.updateGeometry(centers=phiCenter, phiArms=phiRadius)
             # These are not really correct, since the inner limit is pinned at 0. But it gives the range.
-            self.cal.calibModel.updatePhiHardStops(ccw=phiAngFW[:,0,0], cw=phiAngFW[:,0,0])
-        self.cal.calibModel.createCalibrationFile(self.runManager.outputDir / newXml, name='phiModel')
+            # self.cal.updatePhiHardStops(ccw=phiAngFW[:,0,0], cw=phiAngFW[:,0,-1])
+        self.pfi.calibModel.createCalibrationFile(self.runManager.outputDir / newXml, name='phiModel')
 
         # restore default setting ( really? why? CPL )
         # self.cal.restoreConfig()
         # self.pfi.loadModel(self.xml)
 
         self.setPhiGeometryFromRun(self.runManager.runDir, onlyIfClear=True)
-        return self.runManager.runDir
+        return self.runManager.runDir, np.where(bad)[0]
 
     def _mapDone(self, centers, points, limits, k,
                  needAtEnd=4, closeEnough=np.deg2rad(1),
@@ -1284,8 +1283,8 @@ class ModuleTest():
         np.save(dataPath / 'badRange', badRange)
 
         self.thetaCenters = thetaCenter
-        self.thetaCCWHome = np.angle(thetaFW[:,0,0] - thetaCenter)
-        self.thetaCCWHome = np.angle(thetaRV[:,0,0] - thetaCenter)
+        self.thetaCCWHome = thetaAngFW[:,0,0]
+        self.thetaCCWHome = thetaAngRV[:,0,0]
 
         # calculate average speeds
         thetaSpeedFW, thetaSpeedRV = self.cal.speed(thetaAngFW, thetaAngRV, steps, delta)
@@ -1313,7 +1312,7 @@ class ModuleTest():
         self.cal.updateThetaMotorMaps(thetaMMFW, thetaMMRV, bad, slow)
         if thetaOnTime is not None:
             onTime = np.full(57, thetaOnTime)
-            self.cal.calibModel.updateOntimes(thetaFwd=onTime, thetaRev=onTime, fast=fast)
+            self.pfi.calibModel.updateOntimes(thetaFwd=onTime, thetaRev=onTime, fast=fast)
         if updateGeometry:
             phiCenter = np.load(phiRunDir / 'data' / 'phiCenter.npy')
             phiRadius = np.load(phiRunDir / 'data' / 'phiRadius.npy')
