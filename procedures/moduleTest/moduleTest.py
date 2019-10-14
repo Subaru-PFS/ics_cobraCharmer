@@ -7,12 +7,12 @@ from copy import deepcopy
 
 from procedures.moduleTest import calculation
 reload(calculation)
-
-from procedures.moduleTest.mcs import camera
+rom procedures.moduleTest.mcs import camera
 reload(camera)
 from ics.cobraCharmer import pfi as pfiControl
+
 from ics.cobraCharmer import pfiDesign
-<<<<<<< HEAD
+
 from ics.cobraCharmer.utils import butler
 from ics.cobraCharmer.fpgaState import fpgaState
 from ics.cobraCharmer import cobraState
@@ -85,28 +85,6 @@ def unwrappedPosition(pos, center, homeAngle, fromAngle, toAngle,
 
     return unwrappedAngle(diffAngle, fromAngle, toAngle,
                           tripAngle=tripAngle, allowAngle=allowAngle)
-=======
-import visDianosticPlot
-
-class Camera():
-    def __init__(self, devId):
-        self.devId = devId
-        self.camera = idsCamera(devId)
-        self.camera.setExpoureTime(20)
-        self.data = None
-
-    def expose(self, fn=None):
-        self.data = self.camera.getCurrentFrame()
-        if fn is not None:
-            fits.writeto(fn, self.data, overwrite=True)
-        return self.data
-
-    def reload(self):
-        del self.camera
-        self.camera = idsCamera(self.devId)
-        self.camera.setExpoureTime(20)
-        self.data = None
->>>>>>> Revising runMotorMap function.
 
 class ModuleTest():
     def __init__(self, fpgaHost, xml, brokens=None, cam1Id=1, cam2Id=2, camSplit=28, logLevel=logging.INFO):
@@ -2002,16 +1980,16 @@ def combineFastSlowMotorMap(inputXML, newXML, arm='phi', brokens=None, fastPath=
     new.createCalibrationFile(newXML)
 
 
-def runMotorMap(dataPath=None,brokens=None, arm=None, xml=None, module=None):
-    #module = 'Science29'
-    #arm = 'theta'
-    
-    #dataPath = '/data/SC29/20190930/'
+def runMotorMap(dataPath=None,brokens=None,module=None):
+    module = 'Science29'
+    arm = 'theta'
+
+    dataPath = '/data/SC29/20190930/'
 
     stepList = ['50','400']
     speedList = ['','Fast']
-    #brokens = [57]
-    #xml = '/data/SC29/20190930/science29_theta_20190930.xml'
+    brokens = [57]
+    xml = '/data/SC29/20190930/science29_theta_20190930.xml'
 
     for s in speedList:
         for f in stepList:
@@ -2047,9 +2025,11 @@ def runMotorMap(dataPath=None,brokens=None, arm=None, xml=None, module=None):
                     mt.makeThetaMotorMap(f'{module}_{arm}_{f}Step{s}.xml', path, 
                         repeat = 3, steps = int(f), fast=False,totalSteps = 12000)
                 
-            
-            vis.visCobraMotorMap(stepsize=int(f), figpath=figpath, arm=f'{arm}')    
-            
+            if arm is 'phi':
+                vis.visCobraMotorMap(stepsize=int(f), figpath=figpath, arm='phi')    
+            else:
+                vis.visCobraMotorMap(stepsize=int(f), figpath=figpath, arm='theta')
+                
             print(path)
             del(mt)
             del(vis)
