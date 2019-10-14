@@ -336,7 +336,7 @@ class VisDianosticPlot(object):
             export_png(grid,filename=figpath+"motor_speed_histogram.png")
             export_png(qgrid,filename=figpath+"motor_speed_std.png")
 
-    def visConverge(self, figPath = None, arm = 'phi', runs = 50, margin = 15, montage=None):
+    def visConverge(self, figPath = None, arm = 'phi', runs = 50, margin = 15, montage=None, pdffile = None):
         
         if arm is 'phi':
             phiPath = self.path
@@ -396,6 +396,10 @@ class VisDianosticPlot(object):
             retcode = subprocess.call(cmd,shell=True)
             #if figPath is not None:
             #    plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
+        
+        if pdffile is not None:
+            cmd=f"""convert {figPath}Conp*_[0-9].png {figPath}Con*_[0-9]?.png {pdffile}"""
+            retcode = subprocess.call(cmd,shell=True)
     
     def visMultiMotorMapfromXML(self, xmlList, figPath=None, arm='phi', pdffile=None):
         binSize = 3.6
