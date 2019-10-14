@@ -7,8 +7,6 @@ from copy import deepcopy
 import calculation
 from idsCamera import idsCamera
 from ics.cobraCharmer import pfi as pfiControl
-from ics.cobraCharmer import pfiDesign
-import visDianosticPlot
 
 class Camera():
     def __init__(self, devId):
@@ -538,9 +536,7 @@ class ModuleTest():
                 cAngles, cPositions = self.measureAngles(centers, homes)
                 cAngles[cAngles>np.pi*(3/2)] -= np.pi*2
 
-    def thetaConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, 
-        thetaThreshold = 250, fastFirstMove=True):
-        
+    def thetaConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, fast=True):
         # variable declaration for center measurement
         steps = 300
         iteration = 6000 // steps
@@ -626,7 +622,7 @@ class ModuleTest():
                 angle = np.deg2rad(margin + (360 - 2 * margin) * i / (runs - 1))
             else:
                 angle = np.deg2rad(180)
-            self.pfi.moveThetaPhi(self.goodCobras, zeros + angle, zeros, thetaFast=fastFirstMove)
+            self.pfi.moveThetaPhi(self.goodCobras, zeros + angle, zeros, thetaFast=fast)
             cAngles, cPositions = self.measureAngles(centers, homes)
             for k in range(len(goodIdx)):
                 if angle > np.pi + tGaps[k] and cAngles[k] < tGaps[k] + 0.1:
@@ -637,10 +633,7 @@ class ModuleTest():
 
             for j in range(tries - 1):
                 dirs = angle > cAngles
-                
-                self.pfi.moveThetaPhi(self.goodCobras, angle - cAngles, zeros, thetaFroms=cAngles, 
-                    thetaFast=False, thetaThreshold=thetaThreshold)
-                
+                self.pfi.moveThetaPhi(self.goodCobras, angle - cAngles, zeros, thetaFroms=cAngles, thetaFast=fast)
                 cAngles, cPositions = self.measureAngles(centers, homes)
                 for k in range(len(goodIdx)):
                     lastAngle = thetaData[goodIdx[k], i, j, 0]
@@ -715,102 +708,3 @@ def getCobras(cobs):
     # cobs is 0-indexed list
     return pfiControl.PFI.allocateCobraList(zip(np.full(len(cobs), 1), np.array(cobs) + 1))
 
-def combineFastSlowMotorMap(inputXML, newXML, arm='phi', brokens=None, fastPath=None, slowPath=None):
-    binSize = np.deg2rad(3.6)
-    model = pfiDesign.PFIDesign(inputXML)
-
-    if fastPath is not None:
-        fastFwdMM = np.load(f'{fastPath}{arm}MMFW.npy')
-        fastRevMM = np.load(f'{fastPath}{arm}MMRV.npy')
-    
-    
-    if slowPath is not None:
-        slowFwdMM = np.load(f'{slowPath}{arm}MMFW.npy')
-        slowRevMM = np.load(f'{slowPath}{arm}MMRV.npy')
-
- 
-    if brokens is None:
-        brokens = []
-
-    visibles = [e for e in range(1, 58) if e not in brokens]
-    goodIdx = np.array(visibles) - 1
-
-    new = model
-
-        
-    slowFW = binSize / new.S1Pm
-    slowRV = binSize / new.S1Nm
-
-    fastFW = binSize / new.F1Pm
-    fastRV = binSize / new.F1Nm
-    
-    
-    fastFW[goodIdx] = fastFwdMM[goodIdx]
-    fastRV[goodIdx] = fastRevMM[goodIdx]
-    slowFW[goodIdx] = slowFwdMM[goodIdx]
-    slowRV[goodIdx] = slowRevMM[goodIdx]
-
-    if arm is 'phi':
-        new.updateMotorMaps(phiFwd=slowFW, phiRev=slowRV, useSlowMaps=True)
-        new.updateMotorMaps(phiFwd=fastFW, phiRev=fastRV, useSlowMaps=False)
-
-    else:
-        new.updateMotorMaps(thtFwd=slowFW, thtRev=slowRV, useSlowMaps=True)
-        new.updateMotorMaps(thtFwd=fastFW, thtRev=fastRV, useSlowMaps=False)
-
-    new.createCalibrationFile(newXML)
-
-
-def runMotorMap(dataPath=None,brokens=None,module=None):
-    module = 'Science29'
-    arm = 'theta'
-
-    dataPath = '/data/SC29/20190930/'
-
-    stepList = ['50','400']
-    speedList = ['','Fast']
-    brokens = [57]
-    xml = '/data/SC29/20190930/science29_theta_20190930.xml'
-
-    for s in speedList:
-        for f in stepList:
-            path= dataPath+f'{arm}{f}Step{s}/'
-            figpath = dataPath+f'{arm}{f}Step{s}MotorMap/'
-            if not (os.path.exists(path)):
-                    os.mkdir(path)
-            if not (os.path.exists(figpath)):
-                    os.mkdir(figpath)        
-            mt = ModuleTest('128.149.77.24', xml,brokens=brokens,camSplit=28)
-            vis = visDianosticPlot.VisDianosticPlot(path, brokens=brokens, camSplit=28)
-            pfi = mt.pfi
-            
-            if arm is 'phi':
-                pfi.moveAllSteps(mt.allCobras, 0, -5000)
-                pfi.moveAllSteps(mt.allCobras, 0, -1000)
-            else:
-                pfi.moveAllSteps(mt.allCobras, -10000, 0)
-                pfi.moveAllSteps(mt.allCobras, -2000, 0)
-            
-            if s is 'Fast':
-                if arm is 'phi':
-                    mt.makePhiMotorMap(f'{module}_{arm}_{f}Step{s}.xml', path, 
-                        repeat = 3, steps = int(f), fast=True,totalSteps = 6000)
-                else:
-                    mt.makeThetaMotorMap(f'{module}_{arm}_{f}Step{s}.xml', path, 
-                        repeat = 3, steps = int(f), fast=True,totalSteps = 12000)
-            else:
-                if arm is 'phi':
-                    mt.makePhiMotorMap(f'{module}_{arm}_{f}Step{s}.xml', path, 
-                        repeat = 3, steps = int(f), fast=False,totalSteps = 6000)
-                else:
-                    mt.makeThetaMotorMap(f'{module}_{arm}_{f}Step{s}.xml', path, 
-                        repeat = 3, steps = int(f), fast=False,totalSteps = 12000)
-                
-            if arm is 'phi':
-                vis.visCobraMotorMap(stepsize=int(f), figpath=figpath, arm='phi')    
-            else:
-                vis.visCobraMotorMap(stepsize=int(f), figpath=figpath, arm='theta')
-                
-            print(path)
-            del(mt)
-            del(vis)

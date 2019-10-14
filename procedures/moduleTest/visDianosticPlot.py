@@ -233,6 +233,7 @@ class VisDianosticPlot(object):
         ymin = -1.1*np.rad2deg(np.max(self.mr))
 
         for fiber in self.goodIdx:
+            print(fiber)
             x=np.arange(112)*3.6
             c = fiber
 
