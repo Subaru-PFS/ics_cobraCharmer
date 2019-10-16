@@ -336,7 +336,10 @@ class VisDianosticPlot(object):
             export_png(grid,filename=figpath+"motor_speed_histogram.png")
             export_png(qgrid,filename=figpath+"motor_speed_std.png")
 
-    def visConverge(self, figPath = None, arm = 'phi', runs = 50, margin = 15, montage=None, pdffile = None):
+    def visAngleMovement(self, figPath=None, arm = 'phi'):
+        pass
+
+    def visConverge(self, figPath = None, arm = 'phi', runs = 50, margin = 15, montage=None):
         
         if arm is 'phi':
             phiPath = self.path
@@ -394,6 +397,8 @@ class VisDianosticPlot(object):
             cmd=f"""montage {figPath}Con*_[0-9].png {figPath}Con*_[0-9]?.png \
                 -tile 4x -geometry +4+4 {montage}"""
             retcode = subprocess.call(cmd,shell=True)
+            if retcode is not 0:
+                raise Exception
             #if figPath is not None:
             #    plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
         
