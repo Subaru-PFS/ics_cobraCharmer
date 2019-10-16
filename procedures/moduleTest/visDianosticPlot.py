@@ -398,7 +398,7 @@ class VisDianosticPlot(object):
             #    plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
         
         if pdffile is not None:
-            cmd=f"""convert {figPath}Conp*_[0-9].png {figPath}Con*_[0-9]?.png {pdffile}"""
+            cmd=f"""convert {figPath}Con*_[0-9].png {figPath}Con*_[0-9]?.png {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
     
     def visMultiMotorMapfromXML(self, xmlList, figPath=None, arm='phi', pdffile=None):

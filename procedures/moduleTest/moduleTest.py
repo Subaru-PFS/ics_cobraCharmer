@@ -7,6 +7,7 @@ from copy import deepcopy
 import calculation
 from idsCamera import idsCamera
 from ics.cobraCharmer import pfi as pfiControl
+import visDianosticPlot
 
 class Camera():
     def __init__(self, devId):
@@ -708,3 +709,54 @@ def getCobras(cobs):
     # cobs is 0-indexed list
     return pfiControl.PFI.allocateCobraList(zip(np.full(len(cobs), 1), np.array(cobs) + 1))
 
+def runMotorMap(dataPath=None,brokens=None, arm=None, xml=None, module=None):
+    #module = 'Science29'
+    #arm = 'theta'
+    
+    #dataPath = '/data/SC29/20190930/'
+
+    stepList = ['50','400']
+    speedList = ['','Fast']
+    #brokens = [57]
+    #xml = '/data/SC29/20190930/science29_theta_20190930.xml'
+
+    for s in speedList:
+        for f in stepList:
+            path= dataPath+f'{arm}{f}Step{s}/'
+            figpath = dataPath+f'{arm}{f}Step{s}MotorMap/'
+            if not (os.path.exists(path)):
+                    os.mkdir(path)
+            if not (os.path.exists(figpath)):
+                    os.mkdir(figpath)        
+            mt = ModuleTest('128.149.77.24', xml,brokens=brokens,camSplit=28)
+            vis = visDianosticPlot.VisDianosticPlot(path, brokens=brokens, camSplit=28)
+            pfi = mt.pfi
+            
+            if arm is 'phi':
+                pfi.moveAllSteps(mt.allCobras, 0, -5000)
+                pfi.moveAllSteps(mt.allCobras, 0, -1000)
+            else:
+                pfi.moveAllSteps(mt.allCobras, -10000, 0)
+                pfi.moveAllSteps(mt.allCobras, -2000, 0)
+            
+            if s is 'Fast':
+                if arm is 'phi':
+                    mt.makePhiMotorMap(f'{module}_{arm}_{f}Step{s}.xml', path, 
+                        repeat = 3, steps = int(f), fast=True,totalSteps = 6000)
+                else:
+                    mt.makeThetaMotorMap(f'{module}_{arm}_{f}Step{s}.xml', path, 
+                        repeat = 3, steps = int(f), fast=True,totalSteps = 12000)
+            else:
+                if arm is 'phi':
+                    mt.makePhiMotorMap(f'{module}_{arm}_{f}Step{s}.xml', path, 
+                        repeat = 3, steps = int(f), fast=False,totalSteps = 6000)
+                else:
+                    mt.makeThetaMotorMap(f'{module}_{arm}_{f}Step{s}.xml', path, 
+                        repeat = 3, steps = int(f), fast=False,totalSteps = 12000)
+                
+            
+            vis.visCobraMotorMap(stepsize=int(f), figpath=figpath, arm=f'{arm}')    
+            
+            print(path)
+            del(mt)
+            del(vis)
