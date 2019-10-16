@@ -7,12 +7,11 @@ from copy import deepcopy
 
 from procedures.moduleTest import calculation
 reload(calculation)
-rom procedures.moduleTest.mcs import camera
+
+from procedures.moduleTest.mcs import camera
 reload(camera)
 from ics.cobraCharmer import pfi as pfiControl
-
 from ics.cobraCharmer import pfiDesign
-
 from ics.cobraCharmer.utils import butler
 from ics.cobraCharmer.fpgaState import fpgaState
 from ics.cobraCharmer import cobraState
@@ -1542,24 +1541,9 @@ class ModuleTest():
             self.pfi.moveAllSteps(self.goodCobras, -10000, 0, thetaFast=True)
             thetaFW[self.goodIdx, 0] = self.exposeAndExtractPositions()
 
-<<<<<<< HEAD
-<<<<<<< HEAD
             for k in range(iteration):
                 self.pfi.moveAllSteps(self.goodCobras, steps, 0, thetaFast=False)
                 thetaFW[self.goodIdx, 0] = self.exposeAndExtractPositions()
-=======
-    def thetaConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, fastFirstMove=True):
-=======
-    def thetaConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, 
-        thetaThreshold = 250, fastFirstMove=True):
-        
->>>>>>> Adding step threshold for switching between fast and slow maps
-        # variable declaration for center measurement
-        steps = 300
-        iteration = 6000 // steps
-        thetaFW = np.zeros((57, iteration+1), dtype=complex)
-        thetaRV = np.zeros((57, iteration+1), dtype=complex)
->>>>>>> Use fast motor map at first move.
 
             # make sure it goes to the limit
             self.pfi.moveAllSteps(self.goodCobras, 10000, 0, thetaFast=True)
@@ -1645,17 +1629,10 @@ class ModuleTest():
 
             for j in range(tries - 1):
                 dirs = angle > cAngles
-<<<<<<< HEAD
                 lastAngle = cAngles
                 nm = notdoneMask[self.goodIdx]
                 self.pfi.moveThetaPhi(self.allCobras[notdoneMask], (angle - cAngles)[nm],
                                       zeros[nm], thetaFroms=cAngles[nm], thetaFast=fast)
-=======
-                
-                self.pfi.moveThetaPhi(self.goodCobras, angle - cAngles, zeros, thetaFroms=cAngles, 
-                    thetaFast=False, thetaThreshold=thetaThreshold)
-                
->>>>>>> Adding step threshold for switching between fast and slow maps
                 cAngles, cPositions = self.measureAngles(centers, homes)
                 nowDone[:] = False
                 nowDone[self.goodIdx[abs((cAngles - angle + np.pi) % (np.pi*2) - np.pi) < tolerance]] = True
@@ -1933,51 +1910,6 @@ class ModuleTest():
             onTime[c] = t0 + (t1-t0)/(s1-s0)*(speed-s0)
 
         return onTime
-
-def combineFastSlowMotorMap(inputXML, newXML, arm='phi', brokens=None, fastPath=None, slowPath=None):
-    binSize = np.deg2rad(3.6)
-    model = pfiDesign.PFIDesign(inputXML)
-
-    if fastPath is not None:
-        fastFwdMM = np.load(f'{fastPath}{arm}MMFW.npy')
-        fastRevMM = np.load(f'{fastPath}{arm}MMRV.npy')
-    
-    
-    if slowPath is not None:
-        slowFwdMM = np.load(f'{slowPath}{arm}MMFW.npy')
-        slowRevMM = np.load(f'{slowPath}{arm}MMRV.npy')
-
- 
-    if brokens is None:
-        brokens = []
-
-    visibles = [e for e in range(1, 58) if e not in brokens]
-    goodIdx = np.array(visibles) - 1
-
-    new = model
-
-        
-    slowFW = binSize / new.S1Pm
-    slowRV = binSize / new.S1Nm
-
-    fastFW = binSize / new.F1Pm
-    fastRV = binSize / new.F1Nm
-    
-    
-    fastFW[goodIdx] = fastFwdMM[goodIdx]
-    fastRV[goodIdx] = fastRevMM[goodIdx]
-    slowFW[goodIdx] = slowFwdMM[goodIdx]
-    slowRV[goodIdx] = slowRevMM[goodIdx]
-
-    if arm is 'phi':
-        new.updateMotorMaps(phiFwd=slowFW, phiRev=slowRV, useSlowMaps=True)
-        new.updateMotorMaps(phiFwd=fastFW, phiRev=fastRV, useSlowMaps=False)
-
-    else:
-        new.updateMotorMaps(thtFwd=slowFW, thtRev=slowRV, useSlowMaps=True)
-        new.updateMotorMaps(thtFwd=fastFW, thtRev=fastRV, useSlowMaps=False)
-
-    new.createCalibrationFile(newXML)
 
 
 def runMotorMap(dataPath=None,brokens=None,module=None):
