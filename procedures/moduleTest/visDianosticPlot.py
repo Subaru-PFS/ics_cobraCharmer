@@ -339,7 +339,7 @@ class VisDianosticPlot(object):
     def visAngleMovement(self, figPath=None, arm = 'phi'):
         pass
 
-    def visConverge(self, figPath = None, arm = 'phi', runs = 50, margin = 15, montage=None):
+    def visConverge(self, figPath = None, arm = 'phi', runs = 50, margin = 15, montage=None, pdffile=None):
         
         if arm is 'phi':
             phiPath = self.path
