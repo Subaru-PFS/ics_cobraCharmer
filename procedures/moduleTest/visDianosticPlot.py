@@ -336,7 +336,10 @@ class VisDianosticPlot(object):
             export_png(grid,filename=figpath+"motor_speed_histogram.png")
             export_png(qgrid,filename=figpath+"motor_speed_std.png")
 
-    def visConverge(self, figPath = None, arm = 'phi', runs = 50, margin = 15, montage=None, pdffile = None):
+    def visAngleMovement(self, figPath=None, arm = 'phi'):
+        pass
+
+    def visConverge(self, figPath = None, arm = 'phi', runs = 50, margin = 15, montage=None, pdffile=None):
         
         if arm is 'phi':
             phiPath = self.path
