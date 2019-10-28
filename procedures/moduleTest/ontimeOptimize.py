@@ -17,6 +17,7 @@ from bokeh.layouts import column,gridplot
 from bokeh.models import HoverTool, ColumnDataSource, LinearColorMapper
 from bokeh.models.glyphs import Text
 from bokeh.palettes import Category20
+from bokeh.palettes import YlGnBu8
 from bokeh.transform import linear_cmap
 
 import ontimeOptimize 
@@ -256,11 +257,12 @@ class OntimeOptimize(object):
         for pid in self.visibles:
             #if 0 in self.dataframe.loc[self.dataframe['fiberNo'] == pid]['groupFwd'].tolist():
             # Apply fitting only when data are all good.
-            if np.sum(self.dataframe.loc[self.dataframe['fiberNo'] == pid]['groupFwd'].values) == 0:   
+            datapoints = len(self.dataframe.loc[self.dataframe['fiberNo'] == pid]['groupFwd'].values)
+            if np.sum(self.dataframe.loc[self.dataframe['fiberNo'] == pid]['groupFwd'].values) < 0.5*datapoints:   
                 fw_s, fw_i = self.getFwdSlope(pid)
                 fwd_slope[pid-1] = fw_s
                 fwd_int[pid-1] = fw_i
-            if np.sum(self.dataframe.loc[self.dataframe['fiberNo'] == pid]['groupRev'].values) == 0:
+            if np.sum(self.dataframe.loc[self.dataframe['fiberNo'] == pid]['groupRev'].values) < 0.5*datapoints:
                 rv_s, rv_i = self.getRevSlope(pid)
                 rev_slope[pid-1] = rv_s
                 rev_int[pid-1] = rv_i
@@ -482,12 +484,16 @@ class OntimeOptimize(object):
         gooddata = dd.loc[dd[f'{direction}'].abs() > 
              self.minSpeed].loc[dd[f'range{direction}'].abs() > self.minRange]
         
+        #color_array = YlGnBu8[:len(dd[direction].values)]
+        c_array = ['blue', 'saddlebrown', 'darkviolet', 
+                        'seagreen', 'yellow','tan']
+        color_array = c_array[:len(dd[direction].values)]
         if direction is 'Fwd':
             xrange=np.arange(self.newOntimeSlowFwd[fiberInx]*0.8,1.2*np.max(dd[f'onTime{direction}']),0.001)
             newOntime = self.newOntimeSlowFwd[fiberInx] 
             y_predicted = [self.fwd_slope[fiberInx]*i + self.fwd_int[fiberInx]  for i in xrange]
-            if predict == True:
-                p.circle(x=[newOntime],y=[self.slowTarget],color='red', size=15)
+            #if predict == True:
+            p.circle(x=[newOntime],y=[self.slowTarget],color='red', size=15)
         
     
         if direction is 'Rev':
@@ -495,14 +501,14 @@ class OntimeOptimize(object):
 
             newOntime = self.newOntimeSlowRev[fiberInx]
             y_predicted = [self.rev_slope[fiberInx]*i + self.rev_int[fiberInx]  for i in xrange]
-            if predict == True:
-                p.circle(x=[newOntime],y=[-self.slowTarget],color='red', size=15)
+            #if predict == True:
+            p.circle(x=[newOntime],y=[-self.slowTarget],color='red', size=15)
         
         if predict == True:
             p.line(xrange,y_predicted,color='red')
         
-        p.circle(x=dd[f'onTime{direction}'],y=dd[f'{direction}'], size=7, color='red',fill_color=None)
-        p.circle(x=gooddata[f'onTime{direction}'],y=gooddata[direction])
+        p.circle(x=dd[f'onTime{direction}'],y=dd[f'{direction}'], size=10, color=color_array)
+        p.circle(x=gooddata[f'onTime{direction}'],y=gooddata[direction],color='red',fill_color=None, size= 10)
         p.segment(dd[f'onTime{direction}'], dd[f'max{direction}'], dd[f'onTime{direction}'], dd[f'min{direction}'], color="black")
         return p
 
