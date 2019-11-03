@@ -359,41 +359,51 @@ class PFIDesign():
         moduleId = self.getRealModuleId(moduleId)
         return np.where(self.moduleIds == moduleId)[0]
 
-    def setCobraStatus(self, cobraId, brokenTheta=False, brokenPhi=False, invisible=False):
+    def setCobraStatus(self, cobraId, moduleId=1, brokenTheta=False, brokenPhi=False, invisible=False):
         """ Set the operational status of a cobra.
-
-
         """
+        cobraIdx = self.findCobraByModuleAndPositioner(moduleId, cobraId)
 
         if invisible:
-            self.status |= self.COBRA_INVISBLE_MASK
-            self.status &= ~self.COBRA_OK_MASK
+            self.status[cobraIdx] |= self.COBRA_INVISIBLE_MASK
+            self.status[cobraIdx] &= ~self.COBRA_OK_MASK
         if brokenTheta:
-            self.status |= self.COBRA_BROKEN_THETA_MASK
-            self.status &= ~self.COBRA_OK_MASK
+            self.status[cobraIdx] |= self.COBRA_BROKEN_THETA_MASK
+            self.status[cobraIdx] &= ~self.COBRA_OK_MASK
         if brokenPhi:
-            self.status |= self.COBRA_BROKEN_PHI_MASK
-            self.status &= ~self.COBRA_OK_MASK
+            self.status[cobraIdx] |= self.COBRA_BROKEN_PHI_MASK
+            self.status[cobraIdx] &= ~self.COBRA_OK_MASK
 
-    def cobraIsGood(self):
-        """ Return True if we believe cobra can/should be used. """
+        # Arrange for the new value to be persisted.
+        header = self.dataContainers[cobraIdx].find("DATA_HEADER")
+        header.find("Status").text = str(self.status[cobraIdx])
 
-        return self.status == self.COBRA_OK_MASK
+    def cobraStatus(self, cobraId, moduleId=1):
+        cobraIdx = self.findCobraByModuleAndPositioner(moduleId, cobraId)
+        return self.status[cobraIdx]
 
-    def cobraIsBad(self):
+    def cobraIsGood(self, cobraId, moduleId=1):
+        """ Return the cobra's status field. """
+
+        status = self.cobraStatus(cobraId, moduleId=moduleId)
+        return status== self.COBRA_OK_MASK
+
+    def cobraIsBad(self, cobraId, moduleId=1):
         """ Return True if we believe cobra can/should NOT be used. """
 
-        return not self.cobraIsGood()
+        return not self.cobraIsGood(cobraId, moduleId=moduleId)
 
-    def motorIsBroken(self):
+    def motorIsBroken(self, cobraId, moduleId=1):
         """ Return True if we believe cobra can/should NOT be moved. """
 
-        return (self.status & self.COBRA_BROKEN_MOTOR_MASK) != 0
+        status = self.cobraStatus(cobraId, moduleId=moduleId)
+        return status & self.COBRA_BROKEN_MOTOR_MASK != 0
 
-    def fiberIsBroken(self):
+    def fiberIsBroken(self, cobraId, moduleId=1):
         """ Return True if we believe fiber cannot be seen. """
 
-        return (self.status & self.COBRA_INVISBLE_MASK) != 0
+        status = self.cobraStatus(cobraId, moduleId=moduleId)
+        return status & self.COBRA_INVISIBLE_MASK != 0
 
     def setModuleId(self, moduleId, forModule=None, setOurModuleIds=False):
         """ Update moduleIds
@@ -416,7 +426,7 @@ class PFIDesign():
 
         # A length test is probably sufficient
         if len(idx) != 57:
-            raise RuntimeError("Will not set moduleId to anything other that all cobras in a single module")
+            raise RuntimeError("Will not set moduleId for anything other than all cobras in a single module")
         for i in idx:
             header = self.dataContainers[i].find("DATA_HEADER")
             header.find("Module_Id").text = str(moduleId)
