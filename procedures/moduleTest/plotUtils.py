@@ -56,18 +56,15 @@ def plotOntimeSet(moduleName, ontimeRuns, motor, stepSize):
 
     return f
 
-def plotConvergenceRuns(runPaths, motor):
+def plotConvergenceRuns(runPaths, motor, endWidth=2.0, convergence=np.rad2deg(0.005)):
     if isinstance(runPaths, (str, pathlib.Path)):
         runPaths = [runPaths]
     nRuns = len(runPaths)
-    if nRuns == 1:
-        nrows = 2
-        ncols = 1
-    else:
-        nrows = nRuns
-        ncols = 2
+    nrows = nRuns
+    ncols = 3
 
     f, pl = plt.subplots(nrows=nrows, ncols=ncols, sharex=True,
+                         squeeze=False,
                          num=f'{motor}convergenceTest',
                          figsize=(12, 2*nrows))
 
@@ -77,50 +74,51 @@ def plotConvergenceRuns(runPaths, motor):
         data = np.load(dataPath)
         runName = runPath.stem
 
-        p1, p2 = pl[run_i]
+        p1, p2, p3 = pl[run_i]
 
         cobras =  np.unique(data['cobra'])
         lastIteration = np.max(data['iteration'])
+        haveDud = False
 
         p1.hlines(0, 0, 8, 'k', alpha=0.2)
+        p2.hlines(0, 0, 8, 'k', linestyle=':', alpha=0.05)
+        p2.hlines(-convergence, 0, 8, 'k', alpha=0.1)
+        p2.hlines(convergence, 0, 8, 'k', alpha=0.1)
         for c_i in cobras:
             if c_i == 0:
                 continue
-            c_w = np.where(data['cobra'] == c_i)
-            p1.plot(np.rad2deg(data['left'][c_w]), '-+', alpha=0.5)
+            c_w = np.where(data['cobra'] == c_i)[0]
+            done_w = np.where(data['done'][c_w])[0]
+            isDud = len(done_w) == 0
+            if isDud:
+                haveDud = True
+                maxIter = np.max(data['iteration'][c_w])
+            else:
+                maxIter =  np.min(done_w)
+
+            iterIdx = np.arange(maxIter+1)
+            x = iterIdx
+
+            p1.plot(x, np.rad2deg(data['left'][c_w][iterIdx]), '-+', alpha=0.5)
             p1.set_title(runName)
             p1.set_ylabel('degrees')
             p1.set_xlim(-0.5,8.5)
             p1.xaxis.set_major_locator(MaxNLocator(integer=True))
 
-        duds = np.where((data['iteration'] == lastIteration) & (data['done'] == False))
+            p2.plot(x, np.rad2deg(data['left'][c_w][iterIdx]), '-+', alpha=0.5)
+            p2.set_ylim(-endWidth, endWidth)
+            p2.set_title(f'{runName} end moves')
+            p2.xaxis.set_major_locator(MaxNLocator(integer=True))
 
-        if lastIteration >= 7 and len(duds[0]) > 0:
-            skip = 1
-            dudCobras = np.unique(data['cobra'][duds])
-            x = np.arange(skip, lastIteration+1)
-            p2.hlines(0, x[0], x[-1], 'k', alpha=0.2)
+            dudSkip = 1
+            if isDud:
+                p3.plot(x[dudSkip:], np.rad2deg(data['left'][c_w])[dudSkip:], '-+', alpha=0.5, label=f'{c_i}')
+                p3.set_title(f'{runName} failures')
+                p3.xaxis.set_major_locator(MaxNLocator(integer=True))
 
-            for c_i in dudCobras:
-                c_w = np.where(data['cobra'] == c_i)
-                p2.plot(x, np.rad2deg(data['left'][c_w])[skip:], '-+', alpha=0.5, label=f'{c_i}')
-                p2.set_title(f'{runName} failures')
-                p2.set_ylabel('degrees')
-                p2.xaxis.set_major_locator(MaxNLocator(integer=True))
-                p2.legend()
-        else:
-            skip = 2 if lastIteration > 4 else 1
-            x = np.arange(skip, lastIteration+1)
-            p2.hlines(0, x[0], x[-1], 'k', alpha=0.2)
-            for c_i in cobras:
-                if c_i == 0:
-                    continue
-                c_w = np.where(data['cobra'] == c_i)
-                p2.plot(x, np.rad2deg(data['left'][c_w][skip:]), '-+', alpha=0.5)
-                p2.set_ylim(-5,5)
-                p2.set_title(f'{runName} end moves')
-                p2.set_ylabel('degrees')
-                p2.xaxis.set_major_locator(MaxNLocator(integer=True))
+        if haveDud:
+            p3.hlines(0, 0, 9, 'k', alpha=0.2)
+            p3.legend()
 
         # f.tight_layout()
     return f, data
