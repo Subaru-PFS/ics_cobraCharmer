@@ -421,12 +421,12 @@ class PFI(object):
             existingScale = 1.0
 
         newScale = existingScale * scale
-        if newScale < 0.25:
-            self.logger.warn(f'clipping scale adjustment from {newScale} to 0.25')
-            newScale = 0.25
-        if newScale > 3.0:
-            self.logger.warn(f'clipping scale adjustment from {newScale} to 3.0')
-            newScale = 3.0
+        if newScale < 0.5:
+            self.logger.warn(f'clipping scale adjustment from {newScale} to 0.5')
+            newScale = 0.5
+        if newScale > 2.0:
+            self.logger.warn(f'clipping scale adjustment from {newScale} to 2.0')
+            newScale = 2.0
 
         cobraState.motorScales[mapId] = newScale
         self.logger.debug(f'setadjust {mapId} {existingScale:0.2f} -> {newScale:0.2f}')
@@ -440,7 +440,8 @@ class PFI(object):
         if newOntime > self.maxThetaOntime:
             newOntime = self.maxThetaOntime
             cobraState.motorScales[mapId] = newOntime/ontime
-            self.logger.warn(f'clipping {mapId} {scale:0.2f} to {cobraState.motorScales[mapId]}')
+            self.logger.warn(f'clipping {mapId} ontime to {newOntime} and '
+                             f'scale {scale:0.2f} to {cobraState.motorScales[mapId]}')
 
         return newOntime
 
@@ -453,7 +454,8 @@ class PFI(object):
         if newOntime > self.maxPhiOntime:
             newOntime = self.maxPhiOntime
             cobraState.motorScales[mapId] = newOntime/ontime
-            self.logger.warn(f'clipping {mapId} {scale:0.2f} to {cobraState.motorScales[mapId]}')
+            self.logger.warn(f'clipping {mapId} ontime to {newOntime} and '
+                             f'scale {scale:0.2f} to {cobraState.motorScales[mapId]}')
 
         return newOntime
 
