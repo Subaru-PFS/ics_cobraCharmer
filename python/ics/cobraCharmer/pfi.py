@@ -255,7 +255,8 @@ class PFI(object):
 
         self.moveSteps(cobras, thetaAllSteps, phiAllSteps, thetaFast=thetaFast, phiFast=phiFast)
 
-    def moveThetaPhi(self, cobras, thetaMoves, phiMoves, thetaFroms=None, phiFroms=None, thetaFast=True, phiFast=True):
+    def moveThetaPhi(self, cobras, thetaMoves, phiMoves, thetaFroms=None, phiFroms=None,
+                     thetaFast=True, phiFast=True, doRun=True):
         """ Move cobras with theta and phi angles, angles are measured from CCW hard stops
 
             thetaMoves: A numpy array with theta angles to go
@@ -313,20 +314,22 @@ class PFI(object):
             raise RuntimeError("number of phiFast must match number of cobras")
 
         thetaSteps, phiSteps = self.calculateSteps(_thetaFroms, _thetaMoves, _phiFroms, _phiMoves, _thetaFast, _phiFast)
-
         cThetaSteps = thetaSteps[cIdx]
         cPhiSteps = phiSteps[cIdx]
 
-        
-        """ 
+        """
         Looking for NaN values and put them as 0
         """
         thetaIndex =  np.isnan(cThetaSteps)
         phiIndex = np.isnan(cPhiSteps)
         cThetaSteps[thetaIndex] = 0
         cPhiSteps[phiIndex] = 0
-        self.logger.debug(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
-        self.moveSteps(cobras, cThetaSteps, cPhiSteps, thetaFast=thetaFast, phiFast=phiFast)
+
+        self.logger.debug(f'steps (run={doRun}): {list(zip(cThetaSteps, cPhiSteps))}')
+        if doRun:
+            self.moveSteps(cobras, cThetaSteps, cPhiSteps, thetaFast=thetaFast, phiFast=phiFast)
+
+        return cThetaSteps, cPhiSteps
 
     def thetaToGlobal(self, cobras, thetaLocals):
         """ Convert theta angles from relative to hard stops to global coordinate
