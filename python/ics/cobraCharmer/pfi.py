@@ -677,12 +677,20 @@ class PFI(object):
                     phiSteps = self.calibModel.negPhiSlowSteps[c]
 
             # Calculate the total number of motor steps for the theta movement
-            stepsRange = np.interp([startTht[c], startTht[c] + deltaTht[c]], self.calibModel.thtOffsets[c], thtSteps)
-            nThtSteps[c] = stepsRange[1] - stepsRange[0]
+            stepsRange = np.interp([startTht[c], startTht[c] + deltaTht[c]], self.calibModel.thtOffsets[c],
+                                   thtSteps)
+            if not np.all(np.isfinite(stepsRange)):
+                raise ValueError(f"theta angle to step interpolation out of range: "
+                                 f"{startTht[c]} {startTht[c] + deltaTht[c]}")
+            nThtSteps[c] = np.rint(stepsRange[1] - stepsRange[0]).astype('i4')
 
             # Calculate the total number of motor steps for the phi movement
-            stepsRange = np.interp([startPhi[c], startPhi[c] + deltaPhi[c]], self.calibModel.phiOffsets[c], phiSteps)
-            nPhiSteps[c] = stepsRange[1] - stepsRange[0]
+            stepsRange = np.interp([startPhi[c], startPhi[c] + deltaPhi[c]], self.calibModel.phiOffsets[c],
+                                   phiSteps)
+            if not np.all(np.isfinite(stepsRange)):
+                raise ValueError(f"phi angle to step interpolation out of range: "
+                                 f"{startTht[c]} {startTht[c] + deltaTht[c]}")
+            nPhiSteps[c] = np.rint(stepsRange[1] - stepsRange[0]).astype('i4')
 
         self.logger.debug(f'start={startPhi[:3]}, delta={deltaPhi[:3]} move={nPhiSteps[:3]}')
         return (nThtSteps, nPhiSteps)
