@@ -456,3 +456,67 @@ class VisDianosticPlot(object):
             cmd=f"""convert {figPath}motormap*_[0-9].png {figPath}motormap*_[0-9]?.png {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
             print(cmd)
+
+    def visMMVariant(self, baseXML, xmlList, figPath=None, arm='phi', pdffile=None):
+        x=np.arange(112)*3.6
+
+
+        basemodel = pfiDesign.PFIDesign(baseXML)
+        
+        print(arm)
+        
+        for i in self.goodIdx:
+            plt.figure(figsize=(10, 8))
+            plt.clf()
+
+            ax = plt.gca()
+
+            markerarray=['o','v','^','<']
+            m =0
+            if arm is 'phi':
+                baseSlowFWmm = np.rad2deg(basemodel.angularSteps[i]/basemodel.S2Pm[i])
+                baseSlowRVmm = np.rad2deg(basemodel.angularSteps[i]/basemodel.S2Nm[i])
+            else:
+                baseSlowFWmm = np.rad2deg(basemodel.angularSteps[i]/basemodel.S1Pm[i])
+                baseSlowRVmm = np.rad2deg(basemodel.angularSteps[i]/basemodel.S1Nm[i])
+            
+            for f in xmlList:
+
+                model = pfiDesign.PFIDesign(f)
+
+                if arm is 'phi':
+                    slowFWmm = np.rad2deg(model.angularSteps[i]/model.S2Pm[i])
+                    slowRVmm = np.rad2deg(model.angularSteps[i]/model.S2Nm[i])
+                else:
+                    slowFWmm = np.rad2deg(model.angularSteps[i]/model.S1Pm[i])
+                    slowRVmm = np.rad2deg(model.angularSteps[i]/model.S1Nm[i])
+                
+                labeltext=os.path.basename(os.path.dirname(f))[-6:]
+                ln1=ax.plot(x,np.abs(slowFWmm-baseSlowFWmm)/baseSlowFWmm,marker=markerarray[m], label=f'{labeltext} Fwd' )
+                ln2=ax.plot(x,-np.abs(slowRVmm-baseSlowRVmm)/baseSlowRVmm,marker=markerarray[m], label=f'{labeltext} Rev')
+
+                m=m+1
+            ax.set_title(f'Fiber {arm} #{i+1}')
+            ax.legend()
+            if arm is 'phi':
+                ax.set_xlim([0,200])
+            else:
+                ax.set_xlim([0,400])
+
+
+            if figPath is not None:
+                if not (os.path.exists(figPath)):
+                    os.mkdir(figPath)
+
+                plt.ioff()
+                plt.tight_layout()
+                plt.savefig(f'{figPath}/motormap_{arm}_{i+1}.png')
+            else:
+                plt.show()
+            plt.close()
+
+
+        if pdffile is not None:
+            cmd=f"""convert {figPath}motormap*_[0-9].png {figPath}motormap*_[0-9]?.png {pdffile}"""
+            retcode = subprocess.call(cmd,shell=True)
+            print(cmd)
