@@ -6,6 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import subprocess
+import sys
+import math
 
 from bokeh.io import output_notebook, show, export_png,export_svgs
 from bokeh.plotting import figure, show, output_file
@@ -220,7 +222,7 @@ class VisDianosticPlot(object):
 
 
     
-    def visCobraMotorMap(self, stepsize=50, figpath=None, arm=None):
+    def visCobraMotorMap(self, stepsize=50, figPath=None, arm=None, pdffile=None, debug=False):
         try:
             self.mf
         except AttributeError:
@@ -232,8 +234,15 @@ class VisDianosticPlot(object):
         ymax = 1.1*np.rad2deg(np.max(self.mf))
         ymin = -1.1*np.rad2deg(np.max(self.mr))
 
+
+
         for fiber in self.goodIdx:
-            print(fiber)
+            width = (fiber + 1) / 2
+            
+            bar = "\r[" + "#" * int(math.ceil(width)) + " " * int(29 - width) + "]"
+            sys.stdout.write(f'{bar}')
+            sys.stdout.flush()
+
             x=np.arange(112)*3.6
             c = fiber
 
@@ -268,12 +277,22 @@ class VisDianosticPlot(object):
             else:
                 ax.set_xlim([0,400])
             
-            if figpath is not None:
+            if figPath is not None:
+                if not (os.path.exists(figPath)):
+                    os.mkdir(figPath)
                 plt.ioff()
-                plt.savefig(f'{figpath}/motormap_{arm}_{c+1}.png')
+                plt.savefig(f'{figPath}/motormap_{arm}_{c+1}.png')
             else:
                 plt.show()
             plt.close()
+
+        self.visSpeedHisto(arm=f'{arm}', figPath=f'{figPath}')
+
+        if pdffile is not None:
+            cmd=f"""convert {figPath}motormap*_[0-9].png {figPath}motormap*_[0-9]?.png {pdffile}"""
+            retcode = subprocess.call(cmd,shell=True)
+            if debug is True:
+                print(cmd)
 
     def _visSpeedHistogram(self, avg1, Title, Legend1):
         
@@ -304,7 +323,7 @@ class VisDianosticPlot(object):
 
         return p
 
-    def visSpeedHisto(self, arm=None, figpath=None):
+    def visSpeedHisto(self, arm=None, figPath=None):
         try:
             self.sf
         except AttributeError:
@@ -332,9 +351,9 @@ class VisDianosticPlot(object):
         grid = gridplot([[p1, p2]])
         qgrid = gridplot([[q1, q2]])
 
-        if figpath is not None:
-            export_png(grid,filename=figpath+"motor_speed_histogram.png")
-            export_png(qgrid,filename=figpath+"motor_speed_std.png")
+        if figPath is not None:
+            export_png(grid,filename=figPath+"motor_speed_histogram.png")
+            export_png(qgrid,filename=figPath+"motor_speed_std.png")
 
     def visAngleMovement(self, figPath=None, arm = 'phi'):
         pass
