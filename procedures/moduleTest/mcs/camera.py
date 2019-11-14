@@ -274,6 +274,7 @@ class Camera(object):
                               f'get: {t1-t0:0.3f} save: {t2-t1:0.3f} total: {t2-t0:0.3f}')
         else:
             objects = None
+            bkgd = None
 
         return objects, filename, bkgd
 
@@ -338,7 +339,7 @@ class Camera(object):
             stack += img
         except FileNotFoundError:
             stackFits = pyfits.open(stackPath, mode="append")
-            stackFits.append(pyfits.CompImageHDU(img.astype('i4'), name='IMAGE'))
+            stackFits.append(pyfits.CompImageHDU(img, name='IMAGE', uint=True))
 
         stackFits.flush()
         stackFits.close()

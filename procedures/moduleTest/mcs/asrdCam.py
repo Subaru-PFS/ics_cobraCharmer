@@ -22,20 +22,22 @@ class AsrdCamera(Camera):
 
         from idsCamera import idsCamera
         cams = []
-        for devId in devIds:
+        for devId in self.devIds:
             cam = idsCamera(devId)
             cam.setExpoureTime(20)
             cams.append(cam)
 
         self.data = None
-        self._cams = cams
+        self._cam = cams
 
     def _camExpose(self, exptime, _takeDark=False):
         cams = self.cam
 
-        data1 = cams[0].getCurrentFrame()
-        data2 = cams[1].getCurrentFrame()
-        data = np.stack((data1, data2), axis=1)
+        _data = []
+        for cam in cams:
+            _data.append(cam.getCurrentFrame())
+        _data.reverse()
+        data = np.concatenate(_data, axis=1)
         self.data = data
 
         return data
@@ -49,16 +51,17 @@ class AsrdCamera(Camera):
         if self.data is None:
             return None
         h, w = self.data.shape
-        return self.data[:, :w//2]
+        return self.data[:, w//2:]
 
     @property
     def im2(self):
         if self.data is None:
             return None
         h, w = self.data.shape
-        return self.data[:, w//2:]
+        return self.data[:, :w//2]
 
-    def trim(objects):
+    def trim(self, x, y):
         """ Return indices or mask of all valid points. """
 
-        return np.arange(len(objects))
+        w = (y > 600) & (y < 1400)
+        return w
