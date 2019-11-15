@@ -375,30 +375,33 @@ class VisDianosticPlot(object):
             ydata=[]
             z=[]
             
-            x =np.arange(9)
+            x =np.arange(10)
             fig, (vax, hax) = plt.subplots(1, 2, figsize=(12, 6),sharey='all')
             for i in range(runs):
                 angle = margin + (angleLimit - 2 * margin) * i / (runs - 1)
                 if i == 0:
-                    delAngle = (360 - 2 * margin) / (runs - 1)
+                    delAngle = (angleLimit - 2 * margin) / (runs - 1)
                 y=np.rad2deg(np.append([0], moveData[fiberIdx,i,:,0]))
-                xdata.append(np.arange(9))
+                xdata.append(np.arange(10))
                 ydata.append(np.full(len(x), angle))
                 z.append(np.log10(np.abs(angle - np.rad2deg(np.append([0], moveData[fiberIdx,i,:,0])))))
 
-                hax.plot(x,y,marker='o',fillstyle='none',markersize=3)
+                hax.plot(x[:9],y,marker='o',fillstyle='none',markersize=3)
                 #hax.scatter(x,y,marker='o',fillstyle='none')
             
             """Adding one extra data for pcolor function reauirement"""
 
-            xdata.append(np.arange(9))
+            xdata.append(np.arange(10))
             ydata.append(np.full(len(x), angle+delAngle))
             xdata=np.array(xdata)
             ydata=np.array(ydata)
-            ydata=ydata[:,:]-delAngle            
+            #if arm is 'theta':
+            ydata=ydata[:,:]-delAngle 
+            #else:
+            #    ydata=ydata[:,:]-0.5*delAngle            
             z=np.array(z)
 
-            sc=vax.pcolor(xdata,ydata,z,cmap='inferno_r',vmin=-1.5,vmax=1.0)
+            sc=vax.pcolor(xdata,ydata,z,cmap='inferno_r',vmin=-1.0,vmax=1.0)
             
             #plt.xticks(np.arange(8)+0.5,np.arange(8)+1)
             cbaxes = fig.add_axes([0.05,0.13,0.01,0.75]) 
@@ -410,7 +413,12 @@ class VisDianosticPlot(object):
             cb.set_label('Angle Different (log)', labelpad=-1)
             vax.set_xlabel("Iteration",fontsize=10)
             vax.set_ylabel("Cabra Location (Degree)",fontsize=10)
-
+            if arm is 'phi':
+                vax.set_ylim([-10,200])
+                hax.set_ylim([-10,200])
+            else:
+                vax.set_ylim([-10,400])
+                vax.set_ylim([-10,400])
             fig.suptitle(f'Fiber No. {fiberIdx+1}',fontsize=15)
             plt.subplots_adjust(bottom=0.15, wspace=0.05)
             if figPath is not None:
