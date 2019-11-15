@@ -379,17 +379,26 @@ class VisDianosticPlot(object):
             fig, (vax, hax) = plt.subplots(1, 2, figsize=(12, 6),sharey='all')
             for i in range(runs):
                 angle = margin + (angleLimit - 2 * margin) * i / (runs - 1)
+                if i == 0:
+                    delAngle = (360 - 2 * margin) / (runs - 1)
                 y=np.rad2deg(np.append([0], moveData[fiberIdx,i,:,0]))
                 xdata.append(np.arange(9))
                 ydata.append(np.full(len(x), angle))
                 z.append(np.log10(np.abs(angle - np.rad2deg(np.append([0], moveData[fiberIdx,i,:,0])))))
+
                 hax.plot(x,y,marker='o',fillstyle='none',markersize=3)
                 #hax.scatter(x,y,marker='o',fillstyle='none')
+            
+            """Adding one extra data for pcolor function reauirement"""
+
+            xdata.append(np.arange(9))
+            ydata.append(np.full(len(x), angle+delAngle))
             xdata=np.array(xdata)
             ydata=np.array(ydata)
+            ydata=ydata[:,:]-delAngle            
             z=np.array(z)
 
-            sc=vax.pcolor(xdata,ydata,z,cmap='inferno_r',vmin=-1.5,vmax=1.5)
+            sc=vax.pcolor(xdata,ydata,z,cmap='inferno_r',vmin=-1.5,vmax=1.0)
             
             #plt.xticks(np.arange(8)+0.5,np.arange(8)+1)
             cbaxes = fig.add_axes([0.05,0.13,0.01,0.75]) 
