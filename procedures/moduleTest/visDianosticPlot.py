@@ -498,17 +498,16 @@ class VisDianosticPlot(object):
 
 
         basemodel = pfiDesign.PFIDesign(baseXML)
-        
-        print(arm)
-        
+        var_fwd=[]
+        var_rev=[]        
         for i in self.goodIdx:
-            plt.figure(figsize=(10, 8))
+            plt.figure(figsize=(10, 12))
             plt.clf()
 
-            ax = plt.gca()
-
-            markerarray=['o','v','^','<']
-            m =0
+            ax1 = plt.subplot(2, 1, 1)
+            ax2 = plt.subplot(2, 1, 2)
+          
+            m = 0
             if arm is 'phi':
                 baseSlowFWmm = np.rad2deg(basemodel.angularSteps[i]/basemodel.S2Pm[i])
                 baseSlowRVmm = np.rad2deg(basemodel.angularSteps[i]/basemodel.S2Nm[i])
@@ -516,6 +515,9 @@ class VisDianosticPlot(object):
                 baseSlowFWmm = np.rad2deg(basemodel.angularSteps[i]/basemodel.S1Pm[i])
                 baseSlowRVmm = np.rad2deg(basemodel.angularSteps[i]/basemodel.S1Nm[i])
             
+
+            var_fwd_array=[]
+            var_rev_array=[]
             for f in xmlList:
 
                 model = pfiDesign.PFIDesign(f)
@@ -528,16 +530,25 @@ class VisDianosticPlot(object):
                     slowRVmm = np.rad2deg(model.angularSteps[i]/model.S1Nm[i])
                 
                 labeltext=os.path.basename(os.path.dirname(f))[-6:]
-                ln1=ax.plot(x,np.abs(slowFWmm-baseSlowFWmm)/baseSlowFWmm,marker=markerarray[m], label=f'{labeltext} Fwd' )
-                ln2=ax.plot(x,-np.abs(slowRVmm-baseSlowRVmm)/baseSlowRVmm,marker=markerarray[m], label=f'{labeltext} Rev')
-
+                ln1=ax1.plot(x,np.abs(slowFWmm-baseSlowFWmm)/baseSlowFWmm,
+                    marker=f'${m}$', markersize=13, label=f'{labeltext} Fwd' )
+                ln2=ax2.plot(x,np.abs(slowRVmm-baseSlowRVmm)/baseSlowRVmm,
+                    marker=f'${m}$', markersize=13, label=f'{labeltext} Rev')
+                
+                var_fwd_array.append(np.abs(slowFWmm-baseSlowFWmm)/baseSlowFWmm)
+                var_rev_array.append(np.abs(slowFWmm-baseSlowFWmm)/baseSlowFWmm)
                 m=m+1
-            ax.set_title(f'Fiber {arm} #{i+1}')
-            ax.legend()
+
+            ax1.set_title(f'Fiber {arm} #{i+1} FWD')
+            ax1.legend()
+            ax2.set_title(f'Fiber {arm} #{i+1} REV')
+            ax2.legend()
             if arm is 'phi':
-                ax.set_xlim([0,200])
+                ax1.set_xlim([0,200])
+                ax2.set_xlim([0,200])
             else:
-                ax.set_xlim([0,400])
+                ax1.set_xlim([0,400])
+                ax2.set_xlim([0,400])
 
 
             if figPath is not None:
@@ -551,8 +562,65 @@ class VisDianosticPlot(object):
                 plt.show()
             plt.close()
 
+            var_fwd.append(var_fwd_array)
+            var_rev.append(var_rev_array)
+        
+        
+        var_fwd=np.array(var_fwd)
+        var_rev=np.array(var_rev)
+        
+        
+        plt.figure(figsize=(10, 12))
+        plt.clf()
+        ax1 = plt.subplot(2, 1, 1)
+        ax2 = plt.subplot(2, 1, 2)
+            
+        for i in self.goodIdx:
+            x=range(len(xmlList))
+            divfwd_array=[]
+            divrev_array=[]
+            for f in range(len(xmlList)):
+                if arm is 'phi':
+                    # applying 5-sigma filter
+                    data = var_fwd[i,f,0:42]
+                    divfwd_avg=np.mean(data[abs(data - np.mean(data)) < 5 * np.std(data)])
+                    
+                    data = var_rev[i,f,0:42]
+                    divrev_avg=np.mean(data[abs(data - np.mean(data)) < 5 * np.std(data)])
+                else:
+                    data = var_fwd[i,f,0:84]
+                    divfwd_avg=np.mean(data[abs(data - np.mean(data)) < 5 * np.std(data)])
+                    
+                    data = var_rev[i,f,0:84]
+                    divrev_avg=np.mean(data[abs(data - np.mean(data)) < 5 * np.std(data)])
+
+                divfwd_array.append(divfwd_avg)
+                divrev_array.append(divrev_avg)
+            
+            divfwd_array=np.array(divfwd_array)
+            divrev_array=np.array(divfwd_array)
+
+            if np.max(divfwd_array) > 0.4:
+                ax1.scatter(x,divfwd_array,marker='.',s=25,label=f'{i+1}')
+            else:
+                ax1.scatter(x,divfwd_array,marker='.',s=25)
+            
+            if np.max(divrev_array) > 0.4:
+                ax2.scatter(x,divrev_array,marker='.',s=25,label=f'{i+1}')
+            else:
+                ax2.scatter(x,divrev_array,marker='.',s=25)
+        ax1.legend()
+        ax2.legend()
+        ax1.set_title(f'Fiber FWD Variation')
+        ax2.set_title(f'Fiber REV Variation')
+        ax2.set_xlabel("Motor Map Run")
+        ax1.set_ylabel("Variation")
+        ax2.set_ylabel("Variation")
+        plt.savefig(f'{figPath}/allvariant{arm}.png')
+        plt.close()
 
         if pdffile is not None:
             cmd=f"""convert {figPath}motormap*_[0-9].png {figPath}motormap*_[0-9]?.png {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
             print(cmd)
+        return var_fwd,var_rev
