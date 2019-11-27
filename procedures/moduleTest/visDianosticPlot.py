@@ -355,8 +355,57 @@ class VisDianosticPlot(object):
             export_png(grid,filename=figPath+"motor_speed_histogram.png")
             export_png(qgrid,filename=figPath+"motor_speed_std.png")
 
-    def visAngleMovement(self, figPath=None, arm = 'phi'):
-        pass
+    def visAngleMovement(self, figPath=None, arm = 'phi', pdffile=None):
+        try:
+            self.fw
+        except AttributeError:
+            self._loadCobraData(arm=arm)
+        
+        if arm is None:
+            raise Exception('Define the arm')
+
+
+        plt.figure(figsize=(10, 8))
+        plt.clf()
+        ax = plt.gca()
+        ax.set_title(f'Fiber {arm} Speed')
+
+        ax.plot(self.goodIdx,np.rad2deg(self.sf[self.goodIdx]),'.',label='Fwd')
+        ax.plot(self.goodIdx,np.rad2deg(self.sr[self.goodIdx]),'.',label='Rev')
+        ax.legend()
+        if figPath is not None:
+            if not (os.path.exists(figPath)):
+                    os.mkdir(figPath)
+            plt.savefig(figPath+f'FiberSpeed.png')
+        else:
+            plt.show()
+        plt.close()
+        
+        for fiberIdx in self.goodIdx:
+            c = fiberIdx
+            plt.figure(figsize=(10, 8))
+            plt.clf()
+            ax = plt.gca()
+            ax.set_title(f'Fiber {arm} #{c+1}')
+        
+            for n in range(self.af.shape[1]):
+                ax.plot(np.rad2deg(self.af[c, n]), '.')
+                ax.plot(np.rad2deg(self.ar[c, n]), '.')
+            ax.set_xlabel("Steps",fontsize=10)
+            ax.set_ylabel("Angle from hard-stop (Degree)",fontsize=10)
+            if figPath is not None:
+                if not (os.path.exists(figPath)):
+                    os.mkdir(figPath)
+                plt.savefig(figPath+f'AngleMove_{arm}_{c+1}.png')
+            else:
+                plt.show()
+            plt.close()
+
+        if pdffile is not None:
+            cmd=f"""convert {figPath}FiberSpeed.png {figPath}AngleMove*_[0-9].png \
+                {figPath}AngleMove*_[0-9]?.png {pdffile}"""
+            retcode = subprocess.call(cmd,shell=True)
+            print(cmd)
 
     def visConverge(self, figPath = None, arm = 'phi', runs = 50, margin = 15, montage=None, pdffile=None):
         

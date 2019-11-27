@@ -21,6 +21,7 @@ from bokeh.palettes import YlGnBu8
 from bokeh.transform import linear_cmap
 
 import ontimeOptimize 
+import visDianosticPlot
 from moduleTest import ModuleTest
 from ics.cobraCharmer import pfi as pfiControl
 from ics.cobraCharmer import pfiDesign
@@ -582,7 +583,7 @@ class OntimeOptimize(object):
         
 
 def exploreModuleOntime(fpgaHost, dataPath, arm=None, 
-    brokens=None, camSplit=28, iteration=4, XML=None):
+    brokens=None, camSplit=28, iteration=4, XML=None, stepsize=250, repeat=3):
     
     if brokens is None:
         brokens = []
@@ -600,16 +601,20 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
         fwdhtml = currentpath+f'{arm}_fwd{itr}.html'
         revhtml = currentpath+f'{arm}_rev{itr}.html'
         
+        fwdpng = currentpath+f'{arm}_fwd{itr}.png'
+        revpng = currentpath+f'{arm}_rev{itr}.png'
+        
         datalist.append(currentpath)
         
         if itr == 0:
             
+                
+
             thetaOntime = np.zeros(57)+0.08
             phiOntime = np.zeros(57)+0.05
             
             mt = ModuleTest(f'{fpgaHost}', 
-                    f'{XML}', 
-                     brokens=brokens,camSplit=28)
+                    f'{XML}', brokens=brokens,camSplit=28)
             
             pfi = mt.pfi
 
@@ -617,14 +622,14 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
                 pfi.moveAllSteps(mt.allCobras, 0, -5000)
                 pfi.moveAllSteps(mt.allCobras, 0, -1000)
                 mt.makePhiMotorMap(f'{curXML}',f'{currentpath}',
-                        phiOnTime=phiOntime, repeat = 1, fast=False, steps = 100, totalSteps = 6000)
+                        phiOnTime=phiOntime, repeat = repeat, fast=False, steps = stepsize, totalSteps = 6000)
 
             else:
                 pfi.moveAllSteps(mt.allCobras, -10000, 0)
                 pfi.moveAllSteps(mt.allCobras, -2000, 0)
 
                 mt.makeThetaMotorMap(f'{curXML}',f'{currentpath}',
-                        thetaOnTime=thetaOntime, repeat = 1, fast=False, steps = 100, totalSteps = 12000)
+                        thetaOnTime=thetaOntime, repeat = repeat, fast=False, steps = stepsize, totalSteps = 12000)
                 
             curXML = XML
         else:
@@ -638,18 +643,22 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
                 pfi.moveAllSteps(mt.allCobras, 0,-5000)
                 pfi.moveAllSteps(mt.allCobras, 0, -1000)
                 mt.makePhiMotorMap(f'{curXML}',f'{currentpath}', 
-                    repeat = 3, fast=False,totalSteps = 6000, limitOnTime = 0.08)
+                    repeat = repeat, fast=False,totalSteps = 6000, limitOnTime = 0.08, steps = stepsize)
 
             else:
                 pfi.moveAllSteps(mt.allCobras, -10000, 0)
                 pfi.moveAllSteps(mt.allCobras, -2000, 0)
 
                 mt.makeThetaMotorMap(f'{curXML}',f'{currentpath}', 
-                    repeat = 3, fast=False,totalSteps = 12000, limitOnTime = 0.08)
+                    repeat = repeat, fast=False,totalSteps = 12000, limitOnTime = 0.08, steps = stepsize)
 
             curXML = f'{currentpath}{curXML}'
 
+            vis = visDianosticPlot.VisDianosticPlot(currentpath, brokens=brokens, camSplit=28)
+            vis.visAngleMovement(figPath=f'{currentpath}',
+                arm='phi',pdffile=f'{currentpath}AngleMove.pdf')
             
+            del(vis)
         print(datalist)
        
         if arm is 'phi':
@@ -657,9 +666,47 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
         else:
             otm = ontimeOptimize.OntimeOptimize(brokens=brokens, thetaList = datalist)
         
-        
         otm.updateXML(curXML,f'{dataPath}{outXML}')
-        otm.visMaps('Fwd',filename=f'{fwdhtml}')
-
+        otm.visMaps('Fwd',filename=f'{fwdhtml}',)
         otm.visMaps('Rev',filename=f'{revhtml}')
+
+        
         del(mt)
+
+    # Make the plot at the very end.
+    if arm is 'phi':
+        otm = ontimeOptimize.OntimeOptimize(brokens=brokens, phiList = datalist)
+    else:
+        otm = ontimeOptimize.OntimeOptimize(brokens=brokens, thetaList = datalist)
+    
+    otm.pickForSlowSpeed()
+    otm.updateXML(curXML,f'{dataPath}{outXML}')
+    otm.visMaps('Fwd',filename=f'{fwdhtml}',pngfile=f'{fwdpng}',predict=False)
+    otm.visMaps('Rev',filename=f'{revhtml}',pngfile=f'{revpng}',predict=False)
+
+    # use the last XML to run motor map
+    currentpath = dataPath+'finalMM/'
+    if not (os.path.exists(currentpath)):
+        os.mkdir(currentpath)
+    curXML='final.xml'
+    mt = ModuleTest(f'{fpgaHost}', 
+                f'{dataPath}{outXML}', brokens=brokens,camSplit=28)
+
+    if arm is 'phi':
+        pfi.moveAllSteps(mt.allCobras, 0,-5000)
+        pfi.moveAllSteps(mt.allCobras, 0, -1000)
+        mt.makePhiMotorMap(f'{curXML}',f'{currentpath}', 
+            repeat = repeat, fast=False,totalSteps = 6000, limitOnTime = 0.08, steps = stepsize)
+
+    else:
+        pfi.moveAllSteps(mt.allCobras, -10000, 0)
+        pfi.moveAllSteps(mt.allCobras, -2000, 0)
+
+        mt.makeThetaMotorMap(f'{curXML}',f'{currentpath}', 
+            repeat = repeat, fast=False,totalSteps = 12000, limitOnTime = 0.08, steps = stepsize)
+
+    vis = visDianosticPlot.VisDianosticPlot(currentpath, brokens=brokens, camSplit=28)
+    vis.visAngleMovement(figPath=f'{currentpath}',
+                arm='phi',pdffile=f'{currentpath}AngleMove.pdf')
+            
+    del(vis)
