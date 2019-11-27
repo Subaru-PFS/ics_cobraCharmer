@@ -422,6 +422,109 @@ class ModuleTest():
         # restore default setting
         self.pfi.loadModel(self.xml)
 
+    def movePhiAngle(self, dataPath, toAngle=60, tries=8):
+        # variable declaration for center measurement
+        steps = 200
+        iteration = 4000 // steps
+        phiFW = np.zeros((57, iteration+1), dtype=complex)
+        phiRV = np.zeros((57, iteration+1), dtype=complex)
+
+        #record the phi movements
+        self.pfi.moveAllSteps(self.goodCobras, 0, -5000, phiFast=True)
+        data1 = self.cam1.expose()
+        data2 = self.cam2.expose()
+        phiFW[self.goodIdx, 0] = self.extractPositions(data1, data2)
+        stack_image1 = data1
+        stack_image2 = data2
+
+        for k in range(iteration):
+            self.pfi.moveAllSteps(self.goodCobras, 0, steps, phiFast=False)
+            data1 = self.cam1.expose()
+            data2 = self.cam2.expose()
+            phiFW[self.goodIdx, k+1] = self.extractPositions(data1, data2, guess=phiFW[self.goodIdx, k])
+            stack_image1 += data1
+            stack_image2 += data2
+        fits.writeto(dataPath + f'/phi1ForwardStack.fits.gz', stack_image1, overwrite=True)
+        fits.writeto(dataPath + f'/phi2ForwardStack.fits.gz', stack_image2, overwrite=True)
+
+        # make sure it goes to the limit
+        self.pfi.moveAllSteps(self.goodCobras, 0, 5000, phiFast=True)
+
+        # reverse phi motors
+        data1 = self.cam1.expose()
+        data2 = self.cam2.expose()
+        phiRV[self.goodIdx, 0] = self.extractPositions(data1, data2, guess=phiFW[self.goodIdx, iteration])
+        stack_image1 = data1
+        stack_image2 = data2
+
+        for k in range(iteration):
+            self.pfi.moveAllSteps(self.goodCobras, 0, -steps, phiFast=False)
+            data1 = self.cam1.expose()
+            data2 = self.cam2.expose()
+            phiRV[self.goodIdx, k+1] = self.extractPositions(data1, data2, guess=phiRV[self.goodIdx, k])
+            stack_image1 += data1
+            stack_image2 += data2
+        fits.writeto(dataPath + f'/phi1ReverseStack.fits.gz', stack_image1, overwrite=True)
+        fits.writeto(dataPath + f'/phi2ReverseStack.fits.gz', stack_image2, overwrite=True)
+
+        # At the end, make sure the cobra back to the hard stop
+        self.pfi.moveAllSteps(self.goodCobras, 0, -5000, phiFast=True)
+
+        # save calculation result
+        np.save(dataPath + '/phiFW', phiFW)
+        np.save(dataPath + '/phiRV', phiRV)
+
+        # variable declaration
+        phiCenter = np.zeros(57, dtype=complex)
+        phiRadius = np.zeros(57, dtype=float)
+        phiHS = np.zeros(57, dtype=float)
+
+        # measure centers
+        for c in self.goodIdx:
+            data = np.concatenate((phiFW[c].flatten(), phiRV[c].flatten()))
+            x, y, r = calculation.circle_fitting(data)
+            phiCenter[c] = x + y*(1j)
+            phiRadius[c] = r
+
+        # measure phi hard stops
+        for c in self.goodIdx:
+            phiHS[c] = np.angle(phiFW[c, 0] - phiCenter[c])
+
+        # save calculation result
+        np.save(dataPath + '/phiCenter', phiCenter)
+        np.save(dataPath + '/phiRadius', phiRadius)
+        np.save(dataPath + '/phiHS', phiHS)
+
+        targetAngle = toAngle
+
+        phiData = np.zeros((57, 1, tries, 3))
+        goodIdx = self.goodIdx
+        zeros = np.zeros(len(goodIdx))
+        centers = phiCenter[goodIdx]
+        homes = phiHS[goodIdx]
+
+        angle = np.deg2rad(targetAngle)
+        self.pfi.moveThetaPhi(self.goodCobras, zeros, zeros + angle, phiFast=False)
+        cAngles, cPositions = self.measureAngles(centers, homes)
+        phiData[goodIdx, 0, 0, 0] = cAngles
+        phiData[goodIdx, 0, 0, 1] = np.real(cPositions)
+        phiData[goodIdx, 0, 0, 2] = np.imag(cPositions)
+        factor = angle/cAngles
+        #factor[:] = 1
+        print(factor)
+        for j in range(tries - 1):
+            self.pfi.moveThetaPhi(self.goodCobras, zeros, angle - cAngles, phiFactors=factor, phiFroms=cAngles, phiFast=False)
+            cAngles, cPositions = self.measureAngles(centers, homes)
+            cAngles[cAngles>np.pi*(3/2)] -= np.pi*2
+            phiData[goodIdx, 0, j+1, 0] = cAngles
+            phiData[goodIdx, 0, j+1, 1] = np.real(cPositions)
+            phiData[goodIdx, 0, j+1, 2] = np.imag(cPositions)
+            #if j > 4:
+            #    factor = angle/cAngles
+            #factor[factor < 0.2]=1
+            #    print(factor)
+        np.save(dataPath + '/phiData', phiData)
+
     def phiConvergenceTest(self, dataPath, margin=15.0, runs=50, tries=8, fast=True, finalAngle=None):
         # variable declaration for center measurement
         steps = 200
