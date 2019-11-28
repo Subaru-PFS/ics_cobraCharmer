@@ -588,6 +588,10 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
     if brokens is None:
         brokens = []
 
+    # Define the beginning point for on-time searching
+    thetaOnTimeMax = 0.065    
+    phiOnTimeMax = 0.05
+
     datalist =[]
 
     for itr in range(iteration):
@@ -608,10 +612,8 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
         
         if itr == 0:
             
-                
-
-            thetaOntime = np.zeros(57)+0.08
-            phiOntime = np.zeros(57)+0.05
+            thetaOntime = np.zeros(57)+thetaOnTimeMax
+            phiOntime = np.zeros(57)+phiOnTimeMax
             
             mt = ModuleTest(f'{fpgaHost}', 
                     f'{XML}', brokens=brokens,camSplit=28)
@@ -636,7 +638,6 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
             
             mt = ModuleTest(f'{fpgaHost}', 
                 f'{dataPath}{outXML}', brokens=brokens,camSplit=28)
-            print('---------')
             pfi = mt.pfi
 
             if arm is 'phi':
@@ -656,7 +657,7 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
 
             vis = visDianosticPlot.VisDianosticPlot(currentpath, brokens=brokens, camSplit=28)
             vis.visAngleMovement(figPath=f'{currentpath}',
-                arm='phi',pdffile=f'{currentpath}AngleMove.pdf')
+                arm=arm,pdffile=f'{currentpath}AngleMove.pdf')
             
             del(vis)
         print(datalist)
@@ -680,7 +681,8 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
         otm = ontimeOptimize.OntimeOptimize(brokens=brokens, thetaList = datalist)
     
     otm.pickForSlowSpeed()
-    otm.updateXML(curXML,f'{dataPath}{outXML}')
+    # Update XML with best on-time
+    otm.updateXML(curXML,f'{dataPath}{outXML}', solve=False)
     otm.visMaps('Fwd',filename=f'{fwdhtml}',pngfile=f'{fwdpng}',predict=False)
     otm.visMaps('Rev',filename=f'{revhtml}',pngfile=f'{revpng}',predict=False)
 
@@ -707,6 +709,6 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
 
     vis = visDianosticPlot.VisDianosticPlot(currentpath, brokens=brokens, camSplit=28)
     vis.visAngleMovement(figPath=f'{currentpath}',
-                arm='phi',pdffile=f'{currentpath}AngleMove.pdf')
+                arm=arm,pdffile=f'{currentpath}AngleMove.pdf')
             
     del(vis)
