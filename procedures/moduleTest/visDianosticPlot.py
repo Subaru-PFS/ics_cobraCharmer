@@ -488,7 +488,7 @@ class VisDianosticPlot(object):
                     delAngle = (360 - 2 * margin) / (runs - 1)
 
 
-                dist=np.abs(np.deg2rad(angle)-(np.append([0], thetaData[c,i,:,0])))*linklength
+                dist=np.abs(np.deg2rad(angle)-(np.append([0], moveData[c,i,:,0])))*linklength
                 snr=(1-k_offset*dist**2)*(np.sqrt((tmax+tobs-tstep[0:9])/(tobs)))
                 snr_array.append(snr)
                 sax.scatter(tstep[0:9],snr)
