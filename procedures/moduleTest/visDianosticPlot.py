@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import numpy as np
 import glob
 from astropy.io import fits
@@ -480,7 +481,7 @@ class VisDianosticPlot(object):
                 l1=0.026
                 l2=0.028
                 linklength = np.sqrt((l2-(l1*np.cos(np.deg2rad(60))))**2+(l1*np.sin(np.deg2rad(60)))**2)
-                
+
             for i in range(runs):
                 angle = margin + (360 - 2 * margin) * i / (runs - 1)
                 if i == 0:
