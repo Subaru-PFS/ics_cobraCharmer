@@ -11,6 +11,7 @@ reload(calculation)
 from procedures.moduleTest.mcs import camera
 reload(camera)
 from ics.cobraCharmer import pfi as pfiControl
+from ics.cobraCharmer import pfiDesign
 from ics.cobraCharmer.utils import butler
 from ics.cobraCharmer.fpgaState import fpgaState
 from ics.cobraCharmer import cobraState
@@ -915,7 +916,10 @@ class ModuleTest():
         # set fast on-time to a large value so it can move over whole range, set slow on-time to the test value.
         fastOnTime = [np.full(57, limitOnTime)] * 2
         if phiOnTime is not None:
-            slowOnTime = [np.full(57, phiOnTime)] * 2
+            if np.isscalar(phiOnTime):
+                slowOnTime = [np.full(57, phiOnTime)] * 2
+            else:
+                slowOnTime = phiOnTime
         elif fast:
             slowOnTime = defaultOnTimeFast
         else:
@@ -1052,8 +1056,11 @@ class ModuleTest():
         slow = not fast
         self.cal.updatePhiMotorMaps(phiMMFW, phiMMRV, bad, slow)
         if phiOnTime is not None:
-            onTime = np.full(57, phiOnTime)
-            self.cal.calibModel.updateOntimes(phiFwd=onTime, phiRev=onTime, fast=fast)
+            if np.isscalar(phiOnTime):
+                onTime = np.full(57, phiOnTime)
+                self.cal.calibModel.updateOntimes(phiFwd=onTime, phiRev=onTime, fast=fast)
+            else:
+                self.cal.calibModel.updateOntimes(phiFwd=phiOnTime[0], phiRev=phiOnTime[1], fast=fast)
         if updateGeometry:
             self.cal.calibModel.updateGeometry(centers=phiCenter, phiArms=phiRadius)
         self.cal.calibModel.createCalibrationFile(self.runManager.outputDir / newXml, name='phiModel')
@@ -1180,7 +1187,10 @@ class ModuleTest():
         # set fast on-time to a large value so it can move over whole range, set slow on-time to the test value.
         fastOnTime = [np.full(57, limitOnTime)] * 2
         if thetaOnTime is not None:
-            slowOnTime = [np.full(57, thetaOnTime)] * 2
+            if np.isscalar(thetaOnTime):
+                slowOnTime = [np.full(57, thetaOnTime)] * 2
+            else:
+                slowOnTime = thetaOnTime
         elif fast:
             slowOnTime = defaultOnTimeFast
         else:
@@ -1321,8 +1331,11 @@ class ModuleTest():
         slow = not fast
         self.cal.updateThetaMotorMaps(thetaMMFW, thetaMMRV, bad, slow)
         if thetaOnTime is not None:
-            onTime = np.full(57, thetaOnTime)
-            self.cal.calibModel.updateOntimes(thetaFwd=onTime, thetaRev=onTime, fast=fast)
+            if np.isscalar(thetaOnTime):
+                onTime = np.full(57, thetaOnTime)
+                self.cal.calibModel.updateOntimes(thetaFwd=onTime, thetaRev=onTime, fast=fast)
+            else:
+                self.cal.calibModel.updateOntimes(thetaFwd=thetaOnTime[0], thetaRev=thetaOnTime[1], fast=fast)
         if updateGeometry:
             phiCenter = np.load(phiRunDir / 'data' / 'phiCenter.npy')
             phiRadius = np.load(phiRunDir / 'data' / 'phiRadius.npy')
@@ -1666,7 +1679,7 @@ class ModuleTest():
     def measureAngles(self, centers, homes):
         """ measure positions and angles for good cobras """
 
-        curPos = self.exposeAndExtractPositions()
+        curPos = self.exposeAndExtractPositions(guess=centers)
         angles = (np.angle(curPos - centers) - homes) % (np.pi*2)
         return angles, curPos
 
@@ -1751,3 +1764,151 @@ class ModuleTest():
 
         # assumes module == 1 XXX
         return np.array(pfiControl.PFI.allocateCobraList(zip(np.full(len(cobs), 1), np.array(cobs) + 1)))
+
+    def thetaOnTimeSearch(self, newXml, speed=0.06, onTimeHigh=0.07, onTimeIntercept=0.027, steps=1000, iteration=6, repeat=1):
+        """ search the on time parameters for a specified motor speed """
+        speed = np.deg2rad(speed)
+        if iteration < 3:
+            self.logger.warn(f'Change iteration parameter from {iteration} to 3!')
+            iteration = 3
+        idx = self.goodIdx
+        slopeF = np.zeros(57)
+        slopeR = np.zeros(57)
+        ontF = np.full(57, onTimeIntercept)
+        ontR = np.full(57, onTimeIntercept)
+        onTimeLow = onTimeIntercept / 2.0
+        _ontF = []
+        _ontR = []
+        _spdF = []
+        _spdR = []
+
+        # get the average speeds for onTimeHigh, smaller step size since it's fast
+        self.logger.info(f'Initial run, onTime = {onTimeHigh}')
+        dataDir = self.makeThetaMotorMap(newXml, repeat=repeat, steps=400, thetaOnTime=onTimeHigh)
+        spdF = np.load(dataDir / 'data' / 'thetaSpeedFW.npy')
+        spdR = np.load(dataDir / 'data' / 'thetaSpeedRV.npy')
+
+        # assume a typical value for bad cobras, sticky??
+        spdF[spdF<np.deg2rad(0.02)] = np.deg2rad(0.2)
+        spdR[spdR<np.deg2rad(0.02)] = np.deg2rad(0.2)
+
+        # rough estimation for on time
+        slopeF[idx] = (onTimeHigh - onTimeIntercept) / spdF[idx]
+        slopeR[idx] = (onTimeHigh - onTimeIntercept) / spdR[idx]
+        ontF[idx] += slopeF[idx] * speed
+        ontR[idx] += slopeR[idx] * speed
+        self.logger.info(f'Slope = {np.round(np.deg2rad([slopeF, slopeR]),4)}')
+
+        for n in range(iteration):
+            ontF[ontF>onTimeHigh] = onTimeHigh
+            ontR[ontR>onTimeHigh] = onTimeHigh
+            ontF[ontF<onTimeLow] = onTimeLow
+            ontR[ontR<onTimeLow] = onTimeLow
+            self.logger.info(f'Run {n+1}/{iteration}, onTime = {np.round([ontF, ontR],4)}')
+            dataDir = self.makeThetaMotorMap(newXml, repeat=repeat, steps=steps, thetaOnTime=[ontF, ontR])
+            spdF = np.load(dataDir / 'data' / 'thetaSpeedFW.npy')
+            spdR = np.load(dataDir / 'data' / 'thetaSpeedRV.npy')
+            _ontF.append(ontF.copy())
+            _ontR.append(ontR.copy())
+            _spdF.append(spdF.copy())
+            _spdR.append(spdR.copy())
+
+            # try the same on-time again for bad measuement
+            spdF[spdF<=0.0] = speed
+            spdR[spdR<=0.0] = speed
+
+            # calculate on time
+            ontF[idx] += slopeF[idx] * (speed - spdF[idx])
+            ontR[idx] += slopeR[idx] * (speed - spdR[idx])
+
+        # try to find best on time, maybe.....
+        ontF = self.searchOnTime(speed, np.array(_spdF), np.array(_ontF))
+        ontR = self.searchOnTime(speed, np.array(_spdR), np.array(_ontR))
+
+        # build motor maps
+        self.logger.info(f'Build motor maps, best onTime = {np.round([ontF, ontR],4)}')
+        self.makeThetaMotorMap(newXml, repeat=repeat, steps=steps, thetaOnTime=[ontF, ontR])
+
+        return ontF, ontR
+
+    def phiOnTimeSearch(self, newXml, speed=0.06, onTimeHigh=0.05, onTimeIntercept=0.01, steps=500, iteration=6, repeat=1):
+        """ search the on time parameters for a specified motor speed """
+        speed = np.deg2rad(speed)
+        if iteration < 3:
+            self.logger.warn(f'Change iteration parameter from {iteration} to 3!')
+            iteration = 3
+        idx = self.goodIdx
+        slopeF = np.zeros(57)
+        slopeR = np.zeros(57)
+        ontF = np.full(57, onTimeIntercept)
+        ontR = np.full(57, onTimeIntercept)
+        _ontF = []
+        _ontR = []
+        _spdF = []
+        _spdR = []
+
+        # get the average speeds for onTimeHigh, smaller step size since it's fast
+        self.logger.info(f'Initial run, onTime = {onTimeHigh}')
+        dataDir = self.makePhiMotorMap(newXml, repeat=repeat, steps=200, phiOnTime=onTimeHigh)
+        spdF = np.load(dataDir / 'data' / 'phiSpeedFW.npy')
+        spdR = np.load(dataDir / 'data' / 'phiSpeedRV.npy')
+
+        # assume a typical value for bad cobras, sticky??
+        spdF[spdF<np.deg2rad(0.02)] = np.deg2rad(0.2)
+        spdR[spdR<np.deg2rad(0.02)] = np.deg2rad(0.2)
+
+        # rough estimation for on time
+        slopeF[idx] = (onTimeHigh - onTimeIntercept) / spdF[idx]
+        slopeR[idx] = (onTimeHigh - onTimeIntercept) / spdR[idx]
+        ontF[idx] += slopeF[idx] * speed
+        ontR[idx] += slopeR[idx] * speed
+        self.logger.info(f'Slope = {np.round(np.deg2rad([slopeF, slopeR]),4)}')
+
+        for n in range(iteration):
+            ontF[ontF>onTimeHigh] = onTimeHigh
+            ontR[ontR>onTimeHigh] = onTimeHigh
+            ontF[ontF<onTimeIntercept] = onTimeIntercept
+            ontR[ontR<onTimeIntercept] = onTimeIntercept
+            self.logger.info(f'Run {n+1}/{iteration}, onTime = {np.round([ontF, ontR],4)}')
+            dataDir = self.makePhiMotorMap(newXml, repeat=repeat, steps=steps, phiOnTime=[ontF, ontR])
+            spdF = np.load(dataDir / 'data' / 'phiSpeedFW.npy')
+            spdR = np.load(dataDir / 'data' / 'phiSpeedRV.npy')
+            _ontF.append(ontF.copy())
+            _ontR.append(ontR.copy())
+            _spdF.append(spdF.copy())
+            _spdR.append(spdR.copy())
+
+            # try the same on-time again for bad measuement
+            spdF[spdF<=0.0] = speed
+            spdR[spdR<=0.0] = speed
+
+            # calculate on time
+            ontF[idx] += slopeF[idx] * (speed - spdF[idx])
+            ontR[idx] += slopeR[idx] * (speed - spdR[idx])
+
+        # try to find best on time, maybe.....
+        ontF = self.searchOnTime(speed, np.array(_spdF), np.array(_ontF))
+        ontR = self.searchOnTime(speed, np.array(_spdR), np.array(_ontR))
+
+        # build motor maps
+        self.logger.info(f'Build motor maps, best onTime = {np.round([ontF, ontR],4)}')
+        self.makePhiMotorMap(newXml, repeat=repeat, steps=steps, phiOnTime=[ontF, ontR])
+
+        return ontF, ontR
+
+    def searchOnTime(self, speed, sData, tData):
+        """ There should be some better ways to do!!! """
+
+        onTime = np.zeros(57)
+
+        for c in self.goodIdx:
+            s = sData[:,c]
+            t = tData[:,c]
+            t0 = np.min(t)
+            t1 = np.max(t)
+            s0 = np.min(s)
+            s1 = np.max(s)
+            onTime[c] = t0 + (t1-t0)/(s1-s0)*(speed-s0)
+
+        return onTime
+
