@@ -86,7 +86,7 @@ def unwrappedPosition(pos, center, homeAngle, fromAngle, toAngle,
                           tripAngle=tripAngle, allowAngle=allowAngle)
 
 class ModuleTest():
-    def __init__(self, fpgaHost, xml, brokens=None, cam1Id=1, cam2Id=2, camSplit=26, logLevel=logging.INFO):
+    def __init__(self, fpgaHost, xml, brokens=None, cam1Id=1, cam2Id=2, camSplit=28, logLevel=logging.INFO):
 
         self.logger = logging.getLogger('moduleTest')
         self.logger.setLevel(logLevel)
@@ -101,6 +101,7 @@ class ModuleTest():
         self.fpgaHost = fpgaHost
         self.xml = xml
         self.brokens = brokens
+        self.camSplit = camSplit
 
         # partition module 1 cobras into odd and even sets
         moduleCobras = {}
@@ -1687,6 +1688,7 @@ class ModuleTest():
         """ convert old XML to a new coordinate by taking 'phi homed' images
             assuming the cobra module is in horizontal setup
         """
+
         idx = self.goodIdx
         idx1 = idx[idx <= self.camSplit]
         idx2 = idx[idx > self.camSplit]
@@ -1694,13 +1696,11 @@ class ModuleTest():
         newPos = np.zeros(57, dtype=complex)
 
         # go home and measure new positions
-        self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
-        data1 = sep.extract(self.cam1.expose().astype(float), 200)
-        data2 = sep.extract(self.cam2.expose().astype(float), 200)
-        home1 = np.array(sorted([(c['x'], c['y']) for c in data1], key=lambda t: t[0], reverse=True))
-        home2 = np.array(sorted([(c['x'], c['y']) for c in data2], key=lambda t: t[0], reverse=True))
-        newPos[idx1] = home1[:len(idx1), 0] + home1[:len(idx1), 1] * (1j)
-        newPos[idx2] = home2[-len(idx2):, 0] + home2[-len(idx2):, 1] * (1j)
+#        self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
+        data, filename, bkgd = self.cam.expose()
+        centroids = np.flip(np.sort_complex(data['x']+data['y']*1j))
+        newPos[idx1] = centroids[:len(idx1)]
+        newPos[idx2] = centroids[-len(idx2):]
 
         # calculation tranformation
         offset1, scale1, tilt1, convert1 = calculation.transform(oldPos[idx1], newPos[idx1])
