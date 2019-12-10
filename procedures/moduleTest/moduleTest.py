@@ -749,8 +749,14 @@ class ModuleTest():
         if idx is None:
             idx = np.arange(len(self.allCobras))
         cobras = self.getCobras(idx)
-        if idx is not None:
-            targets = targets[idx]
+        if len(targets) != len(idx):
+            raise RuntimeError('number of targets must match idx')
+        if len(set(idx) & set(self.badIdx)) > 0:
+            raise RuntimeError('should not include bad/broken cobras')
+
+        arr = np.full(len(self.allCobras), False)
+        arr[idx] = True
+        _idx = arr[self.goodIdx]
 
         self.pfi.moveXYfromHome(cobras, targets, thetaThreshold=threshold, phiThreshold=threshold)
 
@@ -759,8 +765,7 @@ class ModuleTest():
         while True:
             # extract sources and fiber identification
             curPos = self.exposeAndExtractPositions(tolerance=0.2)
-            if idx is not None:
-                curPos = curPos[idx]
+            curPos = curPos[_idx]
             # check position errors
             self.logger.info("to: %s", targets[keepMoving])
             self.logger.info("at: %s", curPos[keepMoving])
@@ -777,11 +782,7 @@ class ModuleTest():
 
             ntries += 1
 
-            # move again, skip bad center measurement
-            # Yikes, No!!!! Was wondering where replacement in calculations.py got used. -- CPL
-            good = (curPos != self.pfi.calibModel.centers[idx])
-
-            keepMoving = np.where(good & notDone)
+            keepMoving = np.where(notDone)
             self.pfi.moveXY(cobras[keepMoving], curPos[keepMoving], targets[keepMoving],
                             thetaThreshold=threshold, phiThreshold=threshold)
 
@@ -808,7 +809,7 @@ class ModuleTest():
         outTargets = self.pfi.anglesToPositions(self.allCobras, thetaAngles, phiAngles)
 
         # move to outTargets
-        self.moveToXYfromHome(self.goodIdx, outTargets, threshold=threshold, maxTries=maxTries)
+        self.moveToXYfromHome(idx, outTargets[idx], threshold=threshold, maxTries=maxTries)
 
     def moveToThetaPhi(self, idx, theta, phi, threshold=3.0, maxTries=8):
         """ move positioners to given theta, phi angles.
@@ -833,12 +834,10 @@ class ModuleTest():
             raise RuntimeError('number of phis must match _total_ number of cobras')
 
         thetaAngles = self.pfi.thetaToLocal(cobras, thetaAngles)
-        outTargets = self.pfi.anglesToPositions(self.allCobras,
-                                                thetaAngles,
-                                                phiAngles)
+        outTargets = self.pfi.anglesToPositions(self.allCobras, thetaAngles, phiAngles)
 
         # move to outTargets
-        self.moveToXYfromHome(idx, outTargets, threshold=threshold, maxTries=maxTries)
+        self.moveToXYfromHome(idx, outTargets[idx], threshold=threshold, maxTries=maxTries)
 
     def moveBadCobrasOut(self):
         """ move bad cobras to point outwards """

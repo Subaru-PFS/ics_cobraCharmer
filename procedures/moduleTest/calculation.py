@@ -522,17 +522,18 @@ class Calculation():
         # calculate phi hard stops
         phiCCW = np.full(nCobra, np.pi)
         phiCW = np.zeros(nCobra)
+        y = self.goodIdx
 
-        s = np.angle(thetaC - phiC)
+        s = np.angle(thetaC - phiC)[y]
         for n in range(phiFW.shape[1]):
             # CCW hard stops for phi arms
-            t = (np.angle(phiFW[:, n, 0] - phiC) - s + (np.pi/2)) % (np.pi*2) - (np.pi/2)
-            p = np.where(t < phiCCW)[0]
-            phiCCW[p] = t[p]
+            t = (np.angle(phiFW[y, n, 0] - phiC[y]) - s + (np.pi/2)) % (np.pi*2) - (np.pi/2)
+            p = np.where(t < phiCCW[y])[0]
+            phiCCW[y[p]] = t[p]
             # CW hard stops for phi arms
-            t = (np.angle(phiRV[:, n, 0] - phiC) - s + (np.pi/2)) % (np.pi*2) - (np.pi/2)
-            p = np.where(t > phiCW)[0]
-            phiCW[p] = t[p]
+            t = (np.angle(phiRV[y, n, 0] - phiC[y]) - s + (np.pi/2)) % (np.pi*2) - (np.pi/2)
+            p = np.where(t > phiCW[y])[0]
+            phiCW[y[p]] = t[p]
 
         # calculate theta hard stops
         thetaCCW = np.zeros(nCobra)
@@ -549,7 +550,7 @@ class Calculation():
             else:
                 q = (t - thetaCCW[y] + np.pi) % (np.pi*2) - np.pi
                 p = np.where(q < 0)[0]
-                thetaCCW[y[p]] = t[y[p]]
+                thetaCCW[y[p]] = t[p]
 
             # CW hard stops for theta arms
             a = np.absolute(thetaRV[y, n, 0] - thetaC[y])
@@ -560,6 +561,6 @@ class Calculation():
             else:
                 q = (t - thetaCW[y] + np.pi) % (np.pi*2) - np.pi
                 p = np.where(q > 0)[0]
-                thetaCW[y[p]] = t[y[p]]
+                thetaCW[y[p]] = t[p]
 
         return thetaL, phiL, thetaCCW, thetaCW, phiCCW, phiCW
