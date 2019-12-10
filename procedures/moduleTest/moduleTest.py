@@ -4,6 +4,13 @@ import numpy as np
 from astropy.io import fits
 import sep
 from copy import deepcopy
+<<<<<<< HEAD
+=======
+import calculation
+from idsCamera import idsCamera
+from ics.cobraCharmer import pfi as pfiControl
+import visDianosticPlot
+>>>>>>> 97ea4d3561cd8d8ed81573b89a52dcbfe7e913fa
 
 from procedures.moduleTest import calculation
 reload(calculation)
@@ -1913,16 +1920,27 @@ class ModuleTest():
         return onTime
 
 
-def runMotorMap(dataPath=None,brokens=None,module=None):
-    module = 'Science29'
-    arm = 'theta'
+# def runMotorMap(dataPath=None,brokens=None,module=None):
+#     module = 'Science29'
+#     arm = 'theta'
 
-    dataPath = '/data/SC29/20190930/'
+#     dataPath = '/data/SC29/20190930/'
+
+#     stepList = ['50','400']
+#     speedList = ['','Fast']
+#     brokens = [57]
+#     xml = '/data/SC29/20190930/science29_theta_20190930.xml'
+
+def runMotorMap(dataPath=None,brokens=None, arm=None, xml=None, module=None):
+    #module = 'Science29'
+    #arm = 'theta'
+    
+    #dataPath = '/data/SC29/20190930/'
 
     stepList = ['50','400']
     speedList = ['','Fast']
-    brokens = [57]
-    xml = '/data/SC29/20190930/science29_theta_20190930.xml'
+    #brokens = [57]
+    #xml = '/data/SC29/20190930/science29_theta_20190930.xml'
 
     for s in speedList:
         for f in stepList:
