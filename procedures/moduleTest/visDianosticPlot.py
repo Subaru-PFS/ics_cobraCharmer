@@ -429,8 +429,8 @@ class VisDianosticPlot(object):
             #fig, (vax, hax) = plt.subplots(1, 2, figsize=(12, 6),sharey='all')
             fig = plt.figure(figsize=(12, 12),constrained_layout=True)
             gs = gridspec.GridSpec(2, 2)
-            vax = plt.subplot(gs[0, 0])
-            hax = plt.subplot(gs[0, 1])
+            vax = fig.add_subplot(gs[0, 0])
+            hax = fig.add_subplot(gs[0, 1])
             sax = fig.add_subplot(gs[1, :])
 
             for i in range(runs):
@@ -488,7 +488,7 @@ class VisDianosticPlot(object):
                     delAngle = (360 - 2 * margin) / (runs - 1)
 
 
-                dist=np.abs(np.deg2rad(angle)-(np.append([0], moveData[c,i,:,0])))*linklength
+                dist=np.abs(np.deg2rad(angle)-(np.append([0], moveData[fiberIdx,i,:,0])))*linklength
                 snr=(1-k_offset*dist**2)*(np.sqrt((tmax+tobs-tstep[0:9])/(tobs)))
                 snr_array.append(snr)
                 sax.scatter(tstep[0:9],snr)
@@ -504,13 +504,13 @@ class VisDianosticPlot(object):
             if arm is 'phi':
                 vax.set_ylim([-10,200])
                 hax.set_ylim([-10,200])
-                sax.set_ylim([0.8,1.05])
+                sax.set_ylim([0.5,1.05])
             else:
                 vax.set_ylim([-10,400])
                 vax.set_ylim([-10,400])
-                sax.set_ylim([0.8,1.05])
+                sax.set_ylim([0.5,1.05])
             fig.suptitle(f'Fiber No. {fiberIdx+1}',fontsize=15)
-            plt.subplots_adjust(bottom=0.15, wspace=0.05)
+            #plt.subplots_adjust(bottom=0.15, wspace=0.05)
             if figPath is not None:
                 if not (os.path.exists(figPath)):
                     os.mkdir(figPath)
