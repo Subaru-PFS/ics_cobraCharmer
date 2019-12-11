@@ -4,13 +4,6 @@ import numpy as np
 from astropy.io import fits
 import sep
 from copy import deepcopy
-<<<<<<< HEAD
-=======
-import calculation
-from idsCamera import idsCamera
-from ics.cobraCharmer import pfi as pfiControl
-import visDianosticPlot
->>>>>>> 97ea4d3561cd8d8ed81573b89a52dcbfe7e913fa
 
 from procedures.moduleTest import calculation
 reload(calculation)
