@@ -553,8 +553,8 @@ class OntimeOptimize(object):
                 'Ori Rev OT': '%10.5f', 'REV int': '%10.5f', 'REV slope': '%10.5f', 'New Rev OT': '%10.5f'})
 
         if self.axisNum == 1:
-            model.updateOntimes(thtFwd=SlowOntimeFwd, thtRev=SlowOntimeRev, fast=False)
-            model.updateOntimes(thtFwd=OntimeFwd, thtRev=OntimeRev, fast=True)
+            model.updateOntimes(thetaFwd=SlowOntimeFwd, thetaRev=SlowOntimeRev, fast=False)
+            model.updateOntimes(thetaFwd=OntimeFwd, thetaRev=OntimeRev, fast=True)
         else:
             model.updateOntimes(phiFwd=SlowOntimeFwd, phiRev=SlowOntimeRev, fast=False)
             model.updateOntimes(phiFwd=OntimeFwd, phiRev=OntimeRev, fast=True)
@@ -600,13 +600,10 @@ def exploreModuleOntime(arm=None,
     datalist =[]
 
     for itr in range(iteration):
-        #currentpath = dataPath+f'run{itr}/'
-        #if not (os.path.exists(currentpath)):
-        #    os.mkdir(currentpath)
         outXML = f'temp.xml'
         curXML = f'{arm}_run{itr}.xml'
 
-        logger.info(f'Output XML = {dataPath}{outXML}')
+        logger.info(f'Output XML name = {dataPath}{outXML}')
 
         #fwdhtml = currentpath+f'{arm}_fwd{itr}.html'
         #revhtml = currentpath+f'{arm}_rev{itr}.html'
@@ -682,7 +679,7 @@ def exploreModuleOntime(arm=None,
         otm.solveForSlowSpeed()
         
         otm.updateXML(curXML,pathlib.Path(f'{dataPath}{outXML}'))
-        logger.info(f'Updating XML = {dataPath}{outXML}')
+        logger.info(f'Writing {dataPath}{outXML} with {curXML}')
 
         fwdhtml = f'{currentpath}/output/{arm}_fwd{itr}.html'
         revhtml = f'{currentpath}/output/{arm}_rev{itr}.html'

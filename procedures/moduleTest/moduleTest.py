@@ -398,7 +398,7 @@ class ModuleTest():
 
         moveList = []
         moves0 = np.zeros(len(cobras), dtype=dtype)
-
+        print(self.phiCenter)
         try:
             phiCenters = self.phiCenter[self.goodIdx]
         except AttributeError:
