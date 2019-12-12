@@ -197,7 +197,7 @@ class OntimeOptimize(object):
                 revmin.append(-np.min(revmm[p]))
                 revmax.append(-np.max(revmm[p]))
 
-            xml = glob.glob(f'{i}/output/'+'*.xml')[0]
+            xml = pathlib.Path(glob.glob(f'{i}/output/*.xml')[0])
             model = pfiDesign.PFIDesign(xml)
             
             ontimeFwd = self.fwdOntimeSlowModel(model)
@@ -634,8 +634,8 @@ def exploreModuleOntime(arm=None,
                         steps = stepsize, totalSteps = 6000)
 
             else:
-                mt.pfi.moveAllSteps(mt.allCobras, -10000, 0)
-                mt.pfi.moveAllSteps(mt.allCobras, -2000, 0)
+                #mt.pfi.moveAllSteps(mt.allCobras, -10000, 0)
+                #mt.pfi.moveAllSteps(mt.allCobras, -2000, 0)
 
                 currentpath = mt.makeThetaMotorMap(f'{curXML}',
                         thetaOnTime=thetaOntime, repeat = repeat, fast=False, 
