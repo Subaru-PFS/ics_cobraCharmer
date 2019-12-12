@@ -328,9 +328,9 @@ class OntimeOptimize(object):
             else:
                 ind = np.argmin(ndf[f'onTime{direction}'].values)
                 if np.abs(ndf[f'{direction}'].values[ind]) > np.abs(targetSpeed):
-                    newOntime = ndf[f'onTime{direction}'].values[ind] - 0.005
+                    newOntime = ndf[f'onTime{direction}'].values[ind] - 0.010
                 else:
-                    newOntime = ndf[f'onTime{direction}'].values[ind] + 0.005 
+                    newOntime = ndf[f'onTime{direction}'].values[ind] + 0.010 
 
         return newOntime
     
@@ -673,6 +673,7 @@ def exploreModuleOntime(arm=None,
             del(vis)
 
         datalist.append(f'{currentpath}/')
+        logger.info(f'{datalist}')
         print(datalist)
        
         if arm is 'phi':
@@ -711,15 +712,15 @@ def exploreModuleOntime(arm=None,
     
     
     # Update XML with best on-time
-    logger.info(f'Producing final XML = {current}/output/{arm}_final.xml')
+    logger.info(f'Producing final XML = {currentpath}/output/{arm}_final.xml')
 
-    otm.updateXML(curXML,f'{current}/output/{arm}_final.xml', solve=False)
+    otm.updateXML(curXML,f'{currentpath}/output/{arm}_final.xml', solve=False)
     otm.visMaps('Fwd',filename=f'{fwdhtml}',pngfile=f'{fwdpng}',predict=False)
     otm.visMaps('Rev',filename=f'{revhtml}',pngfile=f'{revpng}',predict=False)
 
 
     # Using the last XML to run motor map
-    xml = pathlib.Path(f'{current}/output/{arm}_final.xml')
+    xml = pathlib.Path(f'{currentpath}/output/{arm}_final.xml')
     mt = ModuleTest('fpga', xml, brokens=brokens)
     mt._connect()
     if arm is 'phi':
@@ -729,11 +730,13 @@ def exploreModuleOntime(arm=None,
         path = mt.makeThetaMotorMap(f'{arm}_250step.xml', 
             repeat = 3, fast=False,totalSteps = 12000, limitOnTime = 0.08, steps = 250)    
     
-    vis = visDianosticPlot.VisDianosticPlot('{path}/data/', brokens=brokens, camSplit=28)
+    vis = visDianosticPlot.VisDianosticPlot(f'{path}/data/', brokens=brokens, camSplit=28)
     vis.visAngleMovement(figPath=f'{path}/output/',
                  arm=arm,pdffile=f'{path}/output/AngleMove.pdf')
             
     del(vis)
+
+    return datalist
     # currentpath = dataPath+'finalMM/'
     # if not (os.path.exists(currentpath)):
     #     os.mkdir(currentpath)
