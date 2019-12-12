@@ -718,7 +718,6 @@ def exploreModuleOntime(arm=None,
     otm.visMaps('Fwd',filename=f'{fwdhtml}',pngfile=f'{fwdpng}',predict=False)
     otm.visMaps('Rev',filename=f'{revhtml}',pngfile=f'{revpng}',predict=False)
 
-
     # Using the last XML to run motor map
     xml = pathlib.Path(f'{currentpath}/output/{arm}_final.xml')
     mt = ModuleTest('fpga', xml, brokens=brokens)
