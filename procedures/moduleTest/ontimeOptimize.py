@@ -656,14 +656,14 @@ def exploreModuleOntime(arm=None,
                         steps = stepsize, totalSteps = 6000)
 
             else:
-                pfi.moveAllSteps(mt.allCobras, -10000, 0)
-                pfi.moveAllSteps(mt.allCobras, -2000, 0)
+                #pfi.moveAllSteps(mt.allCobras, -10000, 0)
+                #pfi.moveAllSteps(mt.allCobras, -2000, 0)
 
                 currentpath = mt.makeThetaMotorMap(f'{curXML}', 
                     repeat = repeat, fast=False,totalSteps = 12000, 
                     limitOnTime = 0.08, steps = stepsize)
 
-            curXML = f'{currentpath}/output/{curXML}'
+            curXML = pathlib.Path(f'{currentpath}/output/{curXML}')
             logger.info(f'Current XML = {curXML}')
             
             vis = visDianosticPlot.VisDianosticPlot(f'{currentpath}/data/', brokens=brokens, camSplit=28)
@@ -674,7 +674,6 @@ def exploreModuleOntime(arm=None,
 
         datalist.append(f'{currentpath}/')
         logger.info(f'{datalist}')
-        print(datalist)
        
         if arm is 'phi':
             otm = ontimeOptimize.OntimeOptimize(brokens=brokens, phiList = datalist)
@@ -682,7 +681,7 @@ def exploreModuleOntime(arm=None,
             otm = ontimeOptimize.OntimeOptimize(brokens=brokens, thetaList = datalist)
         otm.solveForSlowSpeed()
         
-        otm.updateXML(curXML,f'{dataPath}{outXML}')
+        otm.updateXML(curXML,pathlib.Path(f'{dataPath}{outXML}'))
         logger.info(f'Updating XML = {dataPath}{outXML}')
 
         fwdhtml = f'{currentpath}/output/{arm}_fwd{itr}.html'
