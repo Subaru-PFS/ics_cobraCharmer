@@ -262,7 +262,7 @@ class VisDianosticPlot(object):
                         daf[i] = np.rad2deg(data[i+1] - data[i])/stepsize
                         ax.plot([np.rad2deg(data[i+1]),np.rad2deg(data[i])],[daf[i],daf[i]],color='grey')
             ax.plot(x,np.rad2deg(self.mf[c]), 'r')        
-            ax.plot(x,np.rad2deg(self.mf2[c]), 'pink')
+            #ax.plot(x,np.rad2deg(self.mf2[c]), 'pink')
 
 
             for data in self.ar[c]: 
@@ -271,7 +271,7 @@ class VisDianosticPlot(object):
                         dar[i] = np.rad2deg(data[i+1] - data[i])/stepsize
                         ax.plot([np.rad2deg(data[i+1]),np.rad2deg(data[i])],[dar[i],dar[i]],color='grey')
             ax.plot(x,-np.rad2deg(self.mr[c]), 'r')
-            ax.plot(x,-np.rad2deg(self.mr2[c]), color='pink')
+            #ax.plot(x,-np.rad2deg(self.mr2[c]), color='pink')
             ax.set_ylim([ymin,ymax])
             if arm is 'phi':
                 ax.set_xlim([0,200])
