@@ -700,9 +700,9 @@ def exploreModuleOntime(arm=None,
     otm.pickForSlowSpeed()
 
     fwdhtml = f'{currentpath}/output/{arm}_fwd{itr}.html'
-    revhtml = f'{currentpath}/output/{arm}rev{itr}.html'
+    revhtml = f'{currentpath}/output/{arm}_rev{itr}.html'
     fwdpng = f'{currentpath}/output/{arm}_fwd{itr}.png'
-    revpng = f'{currentpath}/output/{arm}_fwd{itr}.png'  
+    revpng = f'{currentpath}/output/{arm}_rev{itr}.png'  
         #fwdpng = currentpath+f'{arm}_fwd{itr}.png'
         #revpng = currentpath+f'{arm}_rev{itr}.png'
     
