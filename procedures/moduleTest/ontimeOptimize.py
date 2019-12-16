@@ -595,10 +595,6 @@ def exploreModuleOntime(arm=None, thetaOnTimeMax = 0.065, phiOnTimeMax=0.05,
     if brokens is None:
         brokens = []
 
-    # Define the beginning point for on-time searching
-    #thetaOnTimeMax = 0.065    
-    #phiOnTimeMax = 0.05
-
     datalist =[]
 
     for itr in range(iteration):
@@ -612,7 +608,6 @@ def exploreModuleOntime(arm=None, thetaOnTimeMax = 0.065, phiOnTimeMax=0.05,
             thetaOntime = [np.full(57, thetaOnTimeMax)] * 2 
             phiOntime =  [np.full(57, phiOnTimeMax)] * 2 
             xml = XML
-            
             
             mt = ModuleTest('fpga', xml, brokens=brokens)
             mt._connect()
@@ -656,7 +651,7 @@ def exploreModuleOntime(arm=None, thetaOnTimeMax = 0.065, phiOnTimeMax=0.05,
             
             vis = visDianosticPlot.VisDianosticPlot(f'{currentpath}/data/', brokens=brokens, camSplit=28)
             vis.visAngleMovement(figPath=f'{currentpath}/output/',
-                arm=arm,pdffile=f'{currentpath}/output/AngleMove.pdf')
+                arm=arm,pdffile=f'{currentpath}/output/{arm}AngleMove.pdf')
             
             del(vis)
 
