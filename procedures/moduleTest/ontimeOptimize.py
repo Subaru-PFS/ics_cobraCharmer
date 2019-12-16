@@ -65,6 +65,7 @@ class OntimeOptimize(object):
         self.slowTarget = 0.075
         self.fastTarget = 2.0*self.slowTarget
         self.minRange = 180
+        self.minRangeDelta = 1.0
         self._buildDataFramefromData()
 
        # return self
@@ -79,6 +80,7 @@ class OntimeOptimize(object):
         self.slowTarget = 0.075
         self.fastTarget = 2.0*self.slowTarget
         self.minRange = 360
+        self.minRangeDelta = 1.0
         self._buildDataFramefromData()
 
         #return self
@@ -87,7 +89,7 @@ class OntimeOptimize(object):
         dataframe = self.dataframe
         loc1 = dataframe.loc[dataframe['fiberNo'] == pid].loc
         loc2 = loc1[dataframe[direction].abs() > self.minSpeed].loc
-        ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange]
+        ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange-self.minRangeDelta]
         
         # When nPoint=1, using simple ratio to determine next point.  Otherwise, fitting data 
         #   with full ROM only
@@ -272,7 +274,7 @@ class OntimeOptimize(object):
         dataframe = self.dataframe
         loc1 = dataframe.loc[dataframe['fiberNo'] == fiberInx+1].loc
         loc2 = loc1[dataframe[direction].abs() > self.minSpeed].loc
-        ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange]
+        ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange-self.minRangeDelta]
         # First, make sure there is good speed data.
         ind=np.argmin(np.abs((np.abs(ndf[f'{direction}']) - targetSpeed).values))
         newOntime = ndf[f'onTime{direction}'].values[ind]
@@ -315,7 +317,7 @@ class OntimeOptimize(object):
         else:
             loc1 = dataframe.loc[dataframe['fiberNo'] == fiberInx+1].loc
             loc2 = loc1[dataframe[direction].abs() > self.minSpeed].loc
-            ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange]
+            ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange-self.minRangeDelta]
             
             if (len(ndf[f'onTime{direction}'].values) == 0):
                 loc1 = dataframe.loc[dataframe['fiberNo'] == fiberInx+1].loc
@@ -339,7 +341,7 @@ class OntimeOptimize(object):
         ndf = dataframe.loc[dataframe['fiberNo'] == fiberInx+1]
         ndd = ndf.loc[ndf[f'onTime{direction}'] == Ontime]
         if len(ndd[f'range{direction}']) != 0:
-            if np.abs(ndd[f'range{direction}'].values[0]) < self.minRange:
+            if np.abs(ndd[f'range{direction}'].values[0]) < self.minRange-self.minRangeDelta:
                 newOntime = 0.01 + Ontime
                 return newOntime
             else:
@@ -483,7 +485,7 @@ class OntimeOptimize(object):
         p.yaxis.axis_label = 'Speed'
 
         gooddata = dd.loc[dd[f'{direction}'].abs() > 
-             self.minSpeed].loc[dd[f'range{direction}'].abs() > self.minRange]
+             self.minSpeed].loc[dd[f'range{direction}'].abs() > self.minRange-self.minRangeDelta]
         
         #color_array = YlGnBu8[:len(dd[direction].values)]
         c_array = ['blue', 'saddlebrown', 'darkviolet', 
