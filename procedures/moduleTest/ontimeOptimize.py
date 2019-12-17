@@ -713,7 +713,7 @@ def exploreModuleOntime(arm=None, thetaOnTimeMax = 0.065, phiOnTimeMax=0.05,
     
     vis = visDianosticPlot.VisDianosticPlot(f'{path}/data/', brokens=brokens, camSplit=28)
     vis.visAngleMovement(figPath=f'{path}/output/',
-                 arm=arm,pdffile=f'{path}/output/AngleMove.pdf')
+                 arm=arm,pdffile=f'{path}/output/{arm}AngleMove.pdf')
             
     del(vis)
 
