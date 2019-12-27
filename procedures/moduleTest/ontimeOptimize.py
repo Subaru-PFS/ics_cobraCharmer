@@ -1,5 +1,5 @@
 import logging
-
+import pathlib
 import sys, os
 import numpy as np
 import glob
@@ -65,6 +65,7 @@ class OntimeOptimize(object):
         self.slowTarget = 0.075
         self.fastTarget = 2.0*self.slowTarget
         self.minRange = 180
+        self.minRangeDelta = 1.0
         self._buildDataFramefromData()
 
        # return self
@@ -79,6 +80,7 @@ class OntimeOptimize(object):
         self.slowTarget = 0.075
         self.fastTarget = 2.0*self.slowTarget
         self.minRange = 360
+        self.minRangeDelta = 1.0
         self._buildDataFramefromData()
 
         #return self
@@ -87,7 +89,7 @@ class OntimeOptimize(object):
         dataframe = self.dataframe
         loc1 = dataframe.loc[dataframe['fiberNo'] == pid].loc
         loc2 = loc1[dataframe[direction].abs() > self.minSpeed].loc
-        ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange]
+        ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange-self.minRangeDelta]
         
         # When nPoint=1, using simple ratio to determine next point.  Otherwise, fitting data 
         #   with full ROM only
@@ -173,12 +175,12 @@ class OntimeOptimize(object):
         #imageSet = self.datalist
 
         for i in self.datalist:
-            fw_file=f'{i}'+f'{self.axisName.lower()}SpeedFW.npy'
-            rv_file=f'{i}'+f'{self.axisName.lower()}SpeedRV.npy'
-            af = np.load(f'{i}' + f'{self.axisName.lower()}AngFW.npy')
-            ar = np.load(f'{i}' + f'{self.axisName.lower()}AngRV.npy')
-            fwdmm = np.rad2deg(np.load(f'{i}' + f'{self.axisName.lower()}MMFW.npy'))
-            revmm = np.rad2deg(np.load(f'{i}' + f'{self.axisName.lower()}MMRV.npy'))
+            fw_file=f'{i}/data/'+f'{self.axisName.lower()}SpeedFW.npy'
+            rv_file=f'{i}/data/'+f'{self.axisName.lower()}SpeedRV.npy'
+            af = np.load(f'{i}/data/' + f'{self.axisName.lower()}AngFW.npy')
+            ar = np.load(f'{i}/data/' + f'{self.axisName.lower()}AngRV.npy')
+            fwdmm = np.rad2deg(np.load(f'{i}/data/' + f'{self.axisName.lower()}MMFW.npy'))
+            revmm = np.rad2deg(np.load(f'{i}/data/' + f'{self.axisName.lower()}MMRV.npy'))
             fwd=np.load(fw_file)*180.0/math.pi 
             rev=-np.load(rv_file)*180.0/math.pi
             
@@ -197,7 +199,7 @@ class OntimeOptimize(object):
                 revmin.append(-np.min(revmm[p]))
                 revmax.append(-np.max(revmm[p]))
 
-            xml = glob.glob(f'{i}'+'*.xml')[0]
+            xml = pathlib.Path(glob.glob(f'{i}/output/*.xml')[0])
             model = pfiDesign.PFIDesign(xml)
             
             ontimeFwd = self.fwdOntimeSlowModel(model)
@@ -272,7 +274,7 @@ class OntimeOptimize(object):
         dataframe = self.dataframe
         loc1 = dataframe.loc[dataframe['fiberNo'] == fiberInx+1].loc
         loc2 = loc1[dataframe[direction].abs() > self.minSpeed].loc
-        ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange]
+        ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange-self.minRangeDelta]
         # First, make sure there is good speed data.
         ind=np.argmin(np.abs((np.abs(ndf[f'{direction}']) - targetSpeed).values))
         newOntime = ndf[f'onTime{direction}'].values[ind]
@@ -315,7 +317,7 @@ class OntimeOptimize(object):
         else:
             loc1 = dataframe.loc[dataframe['fiberNo'] == fiberInx+1].loc
             loc2 = loc1[dataframe[direction].abs() > self.minSpeed].loc
-            ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange]
+            ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange-self.minRangeDelta]
             
             if (len(ndf[f'onTime{direction}'].values) == 0):
                 loc1 = dataframe.loc[dataframe['fiberNo'] == fiberInx+1].loc
@@ -328,9 +330,9 @@ class OntimeOptimize(object):
             else:
                 ind = np.argmin(ndf[f'onTime{direction}'].values)
                 if np.abs(ndf[f'{direction}'].values[ind]) > np.abs(targetSpeed):
-                    newOntime = ndf[f'onTime{direction}'].values[ind] - 0.005
+                    newOntime = ndf[f'onTime{direction}'].values[ind] - 0.010
                 else:
-                    newOntime = ndf[f'onTime{direction}'].values[ind] + 0.005 
+                    newOntime = ndf[f'onTime{direction}'].values[ind] + 0.010 
 
         return newOntime
     
@@ -339,7 +341,7 @@ class OntimeOptimize(object):
         ndf = dataframe.loc[dataframe['fiberNo'] == fiberInx+1]
         ndd = ndf.loc[ndf[f'onTime{direction}'] == Ontime]
         if len(ndd[f'range{direction}']) != 0:
-            if np.abs(ndd[f'range{direction}'].values[0]) < self.minRange:
+            if np.abs(ndd[f'range{direction}'].values[0]) < self.minRange-self.minRangeDelta:
                 newOntime = 0.01 + Ontime
                 return newOntime
             else:
@@ -483,7 +485,7 @@ class OntimeOptimize(object):
         p.yaxis.axis_label = 'Speed'
 
         gooddata = dd.loc[dd[f'{direction}'].abs() > 
-             self.minSpeed].loc[dd[f'range{direction}'].abs() > self.minRange]
+             self.minSpeed].loc[dd[f'range{direction}'].abs() > self.minRange-self.minRangeDelta]
         
         #color_array = YlGnBu8[:len(dd[direction].values)]
         c_array = ['blue', 'saddlebrown', 'darkviolet', 
@@ -553,8 +555,8 @@ class OntimeOptimize(object):
                 'Ori Rev OT': '%10.5f', 'REV int': '%10.5f', 'REV slope': '%10.5f', 'New Rev OT': '%10.5f'})
 
         if self.axisNum == 1:
-            model.updateOntimes(thtFwd=SlowOntimeFwd, thtRev=SlowOntimeRev, fast=False)
-            model.updateOntimes(thtFwd=OntimeFwd, thtRev=OntimeRev, fast=True)
+            model.updateOntimes(thetaFwd=SlowOntimeFwd, thetaRev=SlowOntimeRev, fast=False)
+            model.updateOntimes(thetaFwd=OntimeFwd, thetaRev=OntimeRev, fast=True)
         else:
             model.updateOntimes(phiFwd=SlowOntimeFwd, phiRev=SlowOntimeRev, fast=False)
             model.updateOntimes(phiFwd=OntimeFwd, phiRev=OntimeRev, fast=True)
@@ -582,98 +584,99 @@ class OntimeOptimize(object):
         show(grid)
         
 
-def exploreModuleOntime(fpgaHost, dataPath, arm=None, 
-    brokens=None, camSplit=28, iteration=4, XML=None, stepsize=250, repeat=3):
+def exploreModuleOntime(arm=None, thetaOnTimeMax = 0.065, phiOnTimeMax=0.05,
+    brokens=None, iteration=4, XML=None, stepsize=250, repeat=3):
+    
+    logger = logging.getLogger('ontimeOptimize')
+    logger.info(f'Starting to run on-time optimization')
+
+    dataPath = '/data/MCS/'
     
     if brokens is None:
         brokens = []
 
-    # Define the beginning point for on-time searching
-    thetaOnTimeMax = 0.065    
-    phiOnTimeMax = 0.05
-
     datalist =[]
 
     for itr in range(iteration):
-        currentpath = dataPath+f'run{itr}/'
-        if not (os.path.exists(currentpath)):
-            os.mkdir(currentpath)
-
         outXML = f'temp.xml'
         curXML = f'{arm}_run{itr}.xml'
 
-        fwdhtml = currentpath+f'{arm}_fwd{itr}.html'
-        revhtml = currentpath+f'{arm}_rev{itr}.html'
-        
-        fwdpng = currentpath+f'{arm}_fwd{itr}.png'
-        revpng = currentpath+f'{arm}_rev{itr}.png'
-        
-        datalist.append(currentpath)
+        logger.info(f'Output XML name = {dataPath}{outXML}')
         
         if itr == 0:
             
-            thetaOntime = np.zeros(57)+thetaOnTimeMax
-            phiOntime = np.zeros(57)+phiOnTimeMax
+            thetaOntime = [np.full(57, thetaOnTimeMax)] * 2 
+            phiOntime =  [np.full(57, phiOnTimeMax)] * 2 
+            xml = XML
             
-            mt = ModuleTest(f'{fpgaHost}', 
-                    f'{XML}', brokens=brokens,camSplit=28)
-            
-            pfi = mt.pfi
-
+            mt = ModuleTest('fpga', xml, brokens=brokens)
+            mt._connect()
             if arm is 'phi':
-                pfi.moveAllSteps(mt.allCobras, 0, -5000)
-                pfi.moveAllSteps(mt.allCobras, 0, -1000)
-                mt.makePhiMotorMap(f'{curXML}',f'{currentpath}',
-                        phiOnTime=phiOntime, repeat = repeat, fast=False, steps = stepsize, totalSteps = 6000)
+                #mt.pfi.moveAllSteps(mt.allCobras, 0, -5000)
+                #mt.pfi.moveAllSteps(mt.allCobras, 0, -1000)
+                logger.info(f'Running {itr+1} iteration')
+                currentpath = mt.makePhiMotorMap(f'{curXML}',
+                        phiOnTime=phiOntime, repeat = repeat, fast=False, 
+                        steps = stepsize, totalSteps = 6000)
 
             else:
-                pfi.moveAllSteps(mt.allCobras, -10000, 0)
-                pfi.moveAllSteps(mt.allCobras, -2000, 0)
+                #mt.pfi.moveAllSteps(mt.allCobras, -10000, 0)
+                #mt.pfi.moveAllSteps(mt.allCobras, -2000, 0)
 
-                mt.makeThetaMotorMap(f'{curXML}',f'{currentpath}',
-                        thetaOnTime=thetaOntime, repeat = repeat, fast=False, steps = stepsize, totalSteps = 12000)
+                currentpath = mt.makeThetaMotorMap(f'{curXML}',
+                        thetaOnTime=thetaOntime, repeat = repeat, fast=False, 
+                        steps = stepsize, totalSteps = 12000)
                 
             curXML = XML
         else:
             
-            mt = ModuleTest(f'{fpgaHost}', 
-                f'{dataPath}{outXML}', brokens=brokens,camSplit=28)
-            pfi = mt.pfi
+            xml = pathlib.Path(f'{dataPath}{outXML}')
+            mt = ModuleTest('fpga', xml, brokens=brokens)
+            mt._connect()
 
             if arm is 'phi':
-                pfi.moveAllSteps(mt.allCobras, 0,-5000)
-                pfi.moveAllSteps(mt.allCobras, 0, -1000)
-                mt.makePhiMotorMap(f'{curXML}',f'{currentpath}', 
-                    repeat = repeat, fast=False,totalSteps = 6000, limitOnTime = 0.08, steps = stepsize)
+                #mt.pfi.moveAllSteps(mt.allCobras, 0,-5000)
+                #nt.pfi.moveAllSteps(mt.allCobras, 0, -1000)
+                currentpath = mt.makePhiMotorMap(f'{curXML}',
+                        repeat = repeat, fast=False, 
+                        steps = stepsize, totalSteps = 6000)
 
             else:
-                pfi.moveAllSteps(mt.allCobras, -10000, 0)
-                pfi.moveAllSteps(mt.allCobras, -2000, 0)
+                currentpath = mt.makeThetaMotorMap(f'{curXML}', 
+                    repeat = repeat, fast=False,totalSteps = 12000, 
+                    limitOnTime = 0.08, steps = stepsize)
 
-                mt.makeThetaMotorMap(f'{curXML}',f'{currentpath}', 
-                    repeat = repeat, fast=False,totalSteps = 12000, limitOnTime = 0.08, steps = stepsize)
-
-            curXML = f'{currentpath}{curXML}'
-
-            vis = visDianosticPlot.VisDianosticPlot(currentpath, brokens=brokens, camSplit=28)
-            vis.visAngleMovement(figPath=f'{currentpath}',
-                arm=arm,pdffile=f'{currentpath}AngleMove.pdf')
+            curXML = pathlib.Path(f'{currentpath}/output/{curXML}')
+            logger.info(f'Current XML = {curXML}')
+            
+            vis = visDianosticPlot.VisDianosticPlot(f'{currentpath}/data/', brokens=brokens, camSplit=28)
+            vis.visAngleMovement(figPath=f'{currentpath}/output/',
+                arm=arm,pdffile=f'{currentpath}/output/{arm}AngleMove.pdf')
             
             del(vis)
-        print(datalist)
+
+        datalist.append(f'{currentpath}/')
+        logger.info(f'{datalist}')
        
         if arm is 'phi':
             otm = ontimeOptimize.OntimeOptimize(brokens=brokens, phiList = datalist)
         else:
             otm = ontimeOptimize.OntimeOptimize(brokens=brokens, thetaList = datalist)
+        otm.solveForSlowSpeed()
         
-        otm.updateXML(curXML,f'{dataPath}{outXML}')
+        otm.updateXML(curXML,pathlib.Path(f'{dataPath}{outXML}'))
+        logger.info(f'Writing {dataPath}{outXML} with {curXML}')
+
+        fwdhtml = f'{currentpath}/output/{arm}_fwd{itr}.html'
+        revhtml = f'{currentpath}/output/{arm}_rev{itr}.html'
+        
         otm.visMaps('Fwd',filename=f'{fwdhtml}',)
         otm.visMaps('Rev',filename=f'{revhtml}')
 
         
         del(mt)
-
+    
+    logger.info(f'Starting to work on optimization based on all data')
     # Make the plot at the very end.
     if arm is 'phi':
         otm = ontimeOptimize.OntimeOptimize(brokens=brokens, phiList = datalist)
@@ -681,34 +684,38 @@ def exploreModuleOntime(fpgaHost, dataPath, arm=None,
         otm = ontimeOptimize.OntimeOptimize(brokens=brokens, thetaList = datalist)
     
     otm.pickForSlowSpeed()
+
+    fwdhtml = f'{currentpath}/output/{arm}_fwd{itr}.html'
+    revhtml = f'{currentpath}/output/{arm}_rev{itr}.html'
+    fwdpng = f'{currentpath}/output/{arm}_fwd{itr}.png'
+    revpng = f'{currentpath}/output/{arm}_rev{itr}.png'  
+        #fwdpng = currentpath+f'{arm}_fwd{itr}.png'
+        #revpng = currentpath+f'{arm}_rev{itr}.png'
+    
+    
     # Update XML with best on-time
-    otm.updateXML(curXML,f'{dataPath}{outXML}', solve=False)
+    logger.info(f'Producing final XML = {currentpath}/output/{arm}_final.xml')
+
+    otm.updateXML(curXML,f'{currentpath}/output/{arm}_final.xml', solve=False)
     otm.visMaps('Fwd',filename=f'{fwdhtml}',pngfile=f'{fwdpng}',predict=False)
     otm.visMaps('Rev',filename=f'{revhtml}',pngfile=f'{revpng}',predict=False)
 
-    # use the last XML to run motor map
-    currentpath = dataPath+'finalMM/'
-    if not (os.path.exists(currentpath)):
-        os.mkdir(currentpath)
-    curXML='final.xml'
-    mt = ModuleTest(f'{fpgaHost}', 
-                f'{dataPath}{outXML}', brokens=brokens,camSplit=28)
-
+    # Using the last XML to run motor map
+    xml = pathlib.Path(f'{currentpath}/output/{arm}_final.xml')
+    mt = ModuleTest('fpga', xml, brokens=brokens)
+    mt._connect()
     if arm is 'phi':
-        pfi.moveAllSteps(mt.allCobras, 0,-5000)
-        pfi.moveAllSteps(mt.allCobras, 0, -1000)
-        mt.makePhiMotorMap(f'{curXML}',f'{currentpath}', 
-            repeat = repeat, fast=False,totalSteps = 6000, limitOnTime = 0.08, steps = stepsize)
-
+        path = mt.makePhiMotorMap(f'{arm}_250step.xml', 
+            repeat = 3, fast=False,totalSteps = 6000, limitOnTime = 0.08, steps = 250)
     else:
-        pfi.moveAllSteps(mt.allCobras, -10000, 0)
-        pfi.moveAllSteps(mt.allCobras, -2000, 0)
-
-        mt.makeThetaMotorMap(f'{curXML}',f'{currentpath}', 
-            repeat = repeat, fast=False,totalSteps = 12000, limitOnTime = 0.08, steps = stepsize)
-
-    vis = visDianosticPlot.VisDianosticPlot(currentpath, brokens=brokens, camSplit=28)
-    vis.visAngleMovement(figPath=f'{currentpath}',
-                arm=arm,pdffile=f'{currentpath}AngleMove.pdf')
+        path = mt.makeThetaMotorMap(f'{arm}_250step.xml', 
+            repeat = 3, fast=False,totalSteps = 12000, limitOnTime = 0.08, steps = 250)    
+    
+    vis = visDianosticPlot.VisDianosticPlot(f'{path}/data/', brokens=brokens, camSplit=28)
+    vis.visAngleMovement(figPath=f'{path}/output/',
+                 arm=arm,pdffile=f'{path}/output/{arm}AngleMove.pdf')
             
     del(vis)
+
+    return datalist, path
+ 

@@ -44,7 +44,7 @@ def transform(origPoints, newPoints):
     return offset, scale, tilt, tr
 
 class Calculation():
-    def __init__(self, xml, brokens, camSplit):
+    def __init__(self, xml, brokens=None, camSplit=None):
         if not os.path.exists(xml):
             print(f"Error: {xml} is not presented!")
             sys.exit()
@@ -61,7 +61,10 @@ class Calculation():
         self.badIdx = np.array(brokens, dtype=int) - 1
         self.goodIdx = np.array(visibles, dtype=int) - 1
 
-    def extractPositions(self, data1, data2, guess=None, tolerance=None):
+    def extractPositions(self, data1, data2=None, guess=None, tolerance=None):
+        if data2 is None:
+            return self.extractPositions1(data1, guess=guess, tolerance=tolerance)
+
         idx = self.goodIdx
         idx1 = idx[idx <= self.camSplit]
         idx2 = idx[idx > self.camSplit]
@@ -101,6 +104,79 @@ class Calculation():
                 pos[m] = pos2[k]
         return pos
 
+    def matchPositions(self, objects, guess=None, tolerance=None):
+        """ Given a set of measured spots, return the measured positions of our cobras.
+
+        Args
+        ----
+        objects : `ndarray`, which includes an x and a y column.
+           The _measured_ positions, from the camera.
+
+        guess : `ndarray` of complex coordinates.
+           Close to where we expect the spots to be. Uses the the cobra center if None
+
+        tolerance : `float`
+           A expansion factor to apply to the cobra geometry, for matching.
+
+        Returns
+        -------
+        pos : `ndarray` of complex coordinates
+           The measured positions of the cobras.
+           Note that (hmm), the cobra center is returned of there is not matching spot.
+
+        indexMap : `ndarray` of ints
+           Indices from our cobra array to the matching spots.
+           -1 if there is no matching spot.
+        """
+
+        idx = self.goodIdx
+        if tolerance is not None:
+            radii = ((self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance))[idx]
+        else:
+            radii = None
+
+        if guess is None:
+            centers = self.calibModel.centers[idx]
+        else:
+            centers = guess[:len(idx)]
+
+        measPos = np.array(objects['x'] + objects['y']*(1j))
+        target = lazyIdentification(centers, measPos, radii=radii)
+
+        pos = np.zeros(len(idx), dtype=complex)
+        for n, k in enumerate(target):
+            if k < 0:
+                pos[n] = self.calibModel.centers[idx[n]]
+            else:
+                pos[n] = measPos[k]
+
+        return pos, target
+
+    def extractPositions1(self, data, guess=None, tolerance=None):
+        idx = self.goodIdx
+        if tolerance is not None:
+            radii = (self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance)
+        else:
+            radii = None
+
+        if guess is None:
+            centers = self.calibModel.centers[idx]
+        else:
+            centers = guess[:len(idx)]
+
+        ext = sep.extract(data.astype(float), 200)
+        pos = np.array(ext['x'] + ext['y']*(1j))
+        target = lazyIdentification(centers, pos, radii=radii)
+
+        pos = np.zeros(len(idx), dtype=complex)
+        for n, k in enumerate(target):
+            if k < 0:
+                pos[n] = self.calibModel.centers[idx[n]]
+            else:
+                pos[n] = pos[k]
+
+        return pos
+
     def phiCenterAngles(self, phiFW, phiRV):
         # variable declaration for phi angles
         phiCenter = np.zeros(57, dtype=complex)
@@ -130,6 +206,48 @@ class Calculation():
 
         return phiCenter, phiRadius, phiAngFW, phiAngRV, badRange
 
+    def _dPhi(ang0, ang1):
+        """ Return angle FROM ang0 TO ang1. """
+
+        diff = ang1 - ang0
+        return diff
+
+    def _dTheta(ang0, ang1):
+        """ Return angle FROM ang0 TO ang1. """
+
+        diff = ang1 - ang0
+        diff[diff < 0] += 2*np.pi
+
+        return diff
+
+    def thetaFWAngle(self, thetas, thetaFW, nsteps):
+        """ Return the angles from CCW home. """
+
+        if nsteps < 3:
+            return [], []
+
+        thetaCenter = np.array(len(thetas), dtype='complex')
+        thetaRadius = np.array(len(thetas), dtype='f4')
+
+        for c in self.goodIdx:
+            data = thetaFW[c].flatten()
+            x, y, r = circle_fitting(data)
+            thetaCenter[c] = x + y*(1j)
+            thetaRadius[c] = r
+
+        homeAngles = np.angle(thetaFW[:, 0] - thetaCenter)
+        endAngles = np.angle(thetaFW[:, -1] - thetaCenter)
+        ourAngles = np.angle(thetas - thetaCenter)
+
+        homeDiffs = self._dTheta(homeAngles, ourAngles)
+        endDiffs = self._dTheta(endAngles, ourAngles)
+
+        # We are far enough away from home to maybe be at the limit, and have bounced back from the end.
+        #
+        atEnd = (homeDiffs > np.deg2rad(375)) & (endDiffs < 0)
+
+        return homeDiffs, atEnd
+
     def thetaCenterAngles(self, thetaFW, thetaRV):
         # variable declaration for theta angles
         thetaCenter = np.zeros(57, dtype=complex)
@@ -149,27 +267,19 @@ class Calculation():
             for n in range(thetaFW.shape[1]):
                 thetaAngFW[c, n] = np.angle(thetaFW[c, n] - thetaCenter[c])
                 thetaAngRV[c, n] = np.angle(thetaRV[c, n] - thetaCenter[c])
-                home1 = thetaAngFW[c, n, 0]
-                home2 = thetaAngRV[c, n, -1]
-                thetaAngFW[c, n] = (thetaAngFW[c, n] - home1 + 0.1) % (np.pi*2)
-                thetaAngRV[c, n] = (thetaAngRV[c, n] - home2 + 0.1) % (np.pi*2)
+                home = thetaAngFW[c, n, 0]
+                thetaAngFW[c, n] = (thetaAngFW[c, n] - home) % (np.pi*2)
+                thetaAngRV[c, n] = (thetaAngRV[c, n] - home) % (np.pi*2)
 
-                # fix over 2*pi angle issue
-                diff = thetaAngFW[c, n, 1:] - thetaAngFW[c, n, :-1]
-                t = np.where(diff < -np.pi/2)
-                if t[0].size > 0:
-                    thetaAngFW[c, n, t[0][0]+1:] += np.pi*2
-                thetaAngFW[c, n] -= 0.1
+                fwMid = np.argmin(abs(thetaAngFW[c, n] % (np.pi*2) - np.pi))
+                thetaAngFW[c, n, :fwMid][thetaAngFW[c, n, :fwMid]>6.2] -= np.pi*2
+                if fwMid < thetaAngFW.shape[2] - 1:
+                    thetaAngFW[c, n, fwMid:][thetaAngFW[c, n, fwMid:]<0.45] += np.pi*2
 
-                diff = thetaAngRV[c, n, 1:] - thetaAngRV[c, n, :-1]
-                t = np.where(diff > np.pi/2)
-                if t[0].size > 0:
-                    thetaAngRV[c, n, :t[0][0]+1] += np.pi*2
-                thetaAngRV[c, n] += (home2 - home1 + 0.1) % (np.pi*2) - 0.2
-
-                # in case only travel in overlapping region
-                if thetaAngRV[c, n, 0] - thetaAngFW[c, n, -1] < -0.1:
-                    thetaAngRV[c, n] += np.pi*2
+                rvMid = np.argmin(abs(thetaAngRV[c, n] % (np.pi*2) - np.pi))
+                thetaAngRV[c, n, :rvMid][thetaAngRV[c, n, :rvMid]<0.45] += np.pi*2
+                if rvMid < thetaAngRV.shape[2] - 1:
+                    thetaAngRV[c, n, rvMid:][thetaAngRV[c, n, rvMid:]>6.2] -= np.pi*2
 
         # mark bad cobras by checking hard stops
         bad = np.any(thetaAngRV[:, :, 0] < np.pi*2, axis=1)
@@ -247,74 +357,79 @@ class Calculation():
 
         return mmFW, mmRV, bad
 
+    def _setMapPars(self, sarr, darr, idx, spd, dist):
+        """ called by motorMaps2 """
+        if darr[idx] == 0:
+            sarr[idx] = spd
+            darr[idx] = dist
+        else:
+            total = darr[idx] + dist
+            sarr[idx] = total / (darr[idx]/sarr[idx] + dist/spd)
+            darr[idx] = total
+
     def motorMaps2(self, angFW, angRV, steps, delta=0.1):
-        """ calculate motor maps based on average step counts """
+        """ the calculate for motor maps is to ensure the step counts
+            from home to the target is correct
+        """
         mmFW = np.zeros((57, regions), dtype=float)
         mmRV = np.zeros((57, regions), dtype=float)
         bad = np.full(57, False)
-        cnt = np.zeros(regions)
         repeat = angFW.shape[1]
         iteration = angFW.shape[2] - 1
+        af = np.average(angFW, axis=1)
+        ar = np.average(angRV, axis=1)
+        dist_arr = np.zeros(regions, dtype=float)
 
         for c in self.goodIdx:
-            cnt[:] = 0
-            for n in range(repeat):
-                nz = np.nonzero(np.all([angFW[c, n, 1:] > angFW[c, n, :-1], angRV[c, n, 0] - angFW[c, n, 1:] > delta], axis=0))[0]
-                if nz.size <= 0:
-                    continue
-                k = nz[-1]
-                x = np.arange(regions+1) * binSize
-                xp = angFW[c, n, :k+2]
-                fp = np.arange(k+2) * steps
-                mm = np.interp(x, xp, fp)
-                diff = mm[1:] - mm[:-1]
-                nz = np.nonzero(diff)[0]
-                if nz.size > 0:
-                    mmFW[c] += diff
-                    cnt[nz[:-1]] += 1
-                    if angFW[c, n, k+1] % binSize != 0:
-                        cnt[nz[-1]] += (angFW[c, n, k+1] % binSize) / binSize
-                    else:
-                        cnt[nz[-1]] += 1
-            nz = np.nonzero(cnt)[0]
-            if nz.size > 0:
-                mmFW[c, nz] = binSize / (mmFW[c, nz] / cnt[nz])
-                mmFW[c, nz[-1]+1:] = mmFW[c, nz[-1]]
-            else:
+            for valid in range(iteration):
+                if af[c, valid+1] < af[c, valid] or ar[c, 0] - af[c, valid+1] < delta:
+                    break
+            if valid <= 0:
                 bad[c] = True
+            else:
+                dist_arr[:] = 0
+                for n in range(valid):
+                    st = int(af[c, n] / binSize)
+                    ed = int(af[c, n+1] / binSize)
+                    spd = (af[c, n+1] - af[c, n]) / steps
+                    if ed > st:
+                        self._setMapPars(mmFW[c], dist_arr, st, spd, (st+1)*binSize - af[c, n])
+                        self._setMapPars(mmFW[c], dist_arr, ed, spd, af[c, n+1] - ed*binSize)
+                        for k in range(st+1, ed):
+                            self._setMapPars(mmFW[c], dist_arr, k, spd, binSize)
+                    else:
+                        self._setMapPars(mmFW[c], dist_arr, st, spd, af[c, n+1] - af[c, n])
+                mmFW[c, ed+1:] = spd
+                if ed <= 0:
+                    bad[c] = True
 
-            cnt[:] = 0
-            for n in range(repeat):
-                # avoid sticky problem at hard stops
-                if angRV[c, n, 1] > angRV[c, n, 0]:
-                    first = 1
-                else:
-                    first = 0
-                nz = np.nonzero(np.all([angRV[c, n, 1:] < angRV[c, n, :-1], angRV[c, n, 1:] > delta], axis=0))[0]
-                if nz.size <= 0:
-                    continue
-                k = nz[-1]
-                x = np.arange(regions+1) * binSize
-                xp = np.flip(angRV[c, n, first:k+2], 0)
-                fp = np.arange(k+2-first) * steps
-                mm = np.interp(x, xp, fp)
-                diff = mm[1:] - mm[:-1]
-                nz = np.nonzero(diff)[0]
-                if nz.size > 0:
-                    mmRV[c] += diff
-                    cnt[nz[1:-1]] += 1
-                    cnt[nz[0]] += 1 - (angRV[c, n, k+1] % binSize) / binSize
-                    if angRV[c, n, first] % binSize != 0:
-                        cnt[nz[-1]] += (angRV[c, n, first] % binSize) / binSize
-                    else:
-                        cnt[nz[-1]] += 1
-            nz = np.nonzero(cnt)[0]
-            if nz.size > 0:
-                mmRV[c, nz] = binSize / (mmRV[c, nz] / cnt[nz])
-                mmRV[c, :nz[0]] = mmRV[c, nz[0]]
-                mmRV[c, nz[-1]+1:] = mmRV[c, nz[-1]]
-            else:
+            for valid in range(iteration):
+                if ar[c, valid+1] > ar[c, valid] or ar[c, valid+1] < delta:
+                    break
+            if valid <= 0:
                 bad[c] = True
+            else:
+                dist_arr[:] = 0
+                for n in range(valid):
+                    st = int(ar[c, n+1] / binSize)
+                    ed = int(ar[c, n] / binSize)
+                    if ed >= regions:
+                        # the angle calculation may be wrong???
+                        continue
+                    spd = (ar[c, n] - ar[c, n+1]) / steps
+                    if ed > st:
+                        self._setMapPars(mmRV[c], dist_arr, st, spd, (st+1)*binSize - ar[c, n+1])
+                        self._setMapPars(mmRV[c], dist_arr, ed, spd, ar[c, n] - ed*binSize)
+                        for k in range(st+1, ed):
+                            self._setMapPars(mmRV[c], dist_arr, k, spd, binSize)
+                    else:
+                        self._setMapPars(mmRV[c], dist_arr, ed, spd, ar[c, n] - ar[c, n+1])
+                    if n == 0:
+                        for k in range(ed+1, regions):
+                            self._setMapPars(mmRV[c], dist_arr, k, spd, binSize)
+                mmRV[c, :st] = spd
+                if st == int(ar[c, 0] / binSize):
+                    bad[c] = True
 
         return mmFW, mmRV, bad
 
@@ -331,23 +446,23 @@ class Calculation():
             rSteps = 0
             rAngle = 0
             for n in range(repeat):
-                nz = np.nonzero(angFW[c, n] < (angRV[c, n, 0] - delta))[0]
-                if nz.size > 0:
-                    k = nz[-1]
-                    fAngle += angFW[c, n, k] - angFW[c, n, 0]
-                    fSteps += k * steps
+                invalid = np.where(angFW[c, n] > angRV[c, n, 0] - delta)
+                last = iteration
+                if len(invalid[0]) > 0:
+                    last = invalid[0][0] - 1
+                    if last < 0:
+                        last = 0
+                fSteps += last * steps
+                fAngle += angFW[c, n, last]
 
-                # check if stuck at hard stops
-                if angRV[c, n, 0] < angRV[c, n, 1]:
-                    start = 1
-                else:
-                    start = 0
-
-                nz = np.nonzero(angRV[c, n] > delta)[0]
-                if nz.size > 0:
-                    k = nz[-1]
-                    rAngle += angRV[c, n, start] - angRV[c, n, k]
-                    rSteps += (k - start) * steps
+                invalid = np.where(angRV[c, n] < delta)
+                last = iteration
+                if len(invalid[0]) > 0:
+                    last = invalid[0][0] - 1
+                    if last < 0:
+                        last = 0
+                rSteps += last * steps
+                rAngle += angRV[c, n, 0] - angRV[c, n, last]
 
             if fSteps > 0:
                 speedFW[c] = fAngle / fSteps
@@ -407,17 +522,18 @@ class Calculation():
         # calculate phi hard stops
         phiCCW = np.full(nCobra, np.pi)
         phiCW = np.zeros(nCobra)
+        y = self.goodIdx
 
-        s = np.angle(thetaC - phiC)
+        s = np.angle(thetaC - phiC)[y]
         for n in range(phiFW.shape[1]):
             # CCW hard stops for phi arms
-            t = (np.angle(phiFW[:, n, 0] - phiC) - s + (np.pi/2)) % (np.pi*2) - (np.pi/2)
-            p = np.where(t < phiCCW)[0]
-            phiCCW[p] = t[p]
+            t = (np.angle(phiFW[y, n, 0] - phiC[y]) - s + (np.pi/2)) % (np.pi*2) - (np.pi/2)
+            p = np.where(t < phiCCW[y])[0]
+            phiCCW[y[p]] = t[p]
             # CW hard stops for phi arms
-            t = (np.angle(phiRV[:, n, 0] - phiC) - s + (np.pi/2)) % (np.pi*2) - (np.pi/2)
-            p = np.where(t > phiCW)[0]
-            phiCW[p] = t[p]
+            t = (np.angle(phiRV[y, n, 0] - phiC[y]) - s + (np.pi/2)) % (np.pi*2) - (np.pi/2)
+            p = np.where(t > phiCW[y])[0]
+            phiCW[y[p]] = t[p]
 
         # calculate theta hard stops
         thetaCCW = np.zeros(nCobra)
@@ -434,7 +550,7 @@ class Calculation():
             else:
                 q = (t - thetaCCW[y] + np.pi) % (np.pi*2) - np.pi
                 p = np.where(q < 0)[0]
-                thetaCCW[y[p]] = t[y[p]]
+                thetaCCW[y[p]] = t[p]
 
             # CW hard stops for theta arms
             a = np.absolute(thetaRV[y, n, 0] - thetaC[y])
@@ -445,6 +561,6 @@ class Calculation():
             else:
                 q = (t - thetaCW[y] + np.pi) % (np.pi*2) - np.pi
                 p = np.where(q > 0)[0]
-                thetaCW[y[p]] = t[y[p]]
+                thetaCW[y[p]] = t[p]
 
         return thetaL, phiL, thetaCCW, thetaCW, phiCCW, phiCW

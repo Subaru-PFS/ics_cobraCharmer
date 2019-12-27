@@ -1,27 +1,48 @@
 from importlib import reload
 import logging
 import numpy as np
-import sys
-import os
 
 from ics.cobraCharmer import ethernet
 from ics.cobraCharmer import func
+from ics.cobraCharmer import log
 from ics.cobraCharmer.log import Logger
+
+from ics.cobraCharmer import pfiDesign
+from ics.cobraCharmer import fpgaLogger
+
+from ics.cobraCharmer import cobraState
+
+reload(pfiDesign)
+reload(func)
 
 class PFI(object):
     nCobrasPerModule = 57
     nModules = 42
 
-    def __init__(self, fpgaHost='localhost', doConnect=True, doLoadModel=True, debug=False):
+    def __init__(self, fpgaHost='localhost', logDir=None, doConnect=True, doLoadModel=False, debug=False):
         """ Initialize a PFI class
         Args:
            fpgaHost    - fpga device
+           logDir      - directory name for logs
            doConnect   - do connection or not
            doLoadModel - load data model or not
         """
         self.logger = Logger.getLogger('fpga', debug)
+        self.logger = logging.getLogger('pfi')
+        self.logger.setLevel(logging.INFO)
         self.ioLogger = Logger.getLogger('fpgaIO', debug)
+        if logDir is not None:
+            log.setupLogPaths(logDir)
 
+        self.protoLogger = fpgaLogger.FPGAProtocolLogger(logRoot=logDir)
+
+        self.calibModel = None
+        self.motorMap = None
+        self.ontimeScales = cobraState.motorScales
+        self.maxThetaOntime = 0.08
+        self.maxPhiOntime = 0.07
+        if fpgaHost == 'fpga':
+            fpgaHost = '128.149.77.24'  # A JPL address which somehow got burned into the FPGAs. See INSTRM-464
         self.fpgaHost = fpgaHost
         if doConnect:
             self.connect()
@@ -32,23 +53,22 @@ class PFI(object):
         """ Connect to COBRA fpga device """
         if fpgaHost is not None:
             self.fpgaHost = fpgaHost
-        ethernet.sock.connect(self.fpgaHost, 4001)
+        ethernet.sock.connect(self.fpgaHost, 4001, protoLogger=self.protoLogger)
         self.ioLogger.info(f'FPGA connection to {self.fpgaHost}')
+        self.protoLogger.logger.info('FPGA connection to {self.fpgaHost}')
 
     def disconnect(self):
         """ Disconnect from COBRA fpga device """
         ethernet.sock.close()
         ethernet.sock = ethernet.Sock()
         self.ioLogger.info(f'FPGA connection closed')
+        self.protoLogger.logger.info('FPGA connection closed')
 
     def loadModel(self, filename=None):
         """ Load a motormap XML file. """
         import ics.cobraCharmer.pfiDesign as pfiDesign
         reload(pfiDesign)
 
-        if filename is None:
-            filename = os.path.dirname(sys.modules[__name__].__file__)
-            filename += '../../../xml/updatedLinksAndMaps.xml'
         self.calibModel = pfiDesign.PFIDesign(filename)
         self.logger.info(f'load cobra model from {filename}')
 
@@ -63,7 +83,12 @@ class PFI(object):
     def _mapCobraIndex(self, cobra):
         """ Convert our module + cobra to global cobra index for the calibration product. """
 
-        return ((cobra.module - 1)*self.nCobrasPerModule + cobra.cobraNum-1)
+        if self.calibModel is not None:
+            return self.calibModel.findCobraByModuleAndPositioner(cobra.module,
+                                                                  cobra.cobraNum)
+        else:
+            self.logger.warn('no calibModel, so we are guessing about the calibModel index for a cobra')
+            return ((cobra.module - 1)*self.nCobrasPerModule + cobra.cobraNum-1)
 
     def reset(self, sectors=0x3f):
         """ Reset COBRA fpga device """
@@ -71,7 +96,15 @@ class PFI(object):
         if err:
             self.logger.error(f'send RST command failed')
         else:
-            self.logger.info(f'send RST command succeeded')
+            self.logger.debug(f'send RST command succeeded')
+
+    def diag(self):
+        """ Get fpga board inventory"""
+        err = func.DIA()
+        if err:
+            self.logger.error(f'send DIA command failed')
+        else:
+            self.logger.debug(f'send DIA command succeeded')
 
     def power(self, sectors=0x3f):
         """ Set COBRA PSU on/off """
@@ -79,10 +112,27 @@ class PFI(object):
         if err:
             self.logger.error(f'send POW command failed')
         else:
-            self.logger.info(f'send POW command succeeded')
+            self.logger.debug(f'send POW command succeeded')
 
-    def setFreq(self, cobras, thetaFreq=None, phiFreq=None):
+    def hk(self, module, board, updateModel=False):
+        """ Fetch housekeeping info for a board.
+
+        Note:
+
+        The FPGA deals with _boards_, but the original code deals with _modules_. Wrap that.
+        """
+        cobras = self.allocateCobraBoard(module, board)
+        err = func.HK(cobras, updateModel=(self.calibModel if updateModel else None))
+        if err:
+            self.logger.error(f'send HK command failed: {err}')
+        else:
+            self.logger.debug(f'send HK command succeeded')
+
+    def setFreq(self, cobras=None, thetaFreq=None, phiFreq=None):
         """ Set COBRA motor frequency """
+        if cobras is None:
+            cobras = self.getAllDefinedCobras()
+
         if thetaFreq is not None and len(cobras) != len(thetaFreq):
             raise RuntimeError("number of theta frquencies must match number of cobras")
         if phiFreq is not None and len(cobras) != len(phiFreq):
@@ -105,20 +155,26 @@ class PFI(object):
         if err:
             self.logger.error(f'send SET command failed')
         else:
-            self.logger.info(f'send SET command succeeded')
+            self.logger.debug(f'send SET command succeeded')
 
-    def calibrateFreq(self, cobras, thetaLow=60.4, thetaHigh=70.3, phiLow=94.4, phiHigh=108.2, clockwise=True):
+    def calibrateFreq(self, cobras=None,
+                      thetaLow=60.4, thetaHigh=70.3, phiLow=94.4, phiHigh=108.2,
+                      clockwise=True,
+                      enabled=(True,True)):
         """ Calibrate COBRA motor frequency """
+        if cobras is None:
+            cobras = self.getAllDefinedCobras()
+
         spin = func.CW_DIR if clockwise else func.CCW_DIR
         m0 = (self._freqToPeriod(thetaHigh), self._freqToPeriod(thetaLow))
         m1 = (self._freqToPeriod(phiHigh), self._freqToPeriod(phiLow))
         for c in cobras:
-            c.p = func.CalParams(m0=m0, m1=m1, en=(True,True), dir=spin)
+            c.p = func.CalParams(m0=m0, m1=m1, en=enabled, dir=spin)
         err = func.CAL(cobras, timeout=65535)
         if err:
             self.logger.error(f'send Calibrate command failed')
         else:
-            self.logger.info(f'send Calibrate command succeeded')
+            self.logger.debug(f'send Calibrate command succeeded')
 
     def houseKeeping(self, modules=None, m0=(0,1000), m1=(0,1000), temps=(16.0,31.0), cur=(0.25,1.2), volt=(9.5,10.5)):
         """ HK command """
@@ -137,7 +193,7 @@ class PFI(object):
         currents2 = np.zeros((len(modules), self.nCobrasPerModule))
 
         for k, m in enumerate(modules):
-            self.logger.info(f'HK command for Cobra module #{m}')
+            self.logger.debug(f'HK command for Cobra module #{m}')
             for board in range(2):
                 # two boards in one module
                 cobra_num = np.arange(board+1, self.nCobrasPerModule+1, 2)
@@ -155,7 +211,7 @@ class PFI(object):
                 if err:
                     self.logger.error(f'Module {m}:{board} send HK command failed')
                 else:
-                    self.logger.info(f'Module {m}:{board} send HK command succeeded')
+                    self.logger.debug(f'Module {m}:{board} send HK command succeeded')
         return errors, temps, voltages, freqs1, currents1, freqs2, currents2
 
     def moveAllThetaPhiFromHome(self, cobras, thetaMove, phiMove, thetaFast=True, phiFast=True):
@@ -186,11 +242,14 @@ class PFI(object):
         cIdx = [self._mapCobraIndex(c) for c in cobras]
         cThetaSteps = thetaSteps[cIdx]
         cPhiSteps = phiSteps[cIdx]
-        self.logger.info(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
+        self.logger.debug(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
         self.moveSteps(cobras, cThetaSteps, cPhiSteps, thetaFast=thetaFast, phiFast=phiFast)
 
     def moveAllSteps(self, cobras, thetaSteps, phiSteps, thetaFast=True, phiFast=True):
         """ Move all cobras for some theta and phi steps """
+
+        if cobras is None:
+            cobras = self.getAllDefinedCobras()
         thetaAllSteps = np.zeros(len(cobras)) + thetaSteps
         phiAllSteps = np.zeros(len(cobras)) + phiSteps
 
@@ -208,7 +267,13 @@ class PFI(object):
             phiFast: a boolean value for fast/slow phi movement
 
         """
-        
+
+        nCobras = len(cobras)
+        if np.ndim(thetaMoves) == 0:
+            thetaMoves = np.zeros(nCobras) + thetaMoves
+        if np.ndim(phiMoves) == 0:
+            phiMoves = np.zeros(nCobras) + phiMoves
+
         if len(cobras) != len(thetaMoves):
             raise RuntimeError("number of theta moves must match number of cobras")
         if len(cobras) != len(phiMoves):
@@ -264,10 +329,9 @@ class PFI(object):
         thetaIndex =  np.isnan(cThetaSteps)
         phiIndex = np.isnan(cPhiSteps)
         cThetaSteps[thetaIndex] = 0
-        cPhiSteps[[phiIndex]] = 0
-        self.logger.info(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
+        cPhiSteps[phiIndex] = 0
+        self.logger.debug(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
         self.moveSteps(cobras, cThetaSteps, cPhiSteps, thetaFast=thetaFast, phiFast=phiFast)
-
 
     def thetaToGlobal(self, cobras, thetaLocals):
         """ Convert theta angles from relative to hard stops to global coordinate
@@ -306,7 +370,97 @@ class PFI(object):
         thetaLocals = (thetaGlobals - self.calibModel.tht0[cIdx]) % (2 * np.pi)
         return thetaLocals
 
-    def moveSteps(self, cobras, thetaSteps, phiSteps, waitThetaSteps=None, waitPhiSteps=None, interval=2.5, thetaFast=True, phiFast=True):
+    def resetMotorScaling(self, cobras=None, motor=None):
+        """ Declare that we want the scaling for some cobras to be reset to 1.0.
+
+        Args
+        ----
+        cobras : list of `Cobra`s
+           The cobras to reset. All if None.
+        motor : {`theta`, `phi`}
+           The motor to reset. Both if None.
+        """
+
+        if cobras is None:
+            cobras = self.getAllDefinedCobras()
+
+        if motor is None:
+            motors = ['theta', 'phi']
+        else:
+            motors = [motor]
+
+        for c in cobras:
+            for m in motors:
+                self.scaleMotorOntime(c, m, 'cw', 1.0, doReset=True)
+                self.scaleMotorOntime(c, m, 'ccw', 1.0, doReset=True)
+
+    def scaleMotorOntime(self, cobra, motor, direction, scale, doReset=False):
+        """ Declare that we want a given motor's ontime to be scaled after interpolation.
+
+        If there is an existing scaling, the new scaling is applied
+        _that_: we are expecting to be told that the last effective
+        move neeeded adjustment.
+
+        Args
+        ----
+        cobra : internal cobra object FIX -- CPL
+           A single cobra.
+        motor : {'theta', 'phi'}
+           Which motor to adjust
+        direction : {'ccw', 'cw'}
+           Which motor map to adjust
+        scale : `float`
+           Scaling to apply to the theta motor's ontime
+        doReset : `bool`
+           Whether to replace the existing scaling or adjust it.
+        """
+
+        cobraId = self._mapCobraIndex(cobra)
+        mapId = cobraState.mapId(cobraId, motor, direction)
+        if not doReset:
+            existingScale = cobraState.motorScales.get(mapId, 1.0)
+        else:
+            existingScale = 1.0
+
+        newScale = existingScale * scale
+        if newScale < 0.25:
+            self.logger.warn(f'clipping scale adjustment from {newScale} to 0.25')
+            newScale = 0.25
+        if newScale > 3.0:
+            self.logger.warn(f'clipping scale adjustment from {newScale} to 3.0')
+            newScale = 3.0
+
+        cobraState.motorScales[mapId] = newScale
+        self.logger.debug(f'setadjust {mapId} {existingScale:0.2f} -> {newScale:0.2f}')
+
+    def adjustThetaOnTime(self, cobraId, ontime, fast, direction):
+        mapId = cobraState.mapId(cobraId, 'theta', direction)
+        scale = cobraState.motorScales.get(mapId, 1.0)
+        self.logger.debug(f'adjust {mapId} {scale:0.2f}')
+
+        newOntime = ontime*scale
+        if newOntime > self.maxThetaOntime:
+            newOntime = self.maxThetaOntime
+            cobraState.motorScales[mapId] = newOntime/ontime
+            self.logger.warn(f'clipping {mapId} {scale:0.2f} to {cobraState.motorScales[mapId]}')
+
+        return newOntime
+
+    def adjustPhiOnTime(self, cobraId, ontime, fast, direction):
+        mapId = cobraState.mapId(cobraId, 'phi', direction)
+        scale = cobraState.motorScales.get(mapId, 1.0)
+        self.logger.debug(f'adjust {mapId} {scale:0.2f}')
+
+        newOntime = ontime*scale
+        if newOntime > self.maxPhiOntime:
+            newOntime = self.maxPhiOntime
+            cobraState.motorScales[mapId] = newOntime/ontime
+            self.logger.warn(f'clipping {mapId} {scale:0.2f} to {cobraState.motorScales[mapId]}')
+
+        return newOntime
+
+    def moveSteps(self, cobras, thetaSteps, phiSteps, waitThetaSteps=None, waitPhiSteps=None,
+                  interval=2.5, thetaFast=True, phiFast=True):
         """ Move cobras with theta and phi steps
 
             thetaSteps: A numpy array with theta steps to go
@@ -340,6 +494,10 @@ class PFI(object):
         else:
             _phiFast = phiFast
 
+        if len(cobras) == 0:
+            self.logger.debug(f'skipping RUN command: no cobras')
+            return
+
         for c_i, c in enumerate(cobras):
             steps1 = int(np.abs(thetaSteps[c_i])), int(np.abs(phiSteps[c_i]))
             dirs1 = ['cw', 'cw']
@@ -362,6 +520,7 @@ class PFI(object):
                     ontime1 = self.calibModel.motorOntimeSlowFwd1[cobraId]
                 else:
                     ontime1 = self.calibModel.motorOntimeSlowRev1[cobraId]
+                ontime1 = self.adjustThetaOnTime(cobraId, ontime1, fast=_thetaFast[c_i], direction=dirs1[0])
 
             if _phiFast[c_i]:
                 if dirs1[1] == 'cw':
@@ -373,6 +532,7 @@ class PFI(object):
                     ontime2 = self.calibModel.motorOntimeSlowFwd2[cobraId]
                 else:
                     ontime2 = self.calibModel.motorOntimeSlowRev2[cobraId]
+                ontime2 = self.adjustPhiOnTime(cobraId, ontime2, fast=_phiFast[c_i], direction=dirs1[1])
 
             # For early-late offsets.
             if waitThetaSteps is not None:
@@ -395,7 +555,7 @@ class PFI(object):
         if err:
             self.logger.error(f'send RUN command failed')
         else:
-            self.logger.info(f'send RUN command succeeded')
+            self.logger.debug(f'send RUN command succeeded')
 
     def homePhi(self, cobras, nsteps=5000, fast=True):
         # positive/negative steps for CCW/CW limit stops
@@ -519,6 +679,7 @@ class PFI(object):
             stepsRange = np.interp([startPhi[c], startPhi[c] + deltaPhi[c]], self.calibModel.phiOffsets[c], phiSteps)
             nPhiSteps[c] = stepsRange[1] - stepsRange[0]
 
+        self.logger.debug(f'start={startPhi[:3]}, delta={deltaPhi[:3]} move={nPhiSteps[:3]}')
         return (nThtSteps, nPhiSteps)
 
     def anglesToPositions(self, cobras, thetaAngles, phiAngles):
@@ -705,7 +866,7 @@ class PFI(object):
             self.logger.error("no valid target positions are found")
             return
         elif not np.all(valids):
-            self.logger.info("some target positions are invalid")
+            self.logger.warn("some target positions are invalid")
 
         # define home positions
         phiHomes = np.zeros(len(valid_cobras))
@@ -774,5 +935,68 @@ class PFI(object):
                 raise IndexError('cobra numbers are 1-indexed, grrr.')
 
             cobras.append(func.Cobra(m, c))
+
+        return cobras
+
+    @classmethod
+    def allocateCobraModule(cls, moduleId=1):
+        moduleId = pfiDesign.PFIDesign.getRealModuleId(moduleId)
+        cobraIds = range(1,cls.nCobrasPerModule+1)
+        cobras = []
+        for c in cobraIds:
+            cobras.append(func.Cobra(moduleId, c))
+
+        return cobras
+
+    @classmethod
+    def allocateCobraBoard(cls, module, board):
+        module = pfiDesign.PFIDesign.getRealModuleId(module)
+        if module < 1 or module > cls.nModules:
+            raise IndexError(f'module numbers are 1..{cls.nModules}')
+        if board not in (1,2):
+            raise IndexError('board numbers are 1 or 2.')
+        cobras = []
+        for c in range(1,cls.nCobrasPerModule+1):
+            if (c%2 == 1 and board == 1) or (c%2 == 0 and board == 2):
+                cobras.append(func.Cobra(module, c))
+
+        return cobras
+
+    @classmethod
+    def allocateBoardCobra(cls, module, board, cobra):
+        module = pfiDesign.PFIDesign.getRealModuleId(module)
+        if module < 1 or module > cls.nModules:
+            raise IndexError(f'module numbers are 1..{cls.nModules}')
+        if board not in (1,2):
+            raise IndexError('board numbers are 1 or 2.')
+        cobras = []
+        cobras.append(func.Cobra(module, cobra*2))
+
+        return cobras
+
+    def getAllDefinedCobras(self):
+        cobras = []
+        for i in self.calibModel.findAllCobras():
+            c = func.Cobra(self.calibModel.moduleIds[i],
+                           self.calibModel.positionerIds[i])
+            cobras.append(c)
+
+        return cobras
+
+    def getAllConnectedCobras(self):
+        res = func.DIA()
+
+        boards = 0
+        for i in range(len(res)):
+            boardsInSector = res[i]
+            if boards%14 != 0 and boardsInSector != 0:
+                raise RuntimeError("sectors are not left-packed with boards.")
+            boards += boardsInSector
+
+        cobras = []
+        for b in range(1,boards+1):
+            mod = (b-1)//2 + 1
+            brd = (b-1)%2 + 1
+            cobras.extend(self.allocateCobraBoard(mod, brd))
 
         return cobras

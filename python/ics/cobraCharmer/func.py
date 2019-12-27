@@ -9,6 +9,7 @@ from .ethernet import sock
 from .log import full_log, medium_log, short_log, eth_hex_logger
 from .convert import *
 from .cmds import *
+from .fpgaState import fpgaState
 
 CCW_DIR = ('ccw','ccw')
 CW_DIR = ('cw','cw')
@@ -41,6 +42,11 @@ class Cobra:
         self.cobra = (cobraNum-1)//2 + 1
 
         self.p = None # Params
+
+    def __str__(self):
+        return (f"Cobra(module={self.module} board={self.board} "
+                f"cobraNum={self.cobraNum} cobra={self.cobra}")
+
     def stringify(self):
         s = '(C%s,%s ' % (self.board,self.cobra) + self.p.stringify() + ')'
         return s
@@ -58,8 +64,8 @@ class CalParams:
         self.type = 'Cal'
         self.dir = dir
         self.en = en
-        self.m0Range = m0
-        self.m1Range = m1
+        self.m0Range = sorted(m0)
+        self.m1Range = sorted(m1)
     def stringify(self):
         s = ''
         s += 'm0:%s:%s' %(self.dir[0], str(self.m0Range)) if self.en[0] else ''
@@ -78,7 +84,7 @@ class CalParams:
         return p
         
 class HkParams:
-    def __init__(self, m0=(60.0,70.0), m1=(94.0,110.0), \
+    def __init__(self, m0=(60.0,70.0), m1=(100.0,115.0), \
                     temps=(16.0,31.0), cur=(0.25,1.2), volt=(9.5,10.5)
                 ):
         self.type = 'Hk'
@@ -177,8 +183,9 @@ def calibrate(cobras, thetaLow=60.4, thetaHigh=70.3, phiLow=94.4, phiHigh=108.2,
 
     spin = CW_DIR if clockwise else CCW_DIR
     for c in cobras:
-        c.p = CalParams(m0=(thetaLow,thetaHigh),
-                        m1=(phiLow, phiHigh), en=(True,True), dir=spin)
+        c.p = CalParams(m0=(convert.get_per(thetaLow),convert.get_per(thetaHigh)),
+                        m1=(convert.get_per(phiLow), convert.get_per(phiHigh)),
+                        en=(True,True), dir=spin)
 
     err = CAL(cobras)
     if err:
@@ -281,12 +288,14 @@ def DIA():
     short_log.log("Board Counts: %s" %(boards_per_sector) )
     return boards_per_sector
     
-    
-def HK( cobras, export=0, feedback=False ):
-    if not cobrasAreType(cobras, 'Hk'):
-        return True # error
+def HK(cobras, export=0, feedback=False, updateModel=None):
     board = cobras[0].board
-    
+    nCobras = NCOBRAS_BRD
+    nBoardCobras = nCobras if (board%2 == 1) else nCobras-1
+
+    if nBoardCobras != len(cobras) or not all([(c.board == board) for c in cobras]):
+        raise ValueError("Can only fetch housekeeping for one single board.")
+
     short_log.log("--- ISSUE HK & VERIFY (brd:%d) ---" %board)      
     
     cmd = CMD_hk(board, timeout=2000)
@@ -294,13 +303,16 @@ def HK( cobras, export=0, feedback=False ):
     
     resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
     er1 = tlm_chk(resp)
-    
-    resp = sock.recv(HK_TLM_LEN, eth_hex_logger, 'h')
+
+    tlmLen = HK_TLM_HDR_LEN + nCobras*8
+    resp = sock.recv(tlmLen, eth_hex_logger, 'h')
     if feedback:
-        er2, t1, t2, v, f1, c1, f2, c2 = hk_chk(resp, cobras, export, feedback)
+        er2, t1, t2, v, f1, c1, f2, c2 = hk_chk(resp, cobras, export, feedback,
+                                                updateModel=updateModel)
         return er1 or er2, t1, t2, v, f1, c1, f2, c2
     else:
-        er2 = hk_chk(resp, cobras, export)
+        er2 = hk_chk(resp, cobras, export,
+                     updateModel=updateModel)
         return er1 or er2
 
 def CAL( cobras, timeout=0 ):
@@ -314,8 +326,8 @@ def CAL( cobras, timeout=0 ):
     if timeout == 0:
         fRngCob = []
         for c in cobras:
-            f0rng = (c.p.m0Range[0] - c.p.m0Range[1] )
-            f1rng = (c.p.m1Range[0] - c.p.m1Range[1] )
+            f0rng = abs(c.p.m0Range[0] - c.p.m0Range[1] )
+            f1rng = abs(c.p.m1Range[0] - c.p.m1Range[1] )
             fRngCob.append( max(f0rng, f1rng) )
         tPerCobra = int(7.0*max(fRngCob)) # assume <=7ms per freq
         timeout = math.ceil( 1200 + tPerCobra*len(cobras) )
@@ -362,9 +374,11 @@ def RUN( cobras, timeout=0, inter=0 ):
     medium_log.log("Timeout:%d, inter:%d" %(timeout,inter) )
         
     payload = []
+    fpgaState.clearMoves()
     for c in cobras:
         payload += c.p.toList(c.board, c.cobra)
-        
+        fpgaState.runCobra(c)
+
     cmd = CMD_run(payload, cmds=len(cobras), timeout=timeout, inter=inter)
     sock.send(cmd, eth_hex_logger, 'h')
     
@@ -377,17 +391,14 @@ def RUN( cobras, timeout=0, inter=0 ):
 def SET( cobras ):
     if not cobrasAreType(cobras, 'Set'):
         return True # error
-    board = cobras[0].board
-    
-    short_log.log("--- ISSUE SETFREQ & VERIFY (brd:%d) ---" %board)
-    
+
     payload = []
     for c in cobras:
         payload += c.p.toList(c.board, c.cobra)
 
     cmd = CMD_set(payload, cmds=len(cobras), timeout=2000)
     sock.send(cmd, eth_hex_logger, 'h')
-    
+
     error = False
     for i in range(2):
         resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
@@ -414,23 +425,35 @@ def tlm_chk(data):
         short_log.log("Error! Error code %d." %code)
         error = True
     return error
-    
-def hk_chk(data, cobras, export, feedback=False):
+
+def hk_chk(data, cobras, export=False, feedback=False, updateModel=None):
+    """ Consume a housedkeeping response.
+
+    Args
+    ----
+    data : (byte)array
+      the entire HK TLM packet.
+    cobras : list of Cobras
+      the identities of the cobras (module, board, cobra)
+    feedback : bool
+      return HK data if True
+    updateModel : PfiDesign or None
+      if set, design to update
+    """
+
     error = False
-    trange = cobras[0].p.trange
-    vrange = cobras[0].p.vrange
-    
+
     op = data[0]
     code = int(data[2] << 8) + int(data[3])
     b = int(data[4]<<8) + int(data[5])
     raw_t1 = int(data[6]<<8) + int(data[7]) 
     raw_t2 = int(data[8]<<8) + int(data[9])
     raw_v = int(data[10]<<8) + int(data[11])
-    
+
     t1 = conv_temp( raw_t1 )
     t2 = conv_temp( raw_t2 )
     v = conv_volt( raw_v )
-    
+
     medium_log.log("%s data tlm rx'd. (Brd:%d) (code:0x%04x) (Temps:%.1fC,%.1fC) (Voltage:%.3fV)" \
             %(CMD_NAMES[op], b, code, t1, t2, v))
 
@@ -443,6 +466,8 @@ def hk_chk(data, cobras, export, feedback=False):
             filewriter.writerow([b, t1, t2, v])
 
     #Error Logging
+    vrange = [9.7, 10.2]
+    trange = [-10, 35]
     if code != 0:
         short_log.log("Error! Error Code %d." %code)
         error = True
@@ -455,11 +480,16 @@ def hk_chk(data, cobras, export, feedback=False):
 
     # Error Logging Payload
     i = HK_TLM_HDR_LEN
+
     freq1 = np.zeros(len(cobras))
     current1 = np.zeros(len(cobras))
     freq2 = np.zeros(len(cobras))
     current2 = np.zeros(len(cobras))
+    hkParams = HkParams()
     for k, c in enumerate(cobras):
+        # Note that this loop conveniently skips the 29th cobra on the
+        # 2nd board. That is the unconnected one for which we actually
+        # get a (dummy) reading for.
         p1 = int(data[i]<<8) + int(data[i+1])
         c1 = int(data[i+2]<<8) + int(data[i+3])
         p2 = int(data[i+4]<<8) + int(data[i+5])
@@ -471,20 +501,26 @@ def hk_chk(data, cobras, export, feedback=False):
         freq2[k] = get_freq(p2)
         current2[k] = conv_current(c2)
 
+        if updateModel is not None:
+            updateModel.updateMotorFrequency(theta=[get_freq(p1)*1000],
+                                             phi=[get_freq(p2)*1000],
+                                             moduleId=c.module,
+                                             cobraId=c.cobraNum)
+
         logtxt = "%d 3.4mm(%.1fKhz,%.3fAmps) 2.4mm(%.1fKhz,%.3fAmps)" \
                 %(c.cobra, get_freq(p1), conv_current(c1), \
                 get_freq(p2), conv_current(c2))
         
         medium_log.log(logtxt)
 
-		# Write motor data to .csv file
+	# Write motor data to .csv file
         if export:
             with open(path_to_file, "a", newline="") as csvfile:
                 filewriter = csv.writer(csvfile, delimiter=",", quotechar="|")
                 filewriter.writerow([c.cobra, get_freq(p1), conv_current(c1), \
                     get_freq(p2), conv_current(c2)])
 
-        error |= c.p.chk(p1, p2, c1, c2, en_log= not error)
+        error |= hkParams.chk(p1, p2, c1, c2, en_log= not error)
 
     if not feedback:
         return error

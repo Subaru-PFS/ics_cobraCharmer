@@ -61,9 +61,9 @@ class VisDianosticPlot(object):
             self.mf = np.load(path + 'phiMMFW.npy')
             self.mr = np.load(path + 'phiMMRV.npy')
             self.bad = np.load(path + 'bad.npy')
-            self.mf2 = np.load(path + 'phiMMFW2.npy')
-            self.mr2 = np.load(path + 'phiMMRV2.npy')
-            self.bad2 = np.load(path + 'bad2.npy')
+            #self.mf2 = np.load(path + 'phiMMFW2.npy')
+            #self.mr2 = np.load(path + 'phiMMRV2.npy')
+            #self.bad2 = np.load(path + 'bad2.npy')
 
         if arm == 'theta':
             self.centers = np.load(path + 'thetaCenter.npy')
@@ -77,9 +77,9 @@ class VisDianosticPlot(object):
             self.mf = np.load(path + 'thetaMMFW.npy')
             self.mr = np.load(path + 'thetaMMRV.npy')
             self.bad = np.load(path + 'bad.npy')
-            self.mf2 = np.load(path + 'thetaMMFW2.npy')
-            self.mr2 = np.load(path + 'thetaMMRV2.npy')
-            self.bad2 = np.load(path + 'bad2.npy')
+            #self.mf2 = np.load(path + 'thetaMMFW2.npy')
+            #self.mr2 = np.load(path + 'thetaMMRV2.npy')
+            #self.bad2 = np.load(path + 'bad2.npy')
 
         if arm is None:
             raise Exception('Define the arm')
@@ -262,7 +262,7 @@ class VisDianosticPlot(object):
                         daf[i] = np.rad2deg(data[i+1] - data[i])/stepsize
                         ax.plot([np.rad2deg(data[i+1]),np.rad2deg(data[i])],[daf[i],daf[i]],color='grey')
             ax.plot(x,np.rad2deg(self.mf[c]), 'r')        
-            ax.plot(x,np.rad2deg(self.mf2[c]), 'pink')
+            #ax.plot(x,np.rad2deg(self.mf2[c]), 'pink')
 
 
             for data in self.ar[c]: 
@@ -271,7 +271,7 @@ class VisDianosticPlot(object):
                         dar[i] = np.rad2deg(data[i+1] - data[i])/stepsize
                         ax.plot([np.rad2deg(data[i+1]),np.rad2deg(data[i])],[dar[i],dar[i]],color='grey')
             ax.plot(x,-np.rad2deg(self.mr[c]), 'r')
-            ax.plot(x,-np.rad2deg(self.mr2[c]), color='pink')
+            #ax.plot(x,-np.rad2deg(self.mr2[c]), color='pink')
             ax.set_ylim([ymin,ymax])
             if arm is 'phi':
                 ax.set_xlim([0,200])

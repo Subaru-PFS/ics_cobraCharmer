@@ -6,21 +6,79 @@ is no pixel scaling or phi home hacking. The coordinate
 system here should be in F3C.
 
 """
+from importlib import reload
+import logging
 
 import numpy as np
 import xml.etree.ElementTree as ElementTree
 from copy import deepcopy
 
+from .utils import butler
+reload(butler)
+
 class PFIDesign():
     """
 
-    Class describing a cobras calibration product.
+    Class describing a cobras calibration product, the "motor map"
 
     """
 
-    def __init__(self, fileName):
-        """Constructs a new cobras calibration product using the information
-        contained in an XML calibration file.
+    def __init__(self, fileName=None):
+        """
+        Constructs a new cobras calibration product using the information
+        contained in a single XML calibration file.
+
+        Parameters
+        ----------
+        fileName: str
+            a path to an XML calibration file. [Deprecated]
+
+        Returns
+        -------
+        object
+            The cobras calibration product.
+
+        Notes
+        -----
+
+        Since we are loading a single module, assume that we are
+        directly connected to an FPGA, and thus that the module ID
+        must be set to 1. If you want to _keep_ the module IDs, use
+        PFIDesign.loadPFI().
+        """
+
+        if fileName is None:
+            return
+        import warnings
+
+        warnings.warn('please use PFIDesign.loadModule() or PFIDesign.loadPFI()')
+
+        self.loadModelFiles([fileName])
+        self.moduleIds[:] = 1
+
+    @classmethod
+    def loadModule(cls, moduleName, version=None):
+        """ """
+        modulePath = butler.mapPathForModule(moduleName, version=version)
+
+        return cls(modulePath)
+
+    @classmethod
+    def loadPfi(cls, version=None, moduleVersion=None):
+        """ """
+        moduleNames = butler.modulesForPfi(version=version)
+
+        modulePaths = []
+        for m in moduleNames:
+            modulePaths.append(butler.mapPathForModule(m, version=moduleVersion))
+
+        self = cls(None)
+        self.loadModelFiles(modulePaths)
+
+        return self
+
+    def _loadCobrasFromModelFile(self, fileName):
+        """Loads the per-cobra structures from the given model file
 
         Parameters
         ----------
@@ -29,15 +87,54 @@ class PFIDesign():
 
         Returns
         -------
-        object
+        arms : list of ARM_DATA_CONTAINERs
             The cobras calibration product.
-
+        info : dictionary
+            Some metadata which might be useful.
         """
+
         # Load the XML calibration file
         calibrationFileRootElement = ElementTree.parse(fileName).getroot()
 
         # Get all the data container elements
         dataContainers = calibrationFileRootElement.findall("ARM_DATA_CONTAINER")
+
+        # Grab "metadata"
+        info = dict()
+        try:
+            info['name'] = calibrationFileRootElement.find('ARM_DATA_NAME').text
+        except AttributeError:
+            info['name'] = fileName.stem
+        try:
+            info['site'] = calibrationFileRootElement.find('ARM_DATA_SITE').text
+        except AttributeError:
+            info['site'] = 'unknown'
+
+        return dataContainers, info
+
+    def loadModelFiles(self, fileList):
+        """Constructs a new cobras calibration product using the information
+        contained in a list of XML calibration file.
+
+        Parameters
+        ----------
+        fileNames: list
+            The full paths to the XML calibration files.
+
+        Returns
+        -------
+        object
+            The cobras calibration product.
+
+        """
+
+        dataContainers = []
+        self.modelInfo = {}
+        for f in fileList:
+            fileArms, fileInfo = self._loadCobrasFromModelFile(f)
+            dataContainers.extend(fileArms)
+            self.modelInfo[f] = fileInfo
+
         self.origin_dataContainers = dataContainers
         self.dataContainers = deepcopy(dataContainers)
 
@@ -95,6 +192,17 @@ class PFIDesign():
             self.moduleIds[i] = int(header.find("Module_Id").text)
             self.positionerIds[i] = int(header.find("Positioner_Id").text)
             self.serialIds[i] = int(header.find("Serial_Number").text, base=10)
+
+            # Check for conflicts:
+            for check_i in range(i):
+                if (self.moduleIds[i] == self.moduleIds[check_i] and
+                    self.positionerIds[i] == self.positionerIds[check_i]):
+
+                    raise KeyError(f"duplicate cobra id: module={self.moduleIds[i]} "
+                                   f"positioner={self.positionerIds[i]}")
+
+                if self.serialIds[i] == self.serialIds[check_i]:
+                    raise KeyError(f"duplicate cobra with serial={self.serialIds[i]}")
 
             # Save some of the kinematics information
             kinematics = dataContainers[i].find("KINEMATICS")
@@ -166,6 +274,137 @@ class PFIDesign():
             self.negThtSteps = np.hstack((zeros, np.cumsum(self.F1Nm, axis=1)))
             self.posPhiSteps = np.hstack((zeros, np.cumsum(self.F2Pm, axis=1)))
             self.negPhiSteps = np.hstack((zeros, np.cumsum(self.F2Nm, axis=1)))
+
+    def findAllCobras(self):
+        return range(self.nCobras)
+
+    def findCobraByModuleAndPositioner(self, moduleId, positionerId):
+        """ Find cobra at a given module and positioner.
+
+        Args
+        ----
+        moduleId : int
+          The 1..42 number of a PFI module
+        positionerId : int
+          The 1..57 number of a module cobra
+
+        Returns
+        -------
+        id : int
+          The index into our data for the given cobra
+        """
+
+        return np.where((self.moduleIds == moduleId) & (self.positionerIds == positionerId))[0][0]
+
+    def findCobraBySerialNumber(self, serialNumber):
+        """ Find cobra with the given serial number.
+
+        Args
+        ----
+        serialNumber : str
+           The serial number of a cobra.
+
+        Returns
+        -------
+        id : int
+          The index into our data for the given cobra
+        """
+
+        return np.where(self.serialIds == serialNumber)[0][0]
+
+    @staticmethod
+    def getRealModuleId(moduleId):
+        """ Get the canonical module id for a module id or name
+
+        Args
+        ---
+        moduleId : int or str
+          A module number (1..42), "SCxx", "Spare[12]"
+
+        Spare[12] are assigned moduleIds 43 and 44.
+        """
+
+        if isinstance(moduleId, str):
+            modName = moduleId.upper()
+            if modName.startswith('SC'):
+                moduleId = int(modName[2:], base=10)
+            elif modName.startswith('SPARE'):
+                spareId = int(modName[5:], base=10)
+                moduleId = spareId + 42
+            else:
+                raise ValueError(f'invalid module name: {moduleId}')
+
+        if moduleId < 1 or moduleId > 44:
+            raise ValueError(f'module id out of range (1..44): {moduleId}')
+
+        return moduleId
+
+    def findCobrasForModule(self, moduleId):
+        """ Find all cobras for a given module.
+
+        Args
+        ----
+        moduleId : int
+          The 1..42 number of a PFI module
+
+        Returns
+        -------
+        ids : array
+          The indices into our data for all cobras in the module
+        """
+        moduleId = self.getRealModuleId(moduleId)
+        return np.where(self.moduleIds == moduleId)[0]
+
+    def setModuleId(self, moduleId, forModule=None, setOurModuleIds=False):
+        """Update moduleIds
+
+        Args
+        ----
+        moduleId: int or str
+            The moduleId to set ourselves to.
+        forModule: int
+            If set, the module's IDs to (re)set.
+        setOurModuleIds : bool
+            Set both the container's module id AND our id (the ID on the FPGA bus).
+        """
+
+        moduleId = self.getRealModuleId(moduleId)
+        if forModule is not None:
+            idx = self.findCobrasForModule(forModule)
+        else:
+            idx = range(self.nCobras)
+
+        # A length test is probably sufficient
+        if len(idx) != 57:
+            raise RuntimeError("Will not set moduleId to anything other that all cobras in a single module")
+        for i in idx:
+            header = self.dataContainers[i].find("DATA_HEADER")
+            header.find("Module_Id").text = str(moduleId)
+
+            if setOurModuleIds:
+                self.moduleIds[i] = moduleId
+
+    def copyMotorMap(self, otherModel, motorIndex, doThetaFwd=False, doThetaRev=False,
+                     doPhiFwd=False, doPhiRev=False, doFast=False):
+        """ Copy maps for a given cobra from another model. """
+
+        i = motorIndex
+
+        if doFast:
+            calTable = self.dataContainers[i].find("FAST_CALIBRATION_TABLE")
+            otherTable = otherModel.dataContainers[i].find("FAST_CALIBRATION_TABLE")
+        else:
+            calTable = self.dataContainers[i].find("SLOW_CALIBRATION_TABLE")
+            otherTable = otherModel.dataContainers[i].find("FAST_CALIBRATION_TABLE")
+
+        if doThetaFwd:
+            calTable.find("Joint1_fwd_stepsizes").text = otherTable.find("Joint1_fwd_stepsizes").text
+        if doThetaRev:
+            calTable.find("Joint1_rev_stepsizes").text = otherTable.find("Joint1_rev_stepsizes").text
+        if doPhiFwd:
+            calTable.find("Joint2_fwd_stepsizes").text = otherTable.find("Joint2_fwd_stepsizes").text
+        if doPhiRev:
+            calTable.find("Joint2_rev_stepsizes").text = otherTable.find("Joint2_rev_stepsizes").text
 
     def updateMotorMaps(self, thtFwd=None, thtRev=None, phiFwd=None, phiRev=None, useSlowMaps=True):
         """Update cobra motor maps
@@ -240,7 +479,7 @@ class PFIDesign():
                 body = list(map(f2s, np.rad2deg(phiRev[i])))
                 calTable.find("Joint2_rev_stepsizes").text = ','.join(head + body) + ','
 
-    def updateMotorFrequency(self, theta=None, phi=None):
+    def XXupdateMotorFrequency(self, theta=None, phi=None):
         """Update cobra motor frequency
 
         Parameters
@@ -265,6 +504,59 @@ class PFIDesign():
             if phi is not None:
                 self.motorFreq2[i] = phi[i]
                 header.find('Motor2_Run_Frequency').text = str(phi[i])
+
+    def updateMotorFrequency(self, theta=None, phi=None, moduleId=None, cobraId=None):
+        """Update cobra motor frequency
+
+        Parameters
+        ----------
+        theta: object
+            A numpy array with the theta motor frequency.
+        phi: object
+            A numpy array with the phi motor frequency.
+        moduleId: int
+            If set, the module for the cobras
+        cobraId: int
+            If set, the per-module id for the (single) cobra
+            Note that moduleId must also be set.
+
+        We want to allow updating individual cobra, board, or modules
+        """
+
+        # Normalize lengths
+        if theta is None and phi is None:
+            return
+
+        if moduleId is not None:
+            if cobraId is not None:
+                idx = [self.findCobraByModuleAndPositioner(moduleId, cobraId)]
+            else:
+                idx = self.findCobrasForModule(moduleId)
+        else:
+            if cobraId is not None:
+                raise ValueError("if cobraId is specified, moduleId must also be.")
+            idx = range(self.nCobras)
+
+        # Allow passing in values.
+        if theta is None or np.isscalar(theta):
+            theta = [theta]*len(idx)
+        if phi is None or np.isscalar(phi):
+            phi = [phi]*len(idx)
+
+        if len(phi) != len(theta):
+            raise ValueError(f"length of phi and theta arrays must match. Found {len(phi)} and {len(theta)}")
+
+        if len(theta) != len(idx):
+            raise RuntimeError(f"number of motor frequencies ({len(theta)}) must match number of cobras ({len(idx)})")
+
+        for i_i, i in enumerate(idx):
+            header = self.dataContainers[i].find("DATA_HEADER")
+            if theta[i_i] is not None:
+                self.motorFreq1[i] = theta[i_i]
+                header.find('Motor1_Run_Frequency').text = str(theta[i_i])
+            if phi is not None:
+                self.motorFreq2[i] = phi[i_i]
+                header.find('Motor2_Run_Frequency').text = str(phi[i_i])
 
     def updateGeometry(self, centers=None, thetaArms=None, phiArms=None):
         """Update cobra centres.
@@ -320,9 +612,13 @@ class PFIDesign():
         for i in range(self.nCobras):
             kinematics = self.dataContainers[i].find("KINEMATICS")
             if ccw is not None:
+                if not np.isfinite(ccw[i]):
+                    raise ValueError(f"nan/inf in CCW limit for cobra idx {i}")
                 self.tht0[i] = ccw[i]
                 kinematics.find("CCW_Global_base_ori_z").text = str(np.rad2deg(ccw[i]))
             if cw is not None:
+                if not np.isfinite(cw[i]):
+                    raise ValueError(f"nan/inf in CW limit for cobra idx {i}")
                 self.tht1[i] = cw[i]
                 kinematics.find("CW_Global_base_ori_z").text = str(np.rad2deg(cw[i]))
 
@@ -352,14 +648,14 @@ class PFIDesign():
                 self.phiOut[i] = cw[i] - np.pi
                 kinematics.find("Joint2_CW_limit_angle").text = str(np.rad2deg(cw[i]))
 
-    def updateOntimes(self, thtFwd=None, thtRev=None, phiFwd=None, phiRev=None, fast=True):
+    def updateOntimes(self, thetaFwd=None, thetaRev=None, thtFwd=None, thtRev=None, phiFwd=None, phiRev=None, fast=True):
         """Update cobra ontimes
 
         Parameters
         ----------
-        thtFwd: object
+        thetaFwd: object
             A numpy array with the cobras theta forward ontimes.
-        thtRev: object
+        thetaRev: object
             A numpy array with the cobras theta reverse ontimes.
         phiFwd: object
             A numpy array with the cobras phi forward ontimes.
@@ -370,9 +666,9 @@ class PFIDesign():
 
         """
 
-        if thtFwd is not None and len(thtFwd) != self.nCobras:
+        if thetaFwd is not None and len(thetaFwd) != self.nCobras:
             raise RuntimeError("number of cobra theta forward ontimes must match number of cobras")
-        if thtRev is not None and len(thtRev) != self.nCobras:
+        if thetaRev is not None and len(thetaRev) != self.nCobras:
             raise RuntimeError("number of cobra theta reverse ontimes must match number of cobras")
         if phiFwd is not None and len(phiFwd) != self.nCobras:
             raise RuntimeError("number of cobra phi forward ontimes must match number of cobras")
@@ -382,12 +678,12 @@ class PFIDesign():
         for i in range(self.nCobras):
             kinematics = self.dataContainers[i].find("KINEMATICS")
             if fast:
-                if thtFwd is not None:
-                    self.motorOntimeFwd1[i] = thtFwd[i]
-                    kinematics.find("Link1_fwd_Duration").text = str(thtFwd[i])
-                if thtRev is not None:
-                    self.motorOntimeRev1[i] = thtRev[i]
-                    kinematics.find("Link1_rev_Duration").text = str(thtRev[i])
+                if thetaFwd is not None:
+                    self.motorOntimeFwd1[i] = thetaFwd[i]
+                    kinematics.find("Link1_fwd_Duration").text = str(thetaFwd[i])
+                if thetaRev is not None:
+                    self.motorOntimeRev1[i] = thetaRev[i]
+                    kinematics.find("Link1_rev_Duration").text = str(thetaRev[i])
                 if phiFwd is not None:
                     self.motorOntimeFwd2[i] = phiFwd[i]
                     kinematics.find("Link2_fwd_Duration").text = str(phiFwd[i])
@@ -395,12 +691,12 @@ class PFIDesign():
                     self.motorOntimeRev2[i] = phiRev[i]
                     kinematics.find("Link2_rev_Duration").text = str(phiRev[i])
             else:
-                if thtFwd is not None:
-                    self.motorOntimeSlowFwd1[i] = thtFwd[i]
-                    kinematics.find("Link1_fwd_Duration_Slow").text = str(thtFwd[i])
-                if thtRev is not None:
-                    self.motorOntimeSlowRev1[i] = thtRev[i]
-                    kinematics.find("Link1_rev_Duration_Slow").text = str(thtRev[i])
+                if thetaFwd is not None:
+                    self.motorOntimeSlowFwd1[i] = thetaFwd[i]
+                    kinematics.find("Link1_fwd_Duration_Slow").text = str(thetaFwd[i])
+                if thetaRev is not None:
+                    self.motorOntimeSlowRev1[i] = thetaRev[i]
+                    kinematics.find("Link1_rev_Duration_Slow").text = str(thetaRev[i])
                 if phiFwd is not None:
                     self.motorOntimeSlowFwd2[i] = phiFwd[i]
                     kinematics.find("Link2_fwd_Duration_Slow").text = str(phiFwd[i])
@@ -408,19 +704,31 @@ class PFIDesign():
                     self.motorOntimeSlowRev2[i] = phiRev[i]
                     kinematics.find("Link2_rev_Duration_Slow").text = str(phiRev[i])
 
-    def createCalibrationFile(self, outputFileName):
+    def createCalibrationFile(self, outputFileName, name=None, site=None):
         """Creates a new XML calibration file based on current configuration
 
         Parameters
         ----------
         outputFileName: object
             The path where the output XML calibration file should be saved.
-
+        name : str
+            A string to put into a top_level ARM_DATA_NAME element
+        site : str
+            A string to put into a top_level ARM_DATA_SITE element
         """
 
         # Create the output XML tree
         newXmlTree = ElementTree.ElementTree(ElementTree.Element("ARM_DATA"))
         newRootElement = newXmlTree.getroot()
+        if name is not None:
+            node = ElementTree.Element("ARM_DATA_NAME")
+            node.text = name
+            newRootElement.append(node)
+
+        if site is not None:
+            node = ElementTree.Element("ARM_DATA_SITE")
+            node.text = site
+            newRootElement.append(node)
 
         # Fill the calibration file
         for i in range(self.nCobras):
@@ -429,3 +737,4 @@ class PFIDesign():
 
         # Save the new XML calibration file
         newXmlTree.write(outputFileName, encoding="UTF-8", xml_declaration=True)
+        logging.info(f'wrote pfiDesign file for {self.nCobras} cobras and name={name} to {str(outputFileName)}')

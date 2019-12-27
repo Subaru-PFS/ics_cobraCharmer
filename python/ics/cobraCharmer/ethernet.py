@@ -1,11 +1,16 @@
 import array
 import socket
 import struct
+import time
 
 from .hexprint import arr2Hex
 
+# TODO:
+#  Replace all array with bytearray
+#  Have timeouts mean something, packet-by-packet.
+
 def bytesAsString(msg, type=''):
-    if type == 'h':
+    if type == 'h' or type == 'B':
         s = arr2Hex(msg, seperator='')
         length = len(s)
         newstr = ''
@@ -26,9 +31,10 @@ class Sock:
     def __init__(self):
         self._s = socket.socket()
 
-    def connect(self, ip, port, logger=None):
+    def connect(self, ip, port, logger=None, protoLogger=None):
         self._s = socket.socket()
         self.logger = logger
+        self.protoLogger = protoLogger
         if logger is not None:
             logger.log("(ETH)Connecting...")
 
@@ -37,48 +43,69 @@ class Sock:
         self._s.settimeout(30)
 
         if logger is not None:
-            logger.log("(ETH)Connection Made. %s:%s \n" %(ip,port))
+            logger.log("(ETH)Connection Made. %s:%s" %(ip,port))
 
-    def send(self, msg, logger=None, type=''):
+    def send(self, msg, logger=None, type=None):
+        type='B'
         # msg is a byteArray
         if logger is None:
             logger = self.logger
         if logger is not None:
             s = bytesAsString(msg, type)
-            logger.log("(ETH)Sent msg on socket.\n(%s)"%s)
+            logger.log("(ETH)Sent msg on socket.(%s)"%s)
+        if self.protoLogger is not None:
+            self.protoLogger.logSend(msg.tobytes())
 
         self._s.send(msg)
 
-    def recv(self, tgt_len, logger=None, type=''):
+    def recv(self, tgt_len, logger=None, type=None):
+        type='B'
         if logger is None:
             logger = self.logger
 
-            # msg is a byteArray
+        if logger is not None:
+            logger.debug("(ETH)Looking for %d bytes)" % (tgt_len))
+
+        # msg is a byteArray
         remaining = tgt_len
         msg = array.array('B')
+
+        # The FPGA? or something? occasionally times out replies, but manually retrying does get the reply.
+        # Wireshark shows that at CIT, at least, the reply can take over a minute.
+        maxRetries = 3
+        retry = 0
         while remaining > 0:
-            chunk = self._s.recv(remaining)
+            t0 = time.time()
+            try:
+                chunk = self._s.recv(remaining)
+                if logger is not None:
+                    logger.debug("(ETH)Rcvd %d bytes on socket:%s" % (len(chunk), chunk))
+            except socket.timeout:
+                t1 = time.time()
+                errMsg = "timed out (%0.3f s) waiting for %d bytes. Received %d bytes: %s" % (t1-t0, tgt_len,
+                                                                                              tgt_len-remaining,
+                                                                                              msg)
+                if retry >= maxRetries:
+                    raise RuntimeError(errMsg)
+                else:
+                    if logger is not None:
+                        logger.logger.error(errMsg)
+                    else:
+                        print(errMsg)
+                    retry += 1
+                    chunk = bytes()
+                    continue
+
             msg.frombytes(chunk)
             remaining -= len(chunk)
 
         if logger is not None:
             s = bytesAsString(msg, type)
-            logger.log("(ETH)Rcvd msg on socket.\n(%s)"%s)
+            logger.log("(ETH)Rcvd msg on socket.(%s)"%s)
+        if self.protoLogger is not None:
+            self.protoLogger.logRecv(msg.tobytes())
 
         return msg
-
-    def recv_byte(self, logger=None, type='h'):
-        if logger is None:
-            logger = self.logger
-
-        d = self._s.recv(1)
-        by = struct.unpack('B', d)[0]
-
-        if logger is not None:
-            s = bytesAsString(msg, type)
-            logger.log("(ETH)Rcvd byte on socket.(%s)" %s)
-
-        return by
 
     def close(self, logger=None):
         if logger is None:

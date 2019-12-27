@@ -5,6 +5,7 @@ from astropy.io import fits
 import sep
 from copy import deepcopy
 import calculation
+import pandas as pd
 
 class moduleAnalyze():
     def __init__(self, xml, brokens=None, camSplit=26):
@@ -12,6 +13,45 @@ class moduleAnalyze():
             print(f"Error: {xml} is not presented!")
             sys.exit()
         self.cal = calculation.Calculation(xml, brokens, camSplit)
+
+    def loadPhiData(self, dataPath, goodIdx, iterations, repeats=1, reCenter=False):
+        if not reCenter:
+            phiFW = np.load(dataPath + '/phiFW')
+            phiRV = np.load(dataPath + '/phiRV')
+            nCobras, nRepeats, nIterations = phiFW.shape
+            if nCobras != len(goodIdx) or nRepeats != repeats or nIterations != iterations:
+                raise RuntimeError("saved data shape is not expected shape")
+
+            return phiFW, phiRV
+
+        # calculate the phi movements
+        phiFW = np.zeros((57, repeats, iterations+1), dtype=complex)
+        phiRV = np.zeros((57, repeats, iterations+1), dtype=complex)
+        for n in range(repeats):
+            # forward phi motor maps
+            data1 = fits.getdata(dataPath + f'/phi1Begin{n}.fits.gz')
+            data2 = fits.getdata(dataPath + f'/phi2Begin{n}.fits.gz')
+            phiFW[goodIdx, n, 0] = self.cal.extractPositions(data1, data2)
+
+            for k in range(iterations):
+                data1 = fits.getdata(dataPath + f'/phi1Forward{n}N{k}.fits.gz')
+                data2 = fits.getdata(dataPath + f'/phi2Forward{n}N{k}.fits.gz')
+                phiFW[goodIdx, n, k+1] = self.cal.extractPositions(data1, data2,
+                                                                   guess=phiFW[goodIdx, n, k])
+
+            # reverse phi motor maps
+            data1 = fits.getdata(dataPath + f'/phi1End{n}.fits.gz')
+            data2 = fits.getdata(dataPath + f'/phi2End{n}.fits.gz')
+            phiRV[goodIdx, n, 0] = self.cal.extractPositions(data1, data2,
+                                                             guess=phiFW[goodIdx, n, iterations])
+
+            for k in range(iterations):
+                data1 = fits.getdata(dataPath + f'/phi1Reverse{n}N{k}.fits.gz')
+                data2 = fits.getdata(dataPath + f'/phi2Reverse{n}N{k}.fits.gz')
+                phiRV[goodIdx, n, k+1] = self.cal.extractPositions(data1, data2,
+                                                                   guess=phiRV[goodIdx, n, k])
+
+        return phiFW, phiRV
 
     def makePhiMotorMap(
             self,
@@ -22,8 +62,9 @@ class moduleAnalyze():
             totalSteps=5000,
             fast=True,
             phiOnTime=None,
-            delta=0.1
-        ):
+            delta=0.1,
+            reCenter=False):
+
         # generate phi motor maps, it accepts custom phiOnTIme parameter.
         # it assumes that theta arms have been move to up/down positions to avoid collision
         # if phiOnTime is not None, fast parameter is ignored. Otherwise use fast/slow ontime
@@ -34,32 +75,10 @@ class moduleAnalyze():
         #     makePhiMotorMap(xml, path, phiOnTime=0.06)        // motor maps for on-time=0.06
 
         # variable declaration for position measurement
-        iteration = totalSteps // steps
-        phiFW = np.zeros((57, repeat, iteration+1), dtype=complex)
-        phiRV = np.zeros((57, repeat, iteration+1), dtype=complex)
+        iterations = totalSteps // steps
         goodIdx = self.cal.goodIdx
 
-        # calculate the phi movements
-        for n in range(repeat):
-            # forward phi motor maps
-            data1 = fits.getdata(dataPath + f'/phi1Begin{n}.fits.gz')
-            data2 = fits.getdata(dataPath + f'/phi2Begin{n}.fits.gz')
-            phiFW[goodIdx, n, 0] = self.cal.extractPositions(data1, data2)
-
-            for k in range(iteration):
-                data1 = fits.getdata(dataPath + f'/phi1Forward{n}N{k}.fits.gz')
-                data2 = fits.getdata(dataPath + f'/phi2Forward{n}N{k}.fits.gz')
-                phiFW[goodIdx, n, k+1] = self.cal.extractPositions(data1, data2, guess=phiFW[goodIdx, n, k])
-
-            # reverse phi motor maps
-            data1 = fits.getdata(dataPath + f'/phi1End{n}.fits.gz')
-            data2 = fits.getdata(dataPath + f'/phi2End{n}.fits.gz')
-            phiRV[goodIdx, n, 0] = self.cal.extractPositions(data1, data2, guess=phiFW[goodIdx, n, iteration])
-
-            for k in range(iteration):
-                data1 = fits.getdata(dataPath + f'/phi1Reverse{n}N{k}.fits.gz')
-                data2 = fits.getdata(dataPath + f'/phi2Reverse{n}N{k}.fits.gz')
-                phiRV[goodIdx, n, k+1] = self.cal.extractPositions(data1, data2, guess=phiRV[goodIdx, n, k])
+        phiFW, phiRV = self.loadPhiData(dataPath, repeat, goodIdx, iterations, recenter=reCenter)
 
         # save calculation result
         np.save(dataPath + '/phiFW_A', phiFW)
@@ -246,6 +265,33 @@ class moduleAnalyze():
         # restore default setting
         self.cal.restoreConfig()
 
+    def makeGeometryTable(self, dataPath):
+
+        center = np.load(dataPath + 'center_A.npy')
+        phi_arm = np.load(dataPath + 'phiL_A.npy')
+        theta_arm = np.load(dataPath + 'thetaL_A.npy')
+        d={'Center X': center.real,
+            'Center Y': center.imag,
+            'Phi Arm Length': phi_arm,
+            'Theta Arm Length':theta_arm}
+
+        dataframe = pd.DataFrame(d)   
+
+        dataframe.to_csv(dataPath+'geometry.csv')
+
+        phiCCW = np.load(dataPath + 'phiCCW_A.npy')
+        phiCW = np.load(dataPath + 'phiCW_A.npy')
+        thetaCCW = np.load(dataPath + 'thetaCCW_A.npy')
+        thetaCW = np.load(dataPath + 'thetaCW_A.npy')
+
+        d={'Theta CCW Stop': np.rad2deg(thetaCCW),
+        'Theta CW Stop': np.rad2deg(thetaCW),
+        'Phi CCW Stop': np.rad2deg(phiCCW),
+        'Phi CW Stop': np.rad2deg(phiCW)}
+        dataframe = pd.DataFrame(d)        
+        dataframe.to_csv(dataPath+'hardstop.csv')
+
+        
     def convertXML(self, newXml, dataPath, image1=None, image2=None):
         """ convert old XML to a new coordinate by using the 'phi homed' images
             assuming the cobra module is in horizontal setup

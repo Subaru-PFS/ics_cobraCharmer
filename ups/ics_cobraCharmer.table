@@ -1,4 +1,5 @@
 setupRequired(ics_cobraOps)
+setupRequired(pfs_instdata)
 
 pathAppend(PATH, ${PRODUCT_DIR}/bin)
 pathPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
