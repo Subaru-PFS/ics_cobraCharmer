@@ -168,14 +168,14 @@ class Calculation():
         pos = np.array(ext['x'] + ext['y']*(1j))
         target = lazyIdentification(centers, pos, radii=radii)
 
-        pos = np.zeros(len(idx), dtype=complex)
+        mpos = np.zeros(len(idx), dtype=complex)
         for n, k in enumerate(target):
             if k < 0:
-                pos[n] = self.calibModel.centers[idx[n]]
+                mpos[n] = self.calibModel.centers[idx[n]]
             else:
-                pos[n] = pos[k]
+                mpos[n] = pos[k]
 
-        return pos
+        return mpos
 
     def phiCenterAngles(self, phiFW, phiRV):
         # variable declaration for phi angles
@@ -272,14 +272,16 @@ class Calculation():
                 thetaAngRV[c, n] = (thetaAngRV[c, n] - home) % (np.pi*2)
 
                 fwMid = np.argmin(abs(thetaAngFW[c, n] % (np.pi*2) - np.pi))
-                thetaAngFW[c, n, :fwMid][thetaAngFW[c, n, :fwMid]>6.2] -= np.pi*2
+                thetaAngFW[c, n, :fwMid][thetaAngFW[c, n, :fwMid]>5.0] -= np.pi*2
                 if fwMid < thetaAngFW.shape[2] - 1:
-                    thetaAngFW[c, n, fwMid:][thetaAngFW[c, n, fwMid:]<0.45] += np.pi*2
+                    thetaAngFW[c, n, fwMid:][thetaAngFW[c, n, fwMid:]<1.0] += np.pi*2
 
                 rvMid = np.argmin(abs(thetaAngRV[c, n] % (np.pi*2) - np.pi))
-                thetaAngRV[c, n, :rvMid][thetaAngRV[c, n, :rvMid]<0.45] += np.pi*2
+                thetaAngRV[c, n, :rvMid][thetaAngRV[c, n, :rvMid]<1.0] += np.pi*2
                 if rvMid < thetaAngRV.shape[2] - 1:
-                    thetaAngRV[c, n, rvMid:][thetaAngRV[c, n, rvMid:]>6.2] -= np.pi*2
+                    thetaAngRV[c, n, rvMid:][thetaAngRV[c, n, rvMid:]>5.0] -= np.pi*2
+                if thetaAngRV[c, n, 0] < 1.0:
+                    thetaAngRV[c, n] += np.pi*2
 
         # mark bad cobras by checking hard stops
         bad = np.any(thetaAngRV[:, :, 0] < np.pi*2, axis=1)
@@ -307,7 +309,7 @@ class Calculation():
                 valueSum = 0
                 for n in range(repeat):
                     for k in range(iteration):
-                        if angFW[c, n, k+1] < angFW[c, n, k] or angRV[c, n, 0] - angFW[c, n, k+1] < delta:
+                        if angFW[c, n, k+1] <= angFW[c, n, k] or angRV[c, n, 0] - angFW[c, n, k+1] < delta:
                             # hit hard stop or somethings went wrong, then skip it
                             continue
                         if angFW[c, n, k] < binMax and angFW[c, n, k+1] > binMin:
@@ -326,7 +328,7 @@ class Calculation():
                 valueSum = 0
                 for n in range(repeat):
                     for k in range(iteration):
-                        if angRV[c, n, k+1] > angRV[c, n, k] or angRV[c, n, k+1] < delta:
+                        if angRV[c, n, k+1] >= angRV[c, n, k] or angRV[c, n, k+1] < delta:
                             # hit hard stop or somethings went wrong, then skip it
                             continue
                         if angRV[c, n, k] > binMin and angRV[c, n, k+1] < binMax:

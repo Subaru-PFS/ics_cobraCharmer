@@ -1075,7 +1075,7 @@ class ModuleTest():
         return self.runManager.runDir
 
     def thetaFWDone(self, thetas, n, k, needAtEnd=4,
-                    closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
+                    closeEnough=np.deg2rad(2), limitTolerance=np.deg2rad(2)):
         """ Return a mask of the cobras which we deem at the FW theta limit.
 
         Args
@@ -1110,7 +1110,7 @@ class ModuleTest():
 
         return atEnd & stable, endDiff
 
-    def thetaRVDone(self, thetas, n, k, needAtEnd=4, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
+    def thetaRVDone(self, thetas, n, k, needAtEnd=4, closeEnough=np.deg2rad(2), limitTolerance=np.deg2rad(2)):
         """ Return a mask of the cobras which we deem at the RV theta limit.
 
         See `thetaFWDone`
@@ -1732,9 +1732,12 @@ class ModuleTest():
                 for k in range(len(self.goodIdx)):
                     if abs(angle - lastAngle[k]) > np.deg2rad(2.0):
                         rawScale = abs((angle - lastAngle[k]) / (cAngles[k] - lastAngle[k]))
-                        scale = 1 + (rawScale - 1) / scaleFactor
-                        direction = 'ccw' if angle < lastAngle[k] else 'cw'
-                        self.pfi.scaleMotorOntime(self.goodCobras[k], 'phi', direction, scale) 
+                        if angle < lastAngle[k]:
+                            scale[k] = 1 + (rawScale - 1) / (scaleFactor * ratioRv[k])
+                            self.pfi.scaleMotorOntime(self.goodCobras[k], 'phi', 'ccw', scale[k])
+                        else:
+                            scale[k] = 1 + (rawScale - 1) / (scaleFactor * ratioFw[k])
+                            self.pfi.scaleMotorOntime(self.goodCobras[k], 'phi', 'cw', scale[k])
             self.logger.info(f'Final angles: {np.round(np.rad2deg(cAngles), 2)}')
             self.pfi.resetMotorScaling(self.goodCobras, 'phi')
         return self.runManager.runDir
@@ -2013,9 +2016,9 @@ class ModuleTest():
         _spdF = []
         _spdR = []
 
-        # get the average speeds for onTimeHigh, smaller step size since it's fast
+        # get the average speeds for onTimeHigh, small step size since it's fast
         self.logger.info(f'Initial run, onTime = {onTimeHigh}')
-        dataDir = self.makeThetaMotorMap(newXml, repeat=repeat, steps=400, thetaOnTime=onTimeHigh, fast=fast)
+        dataDir = self.makeThetaMotorMap(newXml, repeat=repeat, steps=200, thetaOnTime=onTimeHigh, fast=fast)
         spdF = np.load(dataDir / 'data' / 'thetaSpeedFW.npy')
         spdR = np.load(dataDir / 'data' / 'thetaSpeedRV.npy')
         _ontF.append(np.full(57, onTimeHigh))
@@ -2084,9 +2087,9 @@ class ModuleTest():
         _spdF = []
         _spdR = []
 
-        # get the average speeds for onTimeHigh, smaller step size since it's fast
+        # get the average speeds for onTimeHigh, small step size since it's fast
         self.logger.info(f'Initial run, onTime = {onTimeHigh}')
-        dataDir = self.makePhiMotorMap(newXml, repeat=repeat, steps=200, phiOnTime=onTimeHigh, fast=fast)
+        dataDir = self.makePhiMotorMap(newXml, repeat=repeat, steps=100, phiOnTime=onTimeHigh, fast=fast)
         spdF = np.load(dataDir / 'data' / 'phiSpeedFW.npy')
         spdR = np.load(dataDir / 'data' / 'phiSpeedRV.npy')
         _ontF.append(np.full(57, onTimeHigh))
@@ -2139,17 +2142,29 @@ class ModuleTest():
 
     def searchOnTime(self, speed, sData, tData):
         """ There should be some better ways to do!!! """
-
         onTime = np.zeros(57)
 
         for c in self.goodIdx:
             s = sData[:,c]
             t = tData[:,c]
-            if np.count_nonzero(t == np.max(t)) >= len(t)/2:
+            if np.median(s[t==np.max(t)]) <= speed:
+                self.logger.warn(f'Cobra #{c+1} is sticky, set to max value')
                 onTime[c] = np.max(t)
-            else:
-                params, params_cov = optimize.curve_fit(speedFunc, t, s, p0=[1, 0.06])
+                continue
+
+            try:
+                params, params_cov = optimize.curve_fit(speedFunc, t, s, p0=[10, 0.06])
+                if params[0] < 0 or params[1] < 0:
+                    # remove some slow data and try again
+                    self.logger.warn(f'Curve fitting error #{c+1}, try again')
+                    s[t==np.max(t)] = np.max(s[t==np.max(t)])
+                    params, params_cov = optimize.curve_fit(speedFunc, t, s, p0=[10, 0.06])
+                if params[0] < 0 or params[1] < 0:
+                    raise
                 onTime[c] = invSpeedFunc(speed, params[0], params[1])
+            except:
+                onTime[c] = np.median(t)
+                self.logger.warn(f'Curve fitting failed #{c+1}, set to median value')
 
         return onTime
 

@@ -39,8 +39,10 @@ class PFI(object):
         self.calibModel = None
         self.motorMap = None
         self.ontimeScales = cobraState.motorScales
-        self.maxThetaOntime = 0.08
-        self.maxPhiOntime = 0.07
+        self.maxThetaOntime = 0.10
+        self.maxPhiOntime = 0.08
+        self.maxThetaSteps = 10000
+        self.maxPhiSteps = 7000
         if fpgaHost == 'fpga':
             fpgaHost = '128.149.77.24'  # A JPL address which somehow got burned into the FPGAs. See INSTRM-464
         self.fpgaHost = fpgaHost
@@ -494,9 +496,15 @@ class PFI(object):
             return
 
         for c_i, c in enumerate(cobras):
-            steps1 = int(np.abs(thetaSteps[c_i])), int(np.abs(phiSteps[c_i]))
-            dirs1 = ['cw', 'cw']
+            steps1 = [int(np.abs(thetaSteps[c_i])), int(np.abs(phiSteps[c_i]))]
+            if steps1[0] > self.maxThetaSteps:
+                self.logger.warn(f'clipping #{c_i+1} theta steps from {steps1[0]} to {self.maxThetaSteps}')
+                steps1[0] = self.maxThetaSteps
+            if steps1[1] > self.maxPhiSteps:
+                self.logger.warn(f'clipping #{c_i+1} phi steps from {steps1[1]} to {self.maxPhiSteps}')
+                steps1[1] = self.maxPhiSteps
 
+            dirs1 = ['cw', 'cw']
             if thetaSteps[c_i] < 0:
                 dirs1[0] = 'ccw'
             if phiSteps[c_i] < 0:
