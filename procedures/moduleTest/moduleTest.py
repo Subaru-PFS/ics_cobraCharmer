@@ -331,7 +331,7 @@ class ModuleTest():
         self.phiCWHome = np.angle(phiRV[:,0,0] - self.phiCenter[:])
         dAng = self.phiCWHome - self.phiCCWHome
         dAng[dAng < 0] += 2*np.pi
-        stopped = np.where(dAng < np.deg2rad(182.0))[0]
+        stopped = np.where(dAng < np.deg2rad(180.0))[0]
         if len(stopped) > 0:
             self.logger.error(f"phi ranges for cobras {stopped+1} are too small: "
                               f"CW={np.rad2deg(self.phiCWHome[stopped])} "
@@ -1091,6 +1091,8 @@ class ModuleTest():
         # self.pfi.loadModel(self.xml)
 
         self.setPhiGeometryFromRun(self.runManager.runDir, onlyIfClear=True)
+
+        bad[self.badIdx] = False
         return self.runManager.runDir, np.where(bad)[0]
 
     def _mapDone(self, centers, points, limits, k,
@@ -1360,6 +1362,7 @@ class ModuleTest():
 
         self.pfi.calibModel.createCalibrationFile(self.runManager.outputDir / newXml)
 
+        bad[self.badIdx] = False
         return self.runManager.runDir, np.where(bad)[0]
 
     def makeThetaMotorMap(self, newXml,
