@@ -542,8 +542,10 @@ class ModuleTest():
         Assumes phi is at 60deg and that we know thetaPositions.
 
         """
-        brd1Idx = np.arange(0,57,2)
-        brd2Idx = np.arange(1,57,2)
+
+        angles = np.full(len(self.allCobras), phiAngle, dtype='f4')
+        angles[np.arange(0,57,2)] += 270
+        angles[np.arange(1,57,2)] += 90
 
         if not hasattr(self, 'thetaHomes'):
             self.pfi.moveAllSteps(None, -10000, 0)
@@ -551,21 +553,19 @@ class ModuleTest():
         else:
             keepExisting = True
 
-        run1 = self.moveToThetaAngle(brd1Idx, angle=270+phiAngle, tolerance=np.rad2deg(0.05),
-                                     keepExistingPosition=keepExisting, globalAngles=True)
-
-        run2 = self.moveToThetaAngle(brd2Idx, angle=90+phiAngle, tolerance=np.rad2deg(0.05),
-                                     keepExistingPosition=True, globalAngles=True)
-
-        return [run1, run2]
+        run = self.moveToThetaAngle(None, angle=angles, tolerance=np.rad2deg(0.05),
+                                    keepExistingPosition=keepExisting, globalAngles=True)
+        return run
 
     def gotoShippingFromPhi60(self, phiAngle=60.0):
         """ Move cobras to nominal safe shipping position: thetas IN, phis in.
         Assumes phi is at 60deg and that we know thetaPositions.
 
         """
-        brd1Idx = np.arange(0,57,2)
-        brd2Idx = np.arange(1,57,2)
+
+        angles = np.full(len(self.allCobras), phiAngle, dtype='f4')
+        angles[np.arange(0,57,2)] += 90
+        angles[np.arange(1,57,2)] += 270
 
         if not hasattr(self, 'thetaHomes'):
             self.pfi.moveAllSteps(None, -10000, 0)
@@ -573,17 +573,13 @@ class ModuleTest():
         else:
             keepExisting = True
 
-        run1 = self.moveToThetaAngle(brd1Idx, angle=90+phiAngle, tolerance=np.rad2deg(0.05),
-                                     keepExistingPosition=keepExisting, globalAngles=True)
-
-        run2 = self.moveToThetaAngle(brd2Idx, angle=270+phiAngle, tolerance=np.rad2deg(0.05),
-                                     keepExistingPosition=True, globalAngles=True)
-
-        return [run1, run2]
+        run = self.moveToThetaAngle(None, angle=angles, tolerance=np.rad2deg(0.05),
+                                    keepExistingPosition=keepExisting, globalAngles=True)
+        return run
 
     def moveToThetaAngle(self, idx=None, angle=60.0,
                          keepExistingPosition=False,
-                         tolerance=1.0, maxTries=7, scaleFactor=10,
+                         tolerance=1.0, maxTries=7, scaleFactor=5,
                          globalAngles=False,
                          doFast=False):
         """
