@@ -336,7 +336,7 @@ class ModuleTest():
             self.logger.error(f"phi ranges for cobras {stopped+1} are too small: "
                               f"CW={np.rad2deg(self.phiCWHome[stopped])} "
                               f"CCW={np.rad2deg(self.phiCCWHome[stopped])}")
-            self.logger.error(f"     {np.round(np.rad2deg(dAng[stopped]), 2)}")
+            self.logger.error(f"     ranges={np.round(np.rad2deg(dAng[stopped]), 2)}")
 
     def setThetaCentersFromRun(self, geometryRun):
         self.thetaCenter = np.load(geometryRun / 'data' / 'thetaCenter.npy')
@@ -512,8 +512,8 @@ class ModuleTest():
                     else:
                         logCall = self.logger.debug
 
-                    logCall(f'{c_i+1} try={np.rad2deg(tryDist):0.2f} '
-                            f'at={np.rad2deg(atAngles[c_i]):0.2f} '
+                    logCall(f'{c_i+1} at={np.rad2deg(atAngles[c_i]):0.2f} '
+                            f'try={np.rad2deg(tryDist):0.2f} '
                             f'got={np.rad2deg(gotDist):0.2f} '
                             f'rawScale={rawScale:0.2f} scale={scale:0.2f}')
                     self.pfi.scaleMotorOntime(cobras[c_i], 'phi', direction, scale)
@@ -726,8 +726,8 @@ class ModuleTest():
                     else:
                         logCall = self.logger.debug
 
-                    logCall(f'{c_i+1} try={np.rad2deg(tryDist[c_i]):0.2f} '
-                            f'at={np.rad2deg(atAngles[c_i]):0.2f} '
+                    logCall(f'{c_i+1} at={np.rad2deg(atAngles[c_i]):0.2f} '
+                            f'try={np.rad2deg(tryDist[c_i]):0.2f} '
                             f'got={np.rad2deg(gotDist[c_i]):0.2f} '
                             f'rawScale={rawScale:0.2f} scale={scale:0.2f}')
                     self.pfi.scaleMotorOntime(cobras[c_i], 'theta', direction, scale)
@@ -1015,9 +1015,12 @@ class ModuleTest():
         # calculate centers and phi angles
         phiCenter, phiRadius, phiAngFW, phiAngRV, badRange = self.cal.phiCenterAngles(phiFW, phiRV)
         for short in badRange:
-            self.logger.warn(f'phi range for {short+1:-2d} is short: '
-                             f'out={np.rad2deg(phiAngRV[short,0,0]):-6.2f} '
-                             f'back={np.rad2deg(pAngRV[short,0,-1]):-6.2f}')
+            if short in self.badIdx:
+                self.logger.warn(f"phi range for {short+1:-2d} is short, but that was expected")
+            else:
+                self.logger.warn(f'phi range for {short+1:-2d} is short: '
+                                 f'out={np.rad2deg(phiAngRV[short,0,0]):-6.2f} '
+                                 f'back={np.rad2deg(phiAngRV[short,0,-1]):-6.2f}')
         np.save(dataPath / 'phiCenter', phiCenter)
         np.save(dataPath / 'phiRadius', phiRadius)
         np.save(dataPath / 'phiAngFW', phiAngFW)
