@@ -5,7 +5,6 @@ import pandas as pd
 from scipy import stats
 
 from ics.cobraCharmer import pfiDesign
-from ics.cobraCharmer import cobraState
 from ics.cobraCharmer.utils import butler
 
 class ontimeModel():
@@ -17,7 +16,7 @@ class ontimeModel():
         self.logger.setLevel(logLevel)
 
         self.minSpeed = 0.001
-        self.minOntime = 0.002
+        self.minOntime = 0.005
 
         self.newOntimeSlowFwd = self.newOntimeSlowRev = None
         self.newOntimeFastFwd = self.newOntimeFastRev = None
@@ -53,9 +52,15 @@ class ontimeModel():
         return self
 
     def getSlope(self, pid, direction):
+        if pid not in self.visibleFibers:
+            return 0, 0
+
         dataframe = self.dataframe
         loc = dataframe.loc[dataframe['fiberNo'] == pid].loc
         ndf = loc[dataframe[direction].abs() > self.minSpeed]
+        if len(ndf) == 0:
+            self.lgger.warn(f'no valid speed points for pid {pid}')
+            return 0, 0
 
         onTimeArray = ndf[f'onTime{direction}'].values
         angSpdArray = ndf[(f'{direction}')].values
@@ -210,19 +215,19 @@ class ontimeModel():
 
         # Build a new model by selecting the appropriate motor map for each motor.
         #
-        for i in range(57):
-            fwOntime = self.fwOntimes[i]
-            rvOntime = self.rvOntimes[i]
-            self.model.copyMotorMap(self.models[fwOntime], i,
+        for i in self.visibleFibers:
+            fwOntime = self.fwOntimes[i-1]
+            rvOntime = self.rvOntimes[i-1]
+            self.model.copyMotorMap(self.models[fwOntime], i-1,
                                     doThetaFwd=(self.axisName == "Theta"),
                                     doPhiFwd=(self.axisName == "Phi"), doFast=False)
-            self.model.copyMotorMap(self.models[rvOntime], i,
+            self.model.copyMotorMap(self.models[rvOntime], i-1,
                                     doThetaRev=(self.axisName == "Theta"),
                                     doPhiRev=(self.axisName == "Phi"), doFast=False)
-            self.model.copyMotorMap(self.models[fwOntime], i,
+            self.model.copyMotorMap(self.models[fwOntime], i-1,
                                     doThetaFwd=(self.axisName == "Theta"),
                                     doPhiFwd=(self.axisName == "Phi"), doFast=True)
-            self.model.copyMotorMap(self.models[rvOntime], i,
+            self.model.copyMotorMap(self.models[rvOntime], i-1,
                                     doThetaRev=(self.axisName == "Theta"),
                                     doPhiRev=(self.axisName == "Phi"), doFast=True)
 
@@ -250,6 +255,7 @@ class ontimeModel():
         self.rvAngles = dict()
         self.models = dict()
 
+        self.visibleFibers = None
         for ontime in sorted(self.runDirs.keys())[::-1]:
             runDir = self.runDirs[ontime]
             self.fwAngles[ontime] = np.load(self.fwdAngleFile(runDir))
@@ -261,11 +267,14 @@ class ontimeModel():
             model = pfiDesign.PFIDesign(xml)
             self.models[ontime] = model
 
-            # Get from model
-            try:
-                pid = self.visibleFibers
-            except AttributeError:
-                pid = self.visibleFibers = np.arange(model.nCobras)
+            pid = model.positionerIds
+            if self.visibleFibers is None:
+                self.visibleFibers = np.array([c for c in model.positionerIds if model.cobraIsGood(c)],
+                                              dtype='i4')
+            else:
+                visibleFibers = np.array([c for c in model.positionerIds if model.cobraIsGood(c)], dtype='i4')
+                if not np.all(visibleFibers == self.visibleFibers):
+                    self.logger.warn('list of useable fibers differs between models (%s is one)', xml)
 
             ontimeFwd = self.fwdOntimeModel(model)
             ontimeRev = self.revOntimeModel(model)

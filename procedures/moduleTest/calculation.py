@@ -128,6 +128,7 @@ class Calculation():
         idx = self.goodIdx
         if tolerance is not None:
             radii = (self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance)
+            radii = radii[idx]
         else:
             radii = None
 

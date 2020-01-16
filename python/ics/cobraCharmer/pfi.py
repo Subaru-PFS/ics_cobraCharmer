@@ -511,7 +511,7 @@ class PFI(object):
                 dirs1[1] = 'ccw'
 
             en = (steps1[0] != 0, steps1[1] != 0)
-            isBad = self.calibModel.cobraIsBad(cobraId)
+            isBad = self.calibModel.cobraIsBad(c.cobra, c.module)
             if isBad and not force:
                 en = (False, False)
 
