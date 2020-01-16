@@ -275,6 +275,8 @@ class OntimeOptimize(object):
         loc1 = dataframe.loc[dataframe['fiberNo'] == fiberInx+1].loc
         loc2 = loc1[dataframe[direction].abs() > self.minSpeed].loc
         ndf = loc2[dataframe[f'range{direction}'].abs() > self.minRange-self.minRangeDelta]
+        if ndf.empty is True:
+            ndf = loc2[dataframe[f'range{direction}'].abs() > 0]
         # First, make sure there is good speed data.
         ind=np.argmin(np.abs((np.abs(ndf[f'{direction}']) - targetSpeed).values))
         newOntime = ndf[f'onTime{direction}'].values[ind]
