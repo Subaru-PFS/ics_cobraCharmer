@@ -460,11 +460,13 @@ class ModuleTest():
                 self.logger.info("try %d/%d, %d/%d cobras left",
                                  ntries, maxTries,
                                  notDone.sum(), len(cobras))
-            self.pfi.moveThetaPhi(cobras[notDone],
-                                  thetaAngles[notDone],
-                                  left[notDone],
-                                  phiFroms=lastAngles[notDone],
-                                  phiFast=(doFast and ntries==1))
+            _, phiSteps = self.pfi.moveThetaPhi(cobras[notDone],
+                                                thetaAngles[notDone],
+                                                left[notDone],
+                                                phiFroms=lastAngles[notDone],
+                                                phiFast=(doFast and ntries==1))
+            allPhiSteps = np.zeros(len(cobras), dtype='i4')
+            allPhiSteps[notDone] = phiSteps
 
             # extract sources and fiber identification
             curPos = self.exposeAndExtractPositions(tolerance=0.2)
@@ -525,9 +527,18 @@ class ModuleTest():
 
             lastAngles = atAngles
             if ntries >= maxTries:
-                self.logger.warn(f'Reached max {maxTries} tries, '
-                                 f'left: {[str(c) for c in cobras[np.where(notDone)]]}: '
-                                 f'{np.rad2deg(left)[notDone]}')
+                self.logger.warn(f'Reached max {maxTries} tries, {notDone.sum()} cobras left')
+                self.logger.warn(f'   cobras: {[c.cobraNum for c in cobras[np.where(notDone)]]}')
+                self.logger.warn(f'   left: {np.round(np.rad2deg(left)[notDone], 2)}')
+
+                _, phiSteps = self.pfi.moveThetaPhi(cobras[notDone],
+                                                    thetaAngles[notDone],
+                                                    left[notDone],
+                                                    phiFroms=lastAngles[notDone],
+                                                    phiFast=(doFast and ntries==1),
+                                                    doRun=False)
+                self.logger.warn(f'   steps: {phiSteps}')
+
                 break
             ntries += 1
 
@@ -676,11 +687,13 @@ class ModuleTest():
                 self.logger.info("left try %d/%d, %d/%d",
                                  ntries, maxTries,
                                  notDone.sum(), len(cobras))
-            self.pfi.moveThetaPhi(cobras[notDone],
-                                  left[notDone],
-                                  phiAngles[notDone],
-                                  thetaFroms=lastAngles[notDone],
-                                  thetaFast=(doFast and ntries==1))
+            thetaSteps, _ = self.pfi.moveThetaPhi(cobras[notDone],
+                                                  left[notDone],
+                                                  phiAngles[notDone],
+                                                  thetaFroms=lastAngles[notDone],
+                                                  thetaFast=(doFast and ntries==1))
+            allThetaSteps = np.zeros(len(cobras), dtype='i4')
+            allThetaSteps[notDone] = thetaSteps
 
             # extract sources and fiber identification
             curPos = self.exposeAndExtractPositions(tolerance=0.2)
@@ -742,9 +755,17 @@ class ModuleTest():
             lastAngles = atAngles
             self.thetaAngles[idx] = atAngles
             if ntries >= maxTries:
-                self.logger.warn(f'Reached max {maxTries} tries, '
-                                 f'left: {[str(c) for c in cobras[np.where(notDone)]]}: '
-                                 f'{np.rad2deg(left)[notDone]}')
+                self.logger.warn(f'Reached max {maxTries} tries, {notDone.sum()} cobras left')
+                self.logger.warn(f'   cobras: {[c.cobraNum for c in cobras[np.where(notDone)]]}')
+                self.logger.warn(f'   left: {np.round(np.rad2deg(left)[notDone], 2)}')
+
+                thetaSteps, _ = self.pfi.moveThetaPhi(cobras[notDone],
+                                                      left[notDone],
+                                                      phiAngles[notDone],
+                                                      thetaFroms=lastAngles[notDone],
+                                                      thetaFast=(doFast and ntries==1),
+                                                      doRun=False)
+                self.logger.warn(f'   steps: {thetaSteps}')
                 break
             ntries += 1
 
