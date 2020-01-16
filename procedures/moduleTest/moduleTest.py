@@ -365,7 +365,8 @@ class ModuleTest():
 
     def moveToPhiAngle(self, idx=None, angle=60.0,
                        keepExistingPosition=False,
-                       tolerance=1.0, maxTries=7, scaleFactor=8,
+                       tolerance=np.rad2deg(0.005), maxTries=8,
+                       scaleFactor=5,
                        doFast=False):
         """
         Robustly move to a given phi angle.
@@ -390,6 +391,8 @@ class ModuleTest():
           How close we want to get, in degrees.
         maxTries: `int`
           How many moves to attempt.
+        scaleFactor: `float`
+          What fraction of the motion error to apply to the motor scale. 1/scalefactor
         doFast : bool
           For the first move, use the fast map?
         """
