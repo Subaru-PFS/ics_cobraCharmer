@@ -122,11 +122,15 @@ class PFI(object):
         The FPGA deals with _boards_, but the original code deals with _modules_. Wrap that.
         """
         cobras = self.allocateCobraBoard(module, board)
-        err = func.HK(cobras, updateModel=(self.calibModel if updateModel else None))
+        ret = func.HK(cobras, updateModel=(self.calibModel if updateModel else None),
+                      feedback=True)
+        err = ret[0]
         if err:
             self.logger.error(f'send HK command failed: {err}')
         else:
             self.logger.debug(f'send HK command succeeded')
+
+        return ret
 
     def setFreq(self, cobras=None, thetaFreq=None, phiFreq=None):
         """ Set COBRA motor frequency """
