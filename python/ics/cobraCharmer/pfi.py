@@ -39,8 +39,8 @@ class PFI(object):
         self.calibModel = None
         self.motorMap = None
         self.ontimeScales = cobraState.motorScales
-        self.maxThetaOntime = 0.08
-        self.maxPhiOntime = 0.07
+        self.maxThetaOntime = 0.085
+        self.maxPhiOntime = 0.075
         if fpgaHost == 'fpga':
             fpgaHost = '128.149.77.24'  # A JPL address which somehow got burned into the FPGAs. See INSTRM-464
         self.fpgaHost = fpgaHost
