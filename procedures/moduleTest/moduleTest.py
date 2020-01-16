@@ -649,9 +649,9 @@ class ModuleTest():
             self.thetaHomes = homeAngles
             self.thetaAngles = lastAngles
 
-        homeAngles = self.thetaHomes[idx]
-        lastAngles = self.thetaAngles[idx]
-        thetaCenters = thetaCenters[idx]
+        homeAngles = self.thetaHomes
+        lastAngles = self.thetaAngles
+        thetaCenters = thetaCenters
 
         targetAngles = np.deg2rad(angle)
         if globalAngles:

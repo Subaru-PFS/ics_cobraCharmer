@@ -434,6 +434,8 @@ class PFIDesign():
             if setOurModuleIds:
                 self.moduleIds[i] = moduleId
 
+        return self.moduleIds[0]
+
     def copyMotorMap(self, otherModel, motorIndex, doThetaFwd=False, doThetaRev=False,
                      doPhiFwd=False, doPhiRev=False, doFast=False):
         """ Copy maps for a given cobra from another model. """
@@ -811,6 +813,7 @@ class PFIDesign():
         """ Confirm that the theta limits are sane. """
 
         thetaRange = self.tht1 - self.tht0
+        thetaRange[thetaRange<0] += 2*np.pi
         thetaRange[thetaRange<np.pi/4] += 2*np.pi
         duds = thetaRange < np.deg2rad(370)
 
