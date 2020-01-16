@@ -397,8 +397,8 @@ class ModuleTest():
           For the first move, use the fast map?
         """
 
-        dtype = np.dtype(dict(names=['iteration', 'cobra', 'target', 'position', 'left', 'done'],
-                              formats=['i2', 'i2', 'f4', 'f4', 'f4', 'i1']))
+        dtype = np.dtype(dict(names=['iteration', 'cobra', 'target', 'position', 'left', 'steps', 'done'],
+                              formats=['i2', 'i2', 'f4', 'f4', 'f4', 'i4', 'i1']))
 
         # We do want a new stack of these images.
         self._connect()
@@ -438,14 +438,13 @@ class ModuleTest():
         moves = moves0.copy()
         moveList.append(moves)
         for i in range(len(cobras)):
-            moveIdx = i
             cobraNum = cobras[i].cobraNum
-            moves['iteration'][moveIdx] = 0
-            moves['cobra'][moveIdx] = cobraNum
-            moves['target'][moveIdx] = angle
-            moves['position'][moveIdx] = curAngles[i]
-            moves['left'][moveIdx] = left[i]
-            moves['done'][moveIdx] = not notDone[i]
+            moves['iteration'][i] = 0
+            moves['cobra'][i] = cobraNum
+            moves['target'][i] = targetAngles[i]
+            moves['position'][i] = lastAngles[i]
+            moves['left'][i] = left[i]
+            moves['done'][i] = not notDone[i]
 
         with np.printoptions(precision=2, suppress=True):
             self.logger.info("to: %s", np.rad2deg(targetAngles)[notDone])
@@ -475,20 +474,26 @@ class ModuleTest():
             atAngles = self.dPhiAngle(a1, homeAngles, doAbs=True)
             left = self.dPhiAngle(targetAngles,atAngles, doWrap=True)
 
+            # Any cobras which were 0 steps away on the last move are done.
+            lastNotDone = notDone.copy()
+            tooCloseToMove = (allPhiSteps == 0)
+            notDone[tooCloseToMove] = False
+
             # check position errors
-            notDone = np.abs(left) > tolerance
+            closeEnough = np.abs(left) <= tolerance
+            notDone[closeEnough] = False
 
             moves = moves0.copy()
-            moveList.append(moves)
             for i in range(len(cobras)):
-                moveIdx = i
                 cobraNum = cobras[i].cobraNum
-                moves['iteration'][moveIdx] = ntries
-                moves['cobra'][moveIdx] = cobraNum
-                moves['target'][moveIdx] = angle
-                moves['position'][moveIdx] = atAngles[i]
-                moves['left'][moveIdx] = left[i]
-                moves['done'][moveIdx] = not notDone[i]
+                moves['iteration'][i] = ntries
+                moves['cobra'][i] = cobraNum
+                moves['target'][i] = targetAngles[i]
+                moves['position'][i] = atAngles[i]
+                moves['left'][i] = left[i]
+                moves['done'][i] = not notDone[i]
+            moveList[-1]['steps'][lastNotDone] = phiSteps
+            moveList.append(moves)
 
             if not np.any(notDone):
                 self.logger.info(f'Convergence sequence done after {ntries} iterations')
@@ -604,8 +609,8 @@ class ModuleTest():
           For the first move, use the fast map?
         """
 
-        dtype = np.dtype(dict(names=['iteration', 'cobra', 'target', 'position', 'left', 'done'],
-                              formats=['i2', 'i2', 'f4', 'f4', 'f4', 'i1']))
+        dtype = np.dtype(dict(names=['iteration', 'cobra', 'target', 'position', 'left', 'steps', 'done'],
+                              formats=['i2', 'i2', 'f4', 'f4', 'f4', 'i4', 'i1']))
 
         # We do want a new stack of these images.
         self._connect()
@@ -656,7 +661,7 @@ class ModuleTest():
             cobraNum = cobras[i].cobraNum
             moves['iteration'][i] = 0
             moves['cobra'][i] = cobraNum
-            moves['target'][i] = angle[i]
+            moves['target'][i] = targetAngles[i]
             moves['position'][i] = lastAngles[i]
             moves['left'][i] = left[i]
             moves['done'][i] = not notDone[i]
@@ -691,19 +696,25 @@ class ModuleTest():
                                          lastAngles, targetAngles)
             left = targetAngles - atAngles
 
+            lastNotDone = notDone.copy()
+            tooCloseToMove = (allThetaSteps == 0)
+            notDone[tooCloseToMove] = False
+
             # check position errors
-            notDone = np.abs(left) > tolerance
+            closeEnough = np.abs(left) <= tolerance
+            notDone[closeEnough] = False
 
             moves = moves0.copy()
-            moveList.append(moves)
             for i in range(len(cobras)):
                 cobraNum = cobras[i].cobraNum
                 moves['iteration'][i] = ntries
                 moves['cobra'][i] = cobraNum
-                moves['target'][i] = angle[i]
+                moves['target'][i] = targetAngles[i]
                 moves['position'][i] = atAngles[i]
                 moves['left'][i] = left[i]
                 moves['done'][i] = not notDone[i]
+            moveList[-1]['steps'][lastNotDone] = thetaSteps
+            moveList.append(moves)
 
             if not np.any(notDone):
                 self.logger.info(f'Convergence sequence done after {ntries} iterations')
