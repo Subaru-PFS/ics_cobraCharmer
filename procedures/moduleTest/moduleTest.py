@@ -287,6 +287,13 @@ class ModuleTest():
 
         return a
 
+    @staticmethod
+    def dAngle(angle):
+        """ return angle between Pi and -Pi """
+        d = (angle + np.pi) % (np.pi*2) - np.pi
+
+        return d
+
     def getPhiCenters(self, fixOntime=None):
         outputDir = self.makePhiMotorMap('quickPhiScan.xml',
                                          repeat=1, phiOnTime=fixOntime, steps=200,
@@ -414,7 +421,7 @@ class ModuleTest():
         thetaAngles = targetAngles*0
         ntries = 1
         notDone = targetAngles != 0
-        left = self.dPhiAngle(targetAngles,lastAngles, doWrap=True)
+        left = self.dPhiAngle(targetAngles, lastAngles, doWrap=True)
 
         moves = moves0.copy()
         moveList.append(moves)
@@ -621,15 +628,17 @@ class ModuleTest():
 
         tolerance = np.deg2rad(tolerance)
 
-        if not keepExistingPosition:
+        if not keepExistingPosition or not hasattr(self, 'thetaHomes'):
             # extract sources and fiber identification
+            self.logger.info(f'theta backward -10000 steps to limit')
+            self.pfi.moveAllSteps(cobras, -10000, 0)
             allCurPos = self.exposeAndExtractPositions(tolerance=0.2)
 
             homeAngles = self._fullAngle(allCurPos, thetaCenters)
             lastAngles = np.zeros(len(homeAngles))
-            self.thetaHomes = homeAngles
-            self.thetaAngles = lastAngles
-
+            if not hasattr(self, 'thetaHomes'):
+                self.thetaHomes = np.zeros(57)
+                self.thetaAngles = np.zeros(57)
         homeAngles = self.thetaHomes
         lastAngles = self.thetaAngles
         thetaCenters = thetaCenters
