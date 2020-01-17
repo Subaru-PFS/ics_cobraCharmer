@@ -1,4 +1,5 @@
 from importlib import reload
+import logging
 import numpy as np
 
 from ics.cobraCharmer import pfiDesign
@@ -18,6 +19,7 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
                     simulationPath=None,
                     setCenters=True,
                     clearGeometry=True,
+                    brokenFibers=(),
                     doCalibrate=True,
                     numberCobrasFromRight=False,
                     setModuleId=True):
@@ -68,14 +70,23 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
         else:
             pfi.setFreq()
 
+    if setModuleId:
+        moduleId = pfiModel.setModuleId(moduleName)
+
     cs, im, _ = cam.expose()
     imCenters = np.stack((cs['x'], cs['y']), 1)
 
     # Needs to come from pfiDesign.nVisibleCobras, etc.
     nspots = len(cs)
-    if nspots != 57:
-        raise RuntimeError(f'need 57 spots, got {nspots}')
-    oldCenters = pfiModel.centers
+    if nspots != nCobras - len(brokenFibers):
+        raise RuntimeError(f'expect {nCobras - len(brokenFibers)} spots, got {nspots}')
+    visibleIdx = list(pfiModel.findAllCobras())
+    for b in brokenFibers:
+        pfiModel.setCobraStatus(b, moduleId, invisible=True)
+        visibleIdx.remove(pfiModel.findCobraByModuleAndPositioner(moduleId, b))
+    visibleIdx = np.array(visibleIdx, 'i4')
+
+    oldCenters = pfiModel.centers[visibleIdx]
     modelCenters = np.stack((np.real(oldCenters), np.imag(oldCenters)), 1)
 
     # The _only_ point of this step is to match up the fiber
@@ -102,11 +113,9 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
     # clear the geometry.
     offset1, scale1, tilt1, convert1 = coordinates.makeTransform(oldCenters[modelIdx], homes)
 
-    if setModuleId:
-        pfiModel.setModuleId(moduleName)
-
     if setCenters:
-        centers = homes
+        centers = pfiModel.centers[:] * 0
+        centers[visibleIdx] = homes
     else:
         centers = convert1(pfiModel.centers)
 
@@ -138,7 +147,6 @@ def bootstrapModule(moduleName, initialXml=None, outputName=None,
     pfiModel.createCalibrationFile(outPath, name='bootstrap')
     pfiModel.createCalibrationFile(butler.mapPathForModule(moduleName, version='bootstrap'),
                                    name='bootstrap')
-
     return outPath
 
 def main(args=None):

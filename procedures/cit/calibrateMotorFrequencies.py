@@ -1,4 +1,5 @@
 from importlib import reload
+import logging
 import pathlib
 import numpy as np
 
@@ -28,6 +29,7 @@ def calibrateMotorFrequencies(pfi, modules=None, updateModel=True,
 
 
     """
+    logger = logging.getLogger('pfi')
 
     if modules is not None:
         cobras = []
@@ -45,7 +47,9 @@ def calibrateMotorFrequencies(pfi, modules=None, updateModel=True,
                       enabled=enabled)
     for b in boards:
         mod, brd = b
-        pfi.hk(mod, brd, updateModel=updateModel)
+        err, t1, t2, v, freq1, curr1, freq2, curr2 = pfi.hk(mod, brd, updateModel=updateModel)
+        for i in range(len(curr1)):
+            logger.info(f"cobra {i+1:-2d} theta={curr1[i]:-6.3f} phi={curr2[i]:-6.3f}")
 
     return pfi
 
