@@ -286,7 +286,7 @@ class Calculation():
                 valueSum = 0
                 for n in range(repeat):
                     for k in range(iteration):
-                        if angFW[c, n, k+1] < angFW[c, n, k] or angRV[c, n, 0] - angFW[c, n, k+1] < delta:
+                        if angFW[c, n, k+1] <= angFW[c, n, k] or angRV[c, n, 0] - angFW[c, n, k+1] < delta:
                             # hit hard stop or somethings went wrong, then skip it
                             continue
                         if angFW[c, n, k] < binMax and angFW[c, n, k+1] > binMin:
@@ -305,7 +305,7 @@ class Calculation():
                 valueSum = 0
                 for n in range(repeat):
                     for k in range(iteration):
-                        if angRV[c, n, k+1] > angRV[c, n, k] or angRV[c, n, k+1] < delta:
+                        if angRV[c, n, k+1] >= angRV[c, n, k] or angRV[c, n, k+1] < delta:
                             # hit hard stop or somethings went wrong, then skip it
                             continue
                         if angRV[c, n, k] > binMin and angRV[c, n, k+1] < binMax:
