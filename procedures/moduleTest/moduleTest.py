@@ -797,11 +797,7 @@ class ModuleTest():
 
             ntries += 1
 
-            # move again, skip bad center measurement
-            # Yikes, No!!!! Was wondering where replacement in calculations.py got used. -- CPL
-            good = (curPos != self.pfi.calibModel.centers[idx])
-
-            keepMoving = np.where(good & notDone)
+            keepMoving = np.where(notDone)
             self.pfi.moveXY(cobras[keepMoving], curPos[keepMoving], targets[keepMoving],
                             thetaThreshold=threshold, phiThreshold=threshold)
 
