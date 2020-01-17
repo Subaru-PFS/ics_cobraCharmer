@@ -166,14 +166,14 @@ class Calculation():
         pos = np.array(ext['x'] + ext['y']*(1j))
         target = lazyIdentification(centers, pos, radii=radii)
 
-        pos = np.zeros(len(idx), dtype=complex)
+        mpos = np.zeros(len(idx), dtype=complex)
         for n, k in enumerate(target):
             if k < 0:
-                pos[n] = self.calibModel.centers[idx[n]]
+                mpos[n] = self.calibModel.centers[idx[n]]
             else:
-                pos[n] = pos[k]
+                mpos[n] = pos[k]
 
-        return pos
+        return mpos
 
     def phiCenterAngles(self, phiFW, phiRV):
         # variable declaration for phi angles
