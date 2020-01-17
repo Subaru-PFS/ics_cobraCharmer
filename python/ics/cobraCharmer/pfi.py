@@ -39,8 +39,10 @@ class PFI(object):
         self.calibModel = None
         self.motorMap = None
         self.ontimeScales = cobraState.motorScales
-        self.maxThetaOntime = 0.08
-        self.maxPhiOntime = 0.07
+        self.maxThetaOntime = 0.10
+        self.maxPhiOntime = 0.08
+        self.maxThetaSteps = 10000
+        self.maxPhiSteps = 7000
         if fpgaHost == 'fpga':
             fpgaHost = '128.149.77.24'  # A JPL address which somehow got burned into the FPGAs. See INSTRM-464
         self.fpgaHost = fpgaHost
@@ -122,11 +124,15 @@ class PFI(object):
         The FPGA deals with _boards_, but the original code deals with _modules_. Wrap that.
         """
         cobras = self.allocateCobraBoard(module, board)
-        err = func.HK(cobras, updateModel=(self.calibModel if updateModel else None))
+        ret = func.HK(cobras, updateModel=(self.calibModel if updateModel else None),
+                      feedback=True)
+        err = ret[0]
         if err:
             self.logger.error(f'send HK command failed: {err}')
         else:
             self.logger.debug(f'send HK command succeeded')
+
+        return ret
 
     def setFreq(self, cobras=None, thetaFreq=None, phiFreq=None):
         """ Set COBRA motor frequency """
@@ -255,8 +261,8 @@ class PFI(object):
 
         self.moveSteps(cobras, thetaAllSteps, phiAllSteps, thetaFast=thetaFast, phiFast=phiFast)
 
-    def moveThetaPhi(self, cobras, thetaMoves, phiMoves, thetaFroms=None, phiFroms=None, 
-        phiFactors=None, thetaFactors=None, thetaFast=True, phiFast=True):
+    def moveThetaPhi(self, cobras, thetaMoves, phiMoves, thetaFroms=None, phiFroms=None,
+                     thetaFast=True, phiFast=True, doRun=True):
         """ Move cobras with theta and phi angles, angles are measured from CCW hard stops
 
             thetaMoves: A numpy array with theta angles to go
@@ -312,26 +318,24 @@ class PFI(object):
             _phiFast[cIdx] = phiFast
         else:
             raise RuntimeError("number of phiFast must match number of cobras")
-        
-        thetaSteps, phiSteps = self.calculateSteps(_thetaFroms, _thetaMoves, _phiFroms, _phiMoves, _thetaFast, _phiFast)
-        
-        if phiFactors is not None:
-            phiSteps = phiSteps*phiFactors
-        if thetaFactors is not None:
-            thetaSteps = thetaSteps*thetaFactors
 
+        thetaSteps, phiSteps = self.calculateSteps(_thetaFroms, _thetaMoves, _phiFroms, _phiMoves, _thetaFast, _phiFast)
         cThetaSteps = thetaSteps[cIdx]
         cPhiSteps = phiSteps[cIdx]
-       
-        """ 
+
+        """
         Looking for NaN values and put them as 0
         """
         thetaIndex =  np.isnan(cThetaSteps)
         phiIndex = np.isnan(cPhiSteps)
         cThetaSteps[thetaIndex] = 0
         cPhiSteps[phiIndex] = 0
-        self.logger.debug(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
-        self.moveSteps(cobras, cThetaSteps, cPhiSteps, thetaFast=thetaFast, phiFast=phiFast)
+
+        self.logger.debug(f'steps (run={doRun}): {list(zip(cThetaSteps, cPhiSteps))}')
+        if doRun:
+            self.moveSteps(cobras, cThetaSteps, cPhiSteps, thetaFast=thetaFast, phiFast=phiFast)
+
+        return cThetaSteps, cPhiSteps
 
     def thetaToGlobal(self, cobras, thetaLocals):
         """ Convert theta angles from relative to hard stops to global coordinate
@@ -423,12 +427,12 @@ class PFI(object):
             existingScale = 1.0
 
         newScale = existingScale * scale
-        if newScale < 0.25:
-            self.logger.warn(f'clipping scale adjustment from {newScale} to 0.25')
-            newScale = 0.25
-        if newScale > 3.0:
-            self.logger.warn(f'clipping scale adjustment from {newScale} to 3.0')
-            newScale = 3.0
+        if newScale < 0.5:
+            self.logger.warn(f'clipping scale adjustment from {newScale} to 0.5')
+            newScale = 0.5
+        if newScale > 2.0:
+            self.logger.warn(f'clipping scale adjustment from {newScale} to 2.0')
+            newScale = 2.0
 
         cobraState.motorScales[mapId] = newScale
         self.logger.debug(f'setadjust {mapId} {existingScale:0.2f} -> {newScale:0.2f}')
@@ -442,7 +446,8 @@ class PFI(object):
         if newOntime > self.maxThetaOntime:
             newOntime = self.maxThetaOntime
             cobraState.motorScales[mapId] = newOntime/ontime
-            self.logger.warn(f'clipping {mapId} {scale:0.2f} to {cobraState.motorScales[mapId]}')
+            self.logger.warn(f'clipping {mapId} ontime to {newOntime} and '
+                             f'scale {scale:0.2f} to {cobraState.motorScales[mapId]}')
 
         return newOntime
 
@@ -455,12 +460,13 @@ class PFI(object):
         if newOntime > self.maxPhiOntime:
             newOntime = self.maxPhiOntime
             cobraState.motorScales[mapId] = newOntime/ontime
-            self.logger.warn(f'clipping {mapId} {scale:0.2f} to {cobraState.motorScales[mapId]}')
+            self.logger.warn(f'clipping {mapId} ontime to {newOntime} and '
+                             f'scale {scale:0.2f} to {cobraState.motorScales[mapId]}')
 
         return newOntime
 
     def moveSteps(self, cobras, thetaSteps, phiSteps, waitThetaSteps=None, waitPhiSteps=None,
-                  interval=2.5, thetaFast=True, phiFast=True):
+                  interval=2.5, thetaFast=True, phiFast=True, force=False):
         """ Move cobras with theta and phi steps
 
             thetaSteps: A numpy array with theta steps to go
@@ -470,6 +476,7 @@ class PFI(object):
             interval: the FPGA interval parameter for RUN command
             thetaFast: a boolean value for using fast/slow theta movement
             phiFast: a boolean value for using fast/slow phi movement
+            force: ignore disabled cobra status
 
         """
 
@@ -499,7 +506,15 @@ class PFI(object):
             return
 
         for c_i, c in enumerate(cobras):
-            steps1 = int(np.abs(thetaSteps[c_i])), int(np.abs(phiSteps[c_i]))
+            cobraId = self._mapCobraIndex(c)
+            steps1 = [int(np.abs(thetaSteps[c_i])), int(np.abs(phiSteps[c_i]))]
+            if steps1[0] > self.maxThetaSteps:
+                self.logger.warn(f'clipping #{c_i+1} theta steps from {steps1[0]} to {self.maxThetaSteps}')
+                steps1[0] = self.maxThetaSteps
+            if steps1[1] > self.maxPhiSteps:
+                self.logger.warn(f'clipping #{c_i+1} phi steps from {steps1[1]} to {self.maxPhiSteps}')
+                steps1[1] = self.maxPhiSteps
+
             dirs1 = ['cw', 'cw']
 
             if thetaSteps[c_i] < 0:
@@ -508,7 +523,9 @@ class PFI(object):
                 dirs1[1] = 'ccw'
 
             en = (steps1[0] != 0, steps1[1] != 0)
-            cobraId = self._mapCobraIndex(c)
+            isBad = self.calibModel.cobraIsBad(c.cobra, c.module)
+            if isBad and not force:
+                en = (False, False)
 
             if _thetaFast[c_i]:
                 if dirs1[0] == 'cw':
@@ -672,12 +689,20 @@ class PFI(object):
                     phiSteps = self.calibModel.negPhiSlowSteps[c]
 
             # Calculate the total number of motor steps for the theta movement
-            stepsRange = np.interp([startTht[c], startTht[c] + deltaTht[c]], self.calibModel.thtOffsets[c], thtSteps)
-            nThtSteps[c] = stepsRange[1] - stepsRange[0]
+            stepsRange = np.interp([startTht[c], startTht[c] + deltaTht[c]], self.calibModel.thtOffsets[c],
+                                   thtSteps)
+            if not np.all(np.isfinite(stepsRange)):
+                raise ValueError(f"theta angle to step interpolation out of range: "
+                                 f"{startTht[c]} {startTht[c] + deltaTht[c]}")
+            nThtSteps[c] = np.rint(stepsRange[1] - stepsRange[0]).astype('i4')
 
             # Calculate the total number of motor steps for the phi movement
-            stepsRange = np.interp([startPhi[c], startPhi[c] + deltaPhi[c]], self.calibModel.phiOffsets[c], phiSteps)
-            nPhiSteps[c] = stepsRange[1] - stepsRange[0]
+            stepsRange = np.interp([startPhi[c], startPhi[c] + deltaPhi[c]], self.calibModel.phiOffsets[c],
+                                   phiSteps)
+            if not np.all(np.isfinite(stepsRange)):
+                raise ValueError(f"phi angle to step interpolation out of range: "
+                                 f"{startTht[c]} {startTht[c] + deltaTht[c]}")
+            nPhiSteps[c] = np.rint(stepsRange[1] - stepsRange[0]).astype('i4')
 
         self.logger.debug(f'start={startPhi[:3]}, delta={deltaPhi[:3]} move={nPhiSteps[:3]}')
         return (nThtSteps, nPhiSteps)

@@ -5,7 +5,7 @@ import numpy as np
 import glob
 import pandas as pd
 import math
-import pdb
+
 from scipy import stats
 import matplotlib.pyplot as plt
 from astropy.io import fits

@@ -44,12 +44,8 @@ def transform(origPoints, newPoints):
     return offset, scale, tilt, tr
 
 class Calculation():
-    def __init__(self, xml, brokens=None, camSplit=None):
-        if not os.path.exists(xml):
-            print(f"Error: {xml} is not presented!")
-            sys.exit()
-        self.xml = xml
-        self.calibModel = pfiDesign.PFIDesign(xml)
+    def __init__(self, calibModel, brokens, camSplit):
+        self.calibModel = calibModel
         self.setBrokenCobras(brokens)
         self.camSplit = camSplit
 
@@ -131,7 +127,8 @@ class Calculation():
 
         idx = self.goodIdx
         if tolerance is not None:
-            radii = ((self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance))[idx]
+            radii = (self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance)
+            radii = radii[idx]
         else:
             radii = None
 
@@ -146,6 +143,7 @@ class Calculation():
         pos = np.zeros(len(idx), dtype=complex)
         for n, k in enumerate(target):
             if k < 0:
+                # Is this _really_ what we want to do?
                 pos[n] = self.calibModel.centers[idx[n]]
             else:
                 pos[n] = measPos[k]
@@ -168,14 +166,14 @@ class Calculation():
         pos = np.array(ext['x'] + ext['y']*(1j))
         target = lazyIdentification(centers, pos, radii=radii)
 
-        pos = np.zeros(len(idx), dtype=complex)
+        mpos = np.zeros(len(idx), dtype=complex)
         for n, k in enumerate(target):
             if k < 0:
-                pos[n] = self.calibModel.centers[idx[n]]
+                mpos[n] = self.calibModel.centers[idx[n]]
             else:
-                pos[n] = pos[k]
+                mpos[n] = pos[k]
 
-        return pos
+        return mpos
 
     def phiCenterAngles(self, phiFW, phiRV):
         # variable declaration for phi angles
@@ -200,7 +198,7 @@ class Calculation():
             phiAngRV[c] = (phiAngRV[c] - home + np.pi/2) % (np.pi*2) - np.pi/2
 
         # mark bad cobras by checking hard stops
-        bad = np.any(phiAngRV[:, :, 0] < np.pi*0.8, axis=1)
+        bad = np.any(phiAngRV[:, :, 0] < np.pi, axis=1)
         bad[np.std(phiAngRV[:, :, 0], axis=1) > 0.1] = True
         badRange = np.where(bad)[0]
 
@@ -248,7 +246,7 @@ class Calculation():
 
         return homeDiffs, atEnd
 
-    def thetaCenterAngles(self, thetaFW, thetaRV):
+    def thetaCenterAngles(self, thetaFW, thetaRV, tolerance=0.01):
         # variable declaration for theta angles
         thetaCenter = np.zeros(57, dtype=complex)
         thetaRadius = np.zeros(57, dtype=float)
@@ -267,23 +265,32 @@ class Calculation():
             for n in range(thetaFW.shape[1]):
                 thetaAngFW[c, n] = np.angle(thetaFW[c, n] - thetaCenter[c])
                 thetaAngRV[c, n] = np.angle(thetaRV[c, n] - thetaCenter[c])
-                home = thetaAngFW[c, n, 0]
-                thetaAngFW[c, n] = (thetaAngFW[c, n] - home) % (np.pi*2)
-                thetaAngRV[c, n] = (thetaAngRV[c, n] - home) % (np.pi*2)
+                home1 = thetaAngFW[c, n, 0]
+                home2 = thetaAngRV[c, n, -1]
+                thetaAngFW[c, n] = (thetaAngFW[c, n] - home1 + 0.1) % (np.pi*2)
+                thetaAngRV[c, n] = (thetaAngRV[c, n] - home2 + 0.1) % (np.pi*2)
 
-                fwMid = np.argmin(abs(thetaAngFW[c, n] % (np.pi*2) - np.pi))
-                thetaAngFW[c, n, :fwMid][thetaAngFW[c, n, :fwMid]>6.2] -= np.pi*2
-                if fwMid < thetaAngFW.shape[2] - 1:
-                    thetaAngFW[c, n, fwMid:][thetaAngFW[c, n, fwMid:]<0.45] += np.pi*2
+                # fix over 2*pi angle issue
+                diff = thetaAngFW[c, n, 1:] - thetaAngFW[c, n, :-1]
+                t = np.where(diff < -np.pi/2)
+                if t[0].size > 0:
+                    thetaAngFW[c, n, t[0][0]+1:] += np.pi*2
+                thetaAngFW[c, n] -= 0.1
 
-                rvMid = np.argmin(abs(thetaAngRV[c, n] % (np.pi*2) - np.pi))
-                thetaAngRV[c, n, :rvMid][thetaAngRV[c, n, :rvMid]<0.45] += np.pi*2
-                if rvMid < thetaAngRV.shape[2] - 1:
-                    thetaAngRV[c, n, rvMid:][thetaAngRV[c, n, rvMid:]>6.2] -= np.pi*2
+                diff = thetaAngRV[c, n, 1:] - thetaAngRV[c, n, :-1]
+                t = np.where(diff > np.pi/2)
+                if t[0].size > 0:
+                    thetaAngRV[c, n, :t[0][0]+1] += np.pi*2
+                thetaAngRV[c, n] += (home2 - home1 + 0.1) % (np.pi*2) - 0.2
+
+                # in case only travel in overlapping region
+                if thetaAngRV[c, n, 0] - thetaAngFW[c, n, -1] < -0.1:
+                    thetaAngRV[c, n] += np.pi*2
 
         # mark bad cobras by checking hard stops
         bad = np.any(thetaAngRV[:, :, 0] < np.pi*2, axis=1)
         bad[np.std(thetaAngRV[:, :, 0], axis=1) > 0.1] = True
+        # bad[np.any(thetaAngRV[:, :, -1] > tolerance)] = True
         badRange = np.where(bad)[0]
 
         return thetaCenter, thetaRadius, thetaAngFW, thetaAngRV, badRange
@@ -307,7 +314,7 @@ class Calculation():
                 valueSum = 0
                 for n in range(repeat):
                     for k in range(iteration):
-                        if angFW[c, n, k+1] < angFW[c, n, k] or angRV[c, n, 0] - angFW[c, n, k+1] < delta:
+                        if angFW[c, n, k+1] <= angFW[c, n, k] or angRV[c, n, 0] - angFW[c, n, k+1] < delta:
                             # hit hard stop or somethings went wrong, then skip it
                             continue
                         if angFW[c, n, k] < binMax and angFW[c, n, k+1] > binMin:
@@ -326,7 +333,7 @@ class Calculation():
                 valueSum = 0
                 for n in range(repeat):
                     for k in range(iteration):
-                        if angRV[c, n, k+1] > angRV[c, n, k] or angRV[c, n, k+1] < delta:
+                        if angRV[c, n, k+1] >= angRV[c, n, k] or angRV[c, n, k+1] < delta:
                             # hit hard stop or somethings went wrong, then skip it
                             continue
                         if angRV[c, n, k] > binMin and angRV[c, n, k+1] < binMax:
@@ -368,9 +375,7 @@ class Calculation():
             darr[idx] = total
 
     def motorMaps2(self, angFW, angRV, steps, delta=0.1):
-        """ the calculate for motor maps is to ensure the step counts
-            from home to the target is correct
-        """
+        """ calculate motor maps based on average step counts """
         mmFW = np.zeros((57, regions), dtype=float)
         mmRV = np.zeros((57, regions), dtype=float)
         bad = np.full(57, False)
@@ -508,8 +513,7 @@ class Calculation():
         new.updateMotorMaps(phiFwd=mmFW, phiRev=mmRV, useSlowMaps=slow)
 
     def restoreConfig(self):
-        # restore default setting
-        self.calibModel = pfiDesign.PFIDesign(self.xml)
+        raise NotImplementedError('Create a new cal instance')
 
     def geometry(self, thetaC, thetaR, thetaFW, thetaRV, phiC, phiR, phiFW, phiRV):
         """ calculate geometry from theta and phi motor maps process """

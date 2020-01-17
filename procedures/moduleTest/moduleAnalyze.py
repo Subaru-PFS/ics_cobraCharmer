@@ -148,24 +148,20 @@ class moduleAnalyze():
         #record the theta movements
         for n in range(repeat):
             # forward theta motor maps
-            data1 = fits.getdata(dataPath + f'/theta1Begin{n}.fits.gz')
-            data2 = fits.getdata(dataPath + f'/theta2Begin{n}.fits.gz')
-            thetaFW[goodIdx, n, 0] = self.cal.extractPositions(data1, data2)
+            data1 = fits.getdata(dataPath + f'/thetaBegin{n}.fits')
+            thetaFW[goodIdx, n, 0] = self.cal.extractPositions(data1)
 
             for k in range(iteration):
-                data1 = fits.getdata(dataPath + f'/theta1Forward{n}N{k}.fits.gz')
-                data2 = fits.getdata(dataPath + f'/theta2Forward{n}N{k}.fits.gz')
-                thetaFW[goodIdx, n, k+1] = self.cal.extractPositions(data1, data2, guess=thetaFW[goodIdx, n, k])
+                data1 = fits.getdata(dataPath + f'/thetaForward{n}N{k}.fits')
+                thetaFW[goodIdx, n, k+1] = self.cal.extractPositions(data1, guess=thetaFW[goodIdx, n, k])
 
             # reverse theta motor maps
-            data1 = fits.getdata(dataPath + f'/theta1End{n}.fits.gz')
-            data2 = fits.getdata(dataPath + f'/theta2End{n}.fits.gz')
-            thetaRV[goodIdx, n, 0] = self.cal.extractPositions(data1, data2, guess=thetaFW[goodIdx, n, iteration])
+            data1 = fits.getdata(dataPath + f'/thetaEnd{n}.fits')
+            thetaRV[goodIdx, n, 0] = self.cal.extractPositions(data1, guess=thetaFW[goodIdx, n, iteration])
 
             for k in range(iteration):
-                data1 = fits.getdata(dataPath + f'/theta1Reverse{n}N{k}.fits.gz')
-                data2 = fits.getdata(dataPath + f'/theta2Reverse{n}N{k}.fits.gz')
-                thetaRV[goodIdx, n, k+1] = self.cal.extractPositions(data1, data2, guess=thetaRV[goodIdx, n, k])
+                data1 = fits.getdata(dataPath + f'/thetaReverse{n}N{k}.fits')
+                thetaRV[goodIdx, n, k+1] = self.cal.extractPositions(data1, guess=thetaRV[goodIdx, n, k])
 
         # save calculation result
         np.save(dataPath + '/thetaFW_A', thetaFW)
@@ -291,7 +287,6 @@ class moduleAnalyze():
         dataframe = pd.DataFrame(d)        
         dataframe.to_csv(dataPath+'hardstop.csv')
 
-        
     def convertXML(self, newXml, dataPath, image1=None, image2=None):
         """ convert old XML to a new coordinate by using the 'phi homed' images
             assuming the cobra module is in horizontal setup

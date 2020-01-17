@@ -17,11 +17,14 @@ from .utils import butler
 reload(butler)
 
 class PFIDesign():
-    """
+    """ Class describing a cobras calibration product, the "motor map"  """
 
-    Class describing a cobras calibration product, the "motor map"
+    COBRA_OK_MASK           = 0x0001  # a synthetic summary bit: 1 for good, 0 for bad.
+    COBRA_INVISIBLE_MASK    = 0x0002  # 1 if the fiber is not visible
+    COBRA_BROKEN_THETA_MASK = 0x0004  # 1 if the phi motor do not work
+    COBRA_BROKEN_PHI_MASK   = 0x0008  # 1 if the theta motor does not work
 
-    """
+    COBRA_BROKEN_MOTOR_MASK = COBRA_BROKEN_THETA_MASK | COBRA_BROKEN_PHI_MASK
 
     def __init__(self, fileName=None):
         """
@@ -47,11 +50,10 @@ class PFIDesign():
         PFIDesign.loadPFI().
         """
 
+        self.logger = logging.getLogger('pfiDesign')
+
         if fileName is None:
             return
-        import warnings
-
-        warnings.warn('please use PFIDesign.loadModule() or PFIDesign.loadPFI()')
 
         self.loadModelFiles([fileName])
         self.moduleIds[:] = 1
@@ -142,10 +144,11 @@ class PFIDesign():
         self.nCobras = len(dataContainers)
 
         # Create some of the calibration data arrays
-        self.moduleIds = np.empty(self.nCobras, dtype="int")
-        self.positionerIds = np.empty(self.nCobras, dtype="int")
-        self.serialIds = np.empty(self.nCobras, dtype="int")
+        self.moduleIds = np.empty(self.nCobras, dtype="u2")
+        self.positionerIds = np.empty(self.nCobras, dtype="u2")
+        self.serialIds = np.empty(self.nCobras, dtype="u2")
         self.centers = np.empty(self.nCobras, dtype="complex")
+        self.status = np.empty(self.nCobras, dtype="u2")
         self.tht0 = np.empty(self.nCobras)
         self.tht1 = np.empty(self.nCobras)
         self.phiIn = np.empty(self.nCobras)
@@ -192,6 +195,7 @@ class PFIDesign():
             self.moduleIds[i] = int(header.find("Module_Id").text)
             self.positionerIds[i] = int(header.find("Positioner_Id").text)
             self.serialIds[i] = int(header.find("Serial_Number").text, base=10)
+            self.status[i] = int(header.find("Status").text, base=10)
 
             # Check for conflicts:
             for check_i in range(i):
@@ -355,8 +359,54 @@ class PFIDesign():
         moduleId = self.getRealModuleId(moduleId)
         return np.where(self.moduleIds == moduleId)[0]
 
+    def setCobraStatus(self, cobraId, moduleId=1, brokenTheta=False, brokenPhi=False, invisible=False):
+        """ Set the operational status of a cobra.
+        """
+        cobraIdx = self.findCobraByModuleAndPositioner(moduleId, cobraId)
+
+        if invisible:
+            self.status[cobraIdx] |= self.COBRA_INVISIBLE_MASK
+            self.status[cobraIdx] &= ~self.COBRA_OK_MASK
+        if brokenTheta:
+            self.status[cobraIdx] |= self.COBRA_BROKEN_THETA_MASK
+            self.status[cobraIdx] &= ~self.COBRA_OK_MASK
+        if brokenPhi:
+            self.status[cobraIdx] |= self.COBRA_BROKEN_PHI_MASK
+            self.status[cobraIdx] &= ~self.COBRA_OK_MASK
+
+        # Arrange for the new value to be persisted.
+        header = self.dataContainers[cobraIdx].find("DATA_HEADER")
+        header.find("Status").text = str(self.status[cobraIdx])
+
+    def cobraStatus(self, cobraId, moduleId=1):
+        cobraIdx = self.findCobraByModuleAndPositioner(moduleId, cobraId)
+        return self.status[cobraIdx]
+
+    def cobraIsGood(self, cobraId, moduleId=1):
+        """ Return the cobra's status field. """
+
+        status = self.cobraStatus(cobraId, moduleId=moduleId)
+        return status== self.COBRA_OK_MASK
+
+    def cobraIsBad(self, cobraId, moduleId=1):
+        """ Return True if we believe cobra can/should NOT be used. """
+
+        return not self.cobraIsGood(cobraId, moduleId=moduleId)
+
+    def motorIsBroken(self, cobraId, moduleId=1):
+        """ Return True if we believe cobra can/should NOT be moved. """
+
+        status = self.cobraStatus(cobraId, moduleId=moduleId)
+        return status & self.COBRA_BROKEN_MOTOR_MASK != 0
+
+    def fiberIsBroken(self, cobraId, moduleId=1):
+        """ Return True if we believe fiber cannot be seen. """
+
+        status = self.cobraStatus(cobraId, moduleId=moduleId)
+        return status & self.COBRA_INVISIBLE_MASK != 0
+
     def setModuleId(self, moduleId, forModule=None, setOurModuleIds=False):
-        """Update moduleIds
+        """ Update moduleIds
 
         Args
         ----
@@ -376,13 +426,15 @@ class PFIDesign():
 
         # A length test is probably sufficient
         if len(idx) != 57:
-            raise RuntimeError("Will not set moduleId to anything other that all cobras in a single module")
+            raise RuntimeError("Will not set moduleId for anything other than all cobras in a single module")
         for i in idx:
             header = self.dataContainers[i].find("DATA_HEADER")
             header.find("Module_Id").text = str(moduleId)
 
             if setOurModuleIds:
                 self.moduleIds[i] = moduleId
+
+        return self.moduleIds[0]
 
     def copyMotorMap(self, otherModel, motorIndex, doThetaFwd=False, doThetaRev=False,
                      doPhiFwd=False, doPhiRev=False, doFast=False):
@@ -737,4 +789,36 @@ class PFIDesign():
 
         # Save the new XML calibration file
         newXmlTree.write(outputFileName, encoding="UTF-8", xml_declaration=True)
-        logging.info(f'wrote pfiDesign file for {self.nCobras} cobras and name={name} to {str(outputFileName)}')
+        self.logger.info(f'wrote pfiDesign file for {self.nCobras} cobras and name={name} to {str(outputFileName)}')
+
+    def validatePhiLimits(self, rangeOnly=True):
+        """ Confirm that the phi limits are sane. """
+
+        phiRange = self.phiOut - self.phiIn
+        phiRange[phiRange<0] += 2*np.pi
+        phiRange[phiRange>=2*np.pi] -= 2*np.pi
+
+        if not rangeOnly:
+            raise NotImplementedError('not checking phi limit _positions_ yet.')
+
+        duds = phiRange < np.pi
+
+        for cidx in np.where(duds)[0]:
+            with np.printoptions(precision=2, suppress=True):
+                self.logger.warn(f'phi limits bad: mod={self.moduleIds[cidx]} pos={self.positionerIds[cidx]} '
+                                 f'CCW={np.rad2deg(self.phiIn[cidx])} CW={np.rad2deg(self.phiOut[cidx])}')
+        return ~duds
+
+    def validateThetaLimits(self):
+        """ Confirm that the theta limits are sane. """
+
+        thetaRange = self.tht1 - self.tht0
+        thetaRange[thetaRange<0] += 2*np.pi
+        thetaRange[thetaRange<np.pi/4] += 2*np.pi
+        duds = thetaRange < np.deg2rad(370)
+
+        for cidx in np.where(duds)[0]:
+            with np.printoptions(precision=2, suppress=True):
+                self.logger.warn(f'theta limits bad: mod={self.moduleIds[cidx]} pos={self.positionerIds[cidx]} '
+                                 f'range={np.rad2deg(thetaRange[cidx])}')
+        return ~duds

@@ -2,6 +2,7 @@ from importlib import reload
 import logging
 import numpy as np
 from astropy.io import fits
+from scipy import optimize
 import sep
 from copy import deepcopy
 
@@ -11,7 +12,6 @@ reload(calculation)
 from procedures.moduleTest.mcs import camera
 reload(camera)
 from ics.cobraCharmer import pfi as pfiControl
-from ics.cobraCharmer import pfiDesign
 from ics.cobraCharmer.utils import butler
 from ics.cobraCharmer.fpgaState import fpgaState
 from ics.cobraCharmer import cobraState
@@ -35,6 +35,11 @@ def unwrappedAngle(angle, fromAngle, toAngle,
        If `tripAngle` was crossed and `angle` is within `allowAngle`
        of 0 on the other side, convert `angle` to be continuous with motion from
        `fromAngle` to `toAngle`.
+
+    Returns
+    -------
+    angle : radians
+       The full angle, which can be both slightly negative and slightly above 2pi.
 
     Given tripAngle is 90 and allowAngle is 30:
 
@@ -100,7 +105,6 @@ class ModuleTest():
         self.allCobras = np.array(pfiControl.PFI.allocateCobraModule(1))
         self.fpgaHost = fpgaHost
         self.xml = xml
-        self.brokens = brokens
         self.camSplit = camSplit
 
         # partition module 1 cobras into odd and even sets
@@ -122,8 +126,6 @@ class ModuleTest():
         self.phiCCWHome = None
         self.phiCWHome = None
 
-        self.setBrokenCobras(self.brokens)
-
     def _connect(self):
         self.runManager.newRun()
         # Initializing COBRA module
@@ -133,27 +135,31 @@ class ModuleTest():
         self.pfi.loadModel(self.xml)
         self.pfi.setFreq()
 
+        # define the broken/good cobras
+        self.setBrokenCobras()
+
         # initialize cameras
-        self.cam = camera.cameraFactory(doClear=True, runManager=self.runManager)
+        try:
+            self.cam = camera.cameraFactory(doClear=True, runManager=self.runManager)
+        except:
+            self.cam = None
 
         # init calculation library
-        self.cal = calculation.Calculation(self.xml, None, None)
-
-        # define the broken/good cobras
-        self.setBrokenCobras(self.brokens)
+        self.cal = calculation.Calculation(self.pfi.calibModel, self.badIdx+1,  None)
 
     def setBrokenCobras(self, brokens=None):
         """ define the broken/good cobras """
+        allCobras = self.pfi.getAllDefinedCobras()
         if brokens is None:
-            brokens = []
+            brokens = [c.cobraNum for c in allCobras if self.pfi.calibModel.fiberIsBroken(c.cobraNum,
+                                                                                          c.module)]
+        if len(brokens) > 0:
+            self.logger.warn("setting unuseable cobras: %s", brokens)
         visibles = [e for e in range(1, 58) if e not in brokens]
-        self.badIdx = np.array(brokens) - 1
-        self.goodIdx = np.array(visibles) - 1
+        self.badIdx = np.array(brokens, dtype='i4') - 1
+        self.goodIdx = np.array(visibles, dtype='i4') - 1
         self.badCobras = np.array(self.getCobras(self.badIdx))
         self.goodCobras = np.array(self.getCobras(self.goodIdx))
-
-        if hasattr(self, 'cal'):
-            self.cal.setBrokenCobras(brokens)
 
     movesDtype = np.dtype(dict(names=['expId', 'spotId',
                                       'module', 'cobra',
@@ -183,7 +189,7 @@ class ModuleTest():
             raise RuntimeError("Craig is confused about cobra lists")
 
         for pos_i, pos in enumerate(positions):
-            cobraInfo = self.allCobras[pos_i]
+            cobraInfo = self.goodCobras[pos_i]
             cobraNum = self.pfi.calibModel.findCobraByModuleAndPositioner(cobraInfo.module,
                                                                           cobraInfo.cobraNum)
             moveInfo = fpgaState.cobraLastMove(cobraInfo)
@@ -308,18 +314,18 @@ class ModuleTest():
             return
         self.setPhiCentersFromRun(geometryRun)
 
-        FW = np.load(geometryRun / 'data' / 'phiFW.npy')
-        RV = np.load(geometryRun / 'data' / 'phiRV.npy')
-        self.phiCCWHome = np.angle(FW[:,0,0] - self.phiCenter)
-        self.phiCWHome = np.angle(RV[:,0,0] - self.phiCenter)
+        phiFW = np.load(geometryRun / 'data' / 'phiFW.npy')
+        phiRV = np.load(geometryRun / 'data' / 'phiRV.npy')
+        self.phiCCWHome = np.angle(phiFW[:,0,0] - self.phiCenter[:])
+        self.phiCWHome = np.angle(phiRV[:,0,0] - self.phiCenter[:])
         dAng = self.phiCWHome - self.phiCCWHome
-        dAng[dAng<0] += 2*np.pi
-        stopped = np.where(dAng < np.deg2rad(182.0))[0]
+        dAng[dAng < 0] += 2*np.pi
+        stopped = np.where(dAng < np.deg2rad(180.0))[0]
         if len(stopped) > 0:
             self.logger.error(f"phi ranges for cobras {stopped+1} are too small: "
                               f"CW={np.rad2deg(self.phiCWHome[stopped])} "
                               f"CCW={np.rad2deg(self.phiCCWHome[stopped])}")
-            self.logger.error(f"     {np.round(np.rad2deg(dAng[stopped]), 2)}")
+            self.logger.error(f"     ranges={np.round(np.rad2deg(dAng[stopped]), 2)}")
 
     def setThetaCentersFromRun(self, geometryRun):
         self.thetaCenter = np.load(geometryRun / 'data' / 'thetaCenter.npy')
@@ -332,25 +338,24 @@ class ModuleTest():
 
         self.setThetaCentersFromRun(geometryRun)
 
-        FW = np.load(geometryRun / 'data' / 'thetaFW.npy')
-        RV = np.load(geometryRun / 'data' / 'thetaRV.npy')
-        self.thetaCCWHome = np.angle(FW[:,0,0] - self.thetaCenter)
-        self.thetaCWHome = np.angle(RV[:,0,0] - self.thetaCenter)
+        thetaFW = np.load(geometryRun / 'data' / 'thetaFW.npy')
+        thetaRV = np.load(geometryRun / 'data' / 'thetaRV.npy')
+        self.thetaCCWHome = np.angle(thetaFW[:,0,0] - self.thetaCenter[:])
+        self.thetaCWHome = np.angle(thetaRV[:,0,0] - self.thetaCenter[:])
 
         dAng = self.thetaCWHome - self.thetaCCWHome
         dAng[dAng<np.pi] += 2*np.pi
-        dAng[dAng<np.pi] += 2*np.pi
-        stopped = np.where(dAng < np.deg2rad(375.0))[0]
+        stopped = np.where(dAng < np.deg2rad(10.0))[0]
         if len(stopped) > 0:
             self.logger.error(f"theta ranges for cobras {stopped+1} are too small: "
                               f"CW={np.rad2deg(self.thetaCWHome[stopped])} "
                               f"CCW={np.rad2deg(self.thetaCCWHome[stopped])}")
             self.logger.error(f"     {np.round(np.rad2deg(dAng[stopped]), 2)}")
 
-
     def moveToPhiAngle(self, idx=None, angle=60.0,
                        keepExistingPosition=False,
-                       tolerance=1.0, maxTries=7, scaleFactor=8,
+                       tolerance=np.rad2deg(0.005), maxTries=8,
+                       scaleFactor=5,
                        doFast=False):
         """
         Robustly move to a given phi angle.
@@ -375,46 +380,36 @@ class ModuleTest():
           How close we want to get, in degrees.
         maxTries: `int`
           How many moves to attempt.
+        scaleFactor: `float`
+          What fraction of the motion error to apply to the motor scale. 1/scalefactor
         doFast : bool
           For the first move, use the fast map?
         """
 
-        dtype = np.dtype(dict(names=['iteration', 'cobra', 'target', 'position', 'left', 'done'],
-                              formats=['i2', 'i2', 'f4', 'f4', 'f4', 'i1']))
+        dtype = np.dtype(dict(names=['iteration', 'cobra', 'target', 'position', 'left', 'steps', 'done'],
+                              formats=['i2', 'i2', 'f4', 'f4', 'f4', 'i4', 'i1']))
 
         # We do want a new stack of these images.
         self._connect()
         self.cam.resetStack(doStack=True)
 
-        if idx is None:
-            idx = np.arange(len(self.goodCobras))
-        else:
-            _idx = np.zeros(57, 'bool')
-            _idx[idx] = True
-            idx = _idx[self.goodIdx]
-
-        cobras = np.array(self.goodCobras)
-        cobras = cobras[idx]
-
+        cobras = np.array(self.allCobras)
+        cobras = cobras[self.goodIdx]
         moveList = []
         moves0 = np.zeros(len(cobras), dtype=dtype)
-        print(self.phiCenter)
+
         try:
-            phiCenters = self.phiCenter[self.goodIdx]
+            phiCenters = self.phiCenter
         except AttributeError:
             raise RuntimeError("moduleTest needs to have been to told the phi Centers")
+        phiCenters = phiCenters[self.goodIdx]
 
         tolerance = np.deg2rad(tolerance)
 
         # extract sources and fiber identification
         curPos = self.exposeAndExtractPositions(tolerance=0.2)
-        if idx is not None:
-            curPos = curPos[idx]
-            phiCenters = phiCenters[idx]
         if keepExistingPosition:
-            homeAngles = self.phiCCWHome[self.goodIdx]
-            if idx is not None:
-                homeAngles = homeAngles[idx]
+            homeAngles = self.phiHomes
             curAngles = self._fullAngle(curPos, phiCenters)
             lastAngles = self.dPhiAngle(curAngles, homeAngles, doAbs=True)
         else:
@@ -424,7 +419,7 @@ class ModuleTest():
             self.phiHomes = homeAngles
 
         targetAngles = np.full(len(homeAngles), np.deg2rad(angle))
-        thetaAngles = targetAngles * 0
+        thetaAngles = targetAngles*0
         ntries = 1
         notDone = targetAngles != 0
         left = self.dPhiAngle(targetAngles, lastAngles, doWrap=True)
@@ -432,14 +427,13 @@ class ModuleTest():
         moves = moves0.copy()
         moveList.append(moves)
         for i in range(len(cobras)):
-            moveIdx = i
             cobraNum = cobras[i].cobraNum
-            moves['iteration'][moveIdx] = 0
-            moves['cobra'][moveIdx] = cobraNum
-            moves['target'][moveIdx] = angle
-            moves['position'][moveIdx] = curAngles[i]
-            moves['left'][moveIdx] = left[i]
-            moves['done'][moveIdx] = not notDone[i]
+            moves['iteration'][i] = 0
+            moves['cobra'][i] = cobraNum
+            moves['target'][i] = targetAngles[i]
+            moves['position'][i] = lastAngles[i]
+            moves['left'][i] = left[i]
+            moves['done'][i] = not notDone[i]
 
         with np.printoptions(precision=2, suppress=True):
             self.logger.info("to: %s", np.rad2deg(targetAngles)[notDone])
@@ -455,11 +449,13 @@ class ModuleTest():
                 self.logger.info("try %d/%d, %d/%d cobras left",
                                  ntries, maxTries,
                                  notDone.sum(), len(cobras))
-            self.pfi.moveThetaPhi(cobras[notDone],
-                                  thetaAngles[notDone],
-                                  left[notDone],
-                                  phiFroms=lastAngles[notDone],
-                                  phiFast=(doFast and ntries==1))
+            _, phiSteps = self.pfi.moveThetaPhi(cobras[notDone],
+                                                thetaAngles[notDone],
+                                                left[notDone],
+                                                phiFroms=lastAngles[notDone],
+                                                phiFast=(doFast and ntries==1))
+            allPhiSteps = np.zeros(len(cobras), dtype='i4')
+            allPhiSteps[notDone] = phiSteps
 
             # extract sources and fiber identification
             curPos = self.exposeAndExtractPositions(tolerance=0.2)
@@ -467,22 +463,28 @@ class ModuleTest():
                 curPos = curPos[idx]
             a1 = self._fullAngle(curPos, phiCenters)
             atAngles = self.dPhiAngle(a1, homeAngles, doAbs=True)
-            left = self.dPhiAngle(targetAngles, atAngles, doWrap=True)
+            left = self.dPhiAngle(targetAngles,atAngles, doWrap=True)
+
+            # Any cobras which were 0 steps away on the last move are done.
+            lastNotDone = notDone.copy()
+            tooCloseToMove = (allPhiSteps == 0)
+            notDone[tooCloseToMove] = False
 
             # check position errors
-            notDone = np.abs(left) > tolerance
+            closeEnough = np.abs(left) <= tolerance
+            notDone[closeEnough] = False
 
             moves = moves0.copy()
-            moveList.append(moves)
             for i in range(len(cobras)):
-                moveIdx = i
                 cobraNum = cobras[i].cobraNum
-                moves['iteration'][moveIdx] = ntries
-                moves['cobra'][moveIdx] = cobraNum
-                moves['target'][moveIdx] = angle
-                moves['position'][moveIdx] = atAngles[i]
-                moves['left'][moveIdx] = left[i]
-                moves['done'][moveIdx] = not notDone[i]
+                moves['iteration'][i] = ntries
+                moves['cobra'][i] = cobraNum
+                moves['target'][i] = targetAngles[i]
+                moves['position'][i] = atAngles[i]
+                moves['left'][i] = left[i]
+                moves['done'][i] = not notDone[i]
+            moveList[-1]['steps'][lastNotDone] = phiSteps
+            moveList.append(moves)
 
             if not np.any(notDone):
                 self.logger.info(f'Convergence sequence done after {ntries} iterations')
@@ -506,68 +508,77 @@ class ModuleTest():
                     else:
                         logCall = self.logger.debug
 
-                    logCall(f'{c_i+1} try={np.rad2deg(tryDist):0.2f} '
-                            f'at={np.rad2deg(atAngles[c_i]):0.2f} '
+                    logCall(f'{c_i+1} at={np.rad2deg(atAngles[c_i]):0.2f} '
+                            f'try={np.rad2deg(tryDist):0.2f} '
                             f'got={np.rad2deg(gotDist):0.2f} '
                             f'rawScale={rawScale:0.2f} scale={scale:0.2f}')
                     self.pfi.scaleMotorOntime(cobras[c_i], 'phi', direction, scale)
 
             lastAngles = atAngles
             if ntries >= maxTries:
-                self.logger.warn(f'Reached max {maxTries} tries, '
-                                 f'left: {[str(c) for c in cobras[np.where(notDone)]]}: '
-                                 f'{np.rad2deg(left)[notDone]}')
+                self.logger.warn(f'Reached max {maxTries} tries, {notDone.sum()} cobras left')
+                self.logger.warn(f'   cobras: {[c.cobraNum for c in cobras[np.where(notDone)]]}')
+                self.logger.warn(f'   left: {np.round(np.rad2deg(left)[notDone], 2)}')
+
+                _, phiSteps = self.pfi.moveThetaPhi(cobras[notDone],
+                                                    thetaAngles[notDone],
+                                                    left[notDone],
+                                                    phiFroms=lastAngles[notDone],
+                                                    phiFast=(doFast and ntries==1),
+                                                    doRun=False)
+                self.logger.warn(f'   steps: {phiSteps}')
+
                 break
             ntries += 1
 
-        self.pfi.resetMotorScaling(self.goodCobras, 'phi')
-        moves = np.stack(moveList)
-        movesPath = self.runManager.outputDir / 'phiConvergence.npy'
+        moves = np.concatenate(moveList)
+        movesPath = self.runManager.outputDir / "phiConvergence.npy"
         np.save(movesPath, moves)
 
         return self.runManager.runDir
 
-    def gotoSafeFromPhi60(self, phiAngle=60.0, tolerance=1.0):
+    def gotoSafeFromPhi60(self, phiAngle=60.0):
         """ Move cobras to nominal safe position: thetas OUT, phis in.
         Assumes phi is at 60deg and that we know thetaPositions.
 
         """
+
+        angles = np.full(len(self.allCobras), phiAngle, dtype='f4')
+        angles[np.arange(0,57,2)] += 270
+        angles[np.arange(1,57,2)] += 90
+
         if not hasattr(self, 'thetaHomes'):
             keepExisting = False
         else:
             keepExisting = True
 
-        angle = (180.0 - phiAngle) / 2.0
-        thetaAngle = np.zeros(len(self.goodIdx))
-        thetaAngle[self.goodIdx%2==0] = 270 - angle
-        thetaAngle[self.goodIdx%2!=0] = 90 - angle
-
-        run = self.moveToThetaAngle(angle=thetaAngle, tolerance=tolerance,
+        run = self.moveToThetaAngle(None, angle=angles, tolerance=np.rad2deg(0.05),
                                     keepExistingPosition=keepExisting, globalAngles=True)
         return run
 
-    def gotoShippingFromPhi60(self, phiAngle=60.0, tolerance=1.0):
+    def gotoShippingFromPhi60(self, phiAngle=60.0):
         """ Move cobras to nominal safe shipping position: thetas IN, phis in.
         Assumes phi is at 60deg and that we know thetaPositions.
 
         """
+
+        angles = np.full(len(self.allCobras), phiAngle, dtype='f4')
+        angles[np.arange(0,57,2)] += 90
+        angles[np.arange(1,57,2)] += 270
+
         if not hasattr(self, 'thetaHomes'):
+            self.pfi.moveAllSteps(None, -10000, 0)
             keepExisting = False
         else:
             keepExisting = True
 
-        angle = (180.0 - phiAngle) / 2.0
-        thetaAngle = np.zeros(len(self.goodIdx))
-        thetaAngle[self.goodIdx%2==0] = 90 - angle
-        thetaAngle[self.goodIdx%2!=0] = 270 - angle
-
-        run = self.moveToThetaAngle(angle=thetaAngle, tolerance=tolerance,
-                                     keepExistingPosition=keepExisting, globalAngles=True)
+        run = self.moveToThetaAngle(None, angle=angles, tolerance=np.rad2deg(0.05),
+                                    keepExistingPosition=keepExisting, globalAngles=True)
         return run
 
     def moveToThetaAngle(self, idx=None, angle=60.0,
                          keepExistingPosition=False,
-                         tolerance=1.0, maxTries=7, scaleFactor=10,
+                         tolerance=1.0, maxTries=7, scaleFactor=5,
                          globalAngles=False,
                          doFast=False):
         """
@@ -593,54 +604,48 @@ class ModuleTest():
           For the first move, use the fast map?
         """
 
-        dtype = np.dtype(dict(names=['iteration', 'cobra', 'target', 'position', 'left', 'done'],
-                              formats=['i2', 'i2', 'f4', 'f4', 'f4', 'i1']))
+        dtype = np.dtype(dict(names=['iteration', 'cobra', 'target', 'position', 'left', 'steps', 'done'],
+                              formats=['i2', 'i2', 'f4', 'f4', 'f4', 'i4', 'i1']))
 
         # We do want a new stack of these images.
         self._connect()
         self.cam.resetStack(doStack=True)
 
         if np.isscalar(angle):
-            angle = np.full(len(self.goodCobras), angle)
+            angle = np.full(len(self.allCobras), angle)
+            angle = angle[self.goodIdx]
 
-        if idx is None:
-            idx = np.arange(len(self.goodCobras))
-        else:
-            _idx = np.zeros(57, 'bool')
-            _idx[idx] = True
-            idx = _idx[self.goodIdx]
-
-        cobras = np.array(self.goodCobras)
-        cobras = cobras[idx]
-        angle = angle[idx]
-
+        cobras = np.array(self.allCobras)
+        cobras = cobras[self.goodIdx]
         moveList = []
         moves0 = np.zeros(len(cobras), dtype=dtype)
 
-        thetaCenters = self.thetaCenter
-        if thetaCenters is None:
+        try:
+            thetaCenters = self.thetaCenters
+        except AttributeError:
             thetaCenters = self.pfi.calibModel.centers
+        thetaCenters =  thetaCenters[self.goodIdx]
 
         tolerance = np.deg2rad(tolerance)
 
         if not keepExistingPosition or not hasattr(self, 'thetaHomes'):
             # extract sources and fiber identification
             self.logger.info(f'theta backward -10000 steps to limit')
-            self.pfi.moveAllSteps(self.goodCobras, -10000, 0)
+            self.pfi.moveAllSteps(cobras, -10000, 0)
             allCurPos = self.exposeAndExtractPositions(tolerance=0.2)
 
-            homeAngles = self._fullAngle(allCurPos, thetaCenters[self.goodIdx])
+            homeAngles = self._fullAngle(allCurPos, thetaCenters)
             lastAngles = np.zeros(len(homeAngles))
-            self.thetaHomes = homeAngles
-            self.thetaAngles = lastAngles
-
-        homeAngles = self.thetaHomes[idx]
-        lastAngles = self.thetaAngles[idx]
-        thetaCenters = thetaCenters[self.goodIdx[idx]]
+            if not hasattr(self, 'thetaHomes'):
+                self.thetaHomes = np.zeros(57)
+                self.thetaAngles = np.zeros(57)
+        homeAngles = self.thetaHomes
+        lastAngles = self.thetaAngles
+        thetaCenters = thetaCenters
 
         targetAngles = np.deg2rad(angle)
         if globalAngles:
-            targetAngles = (targetAngles - homeAngles) % (np.pi*2)
+            targetAngles = self.pfi.thetaToLocal(cobras, targetAngles)
 
         phiAngles = targetAngles*0
         ntries = 1
@@ -653,7 +658,7 @@ class ModuleTest():
             cobraNum = cobras[i].cobraNum
             moves['iteration'][i] = 0
             moves['cobra'][i] = cobraNum
-            moves['target'][i] = angle[i]
+            moves['target'][i] = targetAngles[i]
             moves['position'][i] = lastAngles[i]
             moves['left'][i] = left[i]
             moves['done'][i] = not notDone[i]
@@ -672,34 +677,43 @@ class ModuleTest():
                 self.logger.info("left try %d/%d, %d/%d",
                                  ntries, maxTries,
                                  notDone.sum(), len(cobras))
-            self.pfi.moveThetaPhi(cobras[notDone],
-                                  left[notDone],
-                                  phiAngles[notDone],
-                                  thetaFroms=lastAngles[notDone],
-                                  thetaFast=(doFast and ntries==1))
+            thetaSteps, _ = self.pfi.moveThetaPhi(cobras[notDone],
+                                                  left[notDone],
+                                                  phiAngles[notDone],
+                                                  thetaFroms=lastAngles[notDone],
+                                                  thetaFast=(doFast and ntries==1))
+            allThetaSteps = np.zeros(len(cobras), dtype='i4')
+            allThetaSteps[notDone] = thetaSteps
 
             # extract sources and fiber identification
             curPos = self.exposeAndExtractPositions(tolerance=0.2)
-            curPos = curPos[idx]
+            if idx is not None:
+                curPos = curPos[idx]
 
             # Get our angle w.r.t. home.
             atAngles = unwrappedPosition(curPos, thetaCenters, homeAngles,
                                          lastAngles, targetAngles)
             left = targetAngles - atAngles
 
+            lastNotDone = notDone.copy()
+            tooCloseToMove = (allThetaSteps == 0)
+            notDone[tooCloseToMove] = False
+
             # check position errors
-            notDone = np.abs(left) > tolerance
+            closeEnough = np.abs(left) <= tolerance
+            notDone[closeEnough] = False
 
             moves = moves0.copy()
-            moveList.append(moves)
             for i in range(len(cobras)):
                 cobraNum = cobras[i].cobraNum
                 moves['iteration'][i] = ntries
                 moves['cobra'][i] = cobraNum
-                moves['target'][i] = angle[i]
+                moves['target'][i] = targetAngles[i]
                 moves['position'][i] = atAngles[i]
                 moves['left'][i] = left[i]
                 moves['done'][i] = not notDone[i]
+            moveList[-1]['steps'][lastNotDone] = thetaSteps
+            moveList.append(moves)
 
             if not np.any(notDone):
                 self.logger.info(f'Convergence sequence done after {ntries} iterations')
@@ -722,8 +736,8 @@ class ModuleTest():
                     else:
                         logCall = self.logger.debug
 
-                    logCall(f'{c_i+1} try={np.rad2deg(tryDist[c_i]):0.2f} '
-                            f'at={np.rad2deg(atAngles[c_i]):0.2f} '
+                    logCall(f'{c_i+1} at={np.rad2deg(atAngles[c_i]):0.2f} '
+                            f'try={np.rad2deg(tryDist[c_i]):0.2f} '
                             f'got={np.rad2deg(gotDist[c_i]):0.2f} '
                             f'rawScale={rawScale:0.2f} scale={scale:0.2f}')
                     self.pfi.scaleMotorOntime(cobras[c_i], 'theta', direction, scale)
@@ -731,15 +745,22 @@ class ModuleTest():
             lastAngles = atAngles
             self.thetaAngles[idx] = atAngles
             if ntries >= maxTries:
-                self.logger.warn(f'Reached max {maxTries} tries, '
-                                 f'left: {[str(c) for c in cobras[np.where(notDone)]]}: '
-                                 f'{np.rad2deg(left)[notDone]}')
+                self.logger.warn(f'Reached max {maxTries} tries, {notDone.sum()} cobras left')
+                self.logger.warn(f'   cobras: {[c.cobraNum for c in cobras[np.where(notDone)]]}')
+                self.logger.warn(f'   left: {np.round(np.rad2deg(left)[notDone], 2)}')
+
+                thetaSteps, _ = self.pfi.moveThetaPhi(cobras[notDone],
+                                                      left[notDone],
+                                                      phiAngles[notDone],
+                                                      thetaFroms=lastAngles[notDone],
+                                                      thetaFast=(doFast and ntries==1),
+                                                      doRun=False)
+                self.logger.warn(f'   steps: {thetaSteps}')
                 break
             ntries += 1
 
-        self.pfi.resetMotorScaling(self.goodCobras, 'theta')
         moves = np.concatenate(moveList)
-        movesPath = self.runManager.outputDir / 'thetaConvergence.npy'
+        movesPath = self.runManager.outputDir / "thetaConvergence.npy"
         np.save(movesPath, moves)
 
         return self.runManager.runDir
@@ -748,16 +769,9 @@ class ModuleTest():
         """ function to move cobras to target positions """
 
         if idx is None:
-            idx = np.arange(len(self.allCobras))
+            idx = np.arange(len(self.goodCobras))
         cobras = self.getCobras(idx)
-        if len(targets) != len(idx):
-            raise RuntimeError('number of targets must match idx')
-        if len(set(idx) & set(self.badIdx)) > 0:
-            raise RuntimeError('should not include bad/broken cobras')
-
-        arr = np.full(len(self.allCobras), False)
-        arr[idx] = True
-        _idx = arr[self.goodIdx]
+        targets = targets[idx]
 
         self.pfi.moveXYfromHome(cobras, targets, thetaThreshold=threshold, phiThreshold=threshold)
 
@@ -766,7 +780,7 @@ class ModuleTest():
         while True:
             # extract sources and fiber identification
             curPos = self.exposeAndExtractPositions(tolerance=0.2)
-            curPos = curPos[_idx]
+            curPos = curPos[idx]
             # check position errors
             self.logger.info("to: %s", targets[keepMoving])
             self.logger.info("at: %s", curPos[keepMoving])
@@ -810,14 +824,14 @@ class ModuleTest():
         outTargets = self.pfi.anglesToPositions(self.allCobras, thetaAngles, phiAngles)
 
         # move to outTargets
-        self.moveToXYfromHome(idx, outTargets[idx], threshold=threshold, maxTries=maxTries)
+        self.moveToXYfromHome(self.goodIdx, outTargets, threshold=threshold, maxTries=maxTries)
 
     def moveToThetaPhi(self, idx, theta, phi, threshold=3.0, maxTries=8):
         """ move positioners to given theta, phi angles.
         """
 
         if idx is None:
-            idx = np.arange(len(self.allCobras))
+            idx = np.arange(len(self.goodCobras))
 
         cobras = self.getCobras(None)
         if np.isscalar(theta):
@@ -835,10 +849,12 @@ class ModuleTest():
             raise RuntimeError('number of phis must match _total_ number of cobras')
 
         thetaAngles = self.pfi.thetaToLocal(cobras, thetaAngles)
-        outTargets = self.pfi.anglesToPositions(self.allCobras, thetaAngles, phiAngles)
+        outTargets = self.pfi.anglesToPositions(self.goodCobras,
+                                                thetaAngles,
+                                                phiAngles)
 
         # move to outTargets
-        self.moveToXYfromHome(idx, outTargets[idx], threshold=threshold, maxTries=maxTries)
+        self.moveToXYfromHome(idx, outTargets, threshold=threshold, maxTries=maxTries)
 
     def moveBadCobrasOut(self):
         """ move bad cobras to point outwards """
@@ -888,7 +904,6 @@ class ModuleTest():
     def makePhiMotorMap(
             self,
             newXml,
-            repeat=3,
             steps=100,
             totalSteps=5000,
             fast=False,
@@ -896,9 +911,7 @@ class ModuleTest():
             updateGeometry=False,
             limitOnTime=0.08,
             resetScaling=True,
-            delta=np.deg2rad(5.0),
-            fromHome=False
-        ):
+            delta=0.1):
         """ generate phi motor maps, it accepts custom phiOnTIme parameter.
             it assumes that theta arms have been move to up/down positions to avoid collision
             if phiOnTime is not None, fast parameter is ignored. Otherwise use fast/slow ontime
@@ -908,6 +921,7 @@ class ModuleTest():
                 makePhiMotorMap(xml, path, fast=False)            // update slow motor maps
                 makePhiMotorMap(xml, path, phiOnTime=0.06)        // motor maps for on-time=0.06
         """
+        repeat = 1
         self._connect()
         defaultOnTimeFast = deepcopy([self.pfi.calibModel.motorOntimeFwd2,
                                       self.pfi.calibModel.motorOntimeRev2])
@@ -952,30 +966,25 @@ class ModuleTest():
             notdoneMask[self.goodIdx] = True
             for k in range(iteration):
                 self.logger.info(f'{n+1}/{repeat} phi forward to {(k+1)*steps}')
-                if fromHome:
-                    self.pfi.moveAllSteps(self.allCobras[notdoneMask], 0, (k+1)*steps, phiFast=False)
-                else:
-                    self.pfi.moveAllSteps(self.allCobras[notdoneMask], 0, steps, phiFast=False)
-                phiFW[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'phiForward{n}N{k}.fits',
+                self.pfi.moveAllSteps(self.allCobras[np.where(notdoneMask)], 0, steps, phiFast=False)
+                phiFW[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'ph1Forward{n}N{k}.fits',
                                                                              guess=phiFW[self.goodIdx, n, k])
-                if fromHome:
-                    self.pfi.moveAllSteps(self.allCobras[notdoneMask], 0, -(k+1)*steps)
-
-                doneMask, lastAngles = self.phiFWDone(phiFW, n, k)
+                doneMask, lastAngles = self.phiFWDone(phiFW, k)
                 if doneMask is not None:
                     newlyDone = doneMask & notdoneMask
                     if np.any(newlyDone):
                         notdoneMask &= ~doneMask
                         self.logger.info(f'done: {np.where(newlyDone)[0]}, {(notdoneMask == True).sum()} left')
                 if not np.any(notdoneMask):
-                    phiFW[self.goodIdx, n, k+2:] = phiFW[self.goodIdx, n, k+1][:,None]
+                    phiFW[self.goodIdx, n, k+1:] = phiFW[self.goodIdx, n, k+1][:,None]
                     break
             if doneMask is not None and np.any(notdoneMask):
-                self.logger.warn(f'{(notdoneMask == True).sum()} cobras did not finish:')
+                self.logger.warn(f'{(notdoneMask == True).sum()} cobras did not reach phi CW limit:')
                 for c_i in np.where(notdoneMask)[0]:
                     c = self.allCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
-                    self.logger.warn(f'  {str(c)}: {np.round(d, 2)}')
+                    with np.printoptions(precision=2, suppress=True):
+                        self.logger.warn(f'  {str(c)}: {d}')
 
             # make sure it goes to the limit
             self.logger.info(f'{n+1}/{repeat} phi forward {totalSteps} to limit')
@@ -989,30 +998,26 @@ class ModuleTest():
             notdoneMask[self.goodIdx] = True
             for k in range(iteration):
                 self.logger.info(f'{n+1}/{repeat} phi backward to {(k+1)*steps}')
-                if fromHome:
-                    self.pfi.moveAllSteps(self.allCobras[notdoneMask], 0, -(k+1)*steps, phiFast=False)
-                else:
-                    self.pfi.moveAllSteps(self.allCobras[notdoneMask], 0, -steps, phiFast=False)
+                self.pfi.moveAllSteps(self.allCobras[np.where(notdoneMask)], 0, -steps, phiFast=False)
                 phiRV[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'phiReverse{n}N{k}.fits',
                                                                              guess=phiRV[self.goodIdx, n, k])
-                if fromHome:
-                    self.pfi.moveAllSteps(self.allCobras[notdoneMask], 0, (k+1)*steps)
-                doneMask, lastAngles = self.phiRVDone(phiRV, n, k)
+                doneMask, lastAngles = self.phiRVDone(phiRV, k)
                 if doneMask is not None:
                     newlyDone = doneMask & notdoneMask
                     if np.any(newlyDone):
                         notdoneMask &= ~doneMask
                         self.logger.info(f'done: {np.where(newlyDone)[0]}, {(notdoneMask == True).sum()} left')
                 if not np.any(notdoneMask):
-                    phiRV[self.goodIdx, n, k+2:] = phiRV[self.goodIdx, n, k+1][:,None]
+                    phiRV[self.goodIdx, n, k+1:] = phiRV[self.goodIdx, n, k+1][:,None]
                     break
 
             if doneMask is not None and np.any(notdoneMask):
-                self.logger.warn(f'{(notdoneMask == True).sum()} did not finish:')
+                self.logger.warn(f'{(notdoneMask == True).sum()} did not reach phi CCW limit:')
                 for c_i in np.where(notdoneMask)[0]:
                     c = self.allCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
-                    self.logger.warn(f'  {str(c)}: {np.round(d, 2)}')
+                    with np.printoptions(precision=2, suppress=True):
+                        self.logger.warn(f'  {str(c)}: {d}')
 
             # At the end, make sure the cobra back to the hard stop
             self.logger.info(f'{n+1}/{repeat} phi reverse {-totalSteps} steps to limit')
@@ -1025,6 +1030,13 @@ class ModuleTest():
 
         # calculate centers and phi angles
         phiCenter, phiRadius, phiAngFW, phiAngRV, badRange = self.cal.phiCenterAngles(phiFW, phiRV)
+        for short in badRange:
+            if short in self.badIdx:
+                self.logger.warn(f"phi range for {short+1:-2d} is short, but that was expected")
+            else:
+                self.logger.warn(f'phi range for {short+1:-2d} is short: '
+                                 f'out={np.rad2deg(phiAngRV[short,0,0]):-6.2f} '
+                                 f'back={np.rad2deg(phiAngRV[short,0,-1]):-6.2f}')
         np.save(dataPath / 'phiCenter', phiCenter)
         np.save(dataPath / 'phiRadius', phiRadius)
         np.save(dataPath / 'phiAngFW', phiAngFW)
@@ -1037,43 +1049,62 @@ class ModuleTest():
         np.save(dataPath / 'phiSpeedRV', phiSpeedRV)
 
         # calculate motor maps by Johannes weighting
-        if fromHome:
-            phiMMFW, phiMMRV, bad = self.cal.motorMaps2(phiAngFW, phiAngRV, steps, delta)
-        else:
-            phiMMFW, phiMMRV, bad = self.cal.motorMaps(phiAngFW, phiAngRV, steps, delta)
+        phiMMFW, phiMMRV, bad = self.cal.motorMaps(phiAngFW, phiAngRV, steps, delta)
         bad[badRange] = True
         np.save(dataPath / 'phiMMFW', phiMMFW)
         np.save(dataPath / 'phiMMRV', phiMMRV)
         np.save(dataPath / 'bad', np.where(bad)[0])
 
         # calculate motor maps by average speeds
-        #phiMMFW2, phiMMRV2, bad2 = self.cal.motorMaps2(phiAngFW, phiAngRV, steps, delta)
-        #bad2[badRange] = True
-        #np.save(dataPath / 'phiMMFW2', phiMMFW2)
-        #np.save(dataPath / 'phiMMRV2', phiMMRV2)
-        #np.save(dataPath / 'bad2', np.where(bad2)[0])
+        phiMMFW2, phiMMRV2, bad2 = self.cal.motorMaps2(phiAngFW, phiAngRV, steps, delta)
+        bad2[badRange] = True
+        np.save(dataPath / 'phiMMFW2', phiMMFW2)
+        np.save(dataPath / 'phiMMRV2', phiMMRV2)
+        np.save(dataPath / 'bad2', np.where(bad2)[0])
 
         # update XML file, using Johannes weighting
         slow = not fast
         self.cal.updatePhiMotorMaps(phiMMFW, phiMMRV, bad, slow)
         if phiOnTime is not None:
-            if np.isscalar(phiOnTime):
-                onTime = np.full(57, phiOnTime)
-                self.cal.calibModel.updateOntimes(phiFwd=onTime, phiRev=onTime, fast=fast)
-            else:
-                self.cal.calibModel.updateOntimes(phiFwd=phiOnTime[0], phiRev=phiOnTime[1], fast=fast)
+            onTime = np.full(57, phiOnTime)
+            self.pfi.calibModel.updateOntimes(phiFwd=onTime, phiRev=onTime, fast=fast)
         if updateGeometry:
-            self.cal.calibModel.updateGeometry(centers=phiCenter, phiArms=phiRadius)
-        self.cal.calibModel.createCalibrationFile(self.runManager.outputDir / newXml, name='phiModel')
+            self.pfi.calibModel.updateGeometry(centers=phiCenter, phiArms=phiRadius)
+            # These are not really correct, since the inner limit is pinned at 0. But it gives the range.
+            # self.cal.updatePhiHardStops(ccw=phiAngFW[:,0,0], cw=phiAngFW[:,0,-1])
+        self.pfi.calibModel.createCalibrationFile(self.runManager.outputDir / newXml, name='phiModel')
 
         # restore default setting ( really? why? CPL )
         # self.cal.restoreConfig()
         # self.pfi.loadModel(self.xml)
 
         self.setPhiGeometryFromRun(self.runManager.runDir, onlyIfClear=True)
-        return self.runManager.runDir
 
-    def thetaFWDone(self, thetas, n, k, needAtEnd=4,
+        bad[self.badIdx] = False
+        return self.runManager.runDir, np.where(bad)[0]
+
+    def _mapDone(self, centers, points, limits, k,
+                 needAtEnd=4, closeEnough=np.deg2rad(1),
+                 limitTolerance=np.deg2rad(2)):
+        """ Return a mask of the cobras which we deem at the axis limit.
+
+        See thetaFWDone.
+        """
+
+        if centers is None or limits is None or k+1 < needAtEnd:
+            return None, None
+
+        lastAngles = np.angle(points[:,0,k-needAtEnd+1:k+1] - centers[:,None])
+        atEnd = np.abs(lastAngles[:,-1] - limits) <= limitTolerance
+        endDiff = np.abs(np.diff(lastAngles, axis=1))
+        stable = np.all(endDiff <= closeEnough, axis=1)
+
+        # Diagnostic: return the needAtEnd distances from the limit.
+        anglesFromEnd = lastAngles - limits[:,None]
+
+        return atEnd & stable, anglesFromEnd
+
+    def thetaFWDone(self, thetas, k, needAtEnd=4,
                     closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
         """ Return a mask of the cobras which we deem at the FW theta limit.
 
@@ -1099,87 +1130,47 @@ class ModuleTest():
           The last `needAtEnd` angles to the limit
         """
 
-        if self.thetaCenter is None or self.thetaCWHome is None or k+1 < needAtEnd:
-            return None,  None
+        return self._mapDone(self.thetaCenter, thetas, self.thetaCWHome, k,
+                             needAtEnd=needAtEnd, closeEnough=closeEnough,
+                             limitTolerance=limitTolerance)
 
-        lastAngles = np.angle(thetas[:,n,k-needAtEnd+1:k+1] - self.thetaCenter[:,None])
-        atEnd = np.abs(self.dAngle(lastAngles[:,-1] - self.thetaCWHome)) <= limitTolerance
-        endDiff = np.abs(self.dAngle(np.diff(lastAngles, axis=1)))
-        stable = np.all(endDiff <= closeEnough, axis=1)
-
-        return atEnd & stable, endDiff
-
-    def thetaRVDone(self, thetas, n, k, needAtEnd=4, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
+    def thetaRVDone(self, thetas, k, needAtEnd=4, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
         """ Return a mask of the cobras which we deem at the RV theta limit.
 
         See `thetaFWDone`
         """
-        if self.thetaCenter is None or self.thetaCCWHome is None or k+1 < needAtEnd:
-            return None, None
+        return self._mapDone(self.thetaCenter, thetas, self.thetaCCWHome, k,
+                             needAtEnd=needAtEnd, closeEnough=closeEnough,
+                             limitTolerance=limitTolerance)
 
-        lastAngles = np.angle(thetas[:,n,k-needAtEnd+1:k+1] - self.thetaCenter[:,None])
-        atEnd = np.abs(self.dAngle(lastAngles[:,-1] - self.thetaCCWHome)) <= limitTolerance
-        endDiff = np.abs(self.dAngle(np.diff(lastAngles, axis=1)))
-        stable = np.all(endDiff <= closeEnough, axis=1)
-
-        return atEnd & stable, endDiff
-
-    def phiFWDone(self, phis, n, k, needAtEnd=4, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
+    def phiFWDone(self, phis, k, needAtEnd=4, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
         """ Return a mask of the cobras which we deem at the FW phi limit.
 
         See `thetaFWDone`
         """
-        if self.phiCenter is None or self.phiCWHome is None or k+1 < needAtEnd:
-            return None, None
+        return self._mapDone(self.phiCenter, phis, self.phiCWHome, k,
+                             needAtEnd=needAtEnd, closeEnough=closeEnough,
+                             limitTolerance=limitTolerance)
 
-        lastAngles = np.angle(phis[:,n,k-needAtEnd+1:k+1] - self.phiCenter[:,None])
-        atEnd = np.abs(self.dAngle(lastAngles[:,-1] - self.phiCWHome)) <= limitTolerance
-        endDiff = np.abs(self.dAngle(np.diff(lastAngles, axis=1)))
-        stable = np.all(endDiff <= closeEnough, axis=1)
-
-        return atEnd & stable, endDiff
-
-    def phiRVDone(self, phis, n, k, needAtEnd=4, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
+    def phiRVDone(self, phis, k, needAtEnd=4, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
         """ Return a mask of the cobras which we deem at the RV phi limit.
 
         See `thetaFWDone`
         """
-        if self.phiCenter is None or self.phiCCWHome is None or k+1 < needAtEnd:
-            return None, None
+        return self._mapDone(self.phiCenter, phis, self.phiCCWHome, k,
+                             needAtEnd=needAtEnd, closeEnough=closeEnough,
+                             limitTolerance=limitTolerance)
 
-        lastAngles = np.angle(phis[:,n,k-needAtEnd+1:k+1] - self.phiCenter[:,None])
-        atEnd = np.abs(self.dAngle(lastAngles[:,-1] - self.phiCCWHome)) <= limitTolerance
-        endDiff = np.abs(self.dAngle(np.diff(lastAngles, axis=1)))
-        stable = np.all(endDiff <= closeEnough, axis=1)
-
-        return atEnd & stable, endDiff
-
-    def makeThetaMotorMap(
-            self,
-            newXml,
-            repeat=3,
-            steps=100,
-            totalSteps=10000,
-            fast=False,
-            thetaOnTime=None,
-            updateGeometry=False,
-            phiRunDir=None,
-            limitOnTime=0.08,
-            resetScaling=True,
-            delta=np.deg2rad(5.0),
-            fromHome=False
-        ):
-        # generate theta motor maps, it accepts custom thetaOnTIme parameter.
-        # it assumes that phi arms have been move to ~60 degrees out to avoid collision
-        # if thetaOnTime is not None, fast parameter is ignored. Otherwise use fast/slow ontime
-        # Example:
-        #     makethetaMotorMap(xml, path, fast=True)               // update fast motor maps
-        #     makethetaMotorMap(xml, path, fast=False)              // update slow motor maps
-        #     makethetaMotorMap(xml, path, thetaOnTime=0.06)        // motor maps for on-time=0.06
+    def acquireThetaMotorMap(self,
+                             steps=100,
+                             totalSteps=10000,
+                             fast=False,
+                             thetaOnTime=None,
+                             limitOnTime=0.08,
+                             resetScaling=True):
+        """ """
+        repeat = 1
         self._connect()
-        if updateGeometry and phiRunDir is None:
-            raise RuntimeError('To write geometry, need to be told the phiRunDir')
-
         defaultOnTimeFast = deepcopy([self.pfi.calibModel.motorOntimeFwd1,
                                       self.pfi.calibModel.motorOntimeRev1])
         defaultOnTimeSlow = deepcopy([self.pfi.calibModel.motorOntimeSlowFwd1,
@@ -1209,8 +1200,7 @@ class ModuleTest():
         if resetScaling:
             self.pfi.resetMotorScaling(cobras=None, motor='theta')
 
-        #record the theta movements
-        dataPath = self.runManager.dataDir
+        # record the theta movements
         self.logger.info(f'theta home {-totalSteps} steps')
         self.pfi.moveAllSteps(self.goodCobras, -totalSteps, 0)
         for n in range(repeat):
@@ -1223,30 +1213,26 @@ class ModuleTest():
             notdoneMask[self.goodIdx] = True
             for k in range(iteration):
                 self.logger.info(f'{n+1}/{repeat} theta forward to {(k+1)*steps}')
-                if fromHome:
-                    self.pfi.moveAllSteps(self.allCobras[notdoneMask], (k+1)*steps, 0, thetaFast=False)
-                else:
-                    self.pfi.moveAllSteps(self.allCobras[notdoneMask], steps, 0, thetaFast=False)
-                thetaFW[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaForward{n}N{k}.fits')
-                if fromHome:
-                    self.pfi.moveAllSteps(self.allCobras[notdoneMask], -(k+1)*steps, 0)
-
-                doneMask, lastAngles = self.thetaFWDone(thetaFW, n, k)
+                self.pfi.moveAllSteps(self.allCobras[np.where(notdoneMask)], steps, 0, thetaFast=False)
+                thetaFW[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaForward{n}N{k}.fits',
+                                                                               guess=thetaFW[self.goodIdx, n, k])
+                doneMask, lastAngles = self.thetaFWDone(thetaFW, k)
                 if doneMask is not None:
                     newlyDone = doneMask & notdoneMask
                     if np.any(newlyDone):
                         notdoneMask &= ~doneMask
                         self.logger.info(f'done: {np.where(newlyDone)[0]}, {(notdoneMask == True).sum()} left')
                 if not np.any(notdoneMask):
-                    thetaFW[self.goodIdx, n, k+2:] = thetaFW[self.goodIdx, n, k+1][:,None]
+                    thetaFW[self.goodIdx, n, k+1:] = thetaFW[self.goodIdx, n, k+1][:,None]
                     break
 
             if doneMask is not None and np.any(notdoneMask):
-                self.logger.warn(f'{(notdoneMask == True).sum()} did not finish:')
+                self.logger.warn(f'{(notdoneMask == True).sum()} did not reach theta CW limit:')
                 for c_i in np.where(notdoneMask)[0]:
                     c = self.allCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
-                    self.logger.warn(f'  {str(c)}: {np.round(d, 2)}')
+                    with np.printoptions(precision=2, suppress=True):
+                        self.logger.warn(f'  {str(c)}: {d}')
 
             # make sure it goes to the limit
             self.logger.info(f'{n+1}/{repeat} theta forward {totalSteps} to limit')
@@ -1254,36 +1240,34 @@ class ModuleTest():
 
             # reverse theta motor maps
             self.cam.resetStack(f'thetaReverseStack{n}.fits')
-            thetaRV[self.goodIdx, n, 0] = self.exposeAndExtractPositions(f'thetaEnd{n}.fits')
+            thetaRV[self.goodIdx, n, 0] = self.exposeAndExtractPositions(f'thetaEnd{n}.fits',
+                                                                         guess=thetaFW[self.goodIdx, n, -1])
 
             notdoneMask = np.zeros(len(thetaFW), 'bool')
             notdoneMask[self.goodIdx] = True
             for k in range(iteration):
                 self.logger.info(f'{n+1}/{repeat} theta backward to {(k+1)*steps}')
-                if fromHome:
-                    self.pfi.moveAllSteps(self.allCobras[notdoneMask], -(k+1)*steps, 0, thetaFast=False)
-                else:
-                    self.pfi.moveAllSteps(self.allCobras[notdoneMask], -steps, 0, thetaFast=False)
-                thetaRV[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaReverse{n}N{k}.fits')
-                if fromHome:
-                    self.pfi.moveAllSteps(self.allCobras[notdoneMask], (k+1)*steps, 0)
+                self.pfi.moveAllSteps(self.allCobras[np.where(notdoneMask)], -steps, 0, thetaFast=False)
+                thetaRV[self.goodIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaReverse{n}N{k}.fits',
+                                                                               guess=thetaRV[self.goodIdx, n, k])
 
-                doneMask, lastAngles = self.thetaRVDone(thetaRV, n, k)
+                doneMask, lastAngles = self.thetaRVDone(thetaRV, k)
                 if doneMask is not None:
                     newlyDone = doneMask & notdoneMask
                     if np.any(newlyDone):
                         notdoneMask &= ~doneMask
                         self.logger.info(f'done: {np.where(newlyDone)[0]}, {(notdoneMask == True).sum()} left')
                 if not np.any(notdoneMask):
-                    thetaRV[self.goodIdx, n, k+2:] = thetaRV[self.goodIdx, n, k+1][:,None]
+                    thetaRV[self.goodIdx, n, k+1:] = thetaRV[self.goodIdx, n, k+1][:,None]
                     break
 
             if doneMask is not None and np.any(notdoneMask):
-                self.logger.warn(f'{(notdoneMask == True).sum()} did not finish:')
+                self.logger.warn(f'{(notdoneMask == True).sum()} did not reach theta CCW limit:')
                 for c_i in np.where(notdoneMask)[0]:
                     c = self.allCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
-                    self.logger.warn(f'  {str(c)}: {np.round(d, 2)}')
+                    with np.printoptions(precision=2, suppress=True):
+                        self.logger.warn(f'  {str(c)}: {d}')
 
             # At the end, make sure the cobra back to the hard stop
             self.logger.info(f'{n+1}/{repeat} theta reverse {-totalSteps} steps to limit')
@@ -1291,6 +1275,259 @@ class ModuleTest():
         self.cam.resetStack()
 
         # save calculation result
+        dataPath = self.runManager.dataDir
+        np.save(dataPath / 'thetaFW', thetaFW)
+        np.save(dataPath / 'thetaRV', thetaRV)
+
+        return self.runManager.runDir, thetaFW, thetaRV
+
+    def reduceThetaMotorMap(self, newXml, runDir, steps,
+                            thetaOnTime=None,
+                            delta=None, fast=False,
+                            phiRunDir=None,
+                            updateGeometry=False):
+        dataPath = runDir / 'data'
+
+        # load calculation result
+        thetaFW = np.load(dataPath / 'thetaFW.npy')
+        thetaRV = np.load(dataPath / 'thetaRV.npy')
+
+        # calculate centers and theta angles
+        thetaCenter, thetaRadius, thetaAngFW, thetaAngRV, badRange = self.cal.thetaCenterAngles(thetaFW,
+                                                                                                thetaRV)
+        for short in badRange:
+            self.logger.warn(f'theta range for {short+1:-2d} is short: '
+                             f'out={np.rad2deg(thetaAngRV[short,0,0]):-6.2f} '
+                             f'back={np.rad2deg(thetaAngRV[short,0,-1]):-6.2f}')
+        np.save(dataPath / 'thetaCenter', thetaCenter)
+        np.save(dataPath / 'thetaRadius', thetaRadius)
+        np.save(dataPath / 'thetaAngFW', thetaAngFW)
+        np.save(dataPath / 'thetaAngRV', thetaAngRV)
+        np.save(dataPath / 'badRange', badRange)
+
+        self.thetaCenters = thetaCenter
+        self.thetaCCWHome = thetaAngFW[:,0,0]
+        self.thetaCCWHome = thetaAngRV[:,0,0]
+
+        # calculate average speeds
+        thetaSpeedFW, thetaSpeedRV = self.cal.speed(thetaAngFW, thetaAngRV, steps, delta)
+        np.save(dataPath / 'thetaSpeedFW', thetaSpeedFW)
+        np.save(dataPath / 'thetaSpeedRV', thetaSpeedRV)
+
+        # calculate motor maps in Johannes weighting
+        thetaMMFW, thetaMMRV, bad = self.cal.motorMaps(thetaAngFW, thetaAngRV, steps, delta)
+        for bad_i in np.where(bad)[0]:
+            self.logger.warn(f'theta map for {bad_i+1} is bad')
+        bad[badRange] = True
+        np.save(dataPath / 'thetaMMFW', thetaMMFW)
+        np.save(dataPath / 'thetaMMRV', thetaMMRV)
+        np.save(dataPath / 'bad', np.where(bad)[0])
+
+        # calculate motor maps by average speeds
+        thetaMMFW2, thetaMMRV2, bad2 = self.cal.motorMaps2(thetaAngFW, thetaAngRV, steps, delta)
+        bad2[badRange] = True
+        np.save(dataPath / 'thetaMMFW2', thetaMMFW2)
+        np.save(dataPath / 'thetaMMRV2', thetaMMRV2)
+        np.save(dataPath / 'bad2', np.where(bad2)[0])
+
+        # update XML file, using Johannes weighting
+        slow = not fast
+        self.cal.updateThetaMotorMaps(thetaMMFW, thetaMMRV, bad, slow)
+        if thetaOnTime is not None:
+            onTime = np.full(57, thetaOnTime)
+            self.pfi.calibModel.updateOntimes(thetaFwd=onTime, thetaRev=onTime, fast=fast)
+        if updateGeometry:
+            phiCenter = np.load(phiRunDir / 'data' / 'phiCenter.npy')
+            phiRadius = np.load(phiRunDir / 'data' / 'phiRadius.npy')
+            phiFW = np.load(phiRunDir / 'data' / 'phiFW.npy')
+            phiRV = np.load(phiRunDir / 'data' / 'phiRV.npy')
+
+            thetaL, phiL, thetaCCW, thetaCW, phiCCW, phiCW = self.cal.geometry(thetaCenter, thetaRadius,
+                                                                               thetaFW, thetaRV,
+                                                                               phiCenter, phiRadius,
+                                                                               phiFW, phiRV)
+            self.pfi.calibModel.updateGeometry(thetaCenter, thetaL, phiL)
+            self.pfi.calibModel.updateThetaHardStops(thetaCCW, thetaCW)
+            self.pfi.calibModel.updatePhiHardStops(phiCCW, phiCW)
+
+            self.setThetaGeometryFromRun(runDir)
+
+        self.pfi.calibModel.createCalibrationFile(self.runManager.outputDir / newXml)
+
+        bad[self.badIdx] = False
+        return self.runManager.runDir, np.where(bad)[0]
+
+    def makeThetaMotorMap(self, newXml,
+                          steps=100,
+                          totalSteps=10000,
+                          fast=True,
+                          thetaOnTime=None,
+                          updateGeometry=False,
+                          phiRunDir=None,
+                          limitOnTime=0.08,
+                          resetScaling=True,
+                          delta=np.deg2rad(5.0)):
+
+        runDir, thetaFW, thetaRV = self.acquireThetaMotorMap(steps=steps, totalSteps=totalSteps,
+                                                             fast=fast, thetaOnTime=thetaOnTime,
+                                                             limitOnTime=limitOnTime,
+                                                             resetScaling=resetScaling)
+        runDir, duds = self.reduceThetaMotorMap(newXml, runDir, steps,
+                                                thetaOnTime=thetaOnTime,
+                                                delta=delta, fast=fast,
+                                                phiRunDir=phiRunDir,
+                                                updateGeometry=updateGeometry)
+        return runDir, duds
+    
+    def makeThetaMotorMap2(
+            self,
+            newXml,
+            repeat=3,
+            steps=100,
+            totalSteps=10000,
+            fast=False,
+            thetaOnTime=None,
+            limitOnTime=0.08,
+            delta=np.deg2rad(5.0),
+            fromHome=False
+        ):
+        # generate theta motor maps, it accepts custom thetaOnTIme parameter.
+        # it assumes that theta arms already point to the outward direction and phi arms inwards,
+        # also there is good geometry measurement and motor maps in the XML file.
+        # cobras are divided into three non-intefere groups so phi arms can be moved all way out
+        # if thetaOnTime is not None, fast parameter is ignored. Otherwise use fast/slow ontime
+        # Example:
+        #     makethetaMotorMap(xml, path, fast=True)               // update fast motor maps
+        #     makethetaMotorMap(xml, path, fast=False)              // update slow motor maps
+        #     makethetaMotorMap(xml, path, thetaOnTime=0.06)        // motor maps for on-time=0.06
+        self._connect()
+
+        defaultOnTimeFast = deepcopy([self.pfi.calibModel.motorOntimeFwd1,
+                                      self.pfi.calibModel.motorOntimeRev1])
+        defaultOnTimeSlow = deepcopy([self.pfi.calibModel.motorOntimeSlowFwd1,
+                                      self.pfi.calibModel.motorOntimeSlowRev1])
+
+        # set fast on-time to a large value so it can move over whole range, set slow on-time to the test value.
+        fastOnTime = [np.full(57, limitOnTime)] * 2
+        if thetaOnTime is not None:
+            if np.isscalar(thetaOnTime):
+                slowOnTime = [np.full(57, thetaOnTime)] * 2
+            else:
+                slowOnTime = thetaOnTime
+        elif fast:
+            slowOnTime = defaultOnTimeFast
+        else:
+            slowOnTime = defaultOnTimeSlow
+
+        # update ontimes for test
+        self.pfi.calibModel.updateOntimes(thetaFwd=fastOnTime[0], thetaRev=fastOnTime[1], fast=True)
+        self.pfi.calibModel.updateOntimes(thetaFwd=slowOnTime[0], thetaRev=slowOnTime[1], fast=False)
+
+        # variable declaration for position measurement
+        iteration = totalSteps // steps
+        thetaFW = np.zeros((57, repeat, iteration+1), dtype=complex)
+        thetaRV = np.zeros((57, repeat, iteration+1), dtype=complex)
+        extracted = np.zeros(57, dtype=complex)
+        safeAngle = np.empty(57)
+        safeAngle[::2] = 270
+        safeAngle[1::2] = 90
+
+        self.pfi.resetMotorScaling(cobras=None, motor='theta')
+
+        # record theta movement
+        for g in range(3):
+            gIdx = self.goodIdx[self.goodIdx%3==g]
+            self.pfi.moveAllSteps(self.allCobras[gIdx], -10000, 5000)
+
+            for n in range(repeat):
+                self.cam.resetStack(f'thetaForwardStack{n}G{g}.fits')
+
+                # forward theta motor maps
+                extracted[self.goodIdx] = self.exposeAndExtractPositions(f'thetaBegin{n}G{g}.fits')
+                thetaFW[gIdx, n, 0] = extracted[gIdx]
+
+                notdoneMask = np.zeros(len(thetaFW), 'bool')
+                notdoneMask[gIdx] = True
+                for k in range(iteration):
+                    self.logger.info(f'Group{g+1} {n+1}/{repeat} theta forward to {(k+1)*steps}')
+                    if fromHome:
+                        self.pfi.moveAllSteps(self.allCobras[notdoneMask], (k+1)*steps, 0, thetaFast=False)
+                    else:
+                        self.pfi.moveAllSteps(self.allCobras[notdoneMask], steps, 0, thetaFast=False)
+                    extracted[self.goodIdx] = self.exposeAndExtractPositions(f'thetaForward{n}N{k}G{g}.fits')
+                    thetaFW[gIdx, n, k+1] = extracted[gIdx]
+                    if fromHome:
+                        self.pfi.moveAllSteps(self.allCobras[notdoneMask], -(k+1)*steps, 0)
+
+                    doneMask, lastAngles = self.thetaFWDone(thetaFW, n, k)
+                    if doneMask is not None:
+                        newlyDone = doneMask & notdoneMask
+                        if np.any(newlyDone):
+                            notdoneMask &= ~doneMask
+                            self.logger.info(f'done: {np.where(newlyDone)[0]}, {(notdoneMask == True).sum()} left')
+                    if not np.any(notdoneMask):
+                        thetaFW[gIdx, n, k+2:] = thetaFW[gIdx, n, k+1][:,None]
+                        break
+
+                if doneMask is not None and np.any(notdoneMask):
+                    self.logger.warn(f'{(notdoneMask == True).sum()} did not finish:')
+                    for c_i in np.where(notdoneMask)[0]:
+                        c = self.allCobras[c_i]
+                        d = np.rad2deg(lastAngles[c_i])
+                        self.logger.warn(f'  {str(c)}: {np.round(d, 2)}')
+
+                # make sure it goes to the limit
+                self.logger.info(f'{n+1}/{repeat} theta forward {10000} to limit')
+                self.pfi.moveAllSteps(self.allCobras[gIdx], 10000, 0)
+
+                # reverse theta motor maps
+                self.cam.resetStack(f'thetaReverseStack{n}G{g}.fits')
+                extracted[self.goodIdx] = self.exposeAndExtractPositions(f'thetaEnd{n}G{g}.fits')
+                thetaRV[gIdx, n, 0] = extracted[gIdx]
+
+                notdoneMask = np.zeros(len(thetaFW), 'bool')
+                notdoneMask[gIdx] = True
+                for k in range(iteration):
+                    self.logger.info(f'Group{g+1} {n+1}/{repeat} theta backward to {(k+1)*steps}')
+                    if fromHome:
+                        self.pfi.moveAllSteps(self.allCobras[notdoneMask], -(k+1)*steps, 0, thetaFast=False)
+                    else:
+                        self.pfi.moveAllSteps(self.allCobras[notdoneMask], -steps, 0, thetaFast=False)
+                    extracted[self.goodIdx] = self.exposeAndExtractPositions(f'thetaReverse{n}N{k}G{g}.fits')
+                    thetaRV[gIdx, n, k+1] = extracted[gIdx]
+                    if fromHome:
+                        self.pfi.moveAllSteps(self.allCobras[notdoneMask], (k+1)*steps, 0)
+
+                    doneMask, lastAngles = self.thetaRVDone(thetaRV, n, k)
+                    if doneMask is not None:
+                        newlyDone = doneMask & notdoneMask
+                        if np.any(newlyDone):
+                            notdoneMask &= ~doneMask
+                            self.logger.info(f'done: {np.where(newlyDone)[0]}, {(notdoneMask == True).sum()} left')
+                    if not np.any(notdoneMask):
+                        thetaRV[gIdx, n, k+2:] = thetaRV[gIdx, n, k+1][:,None]
+                        break
+
+                if doneMask is not None and np.any(notdoneMask):
+                    self.logger.warn(f'{(notdoneMask == True).sum()} did not finish:')
+                    for c_i in np.where(notdoneMask)[0]:
+                        c = self.allCobras[c_i]
+                        d = np.rad2deg(lastAngles[c_i])
+                        self.logger.warn(f'  {str(c)}: {np.round(d, 2)}')
+
+                # At the end, make sure the cobra back to the hard stop
+                self.logger.info(f'G{g} {n+1}/{repeat} theta reverse {-10000} steps to limit')
+                self.pfi.moveAllSteps(self.allCobras[gIdx], -10000, 0)
+
+            # move theta arms to safe positions
+            self.moveToThetaAngle(gIdx, angle=safeAngle[gIdx], globalAngles=True, maxTries=10)
+            self.pfi.moveAllSteps(self.allCobras[gIdx], 0, -5000)
+
+        self.pfi.resetMotorScaling(cobras=None, motor='theta')
+        self.cam.resetStack()
+
+        # save calculation result
+        dataPath = self.runManager.dataDir
         np.save(dataPath / 'thetaFW', thetaFW)
         np.save(dataPath / 'thetaRV', thetaRV)
 
@@ -1320,13 +1557,6 @@ class ModuleTest():
         np.save(dataPath / 'thetaMMFW', thetaMMFW)
         np.save(dataPath / 'thetaMMRV', thetaMMRV)
         np.save(dataPath / 'bad', np.where(bad)[0])
-
-        # calculate motor maps by average speeds
-        #thetaMMFW2, thetaMMRV2, bad2 = self.cal.motorMaps2(thetaAngFW, thetaAngRV, steps, delta)
-        #bad2[badRange] = True
-        #np.save(dataPath / 'thetaMMFW2', thetaMMFW2)
-        #np.save(dataPath / 'thetaMMRV2', thetaMMRV2)
-        #np.save(dataPath / 'bad2', np.where(bad2)[0])
 
         # update XML file, using Johannes weighting
         slow = not fast
@@ -1360,7 +1590,7 @@ class ModuleTest():
         self.setThetaGeometryFromRun(self.runManager.runDir, onlyIfClear=True)
         return self.runManager.runDir
 
-    def phiConvergenceTest(self, margin=15.0, runs=50, tries=8, fast=False, finalAngle=None, scaleFactor=8.0, tolerance=0.2):
+    def phiConvergenceTest(self, margin=15.0, runs=50, tries=8, fast=False, finalAngle=None, scaleFactor=8.0, tolerance=0.2, b=0.07):
         self._connect()
         dataPath = self.runManager.dataDir
 
@@ -1375,6 +1605,7 @@ class ModuleTest():
 
             #record the phi movements
             self.cam.resetStack('phiForwardStack.fits')
+            self.pfi.resetMotorScaling(self.goodCobras, 'phi')
             self.pfi.moveAllSteps(self.goodCobras, 0, -5000, phiFast=True)
             phiFW[self.goodIdx, 0] = self.exposeAndExtractPositions()
 
@@ -1444,6 +1675,17 @@ class ModuleTest():
         nowDone = np.zeros(57, 'bool')
         tolerance = np.deg2rad(tolerance)
 
+        # calculate the ratio between speed and on-time
+        ratioFw = np.empty(len(self.goodIdx))
+        ratioRv = np.empty(len(self.goodIdx))
+        for i, c in enumerate(self.goodIdx):
+            if fast:
+                ratioFw[i] = scaleFunc(self.pfi.calibModel.motorOntimeFwd2[c], b)
+                ratioRv[i] = scaleFunc(self.pfi.calibModel.motorOntimeRev2[c], b)
+            else:
+                ratioFw[i] = scaleFunc(self.pfi.calibModel.motorOntimeSlowFwd2[c], b)
+                ratioRv[i] = scaleFunc(self.pfi.calibModel.motorOntimeSlowRev2[c], b)
+
         for i in range(runs):
             self.cam.resetStack(f'phiConvergenceTest{i}.fits')
             if runs > 1:
@@ -1477,9 +1719,13 @@ class ModuleTest():
                 for k in range(len(self.goodIdx)):
                     if abs(cAngles[k] - lastAngle[k]) > np.deg2rad(0.5):
                         rawScale = abs((angle - lastAngle[k]) / (cAngles[k] - lastAngle[k]))
-                        scale[k] = 1 + (rawScale - 1) / scaleFactor
-                        direction = 'ccw' if angle < lastAngle[k] else 'cw'
-                        self.pfi.scaleMotorOntime(self.goodCobras[k], 'phi', direction, scale[k])
+                        if angle < lastAngle[k]:
+                            scale[k] = 1 + (rawScale - 1) / (scaleFactor * ratioRv[k])
+                            self.pfi.scaleMotorOntime(self.goodCobras[k], 'phi', 'ccw', scale[k])
+                        else:
+                            scale[k] = 1 + (rawScale - 1) / (scaleFactor * ratioFw[k])
+                            self.pfi.scaleMotorOntime(self.goodCobras[k], 'phi', 'cw', scale[k])
+
                 phiData[self.goodIdx, i, j+1, 0] = cAngles
                 phiData[self.goodIdx, i, j+1, 1] = np.real(cPositions)
                 phiData[self.goodIdx, i, j+1, 2] = np.imag(cPositions)
@@ -1517,14 +1763,17 @@ class ModuleTest():
                 for k in range(len(self.goodIdx)):
                     if abs(angle - lastAngle[k]) > np.deg2rad(2.0):
                         rawScale = abs((angle - lastAngle[k]) / (cAngles[k] - lastAngle[k]))
-                        scale = 1 + (rawScale - 1) / scaleFactor
-                        direction = 'ccw' if angle < lastAngle[k] else 'cw'
-                        self.pfi.scaleMotorOntime(self.goodCobras[k], 'phi', direction, scale) 
+                        if angle < lastAngle[k]:
+                            scale[k] = 1 + (rawScale - 1) / (scaleFactor * ratioRv[k])
+                            self.pfi.scaleMotorOntime(self.goodCobras[k], 'phi', 'ccw', scale[k])
+                        else:
+                            scale[k] = 1 + (rawScale - 1) / (scaleFactor * ratioFw[k])
+                            self.pfi.scaleMotorOntime(self.goodCobras[k], 'phi', 'cw', scale[k])
             self.logger.info(f'Final angles: {np.round(np.rad2deg(cAngles), 2)}')
             self.pfi.resetMotorScaling(self.goodCobras, 'phi')
         return self.runManager.runDir
 
-    def thetaConvergenceTest(self, margin=15.0, runs=50, tries=8, fast=False, scaleFactor=8.0, tolerance=0.2):
+    def thetaConvergenceTest(self, margin=15.0, runs=50, tries=8, fast=False, scaleFactor=8.0, tolerance=0.2, b=0.09):
         self._connect()
         dataPath = self.runManager.dataDir
 
@@ -1539,6 +1788,7 @@ class ModuleTest():
 
             #record the theta movements
             self.cam.resetStack('thetaForwardStack.fits')
+            self.pfi.resetMotorScaling(self.goodCobras, 'theta')
             self.pfi.moveAllSteps(self.goodCobras, -10000, 0, thetaFast=True)
             thetaFW[self.goodIdx, 0] = self.exposeAndExtractPositions()
 
@@ -1609,6 +1859,17 @@ class ModuleTest():
         nowDone = np.zeros(57, 'bool')
         tolerance = np.deg2rad(tolerance)
 
+        # calculate the ratio between speed and on-time
+        ratioFw = np.empty(len(self.goodIdx))
+        ratioRv = np.empty(len(self.goodIdx))
+        for i, c in enumerate(self.goodIdx):
+            if fast:
+                ratioFw[i] = scaleFunc(self.pfi.calibModel.motorOntimeFwd1[c], b)
+                ratioRv[i] = scaleFunc(self.pfi.calibModel.motorOntimeRev1[c], b)
+            else:
+                ratioFw[i] = scaleFunc(self.pfi.calibModel.motorOntimeSlowFwd1[c], b)
+                ratioRv[i] = scaleFunc(self.pfi.calibModel.motorOntimeSlowRev1[c], b)
+
         for i in range(runs):
             self.cam.resetStack(f'thetaConvergenceTest{i}.fits')
             if runs > 1:
@@ -1649,9 +1910,13 @@ class ModuleTest():
                         cAngles[k] -= np.pi*2
                     if abs(cAngles[k] - lastAngle[k]) > np.deg2rad(0.5):
                         rawScale = abs((angle - lastAngle[k]) / (cAngles[k] - lastAngle[k]))
-                        scale[k] = 1 + (rawScale - 1) / scaleFactor
-                        direction = 'ccw' if not dirs[k] else 'cw'
-                        self.pfi.scaleMotorOntime(self.goodCobras[k], 'theta', direction, scale[k])
+                        if not dirs[k]:
+                            scale[k] = 1 + (rawScale - 1) / (scaleFactor * ratioRv[k])
+                            self.pfi.scaleMotorOntime(self.goodCobras[k], 'theta', 'ccw', scale[k])
+                        else:
+                            scale[k] = 1 + (rawScale - 1) / (scaleFactor * ratioFw[k])
+                            self.pfi.scaleMotorOntime(self.goodCobras[k], 'theta', 'cw', scale[k])
+
                 thetaData[self.goodIdx, i, j+1, 0] = cAngles
                 thetaData[self.goodIdx, i, j+1, 1] = np.real(cPositions)
                 thetaData[self.goodIdx, i, j+1, 2] = np.imag(cPositions)
@@ -1688,7 +1953,6 @@ class ModuleTest():
         """ convert old XML to a new coordinate by taking 'phi homed' images
             assuming the cobra module is in horizontal setup
         """
-
         idx = self.goodIdx
         idx1 = idx[idx <= self.camSplit]
         idx2 = idx[idx > self.camSplit]
@@ -1765,7 +2029,7 @@ class ModuleTest():
         # assumes module == 1 XXX
         return np.array(pfiControl.PFI.allocateCobraList(zip(np.full(len(cobs), 1), np.array(cobs) + 1)))
 
-    def thetaOnTimeSearch(self, newXml, speed=0.06, onTimeHigh=0.07, onTimeIntercept=0.027, steps=1000, iteration=6, repeat=1):
+    def thetaOnTimeSearch(self, newXml, speed=0.06, onTimeHigh=0.07, onTimeIntercept=0.027, steps=1000, iteration=6, repeat=1, fast=False):
         """ search the on time parameters for a specified motor speed """
         speed = np.deg2rad(speed)
         if iteration < 3:
@@ -1782,11 +2046,15 @@ class ModuleTest():
         _spdF = []
         _spdR = []
 
-        # get the average speeds for onTimeHigh, smaller step size since it's fast
+        # get the average speeds for onTimeHigh, small step size since it's fast
         self.logger.info(f'Initial run, onTime = {onTimeHigh}')
-        dataDir = self.makeThetaMotorMap(newXml, repeat=repeat, steps=400, thetaOnTime=onTimeHigh)
+        dataDir = self.makeThetaMotorMap(newXml, repeat=repeat, steps=200, thetaOnTime=onTimeHigh, fast=fast)
         spdF = np.load(dataDir / 'data' / 'thetaSpeedFW.npy')
         spdR = np.load(dataDir / 'data' / 'thetaSpeedRV.npy')
+        _ontF.append(np.full(57, onTimeHigh))
+        _ontR.append(np.full(57, onTimeHigh))
+        _spdF.append(spdF.copy())
+        _spdR.append(spdR.copy())
 
         # assume a typical value for bad cobras, sticky??
         spdF[spdF<np.deg2rad(0.02)] = np.deg2rad(0.2)
@@ -1805,7 +2073,7 @@ class ModuleTest():
             ontF[ontF<onTimeLow] = onTimeLow
             ontR[ontR<onTimeLow] = onTimeLow
             self.logger.info(f'Run {n+1}/{iteration}, onTime = {np.round([ontF, ontR],4)}')
-            dataDir = self.makeThetaMotorMap(newXml, repeat=repeat, steps=steps, thetaOnTime=[ontF, ontR])
+            dataDir = self.makeThetaMotorMap(newXml, repeat=repeat, steps=steps, thetaOnTime=[ontF, ontR], fast=fast)
             spdF = np.load(dataDir / 'data' / 'thetaSpeedFW.npy')
             spdR = np.load(dataDir / 'data' / 'thetaSpeedRV.npy')
             _ontF.append(ontF.copy())
@@ -1824,14 +2092,16 @@ class ModuleTest():
         # try to find best on time, maybe.....
         ontF = self.searchOnTime(speed, np.array(_spdF), np.array(_ontF))
         ontR = self.searchOnTime(speed, np.array(_spdR), np.array(_ontR))
+        ontF[ontF>onTimeHigh] = onTimeHigh
+        ontR[ontR>onTimeHigh] = onTimeHigh
 
         # build motor maps
         self.logger.info(f'Build motor maps, best onTime = {np.round([ontF, ontR],4)}')
-        self.makeThetaMotorMap(newXml, repeat=repeat, steps=steps, thetaOnTime=[ontF, ontR])
+        self.makeThetaMotorMap(newXml, repeat=repeat, steps=steps, thetaOnTime=[ontF, ontR], fast=fast)
 
         return ontF, ontR
 
-    def phiOnTimeSearch(self, newXml, speed=0.06, onTimeHigh=0.05, onTimeIntercept=0.01, steps=500, iteration=6, repeat=1):
+    def phiOnTimeSearch(self, newXml, speed=0.06, onTimeHigh=0.05, onTimeIntercept=0.01, steps=500, iteration=6, repeat=1, fast=False):
         """ search the on time parameters for a specified motor speed """
         speed = np.deg2rad(speed)
         if iteration < 3:
@@ -1847,11 +2117,15 @@ class ModuleTest():
         _spdF = []
         _spdR = []
 
-        # get the average speeds for onTimeHigh, smaller step size since it's fast
+        # get the average speeds for onTimeHigh, small step size since it's fast
         self.logger.info(f'Initial run, onTime = {onTimeHigh}')
-        dataDir = self.makePhiMotorMap(newXml, repeat=repeat, steps=200, phiOnTime=onTimeHigh)
+        dataDir = self.makePhiMotorMap(newXml, repeat=repeat, steps=100, phiOnTime=onTimeHigh, fast=fast)
         spdF = np.load(dataDir / 'data' / 'phiSpeedFW.npy')
         spdR = np.load(dataDir / 'data' / 'phiSpeedRV.npy')
+        _ontF.append(np.full(57, onTimeHigh))
+        _ontR.append(np.full(57, onTimeHigh))
+        _spdF.append(spdF.copy())
+        _spdR.append(spdR.copy())
 
         # assume a typical value for bad cobras, sticky??
         spdF[spdF<np.deg2rad(0.02)] = np.deg2rad(0.2)
@@ -1870,7 +2144,7 @@ class ModuleTest():
             ontF[ontF<onTimeIntercept] = onTimeIntercept
             ontR[ontR<onTimeIntercept] = onTimeIntercept
             self.logger.info(f'Run {n+1}/{iteration}, onTime = {np.round([ontF, ontR],4)}')
-            dataDir = self.makePhiMotorMap(newXml, repeat=repeat, steps=steps, phiOnTime=[ontF, ontR])
+            dataDir = self.makePhiMotorMap(newXml, repeat=repeat, steps=steps, phiOnTime=[ontF, ontR], fast=fast)
             spdF = np.load(dataDir / 'data' / 'phiSpeedFW.npy')
             spdR = np.load(dataDir / 'data' / 'phiSpeedRV.npy')
             _ontF.append(ontF.copy())
@@ -1892,88 +2166,53 @@ class ModuleTest():
 
         # build motor maps
         self.logger.info(f'Build motor maps, best onTime = {np.round([ontF, ontR],4)}')
-        self.makePhiMotorMap(newXml, repeat=repeat, steps=steps, phiOnTime=[ontF, ontR])
+        self.makePhiMotorMap(newXml, repeat=repeat, steps=steps, phiOnTime=[ontF, ontR], fast=fast)
 
         return ontF, ontR
 
     def searchOnTime(self, speed, sData, tData):
         """ There should be some better ways to do!!! """
-
         onTime = np.zeros(57)
 
         for c in self.goodIdx:
             s = sData[:,c]
             t = tData[:,c]
-            t0 = np.min(t)
-            t1 = np.max(t)
-            s0 = np.min(s)
-            s1 = np.max(s)
-            onTime[c] = t0 + (t1-t0)/(s1-s0)*(speed-s0)
+            if np.median(s[t==np.max(t)]) <= speed:
+                self.logger.warn(f'Cobra #{c+1} is sticky, set to max value')
+                onTime[c] = np.max(t)
+                continue
+
+            try:
+                params, params_cov = optimize.curve_fit(speedFunc, t, s, p0=[10, 0.06])
+                if params[0] < 0 or params[1] < 0:
+                    # remove some slow data and try again
+                    self.logger.warn(f'Curve fitting error #{c+1}, try again')
+                    s[t==np.max(t)] = np.max(s[t==np.max(t)])
+                    params, params_cov = optimize.curve_fit(speedFunc, t, s, p0=[10, 0.06])
+                if params[0] < 0 or params[1] < 0:
+                    raise
+                onTime[c] = invSpeedFunc(speed, params[0], params[1])
+            except:
+                onTime[c] = np.median(t)
+                self.logger.warn(f'Curve fitting failed #{c+1}, set to median value')
 
         return onTime
 
+def speedFunc(x, a, b, n=2):
+    return a * (np.power(np.power(x, n) + np.power(b, n), 1.0/n) - b)
 
-# def runMotorMap(dataPath=None,brokens=None,module=None):
-#     module = 'Science29'
-#     arm = 'theta'
+def invSpeedFunc(x, a, b, n=2):
+    return np.power(np.power(x/a+b, n) - np.power(b, n), 1.0/n)
 
-#     dataPath = '/data/SC29/20190930/'
-
-#     stepList = ['50','400']
-#     speedList = ['','Fast']
-#     brokens = [57]
-#     xml = '/data/SC29/20190930/science29_theta_20190930.xml'
-
-def runMotorMap(dataPath=None,brokens=None, arm=None, xml=None, module=None):
-    #module = 'Science29'
-    #arm = 'theta'
-    
-    #dataPath = '/data/SC29/20190930/'
-
-    stepList = ['50','400']
-    speedList = ['','Fast']
-    #brokens = [57]
-    #xml = '/data/SC29/20190930/science29_theta_20190930.xml'
-
-    for s in speedList:
-        for f in stepList:
-            path= dataPath+f'{arm}{f}Step{s}/'
-            figpath = dataPath+f'{arm}{f}Step{s}MotorMap/'
-            if not (os.path.exists(path)):
-                    os.mkdir(path)
-            if not (os.path.exists(figpath)):
-                    os.mkdir(figpath)        
-            mt = ModuleTest('128.149.77.24', xml,brokens=brokens,camSplit=28)
-            vis = visDianosticPlot.VisDianosticPlot(path, brokens=brokens, camSplit=28)
-            pfi = mt.pfi
-            
-            if arm is 'phi':
-                pfi.moveAllSteps(mt.allCobras, 0, -5000)
-                pfi.moveAllSteps(mt.allCobras, 0, -1000)
-            else:
-                pfi.moveAllSteps(mt.allCobras, -10000, 0)
-                pfi.moveAllSteps(mt.allCobras, -2000, 0)
-            
-            if s is 'Fast':
-                if arm is 'phi':
-                    mt.makePhiMotorMap(f'{module}_{arm}_{f}Step{s}.xml', path, 
-                        repeat = 3, steps = int(f), fast=True,totalSteps = 6000)
-                else:
-                    mt.makeThetaMotorMap(f'{module}_{arm}_{f}Step{s}.xml', path, 
-                        repeat = 3, steps = int(f), fast=True,totalSteps = 12000)
-            else:
-                if arm is 'phi':
-                    mt.makePhiMotorMap(f'{module}_{arm}_{f}Step{s}.xml', path, 
-                        repeat = 3, steps = int(f), fast=False,totalSteps = 6000)
-                else:
-                    mt.makeThetaMotorMap(f'{module}_{arm}_{f}Step{s}.xml', path, 
-                        repeat = 3, steps = int(f), fast=False,totalSteps = 12000)
-                
-            if arm is 'phi':
-                vis.visCobraMotorMap(stepsize=int(f), figpath=figpath, arm='phi')    
-            else:
-                vis.visCobraMotorMap(stepsize=int(f), figpath=figpath, arm='theta')
-                
-            print(path)
-            del(mt)
-            del(vis)
+def scaleFunc(x, b, n=2):
+    """ calculate the ratio between speed and on-time """
+    if b == 0:
+        return 1
+    c = x / b
+    d = np.power(c, n)
+    e = d + 1
+    f = 1 - np.power(e, -1/n)
+    if f == 0:
+        return n
+    else:
+        return d / (e * f)
