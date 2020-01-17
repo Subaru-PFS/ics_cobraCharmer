@@ -771,8 +771,7 @@ class ModuleTest():
         if idx is None:
             idx = np.arange(len(self.goodCobras))
         cobras = self.getCobras(idx)
-        if idx is not None:
-            targets = targets[idx]
+        targets = targets[idx]
 
         self.pfi.moveXYfromHome(cobras, targets, thetaThreshold=threshold, phiThreshold=threshold)
 
@@ -781,8 +780,7 @@ class ModuleTest():
         while True:
             # extract sources and fiber identification
             curPos = self.exposeAndExtractPositions(tolerance=0.2)
-            if idx is not None:
-                curPos = curPos[idx]
+            curPos = curPos[idx]
             # check position errors
             self.logger.info("to: %s", targets[keepMoving])
             self.logger.info("at: %s", curPos[keepMoving])
