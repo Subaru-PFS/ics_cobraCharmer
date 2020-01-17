@@ -274,6 +274,7 @@ class Camera(object):
                               f'get: {t1-t0:0.3f} save: {t2-t1:0.3f} total: {t2-t0:0.3f}')
         else:
             objects = None
+            bkgd = None
 
         return objects, filename, bkgd
 
