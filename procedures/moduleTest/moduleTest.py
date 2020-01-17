@@ -1022,6 +1022,7 @@ class ModuleTest():
             # At the end, make sure the cobra back to the hard stop
             self.logger.info(f'{n+1}/{repeat} phi reverse {-totalSteps} steps to limit')
             self.pfi.moveAllSteps(self.goodCobras, 0, -totalSteps)  # fast to limit
+        self.cam.resetStack()
 
         # save calculation result
         np.save(dataPath / 'phiFW', phiFW)
@@ -1271,6 +1272,7 @@ class ModuleTest():
             # At the end, make sure the cobra back to the hard stop
             self.logger.info(f'{n+1}/{repeat} theta reverse {-totalSteps} steps to limit')
             self.pfi.moveAllSteps(self.goodCobras, -totalSteps, 0)
+        self.cam.resetStack()
 
         # save calculation result
         dataPath = self.runManager.dataDir
