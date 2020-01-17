@@ -931,7 +931,10 @@ class ModuleTest():
         # set fast on-time to a large value so it can move over whole range, set slow on-time to the test value.
         fastOnTime = [np.full(57, limitOnTime)] * 2
         if phiOnTime is not None:
-            slowOnTime = [np.full(57, phiOnTime)] * 2
+            if np.isscalar(phiOnTime):
+                slowOnTime = [np.full(57, phiOnTime)] * 2
+            else:
+                slowOnTime = phiOnTime
         elif fast:
             slowOnTime = defaultOnTimeFast
         else:
@@ -1175,7 +1178,10 @@ class ModuleTest():
         # set fast on-time to a large value so it can move over whole range, set slow on-time to the test value.
         fastOnTime = [np.full(57, limitOnTime)] * 2
         if thetaOnTime is not None:
-            slowOnTime = [np.full(57, thetaOnTime)] * 2
+            if np.isscalar(thetaOnTime):
+                slowOnTime = [np.full(57, thetaOnTime)] * 2
+            else:
+                slowOnTime = thetaOnTime
         elif fast:
             slowOnTime = defaultOnTimeFast
         else:
