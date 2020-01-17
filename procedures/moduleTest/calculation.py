@@ -423,23 +423,23 @@ class Calculation():
             rSteps = 0
             rAngle = 0
             for n in range(repeat):
-                nz = np.nonzero(angFW[c, n] < (angRV[c, n, 0] - delta))[0]
-                if nz.size > 0:
-                    k = nz[-1]
-                    fAngle += angFW[c, n, k] - angFW[c, n, 0]
-                    fSteps += k * steps
+                invalid = np.where(angFW[c, n] > angRV[c, n, 0] - delta)
+                last = iteration
+                if len(invalid[0]) > 0:
+                    last = invalid[0][0] - 1
+                    if last < 0:
+                        last = 0
+                fSteps += last * steps
+                fAngle += angFW[c, n, last]
 
-                # check if stuck at hard stops
-                if angRV[c, n, 0] < angRV[c, n, 1]:
-                    start = 1
-                else:
-                    start = 0
-
-                nz = np.nonzero(angRV[c, n] > delta)[0]
-                if nz.size > 0:
-                    k = nz[-1]
-                    rAngle += angRV[c, n, start] - angRV[c, n, k]
-                    rSteps += (k - start) * steps
+                invalid = np.where(angRV[c, n] < delta)
+                last = iteration
+                if len(invalid[0]) > 0:
+                    last = invalid[0][0] - 1
+                    if last < 0:
+                        last = 0
+                rSteps += last * steps
+                rAngle += angRV[c, n, 0] - angRV[c, n, last]
 
             if fSteps > 0:
                 speedFW[c] = fAngle / fSteps
