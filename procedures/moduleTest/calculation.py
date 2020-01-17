@@ -336,74 +336,77 @@ class Calculation():
 
         return mmFW, mmRV, bad
 
+    def _setMapPars(self, sarr, darr, idx, spd, dist):
+        """ called by motorMaps2 """
+        if darr[idx] == 0:
+            sarr[idx] = spd
+            darr[idx] = dist
+        else:
+            total = darr[idx] + dist
+            sarr[idx] = total / (darr[idx]/sarr[idx] + dist/spd)
+            darr[idx] = total
+
     def motorMaps2(self, angFW, angRV, steps, delta=0.1):
         """ calculate motor maps based on average step counts """
         mmFW = np.zeros((57, regions), dtype=float)
         mmRV = np.zeros((57, regions), dtype=float)
         bad = np.full(57, False)
-        cnt = np.zeros(regions)
         repeat = angFW.shape[1]
         iteration = angFW.shape[2] - 1
+        af = np.average(angFW, axis=1)
+        ar = np.average(angRV, axis=1)
+        dist_arr = np.zeros(regions, dtype=float)
 
         for c in self.goodIdx:
-            cnt[:] = 0
-            for n in range(repeat):
-                nz = np.nonzero(np.all([angFW[c, n, 1:] > angFW[c, n, :-1], angRV[c, n, 0] - angFW[c, n, 1:] > delta], axis=0))[0]
-                if nz.size <= 0:
-                    continue
-                k = nz[-1]
-                x = np.arange(regions+1) * binSize
-                xp = angFW[c, n, :k+2]
-                fp = np.arange(k+2) * steps
-                mm = np.interp(x, xp, fp)
-                diff = mm[1:] - mm[:-1]
-                nz = np.nonzero(diff)[0]
-                if nz.size > 0:
-                    mmFW[c] += diff
-                    cnt[nz[:-1]] += 1
-                    if angFW[c, n, k+1] % binSize != 0:
-                        cnt[nz[-1]] += (angFW[c, n, k+1] % binSize) / binSize
-                    else:
-                        cnt[nz[-1]] += 1
-            nz = np.nonzero(cnt)[0]
-            if nz.size > 0:
-                mmFW[c, nz] = binSize / (mmFW[c, nz] / cnt[nz])
-                mmFW[c, nz[-1]+1:] = mmFW[c, nz[-1]]
-            else:
+            for valid in range(iteration):
+                if af[c, valid+1] < af[c, valid] or ar[c, 0] - af[c, valid+1] < delta:
+                    break
+            if valid <= 0:
                 bad[c] = True
+            else:
+                dist_arr[:] = 0
+                for n in range(valid):
+                    st = int(af[c, n] / binSize)
+                    ed = int(af[c, n+1] / binSize)
+                    spd = (af[c, n+1] - af[c, n]) / steps
+                    if ed > st:
+                        self._setMapPars(mmFW[c], dist_arr, st, spd, (st+1)*binSize - af[c, n])
+                        self._setMapPars(mmFW[c], dist_arr, ed, spd, af[c, n+1] - ed*binSize)
+                        for k in range(st+1, ed):
+                            self._setMapPars(mmFW[c], dist_arr, k, spd, binSize)
+                    else:
+                        self._setMapPars(mmFW[c], dist_arr, st, spd, af[c, n+1] - af[c, n])
+                mmFW[c, ed+1:] = spd
+                if ed <= 0:
+                    bad[c] = True
 
-            cnt[:] = 0
-            for n in range(repeat):
-                # avoid sticky problem at hard stops
-                if angRV[c, n, 1] > angRV[c, n, 0]:
-                    first = 1
-                else:
-                    first = 0
-                nz = np.nonzero(np.all([angRV[c, n, 1:] < angRV[c, n, :-1], angRV[c, n, 1:] > delta], axis=0))[0]
-                if nz.size <= 0:
-                    continue
-                k = nz[-1]
-                x = np.arange(regions+1) * binSize
-                xp = np.flip(angRV[c, n, first:k+2], 0)
-                fp = np.arange(k+2-first) * steps
-                mm = np.interp(x, xp, fp)
-                diff = mm[1:] - mm[:-1]
-                nz = np.nonzero(diff)[0]
-                if nz.size > 0:
-                    mmRV[c] += diff
-                    cnt[nz[1:-1]] += 1
-                    cnt[nz[0]] += 1 - (angRV[c, n, k+1] % binSize) / binSize
-                    if angRV[c, n, first] % binSize != 0:
-                        cnt[nz[-1]] += (angRV[c, n, first] % binSize) / binSize
-                    else:
-                        cnt[nz[-1]] += 1
-            nz = np.nonzero(cnt)[0]
-            if nz.size > 0:
-                mmRV[c, nz] = binSize / (mmRV[c, nz] / cnt[nz])
-                mmRV[c, :nz[0]] = mmRV[c, nz[0]]
-                mmRV[c, nz[-1]+1:] = mmRV[c, nz[-1]]
-            else:
+            for valid in range(iteration):
+                if ar[c, valid+1] > ar[c, valid] or ar[c, valid+1] < delta:
+                    break
+            if valid <= 0:
                 bad[c] = True
+            else:
+                dist_arr[:] = 0
+                for n in range(valid):
+                    st = int(ar[c, n+1] / binSize)
+                    ed = int(ar[c, n] / binSize)
+                    if ed >= regions:
+                        # the angle calculation may be wrong???
+                        continue
+                    spd = (ar[c, n] - ar[c, n+1]) / steps
+                    if ed > st:
+                        self._setMapPars(mmRV[c], dist_arr, st, spd, (st+1)*binSize - ar[c, n+1])
+                        self._setMapPars(mmRV[c], dist_arr, ed, spd, ar[c, n] - ed*binSize)
+                        for k in range(st+1, ed):
+                            self._setMapPars(mmRV[c], dist_arr, k, spd, binSize)
+                    else:
+                        self._setMapPars(mmRV[c], dist_arr, ed, spd, ar[c, n] - ar[c, n+1])
+                    if n == 0:
+                        for k in range(ed+1, regions):
+                            self._setMapPars(mmRV[c], dist_arr, k, spd, binSize)
+                mmRV[c, :st] = spd
+                if st == int(ar[c, 0] / binSize):
+                    bad[c] = True
 
         return mmFW, mmRV, bad
 
