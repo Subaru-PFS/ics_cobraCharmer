@@ -89,28 +89,8 @@ def unwrappedPosition(pos, center, homeAngle, fromAngle, toAngle,
     return unwrappedAngle(diffAngle, fromAngle, toAngle,
                           tripAngle=tripAngle, allowAngle=allowAngle)
 
-class Camera():
-    def __init__(self, devId):
-        from idsCamera import idsCamera
-        self.devId = devId
-        self.camera = idsCamera(devId)
-        self.camera.setExpoureTime(20)
-        self.data = None
-
-    def expose(self, fn=None):
-        self.data = self.camera.getCurrentFrame()
-        if fn is not None:
-            fits.writeto(fn, self.data, overwrite=True)
-        return self.data
-
-    def reload(self):
-        del self.camera
-        self.camera = idsCamera(self.devId)
-        self.camera.setExpoureTime(20)
-        self.data = None
-
 class ModuleTest():
-    def __init__(self, fpgaHost, xml, brokens=None, cam1Id=1, cam2Id=2, camSplit=26, logLevel=logging.INFO):
+    def __init__(self, fpgaHost, xml, brokens=None, cam1Id=1, cam2Id=2, camSplit=28, logLevel=logging.INFO):
 
         self.logger = logging.getLogger('moduleTest')
         self.logger.setLevel(logLevel)
@@ -124,6 +104,7 @@ class ModuleTest():
         self.allCobras = np.array(pfiControl.PFI.allocateCobraModule(1))
         self.fpgaHost = fpgaHost
         self.xml = xml
+        self.camSplit = camSplit
 
         # partition module 1 cobras into odd and even sets
         moduleCobras = {}
