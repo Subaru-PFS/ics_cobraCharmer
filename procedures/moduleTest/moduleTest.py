@@ -745,22 +745,25 @@ class ModuleTest():
 
         return self.runManager.runDir
 
-    def moveToXYfromHome(self, idx, targets, threshold=3.0, maxTries=8):
+    def moveToXYfromHome(self, idx, targets, ccwLimit=True, threshold=2.0, maxTries=8):
         """ function to move cobras to target positions """
 
         if idx is None:
-            idx = np.arange(len(self.allCobras))
+            idx = self.goodIdx
         cobras = self.getCobras(idx)
         if len(targets) != len(idx):
             raise RuntimeError('number of targets must match idx')
         if len(set(idx) & set(self.badIdx)) > 0:
             raise RuntimeError('should not include bad/broken cobras')
 
-        arr = np.full(len(self.allCobras), False)
+        arr = np.zeros(len(self.allCobras), 'bool')
         arr[idx] = True
         _idx = arr[self.goodIdx]
 
-        self.pfi.moveXYfromHome(cobras, targets, thetaThreshold=threshold, phiThreshold=threshold)
+        if ccwLimit:
+            self.pfi.moveXYfromHome(cobras, targets, ccwLimit=ccwLimit)
+        else:
+            self.pfi.moveXYfromHomeSafe(cobras, targets, ccwLimit=ccwLimit)
 
         ntries = 1
         keepMoving = np.where(targets != 0)
@@ -774,84 +777,109 @@ class ModuleTest():
 
             notDone = np.abs(curPos - targets) > threshold
             if not np.any(notDone):
-                print('Convergence sequence done')
+                self.logger.info('Convergence sequence done')
                 break
             if ntries > maxTries:
-                print(f'Reach max {maxTries} tries, gave up, gave up on {np.where(notDone)}')
+                self.logger.info(f'Reach max {maxTries} tries, gave up on {idx[notDone]}')
                 break
             self.logger.info("left (%d/%d): %s", len(keepMoving[0]), len(targets),
                              targets[keepMoving] - curPos[keepMoving])
 
             ntries += 1
-
             keepMoving = np.where(notDone)
-            self.pfi.moveXY(cobras[keepMoving], curPos[keepMoving], targets[keepMoving],
-                            thetaThreshold=threshold, phiThreshold=threshold)
+            self.pfi.moveXY(cobras[keepMoving], curPos[keepMoving], targets[keepMoving])
 
-    def moveToXY(self, idx, theta, phi, threshold=3.0, maxTries=8):
-        """ move positioners to given theta, phi angles.
-        """
-
-        cobras = self.getCobras(idx)
-        if np.isscalar(theta):
-            thetaAngles = np.full(len(cobras), theta, dtype='f4')
-        elif idx is not None:
-            thetaAngles = theta[idx]
-        else:
-            thetaAngles = theta
-
-        if np.isscalar(phi):
-            phiAngles = np.full(len(cobras), phi, dtype='f4')
-        elif idx is not None:
-            phiAngles = phi[idx]
-        else:
-            phiAngles = phi
-
-        thetaAngles = self.pfi.thetaToLocal(cobras, thetaAngles)
-        outTargets = self.pfi.anglesToPositions(self.allCobras, thetaAngles, phiAngles)
-
-        # move to outTargets
-        self.moveToXYfromHome(idx, outTargets[idx], threshold=threshold, maxTries=maxTries)
-
-    def moveToThetaPhi(self, idx, theta, phi, threshold=3.0, maxTries=8):
+    def moveToThetaPhiFromHome(self, idx, theta, phi, globalAngles=False, ccwLimit=True, threshold=3.0, maxTries=8):
         """ move positioners to given theta, phi angles.
         """
 
         if idx is None:
-            idx = np.arange(len(self.allCobras))
+            idx = np.arange(len(self.goodIdx))
+        if len(set(idx) & set(self.badIdx)) > 0:
+            raise RuntimeError('should not include bad/broken cobras')
 
-        cobras = self.getCobras(None)
+        arr = np.zeros(len(self.allCobras), 'bool')
+        arr[idx] = True
+        _idx = arr[self.goodIdx]
+
+        cobras = self.getCobras(idx)
         if np.isscalar(theta):
             thetaAngles = np.full(len(cobras), theta, dtype='f4')
         else:
             thetaAngles = theta
         if len(thetaAngles) != len(cobras):
-            raise RuntimeError('number of thetas must match _total_ number of cobras')
+            raise RuntimeError('number of thetas must match number of cobras')
 
         if np.isscalar(phi):
             phiAngles = np.full(len(cobras), phi, dtype='f4')
         else:
             phiAngles = phi
         if len(phiAngles) != len(cobras):
-            raise RuntimeError('number of phis must match _total_ number of cobras')
+            raise RuntimeError('number of phis must match number of cobras')
 
-        thetaAngles = self.pfi.thetaToLocal(cobras, thetaAngles)
-        outTargets = self.pfi.anglesToPositions(self.allCobras, thetaAngles, phiAngles)
+        if globalAngles:
+            thetaAngles = self.pfi.thetaToLocal(cobras, thetaAngles)
 
-        # move to outTargets
-        self.moveToXYfromHome(idx, outTargets[idx], threshold=threshold, maxTries=maxTries)
+        gapTht = (self.pfi.calibModel.tht1[idx] - self.pfi.calibModel.tht0[idx] + np.pi) % (2*np.pi) - np.pi
+        if ccwLimit:
+            self.logger.info(f"moving: {list(zip(thetaAngles, phiAngles))}")
+            self.pfi.moveThetaPhi(cobras, thetaAngles, phiAngles, thetaFast=True, phiFast=True, ccwLimit=True)
+        else:
+            # use safe moves, 2x phi speed
+            deltaTht = thetaAngles - (np.pi*2 + gapTht)
+            self.logger.info(f"moving: {list(zip(deltaTht, phiAngles))}")
+            self.pfi.moveThetaPhi(cobras, deltaTht, phiAngles, thetaFast=False, phiFast=True, ccwLimit=False)
+
+        ntries = 1
+        targets = self.pfi.anglesToPositions(cobras, thetaAngles, phiAngles)
+        keepMoving = np.where(targets != 0)
+
+        delta = np.deg2rad(10)
+        while True:
+            # extract sources and fiber identification
+            curPos = self.exposeAndExtractPositions(tolerance=0.2)
+            curPos = curPos[_idx]
+            # check position errors
+            self.logger.info("to: %s", targets[keepMoving])
+            self.logger.info("at: %s", curPos[keepMoving])
+
+            notDone = np.abs(curPos - targets) > threshold
+            if not np.any(notDone):
+                self.logger.info('Convergence sequence done')
+                break
+            if ntries > maxTries:
+                self.logger.info(f'Reach max {maxTries} tries, gave up on {idx[notDone]}')
+                break
+            keepMoving = np.where(notDone)
+            self.logger.info("left (%d/%d): %s", len(keepMoving[0]), len(targets),
+                             targets[notDone] - curPos[notDone])
+
+            ntries += 1
+            curTht, curPhi, _ = self.pfi.positionsToAngles(cobras, curPos)
+            for c_i in keepMoving[0]:
+                if thetaAngles[c_i] > np.pi and curTht[c_i,0] < gapTht[c_i] + delta:
+                    curTht[c_i,0] += 2*np.pi
+                elif thetaAngles[c_i] < np.pi and curTht[c_i,0] > np.pi*2 - delta:
+                    curTht[c_i,0] -= 2*np.pi
+            _curTht = curTht[notDone,0]
+            _curPhi = curPhi[notDone,0]
+            deltaTht = thetaAngles[notDone] - _curTht
+            deltaPhi = phiAngles[notDone] - _curPhi
+            self.logger.info(f"moving: {list(zip(deltaTht, deltaPhi))}")
+            self.pfi.moveThetaPhi(cobras[notDone], deltaTht, deltaPhi, _curTht, _curPhi, thetaFast=False, phiFast=False)
 
     def moveBadCobrasOut(self):
         """ move bad cobras to point outwards """
         if len(self.badIdx) <= 0:
             return
+        self._connect()
 
         # Calculate up/down(outward) angles
         oddMoves = self.pfi.thetaToLocal(self.oddCobras, [np.deg2rad(270)]*len(self.oddCobras))
-        #oddMoves[oddMoves>1.9*np.pi] = 0
+        oddMoves[oddMoves>1.9*np.pi] = 0
 
         evenMoves = self.pfi.thetaToLocal(self.evenCobras, [np.deg2rad(90)]*len(self.evenCobras))
-        #evenMoves[evenMoves>1.9*np.pi] = 0
+        evenMoves[evenMoves>1.9*np.pi] = 0
 
         allMoves = np.zeros(57)
         allMoves[::2] = oddMoves
@@ -861,30 +889,34 @@ class ModuleTest():
 
         # Home
         self.pfi.moveAllSteps(self.badCobras, -10000, -5000)
-        self.pfi.moveAllSteps(self.badCobras, -10000, -5000)
+        self.logger.info(f'theta/phi move 10000/-5000 steps to limit')
 
-        # Move the bad cobras to up/down positions
+        # Move the bad cobras to safe positions
         self.pfi.moveSteps(self.badCobras, allSteps[self.badIdx], np.zeros(len(self.badIdx)))
 
-    def moveGoodCobrasOut(self, threshold=3.0, maxTries=8):
+    def moveGoodCobrasOut(self, threshold=2.0, maxTries=8, phiAngle=60, phiToHome=True):
         """ move visible positioners to outwards positions, phi arms are moved out for 60 degrees
             (outTargets) so we can measure the arm angles
         """
+        self._connect()
+
         thetas = np.empty(57, dtype=float)
         thetas[::2] = self.pfi.thetaToLocal(self.oddCobras, np.full(len(self.oddCobras), np.deg2rad(270)))
         thetas[1::2] = self.pfi.thetaToLocal(self.evenCobras, np.full(len(self.evenCobras), np.deg2rad(90)))
-        phis = np.full(57, np.deg2rad(60.0))
-        outTargets = self.pfi.anglesToPositions(self.allCobras, thetas, phis)
+        phis = np.full(57, np.deg2rad(phiAngle))
 
         # Home the good cobras
-        self.pfi.moveAllSteps(self.goodCobras, -10000, -5000)
-        self.pfi.moveAllSteps(self.goodCobras, -10000, -5000)
+        self.logger.info(f'theta/phi move 10000/-5000 steps to limit')
+        self.pfi.moveAllSteps(self.goodCobras, 10000, -5000)
 
-        # move to outTargets
-        self.moveToXYfromHome(self.goodIdx, outTargets[self.goodIdx], threshold=threshold, maxTries=maxTries)
+        # move to safe angles
+        self.moveToThetaPhiFromHome(self.goodIdx, thetas[self.goodIdx], phis[self.goodIdx], ccwLimit=False, threshold=threshold, maxTries=maxTries)
+#        targets = self.pfi.anglesToPositions(self.allCobras, thetas, phis)
+#        self.moveToXYfromHome(self.goodIdx, targets[self.goodIdx], ccwLimit=False, threshold=threshold, maxTries=maxTries)
 
-        # move phi arms in
-        self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
+        if phiToHome:
+            # move phi arms in
+            self.pfi.moveAllSteps(self.goodCobras, 0, -5000)
 
     def makePhiMotorMap(
             self,
