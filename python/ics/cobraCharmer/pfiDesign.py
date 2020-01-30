@@ -8,6 +8,7 @@ system here should be in F3C.
 """
 from importlib import reload
 import logging
+import pathlib
 
 import numpy as np
 import xml.etree.ElementTree as ElementTree
@@ -837,3 +838,9 @@ class PFIDesign():
                 self.logger.warn(f'theta limits bad: mod={self.moduleIds[cidx]} pos={self.positionerIds[cidx]} '
                                  f'range={np.rad2deg(thetaRange[cidx])}')
         return ~duds
+
+def load(path):
+    des = PFIDesign()
+    des.loadModelFiles([path])
+
+    return des
