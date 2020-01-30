@@ -910,9 +910,9 @@ class ModuleTest():
         self.pfi.moveAllSteps(self.goodCobras, 10000, -5000)
 
         # move to safe angles
-        self.moveToThetaPhiFromHome(self.goodIdx, thetas[self.goodIdx], phis[self.goodIdx], ccwLimit=False, threshold=threshold, maxTries=maxTries)
-#        targets = self.pfi.anglesToPositions(self.allCobras, thetas, phis)
-#        self.moveToXYfromHome(self.goodIdx, targets[self.goodIdx], ccwLimit=False, threshold=threshold, maxTries=maxTries)
+#        self.moveToThetaPhiFromHome(self.goodIdx, thetas[self.goodIdx], phis[self.goodIdx], ccwLimit=False, threshold=threshold, maxTries=maxTries)
+        targets = self.pfi.anglesToPositions(self.allCobras, thetas, phis)
+        self.moveToXYfromHome(self.goodIdx, targets[self.goodIdx], ccwLimit=False, threshold=threshold, maxTries=maxTries)
 
         if phiToHome:
             # move phi arms in
