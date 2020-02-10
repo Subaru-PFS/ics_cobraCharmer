@@ -16,15 +16,22 @@ class CobraStatus(enum.IntEnum):
     COBRA_BROKEN_THETA = 0x0004  # 1 if the phi motor do not work
     COBRA_BROKEN_PHI   = 0x0008  # 1 if the theta motor does not work
 
-    COBRA_BROKEN_MOTOR = COBRA_BROKEN_THETA | COBRA_BROKEN_PHI
+    COBRA_BROKEN_MOTOR_MASK = COBRA_BROKEN_THETA | COBRA_BROKEN_PHI
+    COBRA_BROKEN_THETA_MASK = COBRA_BROKEN_THETA | COBRA_INVISIBLE
 
 class Motor(object):
     def __init__(self, limits, fwdMap=None, revMap=None, ontimeScales=None):
         self.angle = np.nan
+        self.lastMove = 0
+        self.lastOntime = np.nan
         self.limits = limits
         self.ontimeScales = dict(fwd=1.0, rev=1.0)
         self.maps = dict(fwd=None, rev=None)
         self.setMaps(fwdMap=fwdMap,rvMap=revMap)
+
+    def useableStatus(self):
+        return (not (self.status & (CobraStatus.COBRA_INVISIBLE | CobraStatus.COBRA_BROKEN_THETA)),
+                not (self.status & (CobraStatus.COBRA_INVISIBLE | CobraStatus.COBRA_BROKEN_PHI)))
 
     def setPosition(self, angle=np.nan):
         if np.isfinite(angle):
@@ -33,6 +40,11 @@ class Motor(object):
                 # logging.warn('')
 
         self.angle = angle
+
+    def registerMove(self, steps, ontime):
+        if steps is not None and steps != 0:
+            self.lastMove = move
+            self.lastOntime = ontime
 
     def setMaps(self, fwdMap=None, revMap=None):
         if fwdMap is not None:
@@ -73,6 +85,7 @@ class Motor(object):
         self.ontimeScales[direction] = newScale
 
     def adjustOntime(self, direction, ontime):
+        """ Apply dynamic scaling to ontime. """
         scale = self.ontimeScales[direction]
 
         newOntime = ontime*scale
@@ -90,7 +103,10 @@ class Motor(object):
         if fromAngle is None:
             fromAngle = self.angle
 
-        return map.calculateSteps(fromAngle, toAngle)
+        steps, rawOntime = map.calculateSteps(fromAngle, toAngle),
+        ontime = self.adjustOntime(direction, rawOntime))
+
+        return steps, ontime
 
 class ThetaMotor(Motor):
     defaultMaxOntime = 0.1
@@ -153,13 +169,12 @@ class Cobra(object):
 
         thetaLimits = None if thetaLimits is None else np.deg2rad(np.array(thetaLimits))
         phiLimits = None if phiLimits is None else np.deg2rad(np.array(phiLimits))
-        self.thetaMotor = Motor(limits=thetaLimits, frequency=thetaMotorFrequency,
-                                fwdMap=self.getMap(motor='theta', dir='fwd'),
-                                revMap=self.getMap(motor='theta', dir='rev'))
-        self.phiMotor = Motor(limits=phiLimits, frequency=phiMotorFrequency,
-                              fwdMap=self.getMap(motor='phi', dir='fwd'),
-                              revMap=self.getMap(motor='phi', dir='rev'))
-
+        self.thetaMotor = ThetaMotor(limits=thetaLimits, frequency=thetaMotorFrequency,
+                                     fwdMap=self.getMap(motor='theta', dir='fwd'),
+                                     revMap=self.getMap(motor='theta', dir='rev'))
+        self.phiMotor = PhiMotor(limits=phiLimits, frequency=phiMotorFrequency,
+                                 fwdMap=self.getMap(motor='phi', dir='fwd'),
+                                 revMap=self.getMap(motor='phi', dir='rev'))
 
         self.moduleNum, self.cobraInModule = fiberIds.moduleNumsForCobra(cobraId)
 
@@ -243,6 +258,10 @@ class Cobra(object):
 
         self.logger.debug(f'start={startPhi[:3]}, delta={deltaPhi[:3]} move={nPhiSteps[:3]}')
         return (nThtSteps, nPhiSteps)
+
+    def recordMove(self, thetaSteps, phiSteps, thetaOntime, phiOntime):
+        self.thetaMotor.registerMove(thetaSteps, thetaOntime)
+        self.phiMotor.registerMove(phiSteps, phiOntime)
 
     @staticmethod
     def to_yaml(dumper, self):
