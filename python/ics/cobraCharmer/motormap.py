@@ -41,6 +41,20 @@ class MotorMap(object):
                 f" ontime={np.round(self.ontimes,3)})")
 
     def calculateSteps(self, fromAngle, toAngle):
+        """ Return the steps and ontime to move between two angles.
+
+        Args
+        ----
+        fromAngle : `float` radians
+        toAngle : `float` radians
+          The two angles to move between.
+
+        Returns
+        -------
+        int : steps to move
+        float : ontime to use
+
+        """
         dAngle = toAngle - fromAngle
         if dAngle < 0 and self.direction != 'rev' or dAngle > 0 and self.direction  != 'fwd':
             raise ValueError(f"{self}: wrong direction for from={fromAngle} to={toAngle}")
@@ -53,8 +67,9 @@ class MotorMap(object):
             raise ValueError(f"{self} angle to step interpolation out of range: "
                              f"from:{fromAngle} to={toAngle}")
         steps = np.rint(stepRange[1] - stepRange[0]).astype('i4')
+        ontime = self.ontime[0]
 
-        return steps
+        return steps, ontime
 
     @staticmethod
     def to_yaml(dumper, self):
