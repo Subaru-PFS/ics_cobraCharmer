@@ -348,6 +348,7 @@ class ModuleTest():
                               f"CCW={np.rad2deg(self.thetaCCWHome[stopped])}")
             self.logger.error(f"     {np.round(np.rad2deg(dAng[stopped]), 2)}")
 
+
     def moveToPhiAngle(self, idx=None, angle=60.0,
                        keepExistingPosition=False,
                        tolerance=1.0, maxTries=7, scaleFactor=8,
@@ -398,7 +399,7 @@ class ModuleTest():
 
         moveList = []
         moves0 = np.zeros(len(cobras), dtype=dtype)
-
+        print(self.phiCenter)
         try:
             phiCenters = self.phiCenter[self.goodIdx]
         except AttributeError:

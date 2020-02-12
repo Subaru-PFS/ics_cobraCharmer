@@ -258,6 +258,7 @@ class PFI(object):
         self.moveSteps(cobras, thetaAllSteps, phiAllSteps, thetaFast=thetaFast, phiFast=phiFast)
 
     def moveThetaPhi(self, cobras, thetaMoves, phiMoves, thetaFroms=None, phiFroms=None, thetaFast=True, phiFast=True, ccwLimit=True):
+
         """ Move cobras with theta and phi angles, angles are measured from CCW hard stops
 
             thetaMoves: A numpy array with theta angles to go
@@ -314,12 +315,17 @@ class PFI(object):
             _phiFast[cIdx] = phiFast
         else:
             raise RuntimeError("number of phiFast must match number of cobras")
-
+        
         thetaSteps, phiSteps = self.calculateSteps(_thetaFroms, _thetaMoves, _phiFroms, _phiMoves, _thetaFast, _phiFast)
+        
+        if phiFactors is not None:
+            phiSteps = phiSteps*phiFactors
+        if thetaFactors is not None:
+            thetaSteps = thetaSteps*thetaFactors
 
         cThetaSteps = thetaSteps[cIdx]
         cPhiSteps = phiSteps[cIdx]
-        
+
         """ 
         Looking for NaN values and put them as 0
         """

@@ -5,6 +5,7 @@ from astropy.io import fits
 import sep
 from copy import deepcopy
 import calculation
+import pandas as pd
 
 class moduleAnalyze():
     def __init__(self, xml, brokens=None, camSplit=26):
@@ -260,6 +261,33 @@ class moduleAnalyze():
         # restore default setting
         self.cal.restoreConfig()
 
+    def makeGeometryTable(self, dataPath):
+
+        center = np.load(dataPath + 'center_A.npy')
+        phi_arm = np.load(dataPath + 'phiL_A.npy')
+        theta_arm = np.load(dataPath + 'thetaL_A.npy')
+        d={'Center X': center.real,
+            'Center Y': center.imag,
+            'Phi Arm Length': phi_arm,
+            'Theta Arm Length':theta_arm}
+
+        dataframe = pd.DataFrame(d)   
+
+        dataframe.to_csv(dataPath+'geometry.csv')
+
+        phiCCW = np.load(dataPath + 'phiCCW_A.npy')
+        phiCW = np.load(dataPath + 'phiCW_A.npy')
+        thetaCCW = np.load(dataPath + 'thetaCCW_A.npy')
+        thetaCW = np.load(dataPath + 'thetaCW_A.npy')
+
+        d={'Theta CCW Stop': np.rad2deg(thetaCCW),
+        'Theta CW Stop': np.rad2deg(thetaCW),
+        'Phi CCW Stop': np.rad2deg(phiCCW),
+        'Phi CW Stop': np.rad2deg(phiCW)}
+        dataframe = pd.DataFrame(d)        
+        dataframe.to_csv(dataPath+'hardstop.csv')
+
+        
     def convertXML(self, newXml, dataPath, image1=None, image2=None):
         """ convert old XML to a new coordinate by using the 'phi homed' images
             assuming the cobra module is in horizontal setup
