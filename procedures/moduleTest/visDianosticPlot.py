@@ -407,8 +407,134 @@ class VisDianosticPlot(object):
                 {figPath}AngleMove*_[0-9]?.png {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
             print(cmd)
+    
+    def visConvergeAnglePlot(self, figPath = None, arm = 'phi', runs = 50, margin = 15, 
+        montage=None, pdffile=None):
+        if arm is 'phi':
+            phiPath = self.path
+            moveData = np.load(phiPath+'phiData.npy')
+            angleLimit = 180
+        else:
+            thetaPath =  self.path
+            moveData = np.load(thetaPath+'thetaData.npy')
+            angleLimit = 360
 
-    def visConverge(self, figPath = None, arm = 'phi', runs = 50, margin = 15, montage=None, pdffile=None):
+        for fiberIdx in self.goodIdx:
+            xdata=[]
+            ydata=[]
+            z=[]
+            
+            x =np.arange(10)
+
+            fig = plt.figure(figsize=(12, 12),constrained_layout=True)
+            gs = gridspec.GridSpec(1, 2)
+            hax = fig.add_subplot(gs[0, :])
+            for i in range(runs):
+                angle = margin + (angleLimit - 2 * margin) * i / (runs - 1)
+                if i == 0:
+                    delAngle = (angleLimit - 2 * margin) / (runs - 1)
+                y=np.rad2deg(np.append([0], moveData[fiberIdx,i,:,0]))
+                xdata.append(np.arange(10))
+                ydata.append(np.full(len(x), angle))
+                z.append(np.log10(np.abs(angle - np.rad2deg(np.append([0], moveData[fiberIdx,i,:,0])))))
+                hax.plot(x[:9],y,marker='o',fillstyle='none',markersize=3)
+            
+            fig.suptitle(f'Fiber No. {fiberIdx+1}',fontsize=15)
+            #plt.subplots_adjust(bottom=0.15, wspace=0.05)
+            if figPath is not None:
+                if not (os.path.exists(figPath)):
+                    os.mkdir(figPath)
+                plt.savefig(figPath+f'ConvergeAngle_{arm}_{fiberIdx+1}.png')
+            else:
+                plt.show()
+            plt.close()
+
+        if montage is not None:
+            cmd=f"""montage {figPath}Con*Angle_{arm}_[0-9].png {figPath}Con*Angle_{arm}_[0-9]?.png \
+                -tile 5x -geometry 640x640 {montage}"""
+            retcode = subprocess.call(cmd,shell=True)
+            if retcode is not 0:
+                raise Exception
+
+
+    def visConvergeDiffPlot(self, figPath = None, arm = 'phi', runs = 50, margin = 15, 
+        montage=None, pdffile=None):
+        
+        if arm is 'phi':
+            phiPath = self.path
+            moveData = np.load(phiPath+'phiData.npy')
+            angleLimit = 180
+        else:
+            thetaPath =  self.path
+            moveData = np.load(thetaPath+'thetaData.npy')
+            angleLimit = 360
+
+        for fiberIdx in self.goodIdx:
+            xdata=[]
+            ydata=[]
+            z=[]
+            
+            x =np.arange(10)
+
+            fig = plt.figure(figsize=(12, 12),constrained_layout=True)
+            gs = gridspec.GridSpec(1, 2)
+            vax = fig.add_subplot(gs[0, :])
+            for i in range(runs):
+                angle = margin + (angleLimit - 2 * margin) * i / (runs - 1)
+                if i == 0:
+                    delAngle = (angleLimit - 2 * margin) / (runs - 1)
+                y=np.rad2deg(np.append([0], moveData[fiberIdx,i,:,0]))
+                xdata.append(np.arange(10))
+                ydata.append(np.full(len(x), angle))
+                z.append(np.log10(np.abs(angle - np.rad2deg(np.append([0], moveData[fiberIdx,i,:,0])))))
+
+            xdata.append(np.arange(10))
+            ydata.append(np.full(len(x), angle+delAngle))
+            xdata=np.array(xdata)
+            ydata=np.array(ydata)
+            #if arm is 'theta':
+            ydata=ydata[:,:]-delAngle 
+            z=np.array(z)
+
+            sc=vax.pcolor(xdata,ydata,z,cmap='inferno_r',vmin=-1.0,vmax=1.0)
+            
+            #plt.xticks(np.arange(8)+0.5,np.arange(8)+1)
+            cbaxes = fig.add_axes([0.05,0.13,0.01,0.75]) 
+            cb = plt.colorbar(sc, cax = cbaxes,orientation='vertical')
+            #cbar=vax.colorbar(sc)
+            
+            cbaxes.yaxis.set_ticks_position('left')
+            cbaxes.yaxis.set_label_position('left')
+            cb.set_label('Angle Different (log)', labelpad=-1)
+            vax.set_xlabel("Iteration",fontsize=10)
+            vax.set_ylabel("Cabra Location (Degree)",fontsize=10)
+            
+            if arm is 'phi':
+                vax.set_ylim([-10,200])
+            else:
+                vax.set_ylim([-10,400])
+            
+            fig.suptitle(f'Fiber No. {fiberIdx+1}',fontsize=15)
+            #plt.subplots_adjust(bottom=0.15, wspace=0.05)
+            if figPath is not None:
+                #plt.ioff()
+                if not (os.path.exists(figPath)):
+                    os.mkdir(figPath)
+                plt.savefig(figPath+f'ConvergeDiff_{arm}_{fiberIdx+1}.png')
+            else:
+                plt.show()
+            plt.close()
+        if montage is not None:
+            cmd=f"""montage {figPath}Con*Diff_{arm}_[0-9].png {figPath}Con*Diff_{arm}_[0-9]?.png \
+                -tile 5x -geometry 640x640+4+4 {montage}"""
+            retcode = subprocess.call(cmd,shell=True)
+            print(cmd)
+
+            #if retcode is not 0:
+            #    raise Exception
+
+    def visConverge(self, figPath = None, arm = 'phi', runs = 50, margin = 15, 
+        snrplot=True, montage=None, pdffile=None):
         
         if arm is 'phi':
             phiPath = self.path
@@ -427,11 +553,17 @@ class VisDianosticPlot(object):
             
             x =np.arange(10)
             #fig, (vax, hax) = plt.subplots(1, 2, figsize=(12, 6),sharey='all')
-            fig = plt.figure(figsize=(12, 12),constrained_layout=True)
-            gs = gridspec.GridSpec(2, 2)
-            vax = fig.add_subplot(gs[0, 0])
-            hax = fig.add_subplot(gs[0, 1])
-            sax = fig.add_subplot(gs[1, :])
+            if snrplot is True:
+                fig = plt.figure(figsize=(12, 12),constrained_layout=True)
+                gs = gridspec.GridSpec(2, 2)
+                vax = fig.add_subplot(gs[0, 0])
+                hax = fig.add_subplot(gs[0, 1])
+                sax = fig.add_subplot(gs[1, :])
+            else:
+                fig = plt.figure(figsize=(12, 6),constrained_layout=True)
+                gs = gridspec.GridSpec(1, 2)
+                vax = fig.add_subplot(gs[0, 0])
+                hax = fig.add_subplot(gs[0, 1])
 
             for i in range(runs):
                 angle = margin + (angleLimit - 2 * margin) * i / (runs - 1)
@@ -470,45 +602,48 @@ class VisDianosticPlot(object):
             vax.set_ylabel("Cabra Location (Degree)",fontsize=10)
             
             # Plot SNR
-            snr_array=[]
-            k_offset=1/(.075)**2
-            tmax=105
-            tobs=900
-            tstep=x*8+12
-            if arm is 'phi':
-                linklength=0.026
-            else:
-                l1=0.026
-                l2=0.028
-                linklength = np.sqrt((l2-(l1*np.cos(np.deg2rad(60))))**2+(l1*np.sin(np.deg2rad(60)))**2)
+            if snrplot is True:
+                snr_array=[]
+                k_offset=1/(.075)**2
+                tmax=105
+                tobs=900
+                tstep=x*8+12
+                if arm is 'phi':
+                    linklength=0.026
+                else:
+                    l1=0.026
+                    l2=0.028
+                    linklength = np.sqrt((l2-(l1*np.cos(np.deg2rad(60))))**2+(l1*np.sin(np.deg2rad(60)))**2)
 
-            for i in range(runs):
-                angle = margin + (360 - 2 * margin) * i / (runs - 1)
-                if i == 0:
-                    delAngle = (360 - 2 * margin) / (runs - 1)
+                for i in range(runs):
+                    angle = margin + (360 - 2 * margin) * i / (runs - 1)
+                    if i == 0:
+                        delAngle = (360 - 2 * margin) / (runs - 1)
 
 
-                dist=np.abs(np.deg2rad(angle)-(np.append([0], moveData[fiberIdx,i,:,0])))*linklength
-                snr=(1-k_offset*dist**2)*(np.sqrt((tmax+tobs-tstep[0:9])/(tobs)))
-                snr_array.append(snr)
-                sax.scatter(tstep[0:9],snr)
+                    dist=np.abs(np.deg2rad(angle)-(np.append([0], moveData[fiberIdx,i,:,0])))*linklength
+                    snr=(1-k_offset*dist**2)*(np.sqrt((tmax+tobs-tstep[0:9])/(tobs)))
+                    snr_array.append(snr)
+                    sax.scatter(tstep[0:9],snr)
 
-            snr_array=np.array(snr_array)
-            snr_avg=np.mean(snr_array,axis=0)
+                snr_array=np.array(snr_array)
+                snr_avg=np.mean(snr_array,axis=0)
 
-            sax.plot(tstep[0:9],snr_avg,color='green',linewidth=4)
-            sax.scatter(tstep[0:9],snr_avg,color='green',s=100)
-            sax.set_title('SNR = %.3f'%(np.max(snr_avg)),fontsize=20)
+                sax.plot(tstep[0:9],snr_avg,color='green',linewidth=4)
+                sax.scatter(tstep[0:9],snr_avg,color='green',s=100)
+                sax.set_title('SNR = %.3f'%(np.max(snr_avg)),fontsize=20)
 
 
             if arm is 'phi':
                 vax.set_ylim([-10,200])
                 hax.set_ylim([-10,200])
-                sax.set_ylim([0.5,1.05])
+                if snrplot is True:
+                    sax.set_ylim([0.5,1.05])
             else:
                 vax.set_ylim([-10,400])
                 vax.set_ylim([-10,400])
-                sax.set_ylim([0.5,1.05])
+                if snrplot is True:
+                    sax.set_ylim([0.5,1.05])
             fig.suptitle(f'Fiber No. {fiberIdx+1}',fontsize=15)
             #plt.subplots_adjust(bottom=0.15, wspace=0.05)
             if figPath is not None:
@@ -521,7 +656,7 @@ class VisDianosticPlot(object):
 
         if montage is not None:
             cmd=f"""montage {figPath}Con*_[0-9].png {figPath}Con*_[0-9]?.png \
-                -tile 4x -geometry +4+4 {montage}"""
+                -tile 5x -geometry 640x320 {montage}"""
             retcode = subprocess.call(cmd,shell=True)
             if retcode is not 0:
                 raise Exception
