@@ -127,8 +127,7 @@ class Calculation():
 
         idx = self.goodIdx
         if tolerance is not None:
-            radii = (self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance)
-            radii = radii[idx]
+            radii = ((self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance))[idx]
         else:
             radii = None
 
@@ -246,7 +245,7 @@ class Calculation():
 
         return homeDiffs, atEnd
 
-    def thetaCenterAngles(self, thetaFW, thetaRV, tolerance=0.01):
+    def thetaCenterAngles(self, thetaFW, thetaRV):
         # variable declaration for theta angles
         thetaCenter = np.zeros(57, dtype=complex)
         thetaRadius = np.zeros(57, dtype=float)
@@ -265,32 +264,25 @@ class Calculation():
             for n in range(thetaFW.shape[1]):
                 thetaAngFW[c, n] = np.angle(thetaFW[c, n] - thetaCenter[c])
                 thetaAngRV[c, n] = np.angle(thetaRV[c, n] - thetaCenter[c])
-                home1 = thetaAngFW[c, n, 0]
-                home2 = thetaAngRV[c, n, -1]
-                thetaAngFW[c, n] = (thetaAngFW[c, n] - home1 + 0.1) % (np.pi*2)
-                thetaAngRV[c, n] = (thetaAngRV[c, n] - home2 + 0.1) % (np.pi*2)
+                home = thetaAngFW[c, n, 0]
+                thetaAngFW[c, n] = (thetaAngFW[c, n] - home) % (np.pi*2)
+                thetaAngRV[c, n] = (thetaAngRV[c, n] - home) % (np.pi*2)
 
-                # fix over 2*pi angle issue
-                diff = thetaAngFW[c, n, 1:] - thetaAngFW[c, n, :-1]
-                t = np.where(diff < -np.pi/2)
-                if t[0].size > 0:
-                    thetaAngFW[c, n, t[0][0]+1:] += np.pi*2
-                thetaAngFW[c, n] -= 0.1
+                fwMid = np.argmin(abs(thetaAngFW[c, n] % (np.pi*2) - np.pi))
+                thetaAngFW[c, n, :fwMid][thetaAngFW[c, n, :fwMid]>5.0] -= np.pi*2
+                if fwMid < thetaAngFW.shape[2] - 1:
+                    thetaAngFW[c, n, fwMid:][thetaAngFW[c, n, fwMid:]<1.0] += np.pi*2
 
-                diff = thetaAngRV[c, n, 1:] - thetaAngRV[c, n, :-1]
-                t = np.where(diff > np.pi/2)
-                if t[0].size > 0:
-                    thetaAngRV[c, n, :t[0][0]+1] += np.pi*2
-                thetaAngRV[c, n] += (home2 - home1 + 0.1) % (np.pi*2) - 0.2
-
-                # in case only travel in overlapping region
-                if thetaAngRV[c, n, 0] - thetaAngFW[c, n, -1] < -0.1:
+                rvMid = np.argmin(abs(thetaAngRV[c, n] % (np.pi*2) - np.pi))
+                thetaAngRV[c, n, :rvMid][thetaAngRV[c, n, :rvMid]<1.0] += np.pi*2
+                if rvMid < thetaAngRV.shape[2] - 1:
+                    thetaAngRV[c, n, rvMid:][thetaAngRV[c, n, rvMid:]>5.0] -= np.pi*2
+                if thetaAngRV[c, n, 0] < 1.0:
                     thetaAngRV[c, n] += np.pi*2
 
         # mark bad cobras by checking hard stops
         bad = np.any(thetaAngRV[:, :, 0] < np.pi*2, axis=1)
         bad[np.std(thetaAngRV[:, :, 0], axis=1) > 0.1] = True
-        # bad[np.any(thetaAngRV[:, :, -1] > tolerance)] = True
         badRange = np.where(bad)[0]
 
         return thetaCenter, thetaRadius, thetaAngFW, thetaAngRV, badRange
@@ -375,7 +367,9 @@ class Calculation():
             darr[idx] = total
 
     def motorMaps2(self, angFW, angRV, steps, delta=0.1):
-        """ calculate motor maps based on average step counts """
+        """ the calculate for motor maps is to ensure the step counts
+            from home to the target is correct
+        """
         mmFW = np.zeros((57, regions), dtype=float)
         mmRV = np.zeros((57, regions), dtype=float)
         bad = np.full(57, False)

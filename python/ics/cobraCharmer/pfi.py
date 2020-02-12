@@ -262,8 +262,8 @@ class PFI(object):
         self.moveSteps(cobras, thetaAllSteps, phiAllSteps, thetaFast=thetaFast, phiFast=phiFast)
 
     def moveThetaPhi(self, cobras, thetaMoves, phiMoves, thetaFroms=None, phiFroms=None,
-                     thetaFast=True, phiFast=True, doRun=True):
-        """ Move cobras with theta and phi angles, angles are measured from CCW hard stops
+                     thetaFast=True, phiFast=True, doRun=True, ccwLimit=True):
+        """ Move cobras with theta and phi angles
 
             thetaMoves: A numpy array with theta angles to go
             phiMoves: A numpy array with phi angles to go
@@ -271,7 +271,7 @@ class PFI(object):
             phiFroms: A numpy array with starting phi positions
             thetaFast: a boolean value for fast/slow theta movement
             phiFast: a boolean value for fast/slow phi movement
-
+            ccwLimit: using theta CCW or CW hard stops if thetaFroms is None
         """
 
         nCobras = len(cobras)
@@ -280,16 +280,16 @@ class PFI(object):
         if np.ndim(phiMoves) == 0:
             phiMoves = np.zeros(nCobras) + phiMoves
 
-        if len(cobras) != len(thetaMoves):
+        if nCobras != len(thetaMoves):
             raise RuntimeError("number of theta moves must match number of cobras")
-        if len(cobras) != len(phiMoves):
+        if nCobras != len(phiMoves):
             raise RuntimeError("number of phi moves must match number of cobras")
-        if thetaFroms is not None and len(cobras) != len(thetaFroms):
+        if thetaFroms is not None and nCobras != len(thetaFroms):
             raise RuntimeError("number of theta froms must match number of cobras")
-        if phiFroms is not None and len(cobras) != len(phiFroms):
+        if phiFroms is not None and nCobras != len(phiFroms):
             raise RuntimeError("number of phi froms must match number of cobras")
-        nCobras = self.calibModel.nCobras
 
+        nCobras = self.calibModel.nCobras
         _phiMoves = np.zeros(nCobras)
         _thetaMoves = np.zeros(nCobras)
         _phiFroms = np.zeros(nCobras)
@@ -302,11 +302,13 @@ class PFI(object):
             _phiFroms[cIdx] = phiFroms
         if thetaFroms is not None:
             _thetaFroms[cIdx] = thetaFroms
+        elif not ccwLimit:
+            _thetaFroms = (self.calibModel.tht1 - self.calibModel.tht0 + np.pi) % (2*np.pi) + np.pi
 
         if isinstance(thetaFast, bool):
             _thetaFast = thetaFast
         elif len(thetaFast) == len(cobras):
-            _thetaFast = np.full(self.calibModel.nCobras, True)
+            _thetaFast = np.full(nCobras, True)
             _thetaFast[cIdx] = thetaFast
         else:
             raise RuntimeError("number of thetaFast must match number of cobras")
@@ -314,7 +316,7 @@ class PFI(object):
         if isinstance(phiFast, bool):
             _phiFast = phiFast
         elif len(phiFast) == len(cobras):
-            _phiFast = np.full(self.calibModel.nCobras, True)
+            _phiFast = np.full(nCobras, True)
             _phiFast[cIdx] = phiFast
         else:
             raise RuntimeError("number of phiFast must match number of cobras")
@@ -326,7 +328,7 @@ class PFI(object):
         """
         Looking for NaN values and put them as 0
         """
-        thetaIndex =  np.isnan(cThetaSteps)
+        thetaIndex = np.isnan(cThetaSteps)
         phiIndex = np.isnan(cPhiSteps)
         cThetaSteps[thetaIndex] = 0
         cPhiSteps[phiIndex] = 0
@@ -551,16 +553,31 @@ class PFI(object):
                     ontime2 = self.calibModel.motorOntimeSlowRev2[cobraId]
                 ontime2 = self.adjustPhiOnTime(cobraId, ontime2, fast=_phiFast[c_i], direction=dirs1[1])
 
-            # For early-late offsets.
-            if waitThetaSteps is not None:
-                offtime1 = waitThetaSteps[c_i]
+            offtime1 = 0
+            offtime2 = 0
+            if waitThetaSteps is None and waitPhiSteps is None:
+                # set delay parameters for safer operation
+                if phiSteps[c_i] > 0 and thetaSteps[c_i] < 0:
+                    diffSteps = thetaSteps[c_i] + phiSteps[c_i]
+                    if diffSteps < 0:
+                        offtime2 = -diffSteps
+                    else:
+                        offtime1 = diffSteps
+                elif phiSteps[c_i] > 0 and thetaSteps[c_i] > 0:
+                    diffSteps = thetaSteps[c_i] - phiSteps[c_i]
+                    if diffSteps > 0:
+                        offtime2 = diffSteps
+                elif phiSteps[c_i] < 0 and thetaSteps[c_i] < 0:
+                    diffSteps = thetaSteps[c_i] - phiSteps[c_i]
+                    if diffSteps > 0:
+                        offtime1 = diffSteps
             else:
-                offtime1 = 0
+                # For early-late offsets.
+                if waitThetaSteps is not None:
+                    offtime1 = waitThetaSteps[c_i]
 
-            if waitPhiSteps is not None:
-                offtime2 = waitPhiSteps[c_i]
-            else:
-                offtime2 = 0
+                if waitPhiSteps is not None:
+                    offtime2 = waitPhiSteps[c_i]
 
             c.p = func.RunParams(pu=(int(1000*ontime1), int(1000*ontime2)),
                                  st=(steps1),
@@ -574,25 +591,24 @@ class PFI(object):
         else:
             self.logger.debug(f'send RUN command succeeded')
 
-    def homePhi(self, cobras, nsteps=5000, fast=True):
-        # positive/negative steps for CCW/CW limit stops
+    def homePhi(self, cobras, nsteps=-5000, fast=True):
+        # go to the hard stops for phi arms
 
         thetaSteps = np.zeros(len(cobras))
-        phiSteps = np.zeros(len(cobras)) - nsteps
+        phiSteps = np.zeros(len(cobras)) + nsteps
         self.moveSteps(cobras, thetaSteps, phiSteps, phiFast=fast)
 
-    def homePhiSafe(self, cobras, nsteps=5000, iterations=10, fast=True):
-        # positive/negative steps for CCW/CW limit stops
+    def homeThetaPhi(self, cobras, thetaSteps=10000, phiSteps=-5000, thetaFast=True, phiFast=True):
+        """ go to the hard stops fir both theta and phi arms
+            Default: theta(CW) and phi(CCW) arms moves in oppsosite directions.
+        """
 
-        thetaSteps = (np.zeros(len(cobras)) + nsteps) * (0.5 / iterations)
-        phiSteps = (np.zeros(len(cobras)) + nsteps) * (-1.0 / iterations)
-        for _ in range(iterations):
-            self.moveSteps(cobras, thetaSteps, phiSteps, thetaFast=fast, phiFast=fast)
+        self.moveAllSteps(cobras, thetaSteps, phiSteps, thetaFast=thetaFast, phiFast=phiFast)
 
-    def homeTheta(self, cobras, nsteps=10000, fast=True):
-        # positive/negative steps for CCW/CW limit stops
+    def homeTheta(self, cobras, nsteps=-10000, fast=True):
+        # go to the hard stops for theta arms
 
-        thetaSteps = np.zeros(len(cobras)) - nsteps
+        thetaSteps = np.zeros(len(cobras)) + nsteps
         phiSteps = np.zeros(len(cobras))
         self.moveSteps(cobras, thetaSteps, phiSteps, thetaFast=fast)
 
@@ -813,7 +829,8 @@ class PFI(object):
                     overlapping[i][1] = True
         return (tht, phi, overlapping)
 
-    def moveXY(self, cobras, startPositions, targetPositions, thetaThreshold=-1.0, phiThreshold=-1.0):
+    def moveXY(self, cobras, startPositions, targetPositions, overlappingCW=False,
+               thetaThreshold=1e10, phiThreshold=1e10, delta=10.0):
         """Move the Cobras in XY coordinate.
 
         Parameters
@@ -823,10 +840,14 @@ class PFI(object):
             A complex numpy array with the target fiber positions.
         startPositions: numpy array
             A complex numpy array with the starting fiber positions.
+        overlappingCW: a boolean value
+            use the theta solution that's close to CW limit if targetPosition is in overlapping region
         thetaThreshold: a double value
-            The threshold value for using slow/fast theta motor maps, the default is fast.
+            The threshold value for using slow/fast theta motor maps, the default is slow.
         phiThreshold: a double value
-            The threshold value for using slow/fast phi motor maps, the default is fast.
+            The threshold value for using slow/fast phi motor maps, the default is slow.
+        delta: a double value (in degree)
+            The tolerance which is used to identify if startPosition is in overlapping region or not.
 
         If there are more than one possible convertion to theta/phi, this function picks the regular one.
         For better control, the caller should use positionsToAngles to determine which solution is the right one.
@@ -836,30 +857,41 @@ class PFI(object):
             raise RuntimeError("number of starting positions must match number of cobras")
         if len(cobras) != len(targetPositions):
             raise RuntimeError("number of target positions must match number of cobras")
+        delta = np.deg2rad(delta)
 
         startTht, startPhi, _ = self.positionsToAngles(cobras, startPositions)
         targetTht, targetPhi, _ = self.positionsToAngles(cobras, targetPositions)
-        deltaTht = targetTht[:,0] - startTht[:,0]
-        deltaPhi = targetPhi[:,0] - startPhi[:,0]
-        thetaFast = np.full(len(cobras), True)
-        thetaFast[deltaTht < thetaThreshold] = False
-        phiFast = np.full(len(cobras), True)
-        phiFast[deltaPhi < phiThreshold] = False
 
-        # check if there is a solution
         valids = np.all([np.isnan(startTht[:,0]) == False, np.isnan(targetTht[:,0]) == False], axis=0)
-        valid_cobras = [c for i,c in enumerate(cobras) if valids[i]]
+        valid_cobras = cobras[valids]
         if len(valid_cobras) <= 0:
-            self.logger.error("no valid target positions are found")
-            return
+            raise RuntimeError("no valid target positions are found")
         elif not np.all(valids):
             self.logger.info("some target positions are invalid")
 
+        cIdx = [self._mapCobraIndex(c) for c in cobras]
+        gapTht = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx] + np.pi) % (2*np.pi) - np.pi
+        for c_i in np.where(valids)[0]:
+            if targetTht[c_i,0] < gapTht[c_i] and overlappingCW:
+                targetTht[c_i,0] += np.pi*2
+            if startTht[c_i,0] < gapTht[c_i] + delta and targetTht[c_i,0] > np.pi:
+                startTht[c_i,0] += np.pi*2
+            elif startTht[c_i,0] > np.pi*2 - delta and targetTht[c_i,0] < np.pi:
+                startTht[c_i,0] -= np.pi*2
+
+        deltaTht = targetTht[valids,0] - startTht[valids,0]
+        deltaPhi = targetPhi[valids,0] - startPhi[valids,0]
+        thetaFast = np.zeros(len(valid_cobras), 'bool')
+        thetaFast[np.abs(deltaTht) > thetaThreshold] = True
+        phiFast = np.zeros(len(valid_cobras), 'bool')
+        phiFast[np.abs(deltaPhi) > phiThreshold] = True
+
         # move bobras by angles
-        self.logger.info(f"engaged cobras: {[(c.module,c.cobraNum) for c in valid_cobras]}")
-        self.logger.info(f"move to: {list(zip(targetTht[valids,0], targetPhi[valids,0]))}")
-        self.logger.info(f"move from: {list(zip(startTht[valids,0], startPhi[valids,0]))}")
-        self.moveThetaPhi(valid_cobras, deltaTht[valids], deltaPhi[valids], startTht[valids,0], startPhi[valids,0], thetaFast[valids], phiFast[valids])
+        with np.printoptions(precision=2, suppress=True):
+            self.logger.info(f"engaged cobras: {[(c.module,c.cobraNum) for c in valid_cobras]}")
+            self.logger.info(f"move to: {np.stack((targetTht[valids,0], targetPhi[valids,0]))}")
+            self.logger.info(f"move from: {np.stack((startTht[valids,0], startPhi[valids,0]))}")
+        self.moveThetaPhi(valid_cobras, deltaTht, deltaPhi, startTht[valids,0], startPhi[valids,0], thetaFast, phiFast)
 
     def moveXYfromHome(self, cobras, targetPositions, ccwLimit=True, thetaThreshold=-1.0, phiThreshold=-1.0):
         """Move the Cobras in XY coordinate from hard stops.
@@ -869,7 +901,7 @@ class PFI(object):
         cobras: a list of cobras
         targetPositions: numpy array
             A complex numpy array with the target fiber positions.
-        thetaHome: 'ccw'(default) or 'cw' hard stop
+        ccwLimit: 'ccw'(default) or 'cw' hard stop for current theta arms
         thetaThreshold: a double value
             The threshold value for using slow/fast theta motor maps, the default is fast.
         phiThreshold: a double value
@@ -886,10 +918,9 @@ class PFI(object):
 
         # check if there is a solution
         valids = np.isnan(targetTht[:,0]) == False
-        valid_cobras = [c for i,c in enumerate(cobras) if valids[i]]
+        valid_cobras = cobras[valids]
         if len(valid_cobras) <= 0:
-            self.logger.error("no valid target positions are found")
-            return
+            raise RuntimeError("no valid target position found")
         elif not np.all(valids):
             self.logger.warn("some target positions are invalid")
 
@@ -899,7 +930,7 @@ class PFI(object):
             thtHomes = phiHomes
         else:
             cIdx = np.array([self._mapCobraIndex(c) for c in valid_cobras])
-            thtHomes = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx]) % (2*np.pi) + (2*np.pi)
+            thtHomes = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx] + np.pi) % (2*np.pi) + np.pi
         self.logger.info(f"engaged cobras: {[(c.module,c.cobraNum) for c in valid_cobras]}")
         self.logger.info(f"move to: {list(zip(targetTht[valids,0], targetPhi[valids,0]))}")
         self.logger.info(f"move from: {list(zip(thtHomes, phiHomes))}")
@@ -908,10 +939,55 @@ class PFI(object):
         deltaTht = targetTht[valids,0] - thtHomes
         deltaPhi = targetPhi[valids,0] - phiHomes
         thetaFast = np.full(len(valid_cobras), True)
-        thetaFast[deltaTht < thetaThreshold] = False
+        thetaFast[np.abs(deltaTht) < thetaThreshold] = False
         phiFast = np.full(len(valid_cobras), True)
         phiFast[deltaPhi < phiThreshold] = False
         self.moveThetaPhi(valid_cobras, deltaTht, deltaPhi, thtHomes, phiHomes, thetaFast, phiFast)
+
+    def moveXYfromHomeSafe(self, cobras, targetPositions, ccwLimit=False):
+        """Move the Cobras in XY coordinate from hard stops in the safe way.
+           Phi motors should be twice as fast as theta motors and in opposite direction so the tips go in
+           straight lines. Using phi: fast on-time, theta: slow on-time setting.
+
+        Parameters
+        ----------
+        cobras: a list of cobras
+        targetPositions: numpy array
+            A complex numpy array with the target fiber positions.
+        ccwLimit: 'cw'(default) or 'ccw' hard stop for current theta arms
+
+        If there are more than one possible convertion to theta/phi, this function picks the regular one.
+        For better control, the caller should use positionsToAngles to determine which solution is the right one.
+        """
+        if ccwLimit:
+            raise RuntimeError("should be in theta CW limits, stop here!!!")
+
+        if len(cobras) != len(targetPositions):
+            raise RuntimeError("number of target positions must match number of cobras")
+
+        targetTht, targetPhi, _ = self.positionsToAngles(cobras, targetPositions)
+
+        # check if there is a solution
+        valids = np.isnan(targetTht[:,0]) == False
+        valid_cobras = cobras[valids]
+        if len(valid_cobras) <= 0:
+            raise RuntimeError("no valid target positions are found")
+        elif not np.all(valids):
+            self.logger.warn("some target positions are invalid")
+
+        # define home positions
+        phiHomes = np.zeros(len(valid_cobras))
+        cIdx = np.array([self._mapCobraIndex(c) for c in valid_cobras])
+        thtHomes = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx]) % (2*np.pi) + (2*np.pi)
+        with np.printoptions(precision=2, suppress=True):
+            self.logger.info(f"engaged cobras: {[(c.module,c.cobraNum) for c in valid_cobras]}")
+            self.logger.info(f"move to: {np.stack((targetTht[valids,0], targetPhi[valids,0]))}")
+            self.logger.info(f"move from: {np.stack((thtHomes, phiHomes))}")
+
+        # move cobras by angles
+        deltaTht = targetTht[valids,0] - thtHomes
+        deltaPhi = targetPhi[valids,0] - phiHomes
+        self.moveThetaPhi(valid_cobras, deltaTht, deltaPhi, thtHomes, phiHomes, thetaFast=False, phiFast=True)
 
 
     @classmethod

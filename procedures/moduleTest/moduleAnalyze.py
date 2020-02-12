@@ -118,7 +118,7 @@ class moduleAnalyze():
             onTime = np.full(57, phiOnTime)
             self.cal.calibModel.updateOntimes(phiFwd=onTime, phiRev=onTime, fast=fast)
         self.cal.calibModel.createCalibrationFile(dataPath + '/' + newXml)
-        self.cal.restoreConfig()
+        # self.cal.restoreConfig()
 
     def makeThetaMotorMap(
             self,
@@ -201,7 +201,7 @@ class moduleAnalyze():
             onTime = np.full(57, thetaOnTime)
             self.cal.calibModel.updateOntimes(thtFwd=onTime, thtRev=onTime, fast=fast)
         self.cal.calibModel.createCalibrationFile(dataPath + '/' + newXml)
-        self.cal.restoreConfig()
+        # self.cal.restoreConfig()
 
     def calculateGeometry(self, newXml, dataPath, thetaPath, phiPath):
         """ Update xml file for cobra geometry """
@@ -259,7 +259,7 @@ class moduleAnalyze():
         new.createCalibrationFile(dataPath + '/' + newXml)
 
         # restore default setting
-        self.cal.restoreConfig()
+        # self.cal.restoreConfig()
 
     def makeGeometryTable(self, dataPath):
 
@@ -336,4 +336,4 @@ class moduleAnalyze():
         old.updateGeometry(new.centers, new.L1, new.L2)
         old.updateThetaHardStops(new.tht0, new.tht1)
         old.createCalibrationFile(dataPath + '/' + newXml)
-        self.cal.restoreConfig()
+        # self.cal.restoreConfig()
