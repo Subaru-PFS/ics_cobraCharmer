@@ -128,6 +128,8 @@ class ModuleTest():
         self.phiCCWHome = None
         self.phiCWHome = None
 
+        self.minScalingAngle = np.deg2rad(2.0)
+
     def _connect(self):
         self.runManager.newRun()
         # Initializing COBRA module
@@ -825,7 +827,7 @@ class ModuleTest():
             keepMoving = np.where(notDone)
             self.pfi.moveXY(cobras[keepMoving], curPos[keepMoving], targets[keepMoving])
 
-    def moveToThetaPhiFromHome(self, idx, theta, phi, globalAngles=False, ccwLimit=True, threshold=3.0, maxTries=8):
+    def moveToThetaPhiFromHome(self, idx, theta, phi, globalAngles=False, ccwLimit=True, threshold=3.0, maxTries=8, scaleFactor=2.0):
         """ move positioners to given theta, phi angles.
         """
 
@@ -836,7 +838,7 @@ class ModuleTest():
 
         if np.isscalar(theta):
             thetaAngles = np.full(len(cobras), theta, dtype='f4')
-        elif len(theta) == len(cobra):
+        elif len(theta) == len(cobras):
             thetaAngles = theta
         elif len(theta) == self.nCobras:
             thetaAngles = theta[idx]
@@ -845,7 +847,7 @@ class ModuleTest():
 
         if np.isscalar(phi):
             phiAngles = np.full(len(cobras), phi, dtype='f4')
-        elif len(phi) == len(cobra):
+        elif len(phi) == len(cobras):
             phiAngles = phi
         elif len(phi) == self.nCobras:
             phiAngles = phi[idx]
@@ -856,28 +858,33 @@ class ModuleTest():
             thetaAngles = self.pfi.thetaToLocal(cobras, thetaAngles)
 
         gapTht = (self.pfi.calibModel.tht1[idx] - self.pfi.calibModel.tht0[idx] + np.pi) % (2*np.pi) - np.pi
+        deltaPhi = phiAngles
         if ccwLimit:
             deltaTht = thetaAngles
-            self.pfi.moveThetaPhi(cobras, deltaTht, phiAngles, thetaFast=True, phiFast=True, ccwLimit=True)
+            self.pfi.moveThetaPhi(cobras, deltaTht, deltaPhi, thetaFast=True, phiFast=True, ccwLimit=True)
         else:
             # use safe moves, 2x phi speed
-            deltaTht = thetaAngles - (np.pi*2 + gapTht)
-            self.pfi.moveThetaPhi(cobras, deltaTht, phiAngles, thetaFast=False, phiFast=True, ccwLimit=False)
+            deltaTht = thetaAngles - (gapTht + np.pi*2)
+            self.pfi.moveThetaPhi(cobras, deltaTht, deltaPhi, thetaFast=False, phiFast=True, ccwLimit=False)
         with np.printoptions(precision=2, suppress=True):
-            self.logger.info(f"moving: {list(zip(deltaTht, phiAngles))}")
+            self.logger.info(f"moving: {np.stack((deltaTht, deltaPhi))}")
 
         ntries = 1
         targets = self.pfi.anglesToPositions(cobras, thetaAngles, phiAngles)
         keepMoving = np.where(targets != 0)
+        delta = np.deg2rad(20)
+        lastTht = None
+        lastPhi = None
+        scale = np.full((len(cobras),2), 1.0)
 
-        delta = np.deg2rad(10)
         while True:
             # extract sources and fiber identification
             curPos = self.exposeAndExtractPositions(tolerance=0.2)
             curPos = curPos[_idx]
             # check position errors
-            self.logger.info("to: %s", targets[keepMoving])
-            self.logger.info("at: %s", curPos[keepMoving])
+            with np.printoptions(precision=2, suppress=True):
+                self.logger.info("to: %s", targets[keepMoving])
+                self.logger.info("at: %s", curPos[keepMoving])
 
             notDone = np.abs(curPos - targets) > threshold
             if not np.any(notDone):
@@ -898,12 +905,31 @@ class ModuleTest():
                     curTht[c_i,0] += 2*np.pi
                 elif thetaAngles[c_i] < np.pi and curTht[c_i,0] > np.pi*2 - delta:
                     curTht[c_i,0] -= 2*np.pi
+                if lastTht is not None:
+                    lastDeltaTht = thetaAngles[c_i] - lastTht[c_i]
+                    if abs(lastDeltaTht) > delta:
+                        rawScale = (curTht[c_i,0] - lastTht[c_i]) / lastDeltaTht
+                        if rawScale > 0:
+                            engageScale = (rawScale - 1) / scaleFactor + 1
+                            direction = 'cw' if lastDeltaTht>0 else 'ccw'
+                            scale[c_i,0] = self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'theta', direction, False, engageScale)
+                if lastPhi is not None:
+                    lastDeltaPhi = phiAngles[c_i] - lastPhi[c_i]
+                    if abs(lastDeltaPhi) > delta:
+                        rawScale = (curPhi[c_i,0] - lastPhi[c_i]) / lastDeltaPhi
+                        if rawScale > 0:
+                            engageScale = (rawScale - 1) / scaleFactor + 1
+                            direction = 'cw' if lastDeltaPhi>0 else 'ccw'
+                            scale[c_i,1] = self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'phi', direction, False, engageScale)
+            self.logger.info(f'Scaling factor: {np.round(scale.T, 2)}')
+            lastTht, lastPhi = curTht[:,0], curPhi[:,0]
+
             _curTht = curTht[notDone,0]
             _curPhi = curPhi[notDone,0]
             deltaTht = thetaAngles[notDone] - _curTht
             deltaPhi = phiAngles[notDone] - _curPhi
             with np.printoptions(precision=2, suppress=True):
-                self.logger.info(f"moving: {list(zip(deltaTht, deltaPhi))}")
+                self.logger.info(f"moving: {np.stack((deltaTht, deltaPhi))}")
             self.pfi.moveThetaPhi(cobras[notDone], deltaTht, deltaPhi, _curTht, _curPhi, thetaFast=False, phiFast=False)
 
     def moveBadCobrasOut(self):
@@ -945,9 +971,9 @@ class ModuleTest():
         self.pfi.moveAllSteps(self.goodCobras, 10000, -5000)
 
         # move to safe angles
-#        self.moveToThetaPhiFromHome(self.goodIdx, thetas[self.goodIdx], phis[self.goodIdx], ccwLimit=False, threshold=threshold, maxTries=maxTries)
-        targets = self.pfi.anglesToPositions(self.allCobras, thetas, phis)
-        self.moveToXYfromHome(self.goodIdx, targets[self.goodIdx], ccwLimit=False, threshold=threshold, maxTries=maxTries)
+        self.moveToThetaPhiFromHome(self.goodIdx, thetas[self.goodIdx], phis[self.goodIdx], ccwLimit=False, threshold=threshold, maxTries=maxTries)
+#        targets = self.pfi.anglesToPositions(self.allCobras, thetas, phis)
+#        self.moveToXYfromHome(self.goodIdx, targets[self.goodIdx], ccwLimit=False, threshold=threshold, maxTries=maxTries)
 
         if phiToHome:
             # move phi arms in
@@ -1665,7 +1691,7 @@ class ModuleTest():
                                                 fromHome=fromHome)
         return runDir, duds
 
-    def phiConvergenceTest(self, margin=15.0, runs=50, tries=8, fast=False, finalAngle=None, scaleFactor=8.0, tolerance=0.2, b=0.07):
+    def phiConvergenceTest(self, margin=15.0, runs=50, tries=8, fast=False, finalAngle=None, tolerance=0.2, scaleFactor=1.0):
         self._connect()
         dataPath = self.runManager.dataDir
 
@@ -1750,17 +1776,6 @@ class ModuleTest():
         nowDone = np.zeros(57, 'bool')
         tolerance = np.deg2rad(tolerance)
 
-        # calculate the ratio between speed and on-time
-        ratioFw = np.empty(len(self.goodIdx))
-        ratioRv = np.empty(len(self.goodIdx))
-        for i, c in enumerate(self.goodIdx):
-            if fast:
-                ratioFw[i] = scaleFunc(self.pfi.calibModel.motorOntimeFwd2[c], b)
-                ratioRv[i] = scaleFunc(self.pfi.calibModel.motorOntimeRev2[c], b)
-            else:
-                ratioFw[i] = scaleFunc(self.pfi.calibModel.motorOntimeSlowFwd2[c], b)
-                ratioRv[i] = scaleFunc(self.pfi.calibModel.motorOntimeSlowRev2[c], b)
-
         for i in range(runs):
             self.cam.resetStack(f'phiConvergenceTest{i}.fits')
             if runs > 1:
@@ -1777,6 +1792,7 @@ class ModuleTest():
             phiData[self.goodIdx, i, 0, 2] = np.imag(cPositions)
             phiData[self.goodIdx, i, 0, 3] = 1.0
 
+            scale = np.full(len(self.goodIdx), 1.0)
             for j in range(tries - 1):
                 nm = notdoneMask[self.goodIdx]
                 self.pfi.moveThetaPhi(self.allCobras[notdoneMask], zeros[nm], (angle - cAngles)[nm],
@@ -1790,21 +1806,18 @@ class ModuleTest():
                 if np.any(newlyDone):
                     notdoneMask &= ~newlyDone
                     self.logger.info(f'done: {np.where(newlyDone)[0]}, {(notdoneMask == True).sum()} left')
-                scale = np.full(len(self.goodIdx), 1.0)
                 for k in range(len(self.goodIdx)):
-                    if abs(cAngles[k] - lastAngle[k]) > np.deg2rad(0.5):
+                    if abs(cAngles[k] - lastAngle[k]) > self.minScalingAngle:
                         rawScale = abs((angle - lastAngle[k]) / (cAngles[k] - lastAngle[k]))
-                        if angle < lastAngle[k]:
-                            scale[k] = 1 + (rawScale - 1) / (scaleFactor * ratioRv[k])
-                            self.pfi.scaleMotorOntime(self.goodCobras[k], 'phi', 'ccw', scale[k])
-                        else:
-                            scale[k] = 1 + (rawScale - 1) / (scaleFactor * ratioFw[k])
-                            self.pfi.scaleMotorOntime(self.goodCobras[k], 'phi', 'cw', scale[k])
+                        engageScale = (rawScale - 1) / scaleFactor + 1
+                        direction = 'ccw' if angle < lastAngle[k] else 'cw'
+                        scale[k] = self.pfi.scaleMotorOntimeBySpeed(self.goodCobras[k], 'phi', direction, fast, engageScale)
 
                 phiData[self.goodIdx, i, j+1, 0] = cAngles
                 phiData[self.goodIdx, i, j+1, 1] = np.real(cPositions)
                 phiData[self.goodIdx, i, j+1, 2] = np.imag(cPositions)
                 phiData[self.goodIdx, i, j+1, 3] = scale
+                self.logger.debug(f'Scaling factor: {np.round(scale, 2)}')
                 if not np.any(notdoneMask):
                     phiData[self.goodIdx, i, j+2:, 0] = cAngles[..., np.newaxis]
                     phiData[self.goodIdx, i, j+2:, 1] = np.real(cPositions)[..., np.newaxis]
@@ -1836,7 +1849,7 @@ class ModuleTest():
                 cAngles, cPositions = self.measureAngles(centers, homes)
                 cAngles[cAngles>np.pi*(3/2)] -= np.pi*2
                 for k in range(len(self.goodIdx)):
-                    if abs(angle - lastAngle[k]) > np.deg2rad(2.0):
+                    if abs(angle - lastAngle[k]) > self.minScalingAngle:
                         rawScale = abs((angle - lastAngle[k]) / (cAngles[k] - lastAngle[k]))
                         if angle < lastAngle[k]:
                             scale[k] = 1 + (rawScale - 1) / (scaleFactor * ratioRv[k])
@@ -1848,7 +1861,7 @@ class ModuleTest():
             self.pfi.resetMotorScaling(self.goodCobras, 'phi')
         return self.runManager.runDir
 
-    def thetaConvergenceTest(self, margin=15.0, runs=50, tries=8, fast=False, scaleFactor=8.0, tolerance=0.2, b=0.09):
+    def thetaConvergenceTest(self, margin=15.0, runs=50, tries=8, fast=False, tolerance=0.2, scaleFactor=1.0):
         self._connect()
         dataPath = self.runManager.dataDir
 
@@ -1934,17 +1947,6 @@ class ModuleTest():
         nowDone = np.zeros(57, 'bool')
         tolerance = np.deg2rad(tolerance)
 
-        # calculate the ratio between speed and on-time
-        ratioFw = np.empty(len(self.goodIdx))
-        ratioRv = np.empty(len(self.goodIdx))
-        for i, c in enumerate(self.goodIdx):
-            if fast:
-                ratioFw[i] = scaleFunc(self.pfi.calibModel.motorOntimeFwd1[c], b)
-                ratioRv[i] = scaleFunc(self.pfi.calibModel.motorOntimeRev1[c], b)
-            else:
-                ratioFw[i] = scaleFunc(self.pfi.calibModel.motorOntimeSlowFwd1[c], b)
-                ratioRv[i] = scaleFunc(self.pfi.calibModel.motorOntimeSlowRev1[c], b)
-
         for i in range(runs):
             self.cam.resetStack(f'thetaConvergenceTest{i}.fits')
             if runs > 1:
@@ -1964,6 +1966,7 @@ class ModuleTest():
             thetaData[self.goodIdx, i, 0, 2] = np.imag(cPositions)
             thetaData[self.goodIdx, i, 0, 3] = 1.0
 
+            scale = np.full(len(self.goodIdx), 1.0)
             for j in range(tries - 1):
                 dirs = angle > cAngles
                 lastAngle = cAngles
@@ -1977,29 +1980,22 @@ class ModuleTest():
                 if np.any(newlyDone):
                     notdoneMask &= ~newlyDone
                     self.logger.info(f'done: {np.where(newlyDone)[0]}, {(notdoneMask == True).sum()} left')
-                scale = np.full(len(self.goodIdx), 1.0)
                 for k in range(len(self.goodIdx)):
                     if angle > np.pi and cAngles[k] < tGaps[k] + 0.1:
                         cAngles[k] += np.pi*2
                     elif angle < np.pi and cAngles[k] > np.pi*2 - 0.1:
                         cAngles[k] -= np.pi*2
-#                    if dirs[k] and cAngles[k] < lastAngle[k] - 0.01 and cAngles[k] < tGaps[k] + 0.1:
-#                        cAngles[k] += np.pi*2
-#                    elif not dirs[k] and cAngles[k] > lastAngle[k] + 0.01 and cAngles[k] > np.pi*2 - 0.1:
-#                        cAngles[k] -= np.pi*2
-                    if abs(cAngles[k] - lastAngle[k]) > np.deg2rad(0.5):
+                    if abs(cAngles[k] - lastAngle[k]) > self.minScalingAngle:
                         rawScale = abs((angle - lastAngle[k]) / (cAngles[k] - lastAngle[k]))
-                        if not dirs[k]:
-                            scale[k] = 1 + (rawScale - 1) / (scaleFactor * ratioRv[k])
-                            self.pfi.scaleMotorOntime(self.goodCobras[k], 'theta', 'ccw', scale[k])
-                        else:
-                            scale[k] = 1 + (rawScale - 1) / (scaleFactor * ratioFw[k])
-                            self.pfi.scaleMotorOntime(self.goodCobras[k], 'theta', 'cw', scale[k])
+                        engageScale = (rawScale - 1) / scaleFactor + 1
+                        direction = 'cw' if dirs[k] else 'ccw'
+                        scale[k] = self.pfi.scaleMotorOntimeBySpeed(self.goodCobras[k], 'theta', direction, fast, engageScale)
 
                 thetaData[self.goodIdx, i, j+1, 0] = cAngles
                 thetaData[self.goodIdx, i, j+1, 1] = np.real(cPositions)
                 thetaData[self.goodIdx, i, j+1, 2] = np.imag(cPositions)
                 thetaData[self.goodIdx, i, j+1, 3] = scale
+                self.logger.debug(f'Scaling factor: {np.round(scale, 2)}')
                 if not np.any(notdoneMask):
                     thetaData[self.goodIdx, i, j+2:, 0] = cAngles[..., np.newaxis]
                     thetaData[self.goodIdx, i, j+2:, 1] = np.real(cPositions)[..., np.newaxis]
@@ -2067,7 +2063,7 @@ class ModuleTest():
         old.updateGeometry(new.centers, new.L1, new.L2)
         old.updateThetaHardStops(new.tht0, new.tht1)
         old.createCalibrationFile(newXml)
-        self.cal.restoreConfig()
+#        self.cal.restoreConfig()
 
     def convertXML1(self, newXml):
         """ convert old XML to a new coordinate by taking 'phi homed' images
@@ -2360,28 +2356,28 @@ class ModuleTest():
         if motor == 'theta':
             if fast:
                 if direction == 'cw':
-                    ontime = self.calibModel.motorOntimeFwd1[cobraId]
+                    ontime = self.pfi.calibModel.motorOntimeFwd1[cobraId]
                 else:
-                    ontime = self.calibModel.motorOntimeRev1[cobraId]
+                    ontime = self.pfi.calibModel.motorOntimeRev1[cobraId]
             else:
                 if direction == 'cw':
-                    ontime = self.calibModel.motorOntimeSlowFwd1[cobraId]
+                    ontime = self.pfi.calibModel.motorOntimeSlowFwd1[cobraId]
                 else:
-                    ontime = self.calibModel.motorOntimeSlowRev1[cobraId]
+                    ontime = self.pfi.calibModel.motorOntimeSlowRev1[cobraId]
         else:
             if fast:
                 if direction == 'cw':
-                    ontime = self.calibModel.motorOntimeFwd2[cobraId]
+                    ontime = self.pfi.calibModel.motorOntimeFwd2[cobraId]
                 else:
-                    ontime = self.calibModel.motorOntimeRev2[cobraId]
+                    ontime = self.pfi.calibModel.motorOntimeRev2[cobraId]
             else:
                 if direction == 'cw':
-                    ontime = self.calibModel.motorOntimeSlowFwd2[cobraId]
+                    ontime = self.pfi.calibModel.motorOntimeSlowFwd2[cobraId]
                 else:
-                    ontime = self.calibModel.motorOntimeSlowRev2[cobraId]
+                    ontime = self.pfi.calibModel.motorOntimeSlowRev2[cobraId]
 
         # calculate new scaling
-        existingSpeed = speedFunc(ontime, 1.0, b)
+        existingSpeed = speedFunc(ontime*existingScale, 1.0, b)
         newOntime = invSpeedFunc(existingSpeed*ratio, 1.0, b)
         if newOntime > self.pfi.maxThetaOntime:
             self.logger.warn(f'clipping {mapId} ontime from {newOntime} to {self.pfi.maxThetaOntime}')

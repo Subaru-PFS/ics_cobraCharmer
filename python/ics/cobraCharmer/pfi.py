@@ -439,6 +439,83 @@ class PFI(object):
         cobraState.motorScales[mapId] = newScale
         self.logger.debug(f'setadjust {mapId} {existingScale:0.2f} -> {newScale:0.2f}')
 
+    def scaleMotorOntimeBySpeed(self, cobra, motor, direction, fast, scale):
+        """ Declare that we want a given motor's ontime to be scaled after interpolation.
+
+        If there is an existing scaling, the new scaling is applied
+        _that_: we are expecting to be told that the last effective
+        move neeeded adjustment.
+
+        Args
+        ----
+        cobra : internal cobra object FIX -- CPL
+           A single cobra.
+        motor : {'theta', 'phi'}
+           Which motor to adjust
+        direction : {'ccw', 'cw'}
+           Which motor map to adjust
+        scale : `float`
+           Scaling for the motor speed
+        fast : `bool`
+           Using fast or slow motor map
+        """
+        thetaParameter = 0.09
+        phiParameter = 0.07
+
+        cobraId = self._mapCobraIndex(cobra)
+        mapId = cobraState.mapId(cobraId, motor, direction)
+        existingScale = cobraState.motorScales.get(mapId, 1.0)
+        if motor == 'theta':
+            b0 = thetaParameter
+            if fast:
+                if direction == 'cw':
+                    ontime = self.calibModel.motorOntimeFwd1[cobraId]
+                else:
+                    ontime = self.calibModel.motorOntimeRev1[cobraId]
+            else:
+                if direction == 'cw':
+                    ontime = self.calibModel.motorOntimeSlowFwd1[cobraId]
+                else:
+                    ontime = self.calibModel.motorOntimeSlowRev1[cobraId]
+            nowOntime = existingScale * ontime
+            if nowOntime > self.maxThetaOntime:
+                nowOntime = self.maxThetaOntime
+        else:
+            b0 = phiParameter
+            if fast:
+                if direction == 'cw':
+                    ontime = self.calibModel.motorOntimeFwd2[cobraId]
+                else:
+                    ontime = self.calibModel.motorOntimeRev2[cobraId]
+            else:
+                if direction == 'cw':
+                    ontime = self.calibModel.motorOntimeSlowFwd2[cobraId]
+                else:
+                    ontime = self.calibModel.motorOntimeSlowRev2[cobraId]
+            nowOntime = existingScale * ontime
+            if nowOntime > self.maxPhiOntime:
+                nowOntime = self.maxPhiOntime
+
+        a0 = np.sqrt(nowOntime*nowOntime + b0*b0) - b0
+        a1 = a0*scale + b0
+        newOntime = np.sqrt(a1*a1 - b0*b0)
+        if not np.isfinite(newOntime):
+            self.logger.warn(f'invalid scaling adjustment, give up')
+            return existingScale
+
+        newScale = newOntime / ontime
+        if newScale < 0.5:
+            self.logger.warn(f'clipping scale adjustment from {newScale} to 0.5')
+            newScale = 0.5
+        if newScale > 2.0:
+            self.logger.warn(f'clipping scale adjustment from {newScale} to 2.0')
+            newScale = 2.0
+
+        cobraState.motorScales[mapId] = newScale
+        self.logger.debug(f'setadjust {mapId} {existingScale:0.2f} -> {newScale:0.2f}')
+
+        return newScale
+
     def adjustThetaOnTime(self, cobraId, ontime, fast, direction):
         mapId = cobraState.mapId(cobraId, 'theta', direction)
         scale = cobraState.motorScales.get(mapId, 1.0)
