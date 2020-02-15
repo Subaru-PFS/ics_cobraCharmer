@@ -2,12 +2,12 @@ from importlib import reload
 import logging
 import numpy as np
 from astropy.io import fits
-from scipy import optimize
 import sep
 from copy import deepcopy
 
 from procedures.moduleTest import calculation
 reload(calculation)
+from procedures.moduleTest.speedModel import SpeedModel
 
 from procedures.moduleTest.mcs import camera
 reload(camera)
@@ -129,6 +129,8 @@ class ModuleTest():
         self.phiCWHome = None
 
         self.minScalingAngle = np.deg2rad(2.0)
+        self.thetaModel = SpeedModel(p1=0.09)
+        self.phiModel = SpeedModel(p1=0.07)
 
     def _connect(self):
         self.runManager.newRun()
@@ -867,10 +869,12 @@ class ModuleTest():
             deltaTht = thetaAngles - (gapTht + np.pi*2)
             self.pfi.moveThetaPhi(cobras, deltaTht, deltaPhi, thetaFast=False, phiFast=True, ccwLimit=False)
         with np.printoptions(precision=2, suppress=True):
-            self.logger.info(f"moving: {np.stack((deltaTht, deltaPhi))}")
+            self.logger.debug(f"moving: {np.stack((deltaTht, deltaPhi))}")
 
         ntries = 1
         targets = self.pfi.anglesToPositions(cobras, thetaAngles, phiAngles)
+        guess = self.pfi.calibModel.centers[self.goodIdx]
+        guess[_idx] = targets
         keepMoving = np.where(targets != 0)
         delta = np.deg2rad(20)
         lastTht = None
@@ -879,12 +883,12 @@ class ModuleTest():
 
         while True:
             # extract sources and fiber identification
-            curPos = self.exposeAndExtractPositions(tolerance=0.2)
+            curPos = self.exposeAndExtractPositions(tolerance=0.2, guess=guess)
             curPos = curPos[_idx]
             # check position errors
             with np.printoptions(precision=2, suppress=True):
-                self.logger.info("to: %s", targets[keepMoving])
-                self.logger.info("at: %s", curPos[keepMoving])
+                self.logger.debug("to: %s", targets[keepMoving])
+                self.logger.debug("at: %s", curPos[keepMoving])
 
             notDone = np.abs(curPos - targets) > threshold
             if not np.any(notDone):
@@ -908,7 +912,7 @@ class ModuleTest():
                 if lastTht is not None:
                     lastDeltaTht = thetaAngles[c_i] - lastTht[c_i]
                     if abs(lastDeltaTht) > delta:
-                        rawScale = (curTht[c_i,0] - lastTht[c_i]) / lastDeltaTht
+                        rawScale = lastDeltaTht / (curTht[c_i,0] - lastTht[c_i])
                         if rawScale > 0:
                             engageScale = (rawScale - 1) / scaleFactor + 1
                             direction = 'cw' if lastDeltaTht>0 else 'ccw'
@@ -916,12 +920,12 @@ class ModuleTest():
                 if lastPhi is not None:
                     lastDeltaPhi = phiAngles[c_i] - lastPhi[c_i]
                     if abs(lastDeltaPhi) > delta:
-                        rawScale = (curPhi[c_i,0] - lastPhi[c_i]) / lastDeltaPhi
+                        rawScale = lastDeltaPhi / (curPhi[c_i,0] - lastPhi[c_i])
                         if rawScale > 0:
                             engageScale = (rawScale - 1) / scaleFactor + 1
                             direction = 'cw' if lastDeltaPhi>0 else 'ccw'
                             scale[c_i,1] = self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'phi', direction, False, engageScale)
-            self.logger.info(f'Scaling factor: {np.round(scale.T, 2)}')
+            self.logger.debug(f'Scaling factor: {np.round(scale.T, 2)}')
             lastTht, lastPhi = curTht[:,0], curPhi[:,0]
 
             _curTht = curTht[notDone,0]
@@ -929,7 +933,7 @@ class ModuleTest():
             deltaTht = thetaAngles[notDone] - _curTht
             deltaPhi = phiAngles[notDone] - _curPhi
             with np.printoptions(precision=2, suppress=True):
-                self.logger.info(f"moving: {np.stack((deltaTht, deltaPhi))}")
+                self.logger.debug(f"moving: {np.stack((deltaTht, deltaPhi))}")
             self.pfi.moveThetaPhi(cobras[notDone], deltaTht, deltaPhi, _curTht, _curPhi, thetaFast=False, phiFast=False)
 
     def moveBadCobrasOut(self):
@@ -2163,10 +2167,8 @@ class ModuleTest():
         for (fast, speed, step) in zip([False, True], speeds, steps):
             # calculate on time
             for c_i in self.goodIdx:
-                aF = _spdF[0][c_i] / speedFunc(onTimeHigh, 1.0, b)
-                ontF[c_i] = invSpeedFunc(speed, aF, b)
-                aR = _spdR[0][c_i] / speedFunc(onTimeHigh, 1.0, b)
-                ontR[c_i] = invSpeedFunc(speed, aR, b)
+                ontF[c_i] = self.thetaModel.getOntimeFromData(speed, _spdF[0][c_i], onTimeHigh)
+                ontR[c_i] = self.thetaModel.getOntimeFromData(speed, _spdR[0][c_i], onTimeHigh)
 
             for n in range(iteration):
                 ontF[ontF>onTimeHigh] = onTimeHigh
@@ -2188,10 +2190,8 @@ class ModuleTest():
 
                 # calculate on time
                 for c_i in self.goodIdx:
-                    aF = spdF[c_i] / speedFunc(ontF[c_i], 1.0, b)
-                    ontF[c_i] = invSpeedFunc(speed, aF, b)
-                    aR = spdR[c_i] / speedFunc(ontR[c_i], 1.0, b)
-                    ontR[c_i] = invSpeedFunc(speed, aR, b)
+                    ontF[c_i] = self.thetaModel.getOntimeFromData(speed, spdF[c_i], ontF[c_i])
+                    ontR[c_i] = self.thetaModel.getOntimeFromData(speed, spdR[c_i], ontR[c_i])
 
         # try to find best on time, maybe.....
         ontF = self.searchOnTime(speeds[0], np.array(_spdF), np.array(_ontF))
@@ -2265,11 +2265,10 @@ class ModuleTest():
 
         for (fast, speed, step) in zip([False, True], speeds, steps):
             # calculate on time
+            self.logger.info(f'Run for {'Fast' if fast else: 'Slow'} motor maps')
             for c_i in self.goodIdx:
-                aF = _spdF[0][c_i] / speedFunc(onTimeHigh, 1.0, b)
-                ontF[c_i] = invSpeedFunc(speed, aF, b)
-                aR = _spdR[0][c_i] / speedFunc(onTimeHigh, 1.0, b)
-                ontR[c_i] = invSpeedFunc(speed, aR, b)
+                ontF[c_i] = self.phiModel.getOntimeFromData(speed, _spdF[0][c_i], onTimeHigh)
+                ontR[c_i] = self.phiModel.getOntimeFromData(speed, _spdR[0][c_i], onTimeHigh)
 
             for n in range(iteration):
                 ontF[ontF>onTimeHigh] = onTimeHigh
@@ -2291,10 +2290,8 @@ class ModuleTest():
 
                 # calculate on time
                 for c_i in self.goodIdx:
-                    aF = spdF[c_i] / speedFunc(ontF[c_i], 1.0, b)
-                    ontF[c_i] = invSpeedFunc(speed, aF, b)
-                    aR = spdR[c_i] / speedFunc(ontR[c_i], 1.0, b)
-                    ontR[c_i] = invSpeedFunc(speed, aR, b)
+                    ontF[c_i] = self.thetaModel.getOntimeFromData(speed, spdF[c_i], ontF[c_i])
+                    ontR[c_i] = self.thetaModel.getOntimeFromData(speed, spdR[c_i], ontR[c_i])
 
         # try to find best on time, maybe.....
         ontF = self.searchOnTime(speeds[0], np.array(_spdF), np.array(_ontF))
@@ -2325,86 +2322,35 @@ class ModuleTest():
         for c in self.goodIdx:
             s = sData[:,c]
             t = tData[:,c]
-            if np.median(s[t==np.max(t)]) <= speed:
-                self.logger.warn(f'Cobra #{c+1} is sticky, set to max value')
-                onTime[c] = np.max(t)
-                continue
+            model = SpeedModel()
+            err = model.buildModel(s, t)
 
-            try:
-                params, params_cov = optimize.curve_fit(speedFunc, t, s, p0=[10, 0.06])
-                if params[0] < 0 or params[1] < 0:
-                    # remove some slow data and try again
-                    self.logger.warn(f'Curve fitting error #{c+1}, try again')
-                    s[t==np.max(t)] = np.max(s[t==np.max(t)])
-                    params, params_cov = optimize.curve_fit(speedFunc, t, s, p0=[10, 0.06])
-                if params[0] < 0 or params[1] < 0:
-                    raise
-                onTime[c] = invSpeedFunc(speed, params[0], params[1])
-            except:
-                onTime[c] = np.median(t)
-                self.logger.warn(f'Curve fitting failed #{c+1}, set to median value')
+            if err:
+                self.logger.warn(f'Building model failed #{c+1}, set to max value')
+                onTime[c] = np.max(t)
+            else:
+                onTime[c] = model.toOntime(speed)
+                if not np.isfinite(onTime[c]):
+                    self.logger.warn(f'Curve fitting failed #{c+1}, set to median value')
+                    onTime[c] = np.median(t)
+
+#            if np.median(s[t==np.max(t)]) <= speed:
+#                self.logger.warn(f'Cobra #{c+1} is sticky, set to max value')
+#                onTime[c] = np.max(t)
+#                continue
+
+#            try:
+#                params, params_cov = optimize.curve_fit(speedFunc, t, s, p0=[10, 0.06])
+#                if params[0] < 0 or params[1] < 0:
+#                    # remove some slow data and try again
+#                    self.logger.warn(f'Curve fitting error #{c+1}, try again')
+#                    s[t==np.max(t)] = np.max(s[t==np.max(t)])
+#                    params, params_cov = optimize.curve_fit(speedFunc, t, s, p0=[10, 0.06])
+#                if params[0] < 0 or params[1] < 0:
+#                    raise
+#                onTime[c] = invSpeedFunc(speed, params[0], params[1])
+#            except:
+#                onTime[c] = np.median(t)
+#                self.logger.warn(f'Curve fitting failed #{c+1}, set to median value')
 
         return onTime
-
-    def adjustOnTimeScaling(cobra, motor, direction, fast, ratio, b=0.075):
-        """ adjust on time scaling """
-
-        cobraId = self.pfi._mapCobraIndex(cobra)
-        mapId = cobraState.mapId(cobraId, motor, direction)
-        existingScale = self.pfi.ontimeScales.get(mapId, 1.0)
-
-        if motor == 'theta':
-            if fast:
-                if direction == 'cw':
-                    ontime = self.pfi.calibModel.motorOntimeFwd1[cobraId]
-                else:
-                    ontime = self.pfi.calibModel.motorOntimeRev1[cobraId]
-            else:
-                if direction == 'cw':
-                    ontime = self.pfi.calibModel.motorOntimeSlowFwd1[cobraId]
-                else:
-                    ontime = self.pfi.calibModel.motorOntimeSlowRev1[cobraId]
-        else:
-            if fast:
-                if direction == 'cw':
-                    ontime = self.pfi.calibModel.motorOntimeFwd2[cobraId]
-                else:
-                    ontime = self.pfi.calibModel.motorOntimeRev2[cobraId]
-            else:
-                if direction == 'cw':
-                    ontime = self.pfi.calibModel.motorOntimeSlowFwd2[cobraId]
-                else:
-                    ontime = self.pfi.calibModel.motorOntimeSlowRev2[cobraId]
-
-        # calculate new scaling
-        existingSpeed = speedFunc(ontime*existingScale, 1.0, b)
-        newOntime = invSpeedFunc(existingSpeed*ratio, 1.0, b)
-        if newOntime > self.pfi.maxThetaOntime:
-            self.logger.warn(f'clipping {mapId} ontime from {newOntime} to {self.pfi.maxThetaOntime}')
-            newOntime = self.pfi.maxThetaOntime
-        newScale = newOntime / ontime
-
-        self.pfi.ontimeScales[mapId] = newScale
-        self.logger.debug(f'setadjust {mapId} {existingScale:0.2f} -> {newScale:0.2f}')
-
-
-def speedFunc(x, a, b, n=2):
-    """ map ontime to speed """
-    return a * (np.power(np.power(x, n) + np.power(b, n), 1.0/n) - b)
-
-def invSpeedFunc(x, a, b, n=2):
-    """ map speed to ontime """
-    return np.power(np.power(x/a+b, n) - np.power(b, n), 1.0/n)
-
-def scaleFunc(x, b, n=2):
-    """ calculate the ratio between speed and on-time """
-    if b == 0:
-        return 1
-    c = x / b
-    d = np.power(c, n)
-    e = d + 1
-    f = 1 - np.power(e, -1/n)
-    if f == 0:
-        return n
-    else:
-        return d / (e * f)
