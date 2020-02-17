@@ -19,6 +19,13 @@ class PFI(object):
     nCobrasPerModule = 57
     nModules = 42
 
+    # bit array for (x,y) to (theta, phi) convertion
+    IN_OVERLAPPING_REGION    = 0x0001  # 1 if the position in overlapping region
+    PHI_NEGATIVE             = 0x0002  # 1 if phi angle is negative(phi CCW limit < 0)
+    PHI_BEYOND_PI            = 0x0004  # 1 if phi angle is beyond PI(phi CW limit > PI)
+    TOO_CLOSE_TO_CENTER      = 0x0008  # 1 if the position is too close to the center
+    TOO_FAR_FROM_CENTER      = 0x0016  # 1 if the position is too far from the center
+
     def __init__(self, fpgaHost='localhost', logDir=None, doConnect=True, doLoadModel=False, debug=False):
         """ Initialize a PFI class
         Args:
@@ -584,6 +591,7 @@ class PFI(object):
             self.logger.debug(f'skipping RUN command: no cobras')
             return
 
+        maxStep = int(np.amax(np.abs((thetaSteps, phiSteps))))
         for c_i, c in enumerate(cobras):
             cobraId = self._mapCobraIndex(c)
             steps1 = [int(np.abs(thetaSteps[c_i])), int(np.abs(phiSteps[c_i]))]
@@ -635,19 +643,12 @@ class PFI(object):
             if waitThetaSteps is None and waitPhiSteps is None:
                 # set delay parameters for safer operation
                 if phiSteps[c_i] > 0 and thetaSteps[c_i] < 0:
-                    diffSteps = thetaSteps[c_i] + phiSteps[c_i]
-                    if diffSteps < 0:
-                        offtime2 = -diffSteps
-                    else:
-                        offtime1 = diffSteps
+                    offtime1 = maxStep + thetaSteps[c_i]
+                    offtime2 = maxStep - phiSteps[c_i]
                 elif phiSteps[c_i] > 0 and thetaSteps[c_i] > 0:
-                    diffSteps = thetaSteps[c_i] - phiSteps[c_i]
-                    if diffSteps > 0:
-                        offtime2 = diffSteps
+                    offtime2 = maxStep - phiSteps[c_i]
                 elif phiSteps[c_i] < 0 and thetaSteps[c_i] < 0:
-                    diffSteps = thetaSteps[c_i] - phiSteps[c_i]
-                    if diffSteps > 0:
-                        offtime1 = diffSteps
+                    offtime1 = maxStep + thetaSteps[c_i]
             else:
                 # For early-late offsets.
                 if waitThetaSteps is not None:
@@ -846,12 +847,10 @@ class PFI(object):
         Returns
         -------
         tuple
-            A python tuples with all the possible angles (theta, phi, overlapping).
-            Since there are possible 2 phi solutions so the dimensions of theta
-            and phi are (len(cobras), 2), the value np.nan indicates
-            there is no solution. overlapping is a boolean array of the same size,
-            true indicatess the theta solution is within the two hard stops.
-
+            A python tuples with all the possible angles (theta, phi, flags).
+            Since there are possible 2 phi solutions (phi<0 or phi>np.pi*2)
+            so the dimensions of theta and phi are (len(cobras), 2), the value
+            np.nan indicates there is no solution. flags is an bit maps.
         """
         if len(cobras) != len(positions):
             raise RuntimeError("number of positions must match number of cobras")
@@ -871,40 +870,52 @@ class PFI(object):
         tht1 = self.calibModel.tht1[cIdx]
         phi = np.full((len(cobras), 2), np.nan)
         tht = np.full((len(cobras), 2), np.nan)
-        overlapping = np.full((len(cobras), 2), False)
+        flags = np.full((len(cobras), 2), 0, dtype='u2')
 
         for i in range(len(positions)):
-            # check if the positions are reachable by cobras
-            if distance[i] > L1[i] + L2[i] or distance[i] < np.abs(L1[i] - L2[i]):
+            if distance[i] > L1[i] + L2[i]:
+                # too far away, return theta angle and phi=PI
+                flags[i][0] |= self.TOO_FAR_FROM_CENTER
+                phi[i][0] = np.pi
+                tht[i][0] = (np.angle(relativePositions[i]) - tht0[i]) % (2 * np.pi)
+                if tht[i][0] <= (tht1[i] - tht0[i]) % (2 * np.pi):
+                    flags[i][0] |= self.IN_OVERLAPPING_REGION
+                continue
+            if distance[i] < np.abs(L1[i] - L2[i]):
+                # too close to center, theta is undetermined, return theta=0 and phi=0
+                flags[i][0] |= self.TOO_CLOSE_TO_CENTER
+                phi[i][0] = 0
+                tht[i][0] = 0
                 continue
 
             ang1 = np.arccos((L1Sq[i] + L2Sq[i] - distanceSq[i]) / (2 * L1[i] * L2[i]))
             ang2 = np.arccos((L1Sq[i] + distanceSq[i] - L2Sq[i]) / (2 * L1[i] * distance[i]))
 
             # the regular solutions, phi angle is between 0 and pi, no checking for phi hard stops
-            #if ang1 > phiIn[i] and ang1 < phiOut[i]:
             phi[i][0] = ang1 - phiIn[i]
             tht[i][0] = (np.angle(relativePositions[i]) + ang2 - tht0[i]) % (2 * np.pi)
             # check if tht is within two theta hard stops
             if tht[i][0] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-                overlapping[i][0] = True
+                flags[i][0] |= self.IN_OVERLAPPING_REGION
 
-            # check if there are additional phi solutions
+            # check if there are additional solutions
             if phiIn[i] <= -ang1 and ang1 > 0:
+                flags[i][1] |= self.PHI_NEGATIVE
                 # phiIn < 0
                 phi[i][1] = -ang1 - phiIn[i]
                 tht[i][1] = (np.angle(relativePositions[i]) - ang2 - tht0[i]) % (2 * np.pi)
                 # check if tht is within two theta hard stops
                 if tht[i][1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-                    overlapping[i][1] = True
+                    flags[i][1] |= self.IN_OVERLAPPING_REGION
             elif phiOut[i] >= 2 * np.pi - ang1 and ang1 < np.pi:
+                flags[i][1] |= self.PHI_BEYOND_PI
                 # phiOut > np.pi
                 phi[i][1] = 2 * np.pi - ang1 - phiIn[i]
                 tht[i][1] = (np.angle(relativePositions[i]) - ang2 - tht0[i]) % (2 * np.pi)
                 # check if tht is within two theta hard stops
                 if tht[i][1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-                    overlapping[i][1] = True
-        return (tht, phi, overlapping)
+                    flags[i][1] |= self.IN_OVERLAPPING_REGION
+        return (tht, phi, flags)
 
     def moveXY(self, cobras, startPositions, targetPositions, overlappingCW=False,
                thetaThreshold=1e10, phiThreshold=1e10, delta=10.0):
@@ -1145,10 +1156,14 @@ class PFI(object):
         module = pfiDesign.PFIDesign.getRealModuleId(module)
         if module < 1 or module > cls.nModules:
             raise IndexError(f'module numbers are 1..{cls.nModules}')
-        if board not in (1,2):
-            raise IndexError('board numbers are 1 or 2.')
+
         cobras = []
-        cobras.append(func.Cobra(module, cobra*2))
+        if board == 1:
+            cobras.append(func.Cobra(module, cobra*2-1))
+        elif board == 2:
+            cobras.append(func.Cobra(module, cobra*2))
+        else:
+            raise IndexError('board numbers are 1 or 2.')
 
         return cobras
 

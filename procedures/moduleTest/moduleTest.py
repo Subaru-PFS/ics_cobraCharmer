@@ -2265,7 +2265,7 @@ class ModuleTest():
 
         for (fast, speed, step) in zip([False, True], speeds, steps):
             # calculate on time
-            self.logger.info(f'Run for {'Fast' if fast else: 'Slow'} motor maps')
+            self.logger.info(f'Run for best {"Fast" if fast else "Slow"} motor maps')
             for c_i in self.goodIdx:
                 ontF[c_i] = self.phiModel.getOntimeFromData(speed, _spdF[0][c_i], onTimeHigh)
                 ontR[c_i] = self.phiModel.getOntimeFromData(speed, _spdR[0][c_i], onTimeHigh)
@@ -2333,7 +2333,6 @@ class ModuleTest():
                 if not np.isfinite(onTime[c]):
                     self.logger.warn(f'Curve fitting failed #{c+1}, set to median value')
                     onTime[c] = np.median(t)
-
 #            if np.median(s[t==np.max(t)]) <= speed:
 #                self.logger.warn(f'Cobra #{c+1} is sticky, set to max value')
 #                onTime[c] = np.max(t)
