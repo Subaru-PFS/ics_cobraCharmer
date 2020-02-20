@@ -52,11 +52,11 @@ class Cobra:
         return s
     def typeMatch(self, type):
         if self.p is None:
-            return False
             short_log.log("None params type")
-        if self.p.type != type:
             return False
+        if self.p.type != type:
             short_log.log("Wrong params type")
+            return False
         return True
         
 class CalParams:    
@@ -372,7 +372,7 @@ def RUN( cobras, timeout=0, inter=0 ):
         inter = math.ceil( max(puCob)*9/15 )
     
     medium_log.log("Timeout:%d, inter:%d" %(timeout,inter) )
-        
+
     payload = []
     fpgaState.clearMoves()
     for c in cobras:
@@ -381,7 +381,7 @@ def RUN( cobras, timeout=0, inter=0 ):
 
     cmd = CMD_run(payload, cmds=len(cobras), timeout=timeout, inter=inter)
     sock.send(cmd, eth_hex_logger, 'h')
-    
+
     error = False
     for i in range(2):
         resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')

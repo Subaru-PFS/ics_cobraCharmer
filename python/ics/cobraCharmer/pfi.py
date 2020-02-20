@@ -78,8 +78,11 @@ class PFI(object):
         import ics.cobraCharmer.pfiDesign as pfiDesign
         reload(pfiDesign)
 
-        self.calibModel = pfiDesign.PFIDesign(filename)
-        self.logger.info(f'load cobra model from {filename}')
+        if filename is not None:
+            self.calibModel = pfiDesign.PFIDesign(filename)
+            self.logger.info(f'load cobra model from {filename}')
+        else:
+            self.calibModel = pfiDesign.PFIDesign.loadPfi()
 
     def _freqToPeriod(self, freq):
         """ Convert frequency to 60ns ticks """
@@ -109,11 +112,8 @@ class PFI(object):
 
     def diag(self):
         """ Get fpga board inventory"""
-        err = func.DIA()
-        if err:
-            self.logger.error(f'send DIA command failed')
-        else:
-            self.logger.debug(f'send DIA command succeeded')
+        res = func.DIA()
+        self.logger.info("Board Counts: %s" %(res) )
 
     def power(self, sectors=0x3f):
         """ Set COBRA PSU on/off """
