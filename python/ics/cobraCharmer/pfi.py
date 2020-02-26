@@ -20,11 +20,12 @@ class PFI(object):
     nModules = 42
 
     # bit array for (x,y) to (theta, phi) convertion
-    IN_OVERLAPPING_REGION    = 0x0001  # 1 if the position in overlapping region
-    PHI_NEGATIVE             = 0x0002  # 1 if phi angle is negative(phi CCW limit < 0)
-    PHI_BEYOND_PI            = 0x0004  # 1 if phi angle is beyond PI(phi CW limit > PI)
-    TOO_CLOSE_TO_CENTER      = 0x0008  # 1 if the position is too close to the center
-    TOO_FAR_FROM_CENTER      = 0x0016  # 1 if the position is too far from the center
+    SOLUTION_OK              = 0x0001  # 1 if the solution is valid
+    IN_OVERLAPPING_REGION    = 0x0002  # 1 if the position in overlapping region
+    PHI_NEGATIVE             = 0x0004  # 1 if phi angle is negative(phi CCW limit < 0)
+    PHI_BEYOND_PI            = 0x0008  # 1 if phi angle is beyond PI(phi CW limit > PI)
+    TOO_CLOSE_TO_CENTER      = 0x0016  # 1 if the position is too close to the center
+    TOO_FAR_FROM_CENTER      = 0x0032  # 1 if the position is too far from the center
 
     def __init__(self, fpgaHost='localhost', logDir=None, doConnect=True, doLoadModel=False, debug=False):
         """ Initialize a PFI class
@@ -73,7 +74,7 @@ class PFI(object):
         self.ioLogger.info(f'FPGA connection closed')
         self.protoLogger.logger.info('FPGA connection closed')
 
-    def loadModel(self, filename=None):
+    def loadModel(self, filename=None, version=None, moduleVersion=None):
         """ Load a motormap XML file. """
         import ics.cobraCharmer.pfiDesign as pfiDesign
         reload(pfiDesign)
@@ -82,7 +83,7 @@ class PFI(object):
             self.calibModel = pfiDesign.PFIDesign(filename)
             self.logger.info(f'load cobra model from {filename}')
         else:
-            self.calibModel = pfiDesign.PFIDesign.loadPfi()
+            self.calibModel = pfiDesign.PFIDesign.loadPfi(version, moduleVersion)
 
     def _freqToPeriod(self, freq):
         """ Convert frequency to 60ns ticks """
@@ -610,7 +611,7 @@ class PFI(object):
                 dirs1[1] = 'ccw'
 
             en = (steps1[0] != 0, steps1[1] != 0)
-            isBad = self.calibModel.cobraIsBad(c.cobra, c.module)
+            isBad = self.calibModel.cobraIsBad(c.cobraNum, c.module)
             if isBad and not force:
                 en = (False, False)
 
@@ -848,9 +849,26 @@ class PFI(object):
         -------
         tuple
             A python tuples with all the possible angles (theta, phi, flags).
-            Since there are possible 2 phi solutions (phi<0 or phi>np.pi*2)
+            Since there are possible 2 phi solutions (phi<0 or phi>PI)
             so the dimensions of theta and phi are (len(cobras), 2), the value
-            np.nan indicates there is no solution. flags is an bit maps.
+            np.nan indicates there is no solution. flags is a bit map.
+
+            There are several different cases:
+            - No solution: This means the distance from the given position to
+              the center and two arm lengths(theta, phi) can't form a triangle.
+              In this case, either TOO_CLOSE_TO_CENTER or TOO_FAR_FROM_CENTER
+              is set. For TOO_CLOSE_TO_CENTER case, both theta and phi set to 0.
+              For TOO_FAR_FROM_CENTER case, phi is set to PI and theta is set to
+              the angle from the center to the given position.
+            - Two phi solutions: This happens because the range of phi arms can
+              be negative and beyond PI. When the measured phi angle is small or
+              close to PI. This case may happen. The second solution is also
+              calculated and returned. The bit PHI_NEGATIVE or PHI_BEYOND_PI is
+              set in this situation.
+            - Theta overlapping region: Since theta arms can move beyond PI*2,
+              so in the overlapping region(between two hard stops) we have two
+              possible theta solutions. The bit IN_OVERLAPPING_REGION is set.
+
         """
         if len(cobras) != len(positions):
             raise RuntimeError("number of positions must match number of cobras")
@@ -874,7 +892,7 @@ class PFI(object):
 
         for i in range(len(positions)):
             if distance[i] > L1[i] + L2[i]:
-                # too far away, return theta angle and phi=PI
+                # too far away, return the theta angle and phi=PI
                 flags[i][0] |= self.TOO_FAR_FROM_CENTER
                 phi[i][0] = np.pi
                 tht[i][0] = (np.angle(relativePositions[i]) - tht0[i]) % (2 * np.pi)
@@ -892,6 +910,7 @@ class PFI(object):
             ang2 = np.arccos((L1Sq[i] + distanceSq[i] - L2Sq[i]) / (2 * L1[i] * distance[i]))
 
             # the regular solutions, phi angle is between 0 and pi, no checking for phi hard stops
+            flags[i][0] |= self.SOLUTION_OK
             phi[i][0] = ang1 - phiIn[i]
             tht[i][0] = (np.angle(relativePositions[i]) + ang2 - tht0[i]) % (2 * np.pi)
             # check if tht is within two theta hard stops
@@ -900,7 +919,7 @@ class PFI(object):
 
             # check if there are additional solutions
             if phiIn[i] <= -ang1 and ang1 > 0:
-                flags[i][1] |= self.PHI_NEGATIVE
+                flags[i][1] |= self.PHI_NEGATIVE | self.SOLUTION_OK
                 # phiIn < 0
                 phi[i][1] = -ang1 - phiIn[i]
                 tht[i][1] = (np.angle(relativePositions[i]) - ang2 - tht0[i]) % (2 * np.pi)
@@ -908,7 +927,7 @@ class PFI(object):
                 if tht[i][1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
                     flags[i][1] |= self.IN_OVERLAPPING_REGION
             elif phiOut[i] >= 2 * np.pi - ang1 and ang1 < np.pi:
-                flags[i][1] |= self.PHI_BEYOND_PI
+                flags[i][1] |= self.PHI_BEYOND_PI | self.SOLUTION_OK
                 # phiOut > np.pi
                 phi[i][1] = 2 * np.pi - ang1 - phiIn[i]
                 tht[i][1] = (np.angle(relativePositions[i]) - ang2 - tht0[i]) % (2 * np.pi)
@@ -1186,10 +1205,9 @@ class PFI(object):
                 raise RuntimeError("sectors are not left-packed with boards.")
             boards += boardsInSector
 
-        cobras = []
-        for b in range(1,boards+1):
-            mod = (b-1)//2 + 1
-            brd = (b-1)%2 + 1
-            cobras.extend(self.allocateCobraBoard(mod, brd))
+        if boards % 2 != 0:
+            raise RuntimeError("number of boards are not even.")
+
+        cobras = self.allocateCobraRange(range(1,boards//2+1))
 
         return cobras

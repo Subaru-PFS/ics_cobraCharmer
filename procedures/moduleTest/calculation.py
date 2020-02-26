@@ -50,7 +50,7 @@ class Calculation():
         self.camSplit = camSplit
 
     def setBrokenCobras(self, brokens=None):
-        # define the broken/good cobras
+        # define the broken/visible cobras
         if brokens is None:
             brokens = []
         visibles = [e for e in range(1, 58) if e not in brokens]

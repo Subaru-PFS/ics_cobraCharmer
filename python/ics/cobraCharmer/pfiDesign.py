@@ -79,6 +79,20 @@ class PFIDesign():
 
         return self
 
+    def fixModuleIds(self):
+        """
+        During the testing phase, not all cobra modules are installed.
+        We may want to test any modules. This one change the module IDs
+        to (1 .. number of modules) in the same order.
+        """
+        mod = 0
+        for i in range(self.nCobras):
+            if i % 57 == 0:
+                mod += 1
+            self.moduleIds[i] = mod
+
+        return mod
+
     def _loadCobrasFromModelFile(self, fileName):
         """Loads the per-cobra structures from the given model file
 
@@ -364,6 +378,7 @@ class PFIDesign():
         """
         cobraIdx = self.findCobraByModuleAndPositioner(moduleId, cobraId)
 
+        self.status[cobraIdx] = self.COBRA_OK_MASK
         if invisible:
             self.status[cobraIdx] |= self.COBRA_INVISIBLE_MASK
             self.status[cobraIdx] &= ~self.COBRA_OK_MASK
@@ -386,7 +401,7 @@ class PFIDesign():
         """ Return the cobra's status field. """
 
         status = self.cobraStatus(cobraId, moduleId=moduleId)
-        return status== self.COBRA_OK_MASK
+        return status == self.COBRA_OK_MASK
 
     def cobraIsBad(self, cobraId, moduleId=1):
         """ Return True if we believe cobra can/should NOT be used. """

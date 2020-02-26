@@ -5,6 +5,7 @@ from astropy.io import fits
 import sep
 from copy import deepcopy
 import calculation
+from ics.cobraCharmer import pfiDesign
 import pandas as pd
 
 class moduleAnalyze():
@@ -12,7 +13,8 @@ class moduleAnalyze():
         if not os.path.exists(xml):
             print(f"Error: {xml} is not presented!")
             sys.exit()
-        self.cal = calculation.Calculation(xml, brokens, camSplit)
+        model = pfiDesign.PFIDesign(xml)
+        self.cal = calculation.Calculation(model, brokens, camSplit)
 
     def loadPhiData(self, dataPath, goodIdx, iterations, repeats=1, reCenter=False):
         if not reCenter:
