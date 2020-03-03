@@ -44,24 +44,29 @@ def transform(origPoints, newPoints):
     return offset, scale, tilt, tr
 
 class Calculation():
-    def __init__(self, calibModel, brokens, camSplit):
+    def __init__(self, calibModel, brokens, camSplit, bads=None):
         self.calibModel = calibModel
-        self.setBrokenCobras(brokens)
+        self.setBrokenCobras(brokens, bads)
         self.camSplit = camSplit
 
-    def setBrokenCobras(self, brokens=None):
-        # define the broken/visible cobras
+    def setBrokenCobras(self, brokens=None, bads=None):
+        # define the broken/visible cobras, good/bad means broken/visible here
         if brokens is None:
             brokens = []
+        if bads is None:
+            bads = brokens
         visibles = [e for e in range(1, 58) if e not in brokens]
-        self.badIdx = np.array(brokens, dtype=int) - 1
-        self.goodIdx = np.array(visibles, dtype=int) - 1
+        usables = [e for e in range(1, 58) if e not in bads]
+        self.badIdx = np.array(bads, dtype=int) - 1
+        self.goodIdx = np.array(usables, dtype=int) - 1
+        self.invisibleIdx = np.array(brokens, dtype=int) - 1
+        self.visibleIdx = np.array(visibles, dtype=int) - 1
 
     def extractPositions(self, data1, data2=None, guess=None, tolerance=None):
         if data2 is None:
             return self.extractPositions1(data1, guess=guess, tolerance=tolerance)
 
-        idx = self.goodIdx
+        idx = self.visibleIdx
         idx1 = idx[idx <= self.camSplit]
         idx2 = idx[idx > self.camSplit]
         if tolerance is not None:
@@ -125,7 +130,7 @@ class Calculation():
            -1 if there is no matching spot.
         """
 
-        idx = self.goodIdx
+        idx = self.visibleIdx
         if tolerance is not None:
             radii = ((self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance))[idx]
         else:
@@ -150,7 +155,7 @@ class Calculation():
         return pos, target
 
     def extractPositions1(self, data, guess=None, tolerance=None):
-        idx = self.goodIdx
+        idx = self.visibleIdx
         if tolerance is not None:
             radii = (self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance)
         else:

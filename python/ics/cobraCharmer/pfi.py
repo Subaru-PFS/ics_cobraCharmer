@@ -27,6 +27,10 @@ class PFI(object):
     TOO_CLOSE_TO_CENTER      = 0x0016  # 1 if the position is too close to the center
     TOO_FAR_FROM_CENTER      = 0x0032  # 1 if the position is too far from the center
 
+    # on time vs speed model parameters
+    thetaParameter = 0.09
+    phiParameter = 0.07
+
     def __init__(self, fpgaHost='localhost', logDir=None, doConnect=True, doLoadModel=False, debug=False):
         """ Initialize a PFI class
         Args:
@@ -51,6 +55,7 @@ class PFI(object):
         self.maxPhiOntime = 0.08
         self.maxThetaSteps = 10000
         self.maxPhiSteps = 7000
+
         if fpgaHost == 'fpga':
             fpgaHost = '128.149.77.24'  # A JPL address which somehow got burned into the FPGAs. See INSTRM-464
         self.fpgaHost = fpgaHost
@@ -467,14 +472,13 @@ class PFI(object):
         fast : `bool`
            Using fast or slow motor map
         """
-        thetaParameter = 0.09
-        phiParameter = 0.07
 
         cobraId = self._mapCobraIndex(cobra)
         mapId = cobraState.mapId(cobraId, motor, direction)
         existingScale = cobraState.motorScales.get(mapId, 1.0)
+
         if motor == 'theta':
-            b0 = thetaParameter
+            b0 = self.thetaParameter
             if fast:
                 if direction == 'cw':
                     ontime = self.calibModel.motorOntimeFwd1[cobraId]
@@ -489,7 +493,7 @@ class PFI(object):
             if nowOntime > self.maxThetaOntime:
                 nowOntime = self.maxThetaOntime
         else:
-            b0 = phiParameter
+            b0 = self.phiParameter
             if fast:
                 if direction == 'cw':
                     ontime = self.calibModel.motorOntimeFwd2[cobraId]
@@ -849,7 +853,7 @@ class PFI(object):
         -------
         tuple
             A python tuples with all the possible angles (theta, phi, flags).
-            Since there are possible 2 phi solutions (phi<0 or phi>PI)
+            Since there are possible 2 phi solutions (since phi CCW<0 and CW>PI)
             so the dimensions of theta and phi are (len(cobras), 2), the value
             np.nan indicates there is no solution. flags is a bit map.
 
@@ -857,18 +861,18 @@ class PFI(object):
             - No solution: This means the distance from the given position to
               the center and two arm lengths(theta, phi) can't form a triangle.
               In this case, either TOO_CLOSE_TO_CENTER or TOO_FAR_FROM_CENTER
-              is set. For TOO_CLOSE_TO_CENTER case, both theta and phi set to 0.
-              For TOO_FAR_FROM_CENTER case, phi is set to PI and theta is set to
-              the angle from the center to the given position.
+              is set. For TOO_CLOSE_TO_CENTER case, phi is set to 0 and for
+              TOO_FAR_FROM_CENTER case, phi is set to PI, theta is set to
+              the angle from the center to the given position for both cases.
             - Two phi solutions: This happens because the range of phi arms can
               be negative and beyond PI. When the measured phi angle is small or
-              close to PI. This case may happen. The second solution is also
+              close to PI, this case may happen. The second solution is also
               calculated and returned. The bit PHI_NEGATIVE or PHI_BEYOND_PI is
-              set in this situation.
+              set in this situation. If this solution is within the hard stops,
+              the bit SOLUTION_OK is set.
             - Theta overlapping region: Since theta arms can move beyond PI*2,
               so in the overlapping region(between two hard stops) we have two
               possible theta solutions. The bit IN_OVERLAPPING_REGION is set.
-
         """
         if len(cobras) != len(positions):
             raise RuntimeError("number of positions must match number of cobras")
@@ -892,7 +896,7 @@ class PFI(object):
 
         for i in range(len(positions)):
             if distance[i] > L1[i] + L2[i]:
-                # too far away, return the theta angle and phi=PI
+                # too far away, return theta= spot angle and phi=PI
                 flags[i][0] |= self.TOO_FAR_FROM_CENTER
                 phi[i][0] = np.pi
                 tht[i][0] = (np.angle(relativePositions[i]) - tht0[i]) % (2 * np.pi)
@@ -900,10 +904,12 @@ class PFI(object):
                     flags[i][0] |= self.IN_OVERLAPPING_REGION
                 continue
             if distance[i] < np.abs(L1[i] - L2[i]):
-                # too close to center, theta is undetermined, return theta=0 and phi=0
+                # too close to center, theta is undetermined, return theta=spot angle and phi=0
                 flags[i][0] |= self.TOO_CLOSE_TO_CENTER
                 phi[i][0] = 0
-                tht[i][0] = 0
+                tht[i][0] = (np.angle(relativePositions[i]) - tht0[i]) % (2 * np.pi)
+                if tht[i][0] <= (tht1[i] - tht0[i]) % (2 * np.pi):
+                    flags[i][0] |= self.IN_OVERLAPPING_REGION
                 continue
 
             ang1 = np.arccos((L1Sq[i] + L2Sq[i] - distanceSq[i]) / (2 * L1[i] * L2[i]))
@@ -918,16 +924,20 @@ class PFI(object):
                 flags[i][0] |= self.IN_OVERLAPPING_REGION
 
             # check if there are additional solutions
-            if phiIn[i] <= -ang1 and ang1 > 0:
-                flags[i][1] |= self.PHI_NEGATIVE | self.SOLUTION_OK
+            if ang1 <= np.pi/2 and ang1 > 0:
+                if phiIn[i] <= -ang1:
+                    flags[i][1] |= self.SOLUTION_OK
+                flags[i][1] |= self.PHI_NEGATIVE
                 # phiIn < 0
                 phi[i][1] = -ang1 - phiIn[i]
                 tht[i][1] = (np.angle(relativePositions[i]) - ang2 - tht0[i]) % (2 * np.pi)
                 # check if tht is within two theta hard stops
                 if tht[i][1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
                     flags[i][1] |= self.IN_OVERLAPPING_REGION
-            elif phiOut[i] >= 2 * np.pi - ang1 and ang1 < np.pi:
-                flags[i][1] |= self.PHI_BEYOND_PI | self.SOLUTION_OK
+            elif ang1 > np.pi/2 and ang1 < np.pi:
+                if phiOut[i] >= 2 * np.pi - ang1:
+                    flags[i][1] |= self.SOLUTION_OK
+                flags[i][1] |= self.PHI_BEYOND_PI
                 # phiOut > np.pi
                 phi[i][1] = 2 * np.pi - ang1 - phiIn[i]
                 tht[i][1] = (np.angle(relativePositions[i]) - ang2 - tht0[i]) % (2 * np.pi)
@@ -1211,3 +1221,15 @@ class PFI(object):
         cobras = self.allocateCobraRange(range(1,boards//2+1))
 
         return cobras
+
+
+    @classmethod
+    def setModelParameters(cls, thetaParameter=None, phiParameter=None):
+        if thetaParameter is not None:
+            cls.thetaParameter = thetaParameter
+        if phiParameter is not None:
+            cls.phiParameter = phiParameter
+
+    @classmethod
+    def getModelParameters(cls, thetaParameter=None, phiParameter=None):
+        return cls.thetaParameter, cls.phiParameter
