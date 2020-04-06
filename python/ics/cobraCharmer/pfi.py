@@ -121,6 +121,15 @@ class PFI(object):
         res = func.DIA()
         self.logger.info("Board Counts: %s" %(res) )
 
+    def admin(self, debugLevel=0):
+        """ Set debug level, get version and uptime """
+        err, version, uptime = func.ADMIN(debugLevel=debugLevel)
+        if err:
+            self.logger.error(f'send ADMIN command failed')
+        else:
+            self.logger.debug(f'send ADMIN command succeeded')
+        return version, uptime
+
     def power(self, sectors=0x3f):
         """ Set COBRA PSU on/off """
         err = func.POW(sectors)
