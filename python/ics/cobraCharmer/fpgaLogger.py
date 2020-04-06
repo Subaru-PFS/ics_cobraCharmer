@@ -85,8 +85,7 @@ class FPGAProtocolLogger(object):
                             proto.HOUSEKEEPING_CMD: self.housekeepingHandler,
                             proto.POWER_CMD: self.powerHandler,
                             proto.DIAG_CMD: self.diagHandler,
-                            proto.FLUSH_CMD: self.flushHandler,
-                            proto.EXIT_CMD: self.exitHandler,}
+                            proto.ADMIN_CMD: self.adminHandler,}
 
     def log(self, item):
         """ Accept something passed in from the main process.
@@ -127,6 +126,8 @@ class FPGAProtocolLogger(object):
                 tlmType = int(tlm[0])
                 if tlmType == proto.DIAG_CMD:
                     self.diagTlmHandler(tlm)
+                elif tlmType == proto.ADMIN_CMD:
+                    self.adminTlmHandler(tlm)
                 else:
                     self.mainTlmHandler(tlm)
         except Exception as e:
@@ -258,6 +259,17 @@ class FPGAProtocolLogger(object):
             raise RuntimeError(f"incorrect command type; expected {expectedCmd}, got {cmd}")
         self.logger.info(f"CMD diag cmdNum= {cmdNum} timeLimit= {timeLimit}")
 
+    def adminHandler(self, header, data):
+        """ ADMIN command """
+
+        expectedCmd = proto.ADMIN_CMD
+
+        cmd, cmdNum, debugLevel, timeLimit, CRC = struct.unpack('>BBBHH', header)
+        if cmd != expectedCmd:
+            raise RuntimeError(f"incorrect command type; expected {expectedCmd}, got {cmd}")
+        self.logger.info(f"CMD admin cmdNum= {cmdNum} timeLimit= {timeLimit}")
+        self.logger.info("    debugLevel=%d" % (debugLevel))
+
     def exitHandler(self, header, data):
         """ EXIT command, just for the simulator. """
 
@@ -327,3 +339,15 @@ class FPGAProtocolLogger(object):
         errorString = self.errors.get(int(errorCode), f"UNKNOWN ERROR CODE {errorCode}")
 
         self.logger.info(f"TLM DIAG {cmd} cmdNum= {cmdNum} inventory= {inventory} error= {errorCode} {detail} {errorString}")
+
+    def adminTlmHandler(self, tlm):
+        """ Log a reply ("TLM") for an ADMIN commands. """
+
+        if isinstance(tlm, (bytes, bytearray)):
+            cmd, cmdNum, major, minor, uptime, errorCode, detail = struct.unpack('BBBBLHH', tlm)
+        else:
+            cmd, cmdNum, major, minor, uptime, errorCode, detail = tlm
+        errorString = self.errors.get(int(errorCode), f"UNKNOWN ERROR CODE {errorCode}")
+
+        self.logger.info(f"TLM ADMIN {cmd} cmdNum= {cmdNum} version= {major}.{minor} uptime= {uptime} error= {errorCode} {detail} {errorString}")
+        
