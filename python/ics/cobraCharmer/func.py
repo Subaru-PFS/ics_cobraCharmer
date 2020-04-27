@@ -288,6 +288,18 @@ def DIA():
     short_log.log("Board Counts: %s" %(boards_per_sector) )
     return boards_per_sector
     
+def ADMIN(debugLevel=0):
+    cmd = CMD_admin(debugLevel=debugLevel)
+    sock.send(cmd, eth_hex_logger, 'h')
+    resp = sock.recv(ADMIN_TLM_LEN, eth_hex_logger, 'h')
+
+    error = int(resp[8])
+    version = f"{resp[2]}.{resp[3]}"
+    uptime = int(resp[4]) << 24 | int(resp[5]) << 16 | int(resp[6]) << 8 | int(resp[7])
+
+    short_log.log("Admin: version=%s, uptime=%d" % (version, uptime))
+    return error, version, uptime/1000
+
 def HK(cobras, export=0, feedback=False, updateModel=None):
     board = cobras[0].board
     nCobras = NCOBRAS_BRD
