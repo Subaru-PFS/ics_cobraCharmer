@@ -371,8 +371,8 @@ class VisDianosticPlot(object):
         qgrid = gridplot([[q1, q2]])
 
         if figPath is not None:
-            export_png(grid,filename=figPath+"motor_speed_histogram.png")
-            export_png(qgrid,filename=figPath+"motor_speed_std.png")
+            export_png(grid,filename=figPath+f"{arm}_motor_speed_histogram.png")
+            export_png(qgrid,filename=figPath+f"{arm}_motor_speed_std.png")
 
     def visAngleMovement(self, figPath=None, arm = 'phi', pdffile=None):
         try:
