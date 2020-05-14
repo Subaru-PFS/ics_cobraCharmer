@@ -233,12 +233,20 @@ class VisDianosticPlot(object):
         if arm is None:
             raise Exception('Define the arm')
         
-        ymax = 1.1*np.rad2deg(np.max(self.mf))
-        ymin = -1.1*np.rad2deg(np.max(self.mr))
+
+        #ymax = 1.1*np.rad2deg(np.max(self.mf))
+        #ymin = -1.1*np.rad2deg(np.max(self.mr))
 
 
 
         for fiber in self.goodIdx:
+            if arm is 'phi':
+                ymax = 0.15
+                ymin = -0.15
+            else:
+                ymax = 0.25
+                ymin = -0.25
+
             width = (fiber + 1) / 2
             
             bar = "\r[" + "#" * int(math.ceil(width)) + " " * int(29 - width) + "]"
@@ -263,7 +271,7 @@ class VisDianosticPlot(object):
                         daf[i] = np.rad2deg(data[i+1] - data[i])/stepsize
                         ax.plot([np.rad2deg(data[i+1]),np.rad2deg(data[i])],[daf[i],daf[i]],color='grey')
             ax.plot(x,np.rad2deg(self.mf[c]), 'r')        
-            #ax.plot(x,np.rad2deg(self.mf2[c]), 'pink')
+           
 
 
             for data in self.ar[c]: 
@@ -272,7 +280,16 @@ class VisDianosticPlot(object):
                         dar[i] = np.rad2deg(data[i+1] - data[i])/stepsize
                         ax.plot([np.rad2deg(data[i+1]),np.rad2deg(data[i])],[dar[i],dar[i]],color='grey')
             ax.plot(x,-np.rad2deg(self.mr[c]), 'r')
-            #ax.plot(x,-np.rad2deg(self.mr2[c]), color='pink')
+            
+            
+            
+            if np.max(np.rad2deg(self.mf[c])) > ymax: 
+                ymax = 1.1*np.max(np.rad2deg(self.mf[c]))
+            if np.min(-np.rad2deg(self.mr[c])) < ymin: 
+                ymin = 1.1*np.min(-np.rad2deg(self.mr[c]))
+            
+            #print(np.max(np.rad2deg(self.mf[c])),
+            #np.max(np.rad2deg(self.mr[c])),ymax,ymin)
             ax.set_ylim([ymin,ymax])
             if arm is 'phi':
                 ax.set_xlim([0,200])
@@ -530,7 +547,7 @@ class VisDianosticPlot(object):
             #    plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
         
         if pdffile is not None:
-            cmd=f"""convert {figPath}Con*_[0-9].png {figPath}Con*_[0-9]?.png {pdffile}"""
+            cmd=f"""convert {figPath}Con*_{arm}_[0-9].png {figPath}Con*_{arm}_[0-9]?.png {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
             print(cmd)
     
