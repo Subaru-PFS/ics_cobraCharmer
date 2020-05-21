@@ -83,9 +83,12 @@ class PFI(object):
         """ Load a motormap XML file. """
         import ics.cobraCharmer.pfiDesign as pfiDesign
         reload(pfiDesign)
-
+        des = pfiDesign.PFIDesign()
+        #des.loadModelFiles(filename)
+        
         if filename is not None:
-            self.calibModel = pfiDesign.PFIDesign(filename)
+            des.loadModelFiles(filename)
+            self.calibModel = des
             self.logger.info(f'load cobra model from {filename}')
         else:
             self.calibModel = pfiDesign.PFIDesign.loadPfi(version, moduleVersion)
