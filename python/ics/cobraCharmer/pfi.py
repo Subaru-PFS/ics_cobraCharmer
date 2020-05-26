@@ -83,9 +83,12 @@ class PFI(object):
         """ Load a motormap XML file. """
         import ics.cobraCharmer.pfiDesign as pfiDesign
         reload(pfiDesign)
-
+        des = pfiDesign.PFIDesign()
+        #des.loadModelFiles(filename)
+        
         if filename is not None:
-            self.calibModel = pfiDesign.PFIDesign(filename)
+            des.loadModelFiles(filename)
+            self.calibModel = des
             self.logger.info(f'load cobra model from {filename}')
         else:
             self.calibModel = pfiDesign.PFIDesign.loadPfi(version, moduleVersion)
@@ -120,6 +123,15 @@ class PFI(object):
         """ Get fpga board inventory"""
         res = func.DIA()
         self.logger.info("Board Counts: %s" %(res) )
+
+    def admin(self, debugLevel=0):
+        """ Set debug level, get version and uptime """
+        err, version, uptime = func.ADMIN(debugLevel=debugLevel)
+        if err:
+            self.logger.error(f'send ADMIN command failed')
+        else:
+            self.logger.debug(f'send ADMIN command succeeded')
+        return version, uptime
 
     def power(self, sectors=0x3f):
         """ Set COBRA PSU on/off """

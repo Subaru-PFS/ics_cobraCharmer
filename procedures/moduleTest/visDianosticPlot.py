@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import math
+import pathlib
 
 from bokeh.io import output_notebook, show, export_png,export_svgs
 from bokeh.plotting import figure, show, output_file
@@ -232,12 +233,20 @@ class VisDianosticPlot(object):
         if arm is None:
             raise Exception('Define the arm')
         
-        ymax = 1.1*np.rad2deg(np.max(self.mf))
-        ymin = -1.1*np.rad2deg(np.max(self.mr))
+
+        #ymax = 1.1*np.rad2deg(np.max(self.mf))
+        #ymin = -1.1*np.rad2deg(np.max(self.mr))
 
 
 
         for fiber in self.goodIdx:
+            if arm is 'phi':
+                ymax = 0.15
+                ymin = -0.15
+            else:
+                ymax = 0.25
+                ymin = -0.25
+
             width = (fiber + 1) / 2
             
             bar = "\r[" + "#" * int(math.ceil(width)) + " " * int(29 - width) + "]"
@@ -262,7 +271,7 @@ class VisDianosticPlot(object):
                         daf[i] = np.rad2deg(data[i+1] - data[i])/stepsize
                         ax.plot([np.rad2deg(data[i+1]),np.rad2deg(data[i])],[daf[i],daf[i]],color='grey')
             ax.plot(x,np.rad2deg(self.mf[c]), 'r')        
-            #ax.plot(x,np.rad2deg(self.mf2[c]), 'pink')
+           
 
 
             for data in self.ar[c]: 
@@ -271,7 +280,16 @@ class VisDianosticPlot(object):
                         dar[i] = np.rad2deg(data[i+1] - data[i])/stepsize
                         ax.plot([np.rad2deg(data[i+1]),np.rad2deg(data[i])],[dar[i],dar[i]],color='grey')
             ax.plot(x,-np.rad2deg(self.mr[c]), 'r')
-            #ax.plot(x,-np.rad2deg(self.mr2[c]), color='pink')
+            
+            
+            
+            if np.max(np.rad2deg(self.mf[c])) > ymax: 
+                ymax = 1.1*np.max(np.rad2deg(self.mf[c]))
+            if np.min(-np.rad2deg(self.mr[c])) < ymin: 
+                ymin = 1.1*np.min(-np.rad2deg(self.mr[c]))
+            
+            #print(np.max(np.rad2deg(self.mf[c])),
+            #np.max(np.rad2deg(self.mr[c])),ymax,ymin)
             ax.set_ylim([ymin,ymax])
             if arm is 'phi':
                 ax.set_xlim([0,200])
@@ -353,8 +371,8 @@ class VisDianosticPlot(object):
         qgrid = gridplot([[q1, q2]])
 
         if figPath is not None:
-            export_png(grid,filename=figPath+"motor_speed_histogram.png")
-            export_png(qgrid,filename=figPath+"motor_speed_std.png")
+            export_png(grid,filename=figPath+f"{arm}_motor_speed_histogram.png")
+            export_png(qgrid,filename=figPath+f"{arm}_motor_speed_std.png")
 
     def visAngleMovement(self, figPath=None, arm = 'phi', pdffile=None):
         try:
@@ -420,6 +438,10 @@ class VisDianosticPlot(object):
             angleLimit = 360
         
         
+        snr_list = np.array([])
+        fiber_list = np.array([])
+        repeat_list = np.array([])
+
         for fiberIdx in self.goodIdx:
             xdata=[]
             ydata=[]
@@ -469,29 +491,24 @@ class VisDianosticPlot(object):
             vax.set_xlabel("Iteration",fontsize=10)
             vax.set_ylabel("Cabra Location (Degree)",fontsize=10)
             
-            # Plot SNR
+            #Plot SNR
             snr_array=[]
-            k_offset=1/(.075)**2
-            tmax=105
+            k_offset=1/(.074)**2
+            tmax=76
             tobs=900
             tstep=x*8+12
-            if arm is 'phi':
-                linklength=0.026
-            else:
-                l1=0.026
-                l2=0.028
-                linklength = np.sqrt((l2-(l1*np.cos(np.deg2rad(60))))**2+(l1*np.sin(np.deg2rad(60)))**2)
+            
+            linklength=2.35
+            
 
             for i in range(runs):
-                angle = margin + (360 - 2 * margin) * i / (runs - 1)
-                if i == 0:
-                    delAngle = (360 - 2 * margin) / (runs - 1)
+                angle = margin + (angleLimit - 2 * margin) * i / (runs - 1)
 
-
-                dist=np.abs(np.deg2rad(angle)-(np.append([0], moveData[fiberIdx,i,:,0])))*linklength
+                dist=2*np.sin(0.5*(np.abs(np.deg2rad(angle)-(np.append([0], moveData[fiberIdx,i,:,0])))))*linklength
                 snr=(1-k_offset*dist**2)*(np.sqrt((tmax+tobs-tstep[0:9])/(tobs)))
+                snr[snr < 0]=0
+                sax.scatter(tstep[0:9],snr,s=50)
                 snr_array.append(snr)
-                sax.scatter(tstep[0:9],snr)
 
             snr_array=np.array(snr_array)
             snr_avg=np.mean(snr_array,axis=0)
@@ -504,11 +521,12 @@ class VisDianosticPlot(object):
             if arm is 'phi':
                 vax.set_ylim([-10,200])
                 hax.set_ylim([-10,200])
-                sax.set_ylim([0.5,1.05])
+                sax.set_ylim([0.5,1.20])
             else:
                 vax.set_ylim([-10,400])
                 vax.set_ylim([-10,400])
-                sax.set_ylim([0.5,1.05])
+                sax.set_ylim([0.5,1.20])
+
             fig.suptitle(f'Fiber No. {fiberIdx+1}',fontsize=15)
             #plt.subplots_adjust(bottom=0.15, wspace=0.05)
             if figPath is not None:
@@ -529,11 +547,181 @@ class VisDianosticPlot(object):
             #    plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
         
         if pdffile is not None:
-            cmd=f"""convert {figPath}Con*_[0-9].png {figPath}Con*_[0-9]?.png {pdffile}"""
+            cmd=f"""convert {figPath}Con*_{arm}_[0-9].png {figPath}Con*_{arm}_[0-9]?.png {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
             print(cmd)
     
-    def visMultiMotorMapfromXML(self, xmlList, figPath=None, arm='phi', pdffile=None):
+    def visModuleSNR(self, figPath = None, arm = 'phi', runs = 50, 
+        margin = 15, pdffile=None):
+
+        if arm is 'phi':
+            phiPath = self.path
+            moveData = np.load(phiPath+'phiData.npy')
+            angleLimit = 180
+        else:
+            thetaPath =  self.path
+            moveData = np.load(thetaPath+'thetaData.npy')
+            angleLimit = 360
+
+        all_snr=[]
+        max_snr=[]
+        it_max =[]
+
+        for fiberIdx in self.goodIdx:
+            max_array=[]
+            snr_array=[]
+            it_array = []
+            
+            k_offset=1/(.075)**2
+            tmax=76
+            tobs=900
+            tstep=np.arange(10)*8+12
+
+            linklength=2.35
+
+
+            for i in range(runs):
+                angle = margin + (angleLimit - 2 * margin) * i / (runs - 1)
+
+                dist=2*np.sin(0.5*(np.abs(np.deg2rad(angle)-(np.append([0], moveData[fiberIdx,i,:,0])))))*linklength            
+                
+                snr=(1-k_offset*dist**2)*(np.sqrt((tmax+tobs-tstep[0:9])/(tobs)))
+                snr[snr < 0]=0
+        
+                snr_array.append(snr)
+                max_array.append(np.max(snr))
+                it_array.append(np.argmax(snr))
+                
+            all_snr.append(snr_array)
+            max_snr.append(max_array)
+            it_max.append(it_array)
+            
+            
+        max_snr = np.array(max_snr)    
+        all_snr = np.array(all_snr)    
+        it_max = np.array(it_max)    
+
+        all_angle = margin + (angleLimit - 2 * margin) * np.arange(runs+1) / (runs)
+        all_fiber = np.arange(58)
+
+
+        fig = plt.figure(figsize=(10, 8),constrained_layout=True)
+        inx=8
+        cmin = np.min(all_snr[:,:,inx])
+        cmax = np.max(all_snr[:,:,inx])
+        sc=plt.pcolor(all_angle, all_fiber, all_snr[:,:,inx],cmap='inferno',vmin=0.95,vmax=cmax)
+        plt.title(f"SNR at {inx}-th iteration", fontsize = 20)
+        plt.xlabel("Angle (Degree)", fontsize = 15)
+        plt.ylabel("Fiber", fontsize = 15)
+        cbaxes = fig.add_axes([1.02,0.1,0.02,0.8]) 
+        cb = fig.colorbar(sc, cax = cbaxes,orientation='vertical')
+        
+        if figPath is not None:
+            if not (os.path.exists(figPath)):
+                os.mkdir(figPath)
+            plt.savefig(figPath+f'snr_iteration_{arm}.png', bbox_inches='tight')
+        else:
+            plt.show()
+        plt.close()
+
+
+
+        fig = plt.figure(figsize=(10, 8),constrained_layout=True)
+        cmin = np.min(max_snr)
+        cmax = np.max(max_snr)
+        sc=plt.pcolor(all_angle, all_fiber,max_snr,cmap='inferno',vmin=0.95,vmax=cmax)
+        plt.title(f"Maximum SNR", fontsize = 20)
+        plt.xlabel("Angle (Degree)", fontsize = 15)
+        plt.ylabel("Fiber", fontsize = 15)
+        cbaxes = fig.add_axes([1.02,0.1,0.02,0.8]) 
+        cb = fig.colorbar(sc, cax = cbaxes,orientation='vertical')
+
+        if figPath is not None:
+            if not (os.path.exists(figPath)):
+                os.mkdir(figPath)
+            plt.savefig(figPath+f'snr_max_{arm}.png', bbox_inches='tight')
+        else:
+            plt.show()
+        plt.close()
+
+
+        fig = plt.figure(figsize=(10, 8),constrained_layout=True)
+        cmin = np.min(it_max)
+        cmax = np.max(it_max)
+        sc=plt.pcolor(all_angle, all_fiber,it_max,cmap='inferno',vmin=0,vmax=cmax)
+        plt.title(f"Iteration of maximum SNR", fontsize = 20)
+        plt.xlabel("Angle (Degree)", fontsize = 15)
+        plt.ylabel("Fiber", fontsize = 15)
+
+        cbaxes = fig.add_axes([1.02,0.1,0.02,0.8]) 
+        cb = fig.colorbar(sc, cax = cbaxes,orientation='vertical')       
+
+        if figPath is not None:
+            if not (os.path.exists(figPath)):
+                os.mkdir(figPath)
+            plt.savefig(figPath+f'snrmax_it_{arm}.png', bbox_inches='tight')
+        else:
+            plt.show()
+        plt.close()
+
+        if pdffile is not None:
+            cmd=f"""convert {figPath}snr_iteration_{arm}.png {figPath}snr_max_{arm}.png \
+                {figPath}snrmax_it_{arm}.png {pdffile}"""
+            retcode = subprocess.call(cmd,shell=True)
+        print(cmd)
+
+    def visConvergeHisto(self, figPath = None, filename = None, arm ='phi', brokens=None, runs = 16, margin = 15, title=None):
+        #brokens = []
+        #badIdx = np.array(brokens) - 1
+        #goodIdx = np.array([e for e in range(57) if e not in badIdx])
+        
+        if arm is 'phi':
+            phiPath = self.path
+            moveData = np.load(phiPath+'phiData.npy')
+            angleLimit = 180
+        else:
+            thetaPath =  self.path
+            moveData = np.load(thetaPath+'thetaData.npy')
+            angleLimit = 360
+                
+        fig, fax = plt.subplots(figsize=(15, 6),ncols=4, nrows=2, constrained_layout=True)
+        fig.suptitle(f'{title}', fontsize=16)
+        for ite in range(8):
+            diff = []
+            #runs = 16
+            #margin = 15
+            for i in range(runs):
+                if runs > 1:
+                    angle = np.deg2rad(margin + (angleLimit - 2 * margin) * i / (runs - 1))
+                else:
+                    angle = np.deg2rad((angleLimit - 2 * margin) / (runs - 1))
+                for cob in self.goodIdx:
+                    diff.append(np.rad2deg(angle - moveData[cob,i,ite,0]))
+            x= (np.arange(100)-50)/100
+            diff = np.array(diff)
+            
+            
+            if ite < 4:
+                fax[int(ite/4), ite%4].hist(diff, bins=100,range=(-10,10))
+                fax[int(ite/4), ite%4].set_xlim([-10, 10])
+                fax[int(ite/4), ite%4].set_ylim([0, 800])
+            else:
+                fax[int(ite/4), ite%4].hist(diff, bins=50,range=(-1,1))
+                fax[int(ite/4), ite%4].set_xlim([-1, 1])
+                fax[int(ite/4), ite%4].set_ylim([0, 400])
+
+            
+            fax[int(ite/4), ite%4].title.set_text(f'{ite} Iteration')   
+
+        if filename is None:
+            plt.savefig(figPath+f'{arm}_convergeHisto.png')
+        else:
+            plt.savefig(figPath+f'{filename}')
+        plt.close()
+
+
+
+    def visMultiMotorMapfromXML(self, xmlList, figPath=None, arm='phi', pdffile=None, fast=False):
         binSize = 3.6
         x=np.arange(112)*3.6
         
@@ -545,23 +733,36 @@ class VisDianosticPlot(object):
             ax = plt.gca()
             
             for xml in xmlList:
-                model = pfiDesign.PFIDesign(xml)
+                model = pfiDesign.PFIDesign(pathlib.Path(xml))
 
                 if arm is 'phi':
                     slowFWmm = np.rad2deg(model.angularSteps[i]/model.S2Pm[i])
                     slowRVmm = np.rad2deg(model.angularSteps[i]/model.S2Nm[i])
+                    fastFWmm = np.rad2deg(model.angularSteps[i]/model.F2Pm[i])
+                    fastRVmm = np.rad2deg(model.angularSteps[i]/model.F2Nm[i])
                 else:
                     slowFWmm = np.rad2deg(model.angularSteps[i]/model.S1Pm[i])
                     slowRVmm = np.rad2deg(model.angularSteps[i]/model.S1Nm[i])
+                    fastFWmm = np.rad2deg(model.angularSteps[i]/model.F1Pm[i])
+                    fastRVmm = np.rad2deg(model.angularSteps[i]/model.F1Nm[i])
+
+                labeltext=os.path.splitext(os.path.basename(xml))[0]
                 
-                labeltext=os.path.basename(os.path.dirname(xml))
-                ln1 = ax.plot(x,slowFWmm,label=f'{labeltext} Fwd')
-                ln2 = ax.plot(x,-slowRVmm,label=f'{labeltext} Rev')
+                if fast is True:
+                    ln1 = ax.plot(x,fastFWmm,label=f'{labeltext} Fwd')
+                    ln2 = ax.plot(x,-fastRVmm,label=f'{labeltext} Rev')
+                else:
+                    ln1 = ax.plot(x,slowFWmm,label=f'{labeltext} Fwd')
+                    ln2 = ax.plot(x,-slowRVmm,label=f'{labeltext} Rev')
 
             ax.set_title(f'Fiber {arm} #{i+1}')
             ax.legend()
             if arm is 'phi':
                 ax.set_xlim([0,200])
+                if fast is 'False':
+                    ax.set_ylim([-0.15,0.15])
+                else:
+                    ax.set_ylim([-0.25,0.25])
             else:
                 ax.set_xlim([0,400])
                 ax.set_ylim([-0.3,0.3])
@@ -579,7 +780,7 @@ class VisDianosticPlot(object):
 
 
         if pdffile is not None:
-            cmd=f"""convert {figPath}motormap*_[0-9].png {figPath}motormap*_[0-9]?.png {pdffile}"""
+            cmd=f"""convert {figPath}motormap*{arm}*_[0-9].png {figPath}motormap*{arm}*_[0-9]?.png {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
             print(cmd)
 
@@ -619,7 +820,7 @@ class VisDianosticPlot(object):
                     slowFWmm = np.rad2deg(model.angularSteps[i]/model.S1Pm[i])
                     slowRVmm = np.rad2deg(model.angularSteps[i]/model.S1Nm[i])
                 
-                labeltext=os.path.basename(os.path.dirname(f))[-6:]
+                labeltext=os.path.splitext(os.path.basename(f))[0]
                 ln1=ax1.plot(x,np.abs(slowFWmm-baseSlowFWmm)/baseSlowFWmm,
                     marker=f'${m}$', markersize=13, label=f'{labeltext} Fwd' )
                 ln2=ax2.plot(x,np.abs(slowRVmm-baseSlowRVmm)/baseSlowRVmm,
