@@ -477,6 +477,10 @@ class PFI(object):
         mapId = cobraState.mapId(cobraId, motor, direction)
         existingScale = cobraState.motorScales.get(mapId, 1.0)
 
+        if scale <= 0:
+            self.logger.warn(f'scale is negative, give up scaling: {scale}')
+            return cobraState.motorScales[mapId]
+
         if motor == 'theta':
             b0 = self.thetaParameter
             if fast:
@@ -516,12 +520,12 @@ class PFI(object):
             return existingScale
 
         newScale = newOntime / ontime
-        if newScale < 0.5:
-            self.logger.warn(f'clipping scale adjustment from {newScale} to 0.5')
-            newScale = 0.5
-        if newScale > 2.0:
-            self.logger.warn(f'clipping scale adjustment from {newScale} to 2.0')
-            newScale = 2.0
+        if newScale < 0.3:
+            self.logger.warn(f'clipping scale adjustment from {newScale} to 0.3')
+            newScale = 0.3
+        if newScale > 3.0:
+            self.logger.warn(f'clipping scale adjustment from {newScale} to 3.0')
+            newScale = 3.0
 
         cobraState.motorScales[mapId] = newScale
         self.logger.debug(f'setadjust {mapId} {existingScale:0.2f} -> {newScale:0.2f}')
@@ -829,7 +833,7 @@ class PFI(object):
             raise RuntimeError("number of phi angles must match number of cobras")
 
         cIdx = np.array([self._mapCobraIndex(c) for c in cobras])
-        thtRange = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx]) % (2*np.pi) + (2*np.pi)
+        thtRange = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx] + np.pi) % (2*np.pi) + np.pi
         if np.any(np.zeros(len(cIdx)) > thetaAngles) or np.any(thtRange < thetaAngles):
             self.logger.error('Some theta angles are out of range')
         phiRange = self.calibModel.phiOut[cIdx] - self.calibModel.phiIn[cIdx]

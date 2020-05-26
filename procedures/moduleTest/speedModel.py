@@ -4,7 +4,7 @@ from scipy import optimize
 
 class SpeedModel():
     def __init__(self, p0=1.0, p1=0.08, p2=2, logLevel=logging.INFO):
-        self.logger = logging.getLogger('moduleTest')
+        self.logger = logging.getLogger('speedModel')
         self.logger.setLevel(logLevel)
         self.p0 = p0
         self.p1 = p1

@@ -20,7 +20,7 @@ class AsrdCamera(Camera):
         if self.simulationPath is not None:
             return None
 
-        from idsCamera import idsCamera
+        from procedures.idsCamera import idsCamera
         cams = []
         for devId in self.devIds:
             cam = idsCamera(devId)
