@@ -1,10 +1,6 @@
 import logging
 import os
 
-LOG_TYPES = ["Short", "Medium", "Full", "Dia"]
-NUM_LOGS = 4
-LOGS = [] # Filled in after declaration
-
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(filename)s:%(lineno)s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
 
@@ -24,12 +20,6 @@ class Logger:
 
     def getFilePath(self):
         return os.path.join(self.filePath, self.fileName)
-
-    def setup(self, propagate=True):
-        pass
-
-    def debug(self, text):
-        self.logger.debug(text)
 
     def log(self, text, enable=True):
         if(enable):

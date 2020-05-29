@@ -4,7 +4,6 @@ import struct
 import multiprocessing
 
 from . import convert
-from .convert import get_freq, conv_temp, conv_volt, conv_current
 from . import fpgaProtocol as proto
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(filename)s:%(lineno)s %(message)s",
@@ -42,7 +41,7 @@ class FPGAProtocolLogger(object):
     A logger for the PFI FPGA protocol.
 
     The FPGA implements six commands: move, calibrate, setFrequencies,
-    getHousekeeping, reset, and diagnostic. We accept all of these,
+    getHousekeeping, power/reset, and diagnostic. We accept all of these,
     neatly log the contents, and generate fake-ish responses when
     required.
 

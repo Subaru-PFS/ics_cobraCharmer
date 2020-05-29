@@ -91,7 +91,7 @@ class Motor(object):
         newOntime = ontime*scale
         if newOntime > self.maxThetaOntime:
             newOntime = self.maxThetaOntime
-            cobraState.motorScales[mapId] = newOntime/ontime
+            self.ontimeScales[direction] = newOntime/ontime
             self.logger.warn(f'clipping {mapId} ontime to {newOntime} and '
                              f'scale {scale:0.2f} to {cobraState.motorScales[mapId]}')
 
