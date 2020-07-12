@@ -1,6 +1,8 @@
 from importlib import reload
 import logging
 
+import numpy as np
+
 from pfs.utils import fiberids
 
 class FPGA(object):
@@ -68,8 +70,8 @@ class FPGA(object):
             okMotors = c.usableStatus()
             if force:
                 okMotors = (True, True)
-            en = (en[0] && okMotors[0],
-                  en[1] && okMotors[1])
+            en = (en[0] and okMotors[0],
+                  en[1] and okMotors[1])
 
             if _thetaFast[c_i]:
                 if dirs1[0] == 'cw':

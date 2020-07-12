@@ -27,7 +27,7 @@ class Motor(object):
         self.limits = limits
         self.ontimeScales = dict(fwd=1.0, rev=1.0)
         self.maps = dict(fwd=None, rev=None)
-        self.setMaps(fwdMap=fwdMap,rvMap=revMap)
+        self.setMaps(fwdMap=fwdMap,revMap=revMap)
 
     def useableStatus(self):
         return (not (self.status & (CobraStatus.COBRA_INVISIBLE | CobraStatus.COBRA_BROKEN_THETA)),
