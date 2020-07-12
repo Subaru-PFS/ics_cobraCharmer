@@ -7,7 +7,7 @@ class MotorMap(object):
     yaml_tag = "!MotorMap"
 
     def __init__(self, name, cobraId=None, motor=None, direction=None, angles=None, steps=None, ontimes=None):
-        """Encapsulate a 2019 motor map. Currently only un/pickles. """
+        """Encapsulate a motor map: currently a mapping between angles and steps&ontimes. """
         self.name = name
         self._initFromParts(cobraId=cobraId,
                             motor=motor, direction=direction,
@@ -40,8 +40,13 @@ class MotorMap(object):
                 f" angles={np.round(self.angles,3)}, steps={self.steps.tolist()},"
                 f" ontime={np.round(self.ontimes,3)})")
 
-    def calculateSteps(self, fromAngle, toAngle):
-        """ Return the steps and ontime to move between two angles.
+    def updateMap(self, steps, ontime, angles=None):
+        """
+        """
+        raise NotImplementedError()
+
+    def calculateMove(self, fromAngle, toAngle):
+        """Return the steps and ontime to move between two angles.
 
         Args
         ----
@@ -51,8 +56,7 @@ class MotorMap(object):
 
         Returns
         -------
-        int : steps to move
-        float : ontime to use
+        moves : [ (int steps, float ontime) ]
 
         """
         dAngle = toAngle - fromAngle
@@ -67,9 +71,11 @@ class MotorMap(object):
             raise ValueError(f"{self} angle to step interpolation out of range: "
                              f"from:{fromAngle} to={toAngle}")
         steps = np.rint(stepRange[1] - stepRange[0]).astype('i4')
+
+        # We want to use np.simps or some other integration, then get the average?
         ontime = self.ontime[0]
 
-        return steps, ontime
+        return [(steps, ontime)]
 
     @staticmethod
     def to_yaml(dumper, self):
