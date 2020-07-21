@@ -56,7 +56,7 @@ class PFIDesign():
             return
 
         self.loadModelFiles([fileName])
-        self.moduleIds[:] = 1
+        #self.moduleIds[:] = 1
 
     @classmethod
     def loadModule(cls, moduleName, version=None):
