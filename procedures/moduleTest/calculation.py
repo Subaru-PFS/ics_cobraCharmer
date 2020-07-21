@@ -55,8 +55,8 @@ class Calculation():
             brokens = []
         if bads is None:
             bads = brokens
-        visibles = [e for e in range(1, 58) if e not in brokens]
-        usables = [e for e in range(1, 58) if e not in bads]
+        visibles = [e for e in range(1, len(self.calibModel.centers)+1) if e not in brokens]
+        usables = [e for e in range(1, len(self.calibModel.centers)+1) if e not in bads]
         self.badIdx = np.array(bads, dtype=int) - 1
         self.goodIdx = np.array(usables, dtype=int) - 1
         self.invisibleIdx = np.array(brokens, dtype=int) - 1
@@ -140,7 +140,8 @@ class Calculation():
             centers = self.calibModel.centers[idx]
         else:
             centers = guess[:len(idx)]
-
+        
+        #print(centers)
         measPos = np.array(objects['x'] + objects['y']*(1j))
         target = lazyIdentification(centers, measPos, radii=radii)
 
@@ -181,8 +182,8 @@ class Calculation():
 
     def phiCenterAngles(self, phiFW, phiRV):
         # variable declaration for phi angles
-        phiCenter = np.zeros(57, dtype=complex)
-        phiRadius = np.zeros(57, dtype=float)
+        phiCenter = np.zeros(len(self.calibModel.centers), dtype=complex)
+        phiRadius = np.zeros(len(self.calibModel.centers), dtype=float)
         phiAngFW = np.zeros(phiFW.shape, dtype=float)
         phiAngRV = np.zeros(phiFW.shape, dtype=float)
 
@@ -252,8 +253,8 @@ class Calculation():
 
     def thetaCenterAngles(self, thetaFW, thetaRV):
         # variable declaration for theta angles
-        thetaCenter = np.zeros(57, dtype=complex)
-        thetaRadius = np.zeros(57, dtype=float)
+        thetaCenter = np.zeros(len(self.calibModel.centers), dtype=complex)
+        thetaRadius = np.zeros(len(self.calibModel.centers), dtype=float)
         thetaAngFW = np.zeros(thetaFW.shape, dtype=float)
         thetaAngRV = np.zeros(thetaFW.shape, dtype=float)
 
@@ -294,9 +295,9 @@ class Calculation():
 
     def motorMaps(self, angFW, angRV, steps, delta=0.1):
         """ use Johannes weighting for motor maps, delta is the margin for detecting hard stops """
-        mmFW = np.zeros((57, regions), dtype=float)
-        mmRV = np.zeros((57, regions), dtype=float)
-        bad = np.full(57, False)
+        mmFW = np.zeros((len(self.calibModel.centers), regions), dtype=float)
+        mmRV = np.zeros((len(self.calibModel.centers), regions), dtype=float)
+        bad = np.full(len(self.calibModel.centers), False)
         repeat = angFW.shape[1]
         iteration = angFW.shape[2] - 1
 
@@ -439,8 +440,8 @@ class Calculation():
 
     def speed(self, angFW, angRV, steps, delta=0.1):
         # calculate average speed
-        speedFW = np.zeros(57, dtype=float)
-        speedRV = np.zeros(57, dtype=float)
+        speedFW = np.zeros(len(self.calibModel.centers), dtype=float)
+        speedRV = np.zeros(len(self.calibModel.centers), dtype=float)
         repeat = angFW.shape[1]
         iteration = angFW.shape[2] - 1
 
