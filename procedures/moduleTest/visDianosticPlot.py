@@ -37,7 +37,7 @@ class VisDianosticPlot(object):
         else:
             self.brokens = brokens
      
-        self.visibles= [e for e in range(1,58) if e not in brokens]
+        self.visibles= [e for e in range(1,514) if e not in brokens]
         self.badIdx = np.array(brokens) - 1
         self.goodIdx = np.array(self.visibles) - 1
 
@@ -308,7 +308,8 @@ class VisDianosticPlot(object):
         self.visSpeedHisto(arm=f'{arm}', figPath=f'{figPath}')
 
         if pdffile is not None:
-            cmd=f"""convert {figPath}motormap*_[0-9].png {figPath}motormap*_[0-9]?.png {pdffile}"""
+            cmd=f"""convert {figPath}motormap*_[0-9].png {figPath}motormap*_[0-9]?.png \
+            {figPath}motormap*_[0-9]??.png {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
             if debug is True:
                 print(cmd)
@@ -422,7 +423,7 @@ class VisDianosticPlot(object):
 
         if pdffile is not None:
             cmd=f"""convert {figPath}FiberSpeed.png {figPath}AngleMove*_[0-9].png \
-                {figPath}AngleMove*_[0-9]?.png {pdffile}"""
+                {figPath}AngleMove*_[0-9]?.png {figPath}AngleMove*_[0-9]??.png {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
             print(cmd)
 
@@ -516,7 +517,8 @@ class VisDianosticPlot(object):
             sax.plot(tstep[0:9],snr_avg,color='green',linewidth=4)
             sax.scatter(tstep[0:9],snr_avg,color='green',s=100)
             sax.set_title('SNR = %.3f'%(np.max(snr_avg)),fontsize=20)
-
+            if np.max(snr_avg) < 0.95:
+                print(f'Fiber {fiberIdx+1} SNR {np.max(snr_avg)}')
 
             if arm is 'phi':
                 vax.set_ylim([-10,200])
@@ -547,7 +549,8 @@ class VisDianosticPlot(object):
             #    plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
         
         if pdffile is not None:
-            cmd=f"""convert {figPath}Con*_{arm}_[0-9].png {figPath}Con*_{arm}_[0-9]?.png {pdffile}"""
+            cmd=f"""convert {figPath}Con*_{arm}_[0-9].png {figPath}Con*_{arm}_[0-9]?.png \
+            {figPath}Con*_{arm}_[0-9]??.png  {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
             print(cmd)
     
@@ -602,7 +605,7 @@ class VisDianosticPlot(object):
         it_max = np.array(it_max)    
 
         all_angle = margin + (angleLimit - 2 * margin) * np.arange(runs+1) / (runs)
-        all_fiber = np.arange(58)
+        all_fiber = np.arange(513)
 
 
         fig = plt.figure(figsize=(10, 8),constrained_layout=True)
@@ -780,7 +783,8 @@ class VisDianosticPlot(object):
 
 
         if pdffile is not None:
-            cmd=f"""convert {figPath}motormap*{arm}*_[0-9].png {figPath}motormap*{arm}*_[0-9]?.png {pdffile}"""
+            cmd=f"""convert {figPath}motormap*{arm}*_[0-9].png {figPath}motormap*{arm}*_[0-9]?.png \
+            {figPath}motormap*{arm}*_[0-9]?.png {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
             print(cmd)
 
@@ -911,7 +915,8 @@ class VisDianosticPlot(object):
         plt.close()
 
         if pdffile is not None:
-            cmd=f"""convert {figPath}motormap*_[0-9].png {figPath}motormap*_[0-9]?.png {pdffile}"""
+            cmd=f"""convert {figPath}motormap*_[0-9].png {figPath}motormap*_[0-9]?.png \
+            {figPath}motormap*_[0-9]?.png {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
             print(cmd)
         return var_fwd,var_rev
