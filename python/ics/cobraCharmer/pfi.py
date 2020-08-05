@@ -24,8 +24,8 @@ class PFI(object):
     IN_OVERLAPPING_REGION    = 0x0002  # 1 if the position in overlapping region
     PHI_NEGATIVE             = 0x0004  # 1 if phi angle is negative(phi CCW limit < 0)
     PHI_BEYOND_PI            = 0x0008  # 1 if phi angle is beyond PI(phi CW limit > PI)
-    TOO_CLOSE_TO_CENTER      = 0x0016  # 1 if the position is too close to the center
-    TOO_FAR_FROM_CENTER      = 0x0032  # 1 if the position is too far from the center
+    TOO_CLOSE_TO_CENTER      = 0x0010  # 1 if the position is too close to the center
+    TOO_FAR_FROM_CENTER      = 0x0020  # 1 if the position is too far from the center
 
     # on time vs speed model parameters
     thetaParameter = 0.09
@@ -54,7 +54,7 @@ class PFI(object):
         self.maxThetaOntime = 0.10
         self.maxPhiOntime = 0.08
         self.maxThetaSteps = 10000
-        self.maxPhiSteps = 7000
+        self.maxPhiSteps = 6000
 
         if fpgaHost == 'fpga':
             fpgaHost = '128.149.77.24'  # A JPL address which somehow got burned into the FPGAs. See INSTRM-464
@@ -468,7 +468,7 @@ class PFI(object):
         direction : {'ccw', 'cw'}
            Which motor map to adjust
         scale : `float`
-           Scaling for the motor speed
+           Ontime scaling for the motor speed
         fast : `bool`
            Using fast or slow motor map
         """
@@ -517,20 +517,22 @@ class PFI(object):
         newOntime = np.sqrt(a1*a1 - b0*b0)
         if not np.isfinite(newOntime):
             self.logger.warn(f'invalid scaling adjustment, give up')
-            return existingScale
+            return 1.0
 
-        newScale = newOntime / ontime
-        if newScale < 0.3:
-            self.logger.warn(f'clipping scale adjustment from {newScale} to 0.3')
-            newScale = 0.3
-        if newScale > 3.0:
-            self.logger.warn(f'clipping scale adjustment from {newScale} to 3.0')
-            newScale = 3.0
+        ontimeScale = newOntime / ontime
+        if ontimeScale < 0.3:
+            self.logger.warn(f'clipping scale adjustment from {ontimeScale} to 0.3')
+            ontimeScale = 0.3
+        if ontimeScale > 3.0:
+            self.logger.warn(f'clipping scale adjustment from {ontimeScale} to 3.0')
+            ontimeScale = 3.0
+        trueOntime = ontimeScale * ontime
+        trueScale = (np.sqrt(trueOntime*trueOntime + b0*b0) - b0) / a0
 
-        cobraState.motorScales[mapId] = newScale
-        self.logger.debug(f'setadjust {mapId} {existingScale:0.2f} -> {newScale:0.2f}')
+        cobraState.motorScales[mapId] = ontimeScale
+        self.logger.debug(f'setadjust {mapId} {existingScale:0.2f} -> {ontimeScale:0.2f}')
 
-        return newScale
+        return trueScale
 
     def adjustThetaOnTime(self, cobraId, ontime, fast, direction):
         mapId = cobraState.mapId(cobraId, 'theta', direction)
@@ -633,7 +635,7 @@ class PFI(object):
                     ontime1 = self.calibModel.motorOntimeSlowFwd1[cobraId]
                 else:
                     ontime1 = self.calibModel.motorOntimeSlowRev1[cobraId]
-                ontime1 = self.adjustThetaOnTime(cobraId, ontime1, fast=_thetaFast[c_i], direction=dirs1[0])
+            ontime1 = self.adjustThetaOnTime(cobraId, ontime1, fast=_thetaFast[c_i], direction=dirs1[0])
 
             if _phiFast[c_i]:
                 if dirs1[1] == 'cw':
@@ -645,7 +647,7 @@ class PFI(object):
                     ontime2 = self.calibModel.motorOntimeSlowFwd2[cobraId]
                 else:
                     ontime2 = self.calibModel.motorOntimeSlowRev2[cobraId]
-                ontime2 = self.adjustPhiOnTime(cobraId, ontime2, fast=_phiFast[c_i], direction=dirs1[1])
+            ontime2 = self.adjustPhiOnTime(cobraId, ontime2, fast=_phiFast[c_i], direction=dirs1[1])
 
             offtime1 = 0
             offtime2 = 0
@@ -765,19 +767,24 @@ class PFI(object):
         # Calculate the total number of motor steps for each angle
         nThtSteps = np.empty(nCobras)
         nPhiSteps = np.empty(nCobras)
+        cobras = self.getAllDefinedCobras()
 
         for c in range(nCobras):
+            cobraId = self._mapCobraIndex(cobras[c])
+
             # Get the integrated step maps for the theta angle
             if deltaTht[c] >= 0:
                 if _thetaFast[c]:
                     thtSteps = self.calibModel.posThtSteps[c]
                 else:
                     thtSteps = self.calibModel.posThtSlowSteps[c]
+                mapId = cobraState.mapId(cobraId, 'theta', 'cw')
             else:
                 if _thetaFast[c]:
                     thtSteps = self.calibModel.negThtSteps[c]
                 else:
                     thtSteps = self.calibModel.negThtSlowSteps[c]
+                mapId = cobraState.mapId(cobraId, 'theta', 'ccw')
 
             # Get the integrated step maps for the phi angle
             if deltaPhi[c] >= 0:
@@ -785,11 +792,13 @@ class PFI(object):
                     phiSteps = self.calibModel.posPhiSteps[c]
                 else:
                     phiSteps = self.calibModel.posPhiSlowSteps[c]
+                mapId = cobraState.mapId(cobraId, 'phi', 'cw')
             else:
                 if _phiFast[c]:
                     phiSteps = self.calibModel.negPhiSteps[c]
                 else:
                     phiSteps = self.calibModel.negPhiSlowSteps[c]
+                mapId = cobraState.mapId(cobraId, 'phi', 'ccw')
 
             # Calculate the total number of motor steps for the theta movement
             stepsRange = np.interp([startTht[c], startTht[c] + deltaTht[c]], self.calibModel.thtOffsets[c],

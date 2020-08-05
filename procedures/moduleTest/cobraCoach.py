@@ -66,7 +66,8 @@ class CobraCoach():
         self.phiScaleFactor = 2.0
         self.minThetaStepsForScaling = 10
         self.minPhiStepsForScaling = 10
-        self.constantSpeedScaling = False
+        self.constantThetaSpeed = np.deg2rad(0.06)
+        self.constantPhiSpeed = np.deg2rad(0.06)
         self.minScalingAngle = np.deg2rad(2.0)
         self.thetaModel = SpeedModel(p1=self.thetaModelParameter)
         self.phiModel = SpeedModel(p1=self.phiModelParameter)
@@ -91,7 +92,7 @@ class CobraCoach():
         self.connect()
 
     def setScaling(self, enabled=True, thetaScaleFactor=None, phiScaleFactor=None,
-                   minThetaSteps=None, minPhiSteps=None, constantSpeedScaling=None):
+                   minThetaSteps=None, minPhiSteps=None):
         """ enable/disable motor scaling """
         self.useScaling = enabled
         if thetaScaleFactor is not None:
@@ -102,8 +103,6 @@ class CobraCoach():
             self.minThetaStepsForScaling = minThetaSteps
         if minPhiSteps is not None:
             self.minPhiStepsForScaling = minPhiSteps
-        if constantSpeedScaling is not None:
-            self.constantSpeedScaling = constantSpeedScaling
 
     def _setupCobras(self):
         """ define the broken/good cobras """
@@ -188,7 +187,7 @@ class CobraCoach():
         self.logger.info(f'Current positions: {np.round(self.cobraInfo["position"],1)}')
         if self.useScaling:
             self.logger.info(f'Scaling enabled, Scaling Factor: {self.thetaScaleFactor}/{self.phiScaleFactor}, '
-                             'Min Steps: {self.minThetaStepsForScaling}/{self.minPhiStepsForScaling}')
+                             f'Min Steps: {self.minThetaStepsForScaling}/{self.minPhiStepsForScaling}')
         else:
             self.logger.info(f'Scaling disabled')
 
@@ -327,7 +326,7 @@ class CobraCoach():
             raise RuntimeError("number of expected phi angles must match number of cobras")
 
         # move and expose
-        self.pfi.moveSteps(cobras, thetaSteps, phiSteps, thetaFast=thetaFast, phiFast=phiFast)
+        self.pfi.moveSteps(cobras, np.clip(thetaSteps, -10000, 10000), np.clip(phiSteps, -6000, 6000), thetaFast=thetaFast, phiFast=phiFast)
         pos = np.zeros(self.nCobras, 'complex')
         pos[self.visibleIdx] = self.exposeAndExtractPositions()
         thetas, phis, flags = self.pfi.positionsToAngles(self.allCobras, pos)
@@ -354,12 +353,12 @@ class CobraCoach():
             self.moveInfo['phiOntime'][cId] = cobras[c_i].p.pulses[1] / 1000
 
             # check theta/phi solution
-            if flags[cId][0] & self.pfi.SOLUTION_OK != 0:
+            if flags[cId, 0] & self.pfi.SOLUTION_OK != 0:
                 theta = thetas[cId, 0]
-            elif flags[cId][0] & self.pfi.TOO_FAR_FROM_CENTER != 0:
+            elif flags[cId, 0] & self.pfi.TOO_FAR_FROM_CENTER != 0:
                 self.logger.warn(f'Cobra#{cId+1} is too far from center')
                 theta = thetas[cId, 0]
-            elif flags[cId][0] & self.pfi.TOO_CLOSE_TO_CENTER != 0:
+            elif flags[cId, 0] & self.pfi.TOO_CLOSE_TO_CENTER != 0:
                 self.logger.warn(f'Cobra#{cId+1} is too close to center')
                 theta = self.cobraInfo['thetaAngle'][cId] + expectedThetas[c_i]
             phi = phis[cId, 0]
@@ -637,7 +636,7 @@ class CobraCoach():
     def moveToHome(self, cobras, thetaEnable=False, phiEnable=False, thetaCCW=True):
         """ move arms to hard stop positions """
         if not thetaEnable and not phiEnable:
-            self.logger.info('Both arms are diabled, ignore the command')
+            self.logger.info('Both arms are disabled, ignore the command')
             return
 
         if thetaEnable:
@@ -657,31 +656,46 @@ class CobraCoach():
         else:
             phiSteps = 0
 
+        cIds = self._getIndex(cobras)
+
         # move cobras and update information
         self.logger.info(f'home cobras: theta={thetaSteps}, phi={phiSteps}')
         self.pfi.moveAllSteps(cobras, thetaSteps, phiSteps, thetaFast=True, phiFast=True)
 
-        cIds = self._getIndex(cobras)
-        thetas = np.zeros(len(cobras))
-        phis = np.zeros(len(cobras))
-        if not thetaCCW:
-            thetas = (self.calibModel.tht1[cIds] - self.calibModel.tht0[cIds] + np.pi) % (np.pi*2) + np.pi
+        # update current positions
+        self.cobraInfo['position'][self.visibleIdx] = self.exposeAndExtractPositions()
+        diff = None
 
-        if self.mode == self.thetaMode:
-            self.thetaInfo['angle'][cIds] = thetas
-        elif self.mode == self.phiMode:
-            self.phiInfo['angle'][cIds] = phis
+        if thetaEnable:
+            if thetaCCW:
+                thetas = np.zeros(len(cobras))
+            else:
+                thetas = (self.calibModel.tht1[cIds] - self.calibModel.tht0[cIds] + np.pi) % (np.pi*2) + np.pi
+            self.cobraInfo['thetaAngle'][cIds] = thetas
+            if self.mode == self.thetaMode and self.thetaInfoIsValid:
+                thetas2 = (np.angle(self.cobraInfo['position'] - self.thetaInfo['center']) - self.thetaInfo['ccwHome'])[cIds]
+                if thetaCCW:
+                    self.thetaInfo['angle'][cIds] = (thetas2 + np.pi) % (np.pi*2) - np.pi
+                    diff = self.thetaInfo['angle'][cIds]
+                else:
+                    self.thetaInfo['angle'][cIds] = (thetas2 + np.pi) % (np.pi*2) + np.pi
+                    diff = calculus.diffAngle(self.thetaInfo['angle'], self.thetaInfo['cwHome'] - self.thetaInfo['ccwHome'])[cIds]
         else:
-            if thetaEnable:
-                self.cobraInfo['thetaAngle'][cIds] = thetas
-            else:
-                thetas = self.cobraInfo['thetaAngle'][cIds]
-            if phiEnable:
-                self.cobraInfo['phiAngle'][cIds] = phis
-            else:
-                phis = self.cobraInfo['phiAngle'][cIds]
+            thetas = self.cobraInfo['thetaAngle'][cIds]
 
-        self.cobraInfo['position'][cIds] = self.pfi.anglesToPositions(cobras, thetas, phis)
+        if phiEnable:
+            phis = np.zeros(len(cobras))
+            self.cobraInfo['phiAngle'][cIds] = phis
+            if self.mode == self.phiMode and self.phiInfoIsValid:
+                diff = calculus.diffAngle(np.angle(self.cobraInfo['position'] - self.phiInfo['center']), self.phiInfo['ccwHome'])[cIds]
+                self.phiInfo['angle'][cIds] = diff
+        else:
+            phis = self.cobraInfo['phiAngle'][cIds]
+
+        if self.mode == self.normalMode and thetaEnable and phiEnable:
+            diff = np.abs(self.cobraInfo['position'][cIds] - self.pfi.anglesToPositions(cobras, thetas, phis))
+
+        return diff
 
     def setCurrentAngles(self, cobras, thetaAngles=None, phiAngles=None):
         """ set current theta and phi angles """
