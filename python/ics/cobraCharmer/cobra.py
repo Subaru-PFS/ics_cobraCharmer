@@ -220,6 +220,9 @@ class Cobra(object):
     def xyToThetaPhi(self, x, y):
         pass
 
+    def thetaPhiToXY(self, theta, phi):
+        pass
+
     def calculateSteps(self, startTht, deltaTht, startPhi, deltaPhi,
                        thetaFast=False, phiFast=False):
         """ Modified from ics_cobraOps MotorMapGroup.py
