@@ -826,7 +826,7 @@ class CobraCoach():
             self.thetaInfoIsValid = True
 
     def thetaFWDone(self, thetas, k, needAtEnd=3,
-                    closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
+                    closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(5)):
         """ Return a mask of the cobras which we deem at the FW theta limit.
 
         Args
@@ -859,7 +859,7 @@ class CobraCoach():
             return None, None
 
     def thetaRVDone(self, thetas, k, needAtEnd=3,
-                    closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
+                    closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(5)):
         """ Return a mask of the cobras which we deem at the RV theta limit.
 
         See `thetaFWDone`
@@ -871,7 +871,7 @@ class CobraCoach():
         else:
             return None, None
 
-    def phiFWDone(self, phis, k, needAtEnd=3, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
+    def phiFWDone(self, phis, k, needAtEnd=3, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(5)):
         """ Return a mask of the cobras which we deem at the FW phi limit.
 
         See `thetaFWDone`
@@ -883,7 +883,7 @@ class CobraCoach():
         else:
             return None, None
 
-    def phiRVDone(self, phis, k, needAtEnd=3, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(2)):
+    def phiRVDone(self, phis, k, needAtEnd=3, closeEnough=np.deg2rad(1), limitTolerance=np.deg2rad(5)):
         """ Return a mask of the cobras which we deem at the RV phi limit.
 
         See `thetaFWDone`
