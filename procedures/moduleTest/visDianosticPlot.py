@@ -12,6 +12,10 @@ import math
 import pathlib
 
 from bokeh.io import output_notebook, show, export_png,export_svgs
+from selenium import webdriver
+from webdriver_manager.chrome import ChromeDriverManager
+
+
 from bokeh.plotting import figure, show, output_file
 import bokeh.palettes
 from bokeh.layouts import column,gridplot
@@ -37,7 +41,7 @@ class VisDianosticPlot(object):
         else:
             self.brokens = brokens
      
-        self.visibles= [e for e in range(1,514) if e not in brokens]
+        self.visibles= [e for e in range(1,1198) if e not in brokens]
         self.badIdx = np.array(brokens) - 1
         self.goodIdx = np.array(self.visibles) - 1
 
@@ -46,6 +50,13 @@ class VisDianosticPlot(object):
         self.group1 = self.goodIdx[self.goodIdx <= cam_split]
         self.group2 = self.goodIdx[self.goodIdx > cam_split]
 
+    def __del__(self):
+        del(self.fw)
+        del(self.rv)
+        del(self.af)
+        del(self.ar)
+        del(self.sf)
+        del(self.sr)
 
     def _loadCobraData(self, arm=None) :
         path = self.path
@@ -247,11 +258,11 @@ class VisDianosticPlot(object):
                 ymax = 0.25
                 ymin = -0.25
 
-            width = (fiber + 1) / 2
+            #width = (fiber + 1) / 2
             
-            bar = "\r[" + "#" * int(math.ceil(width)) + " " * int(29 - width) + "]"
-            sys.stdout.write(f'{bar}')
-            sys.stdout.flush()
+            #bar = "\r[" + "#" * int(math.ceil(width)) + " " * int(29 - width) + "]"
+            #sys.stdout.write(f'{bar}')
+            #sys.stdout.flush()
 
             x=np.arange(112)*3.6
             c = fiber
@@ -309,7 +320,7 @@ class VisDianosticPlot(object):
 
         if pdffile is not None:
             cmd=f"""convert {figPath}motormap*_[0-9].png {figPath}motormap*_[0-9]?.png \
-            {figPath}motormap*_[0-9]??.png {pdffile}"""
+            {figPath}motormap*_[0-9]??.png {figPath}motormap*_[0-9]???.png {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
             if debug is True:
                 print(cmd)
@@ -371,9 +382,14 @@ class VisDianosticPlot(object):
         grid = gridplot([[p1, p2]])
         qgrid = gridplot([[q1, q2]])
 
+        options = webdriver.ChromeOptions()
+        options.add_argument('--headless')
+        driver = webdriver.Chrome(ChromeDriverManager().install(),options=options)
+
+
         if figPath is not None:
-            export_png(grid,filename=figPath+f"{arm}_motor_speed_histogram.png")
-            export_png(qgrid,filename=figPath+f"{arm}_motor_speed_std.png")
+            export_png(grid,filename=figPath+f"{arm}_motor_speed_histogram.png",webdriver=driver)
+            export_png(qgrid,filename=figPath+f"{arm}_motor_speed_std.png",webdriver=driver)
 
     def visAngleMovement(self, figPath=None, arm = 'phi', pdffile=None):
         try:
@@ -423,7 +439,7 @@ class VisDianosticPlot(object):
 
         if pdffile is not None:
             cmd=f"""convert {figPath}FiberSpeed.png {figPath}AngleMove*_[0-9].png \
-                {figPath}AngleMove*_[0-9]?.png {figPath}AngleMove*_[0-9]??.png {pdffile}"""
+                {figPath}AngleMove*_[0-9]?.png {figPath}AngleMove*_[0-9]??.png {figPath}AngleMove*_[0-9]???.png {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
             print(cmd)
 
@@ -508,6 +524,10 @@ class VisDianosticPlot(object):
                 dist=2*np.sin(0.5*(np.abs(np.deg2rad(angle)-(np.append([0], moveData[fiberIdx,i,:,0])))))*linklength
                 snr=(1-k_offset*dist**2)*(np.sqrt((tmax+tobs-tstep[0:9])/(tobs)))
                 snr[snr < 0]=0
+                
+                if np.max(snr) < 0.95:
+                    if fiberIdx+1 not in [139,172,194,226,322,399,400,470]:
+                        print(f'Fiber {fiberIdx+1}, angle = {angle}, SNR= {np.max(snr)}')
                 sax.scatter(tstep[0:9],snr,s=50)
                 snr_array.append(snr)
 
@@ -517,8 +537,8 @@ class VisDianosticPlot(object):
             sax.plot(tstep[0:9],snr_avg,color='green',linewidth=4)
             sax.scatter(tstep[0:9],snr_avg,color='green',s=100)
             sax.set_title('SNR = %.3f'%(np.max(snr_avg)),fontsize=20)
-            if np.max(snr_avg) < 0.95:
-                print(f'Fiber {fiberIdx+1} SNR {np.max(snr_avg)}')
+            #if np.max(snr_avg) < 0.95:
+                #print(f'Fiber {fiberIdx+1} SNR {np.max(snr_avg)}')
 
             if arm is 'phi':
                 vax.set_ylim([-10,200])
@@ -550,9 +570,11 @@ class VisDianosticPlot(object):
         
         if pdffile is not None:
             cmd=f"""convert {figPath}Con*_{arm}_[0-9].png {figPath}Con*_{arm}_[0-9]?.png \
-            {figPath}Con*_{arm}_[0-9]??.png  {pdffile}"""
+            {figPath}Con*_{arm}_[0-9]??.png {figPath}Con*_{arm}_[0-9]???.png  {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
             print(cmd)
+
+        del(moveData)
     
     def visModuleSNR(self, figPath = None, arm = 'phi', runs = 50, 
         margin = 15, pdffile=None):
@@ -605,7 +627,7 @@ class VisDianosticPlot(object):
         it_max = np.array(it_max)    
 
         all_angle = margin + (angleLimit - 2 * margin) * np.arange(runs+1) / (runs)
-        all_fiber = np.arange(513)
+        all_fiber = np.arange(1197)
 
 
         fig = plt.figure(figsize=(10, 8),constrained_layout=True)
@@ -672,6 +694,7 @@ class VisDianosticPlot(object):
                 {figPath}snrmax_it_{arm}.png {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
         print(cmd)
+        del(moveData)
 
     def visConvergeHisto(self, figPath = None, filename = None, arm ='phi', brokens=None, runs = 16, margin = 15, title=None):
         #brokens = []
@@ -721,7 +744,7 @@ class VisDianosticPlot(object):
         else:
             plt.savefig(figPath+f'{filename}')
         plt.close()
-
+        del(moveData)
 
 
     def visMultiMotorMapfromXML(self, xmlList, figPath=None, arm='phi', pdffile=None, fast=False):
