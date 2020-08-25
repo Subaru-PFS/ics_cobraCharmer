@@ -64,7 +64,11 @@ def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, delta=0.01, m
             angle += np.pi*2
         elif angle < fromAngle and steps > minSteps:
             angle += np.pi*2
+        elif angle < fromAngle - delta and steps > 0:
+            angle += np.pi*2
         elif not np.isnan(toAngle) and toAngle >= np.pi*1.2:
+            angle += np.pi*2
+        elif np.isnan(toAngle) and fromAngle > np.pi*2.0:
             angle += np.pi*2
     elif angle > np.pi*1.8:
         # check if the angle is negative
@@ -73,7 +77,11 @@ def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, delta=0.01, m
             angle -= np.pi*2
         elif angle > fromAngle and steps < -minSteps:
             angle -= np.pi*2
+        elif angle > fromAngle + delta and steps < 0:
+            angle -= np.pi*2
         elif not np.isnan(toAngle) and toAngle < np.pi*0.8:
+            angle -= np.pi*2
+        elif np.isnan(toAngle) and fromAngle < 0:
             angle -= np.pi*2
 
     return angle
@@ -399,3 +407,37 @@ def calculateScale(movedAngle, expectedAngle, scaleFactor=1):
     scale = (ratio - 1) / scaleFactor + 1
 
     return scale
+
+def calculateOntime(ontime, speedRatio, scaling, modelParameter, maxOntime):
+    """ calculate on-time """
+
+    if speedRatio <= 0:
+        return ontime
+
+    b0 = modelParameter
+    b1 = ontime
+    a0 = np.sqrt(b1*b1 + b0*b0) - b0
+    a1 = a0*((speedRatio - 1) / scaling + 1) + b0
+
+    return np.rint(min(np.sqrt(a1*a1 - b0*b0), maxOntime)*1000.0) / 1000.0
+
+def smooth(x, window_len=11, window='hamming'):
+    """ smooth the data """
+
+    if x.ndim != 1:
+        raise ValueError("smooth only accepts 1 dimension arrays.")
+    if x.size < window_len:
+        raise ValueError("Input vector needs to be bigger than window size.")
+    if window_len < 3:
+        return x
+    if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
+        raise ValueError("Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
+
+    s = np.r_[x[window_len-1:0:-1], x, x[-2:-window_len-1:-1]]
+    if window == 'flat': #moving average
+        w = np.ones(window_len,'d')
+    else:
+        w = eval('np.' + window + '(window_len)')
+    y = np.convolve(w/w.sum(), s, mode='valid')
+
+    return y[(window_len//2):-(window_len//2)]
