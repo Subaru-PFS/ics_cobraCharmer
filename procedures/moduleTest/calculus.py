@@ -29,6 +29,16 @@ def circle_fitting(p):
     a, b, c = np.linalg.lstsq(m, n, rcond=None)[0]
     return a/2, b/2, np.sqrt(c+(a*a+b*b)/4)
 
+def filtered_circle_fitting(fw, rv, threshold=1.0):
+    data = np.array([], complex)
+    for k in range(len(fw)):
+        last = np.where(np.abs(fw[k] - fw[k,-1]) > threshold)[0][-1]
+        data = np.append(data, fw[k,1:last+1])
+    for k in range(len(rv)):
+        last = np.where(np.abs(rv[k] - rv[k,-1]) > threshold)[0][-1]
+        data = np.append(data, rv[k,1:last+1])
+    return circle_fitting(data)
+
 def transform(origPoints, newPoints):
     """ return the tranformation parameters and a function that can convert origPoints to newPoints """
     origCenter = np.mean(origPoints)
@@ -86,14 +96,15 @@ def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, delta=0.01, m
 
     return angle
 
-def thetaCenterAngles(thetaFW, thetaRV):
+def thetaCenterAngles(thetaFW, thetaRV, threshold=1.0):
     """ calculate theta centers and angles """
     thetaAngFW = np.zeros(thetaFW.shape, dtype=float)
     thetaAngRV = np.zeros(thetaFW.shape, dtype=float)
 
     # measure centers
-    data = np.concatenate((thetaFW.flatten(), thetaRV.flatten()))
-    x, y, r = circle_fitting(data)
+    x, y, r = filtered_circle_fitting(thetaFW, thetaRV)
+#    data = np.concatenate((thetaFW.flatten(), thetaRV.flatten()))
+#    x, y, r = circle_fitting(data)
     thetaCenter = x + y*(1j)
     thetaRadius = r
 
@@ -128,8 +139,9 @@ def phiCenterAngles(phiFW, phiRV):
     phiAngRV = np.zeros(phiFW.shape, dtype=float)
 
     # measure centers
-    data = np.concatenate((phiFW.flatten(), phiRV.flatten()))
-    x, y, r = circle_fitting(data)
+    x, y, r = filtered_circle_fitting(phiFW, phiRV)
+#    data = np.concatenate((phiFW.flatten(), phiRV.flatten()))
+#    x, y, r = circle_fitting(data)
     phiCenter = x + y*(1j)
     phiRadius = r
 
