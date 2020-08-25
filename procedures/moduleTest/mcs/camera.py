@@ -29,7 +29,7 @@ def whereAmI():
     # Need to distinguish the ASRD bench, the ASRD MCS, the Subaru MCS.
     # Can use network address for Subaru
 
-    return 'asrd'
+    return 'rmod'
 
 def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None):
     if doClear or simulationPath is not None:
@@ -51,6 +51,11 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None
             from . import asrdCam
             reload(asrdCam)
             cameraFactory.__camera = asrdCam.AsrdCamera(simulationPath=simulationPath,
+                                                        runManager=runManager)
+        elif name == 'rmod':
+            from . import rmodCam
+            reload(rmodCam)
+            cameraFactory.__camera = rmodCam.RmodCamera(simulationPath=simulationPath,
                                                         runManager=runManager)
         elif name == 'sim':
             cameraFactory.__camera = SimCamera(simulationPath=simulationPath,
