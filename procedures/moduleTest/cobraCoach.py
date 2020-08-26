@@ -73,7 +73,10 @@ class CobraCoach():
         self.phiModel = SpeedModel(p1=self.phiModelParameter)
 
     def loadModel(self, version=None, moduleVersion=None, camSplit=28):
-        self.calibModel = pfiDesign.PFIDesign.loadPfi(version, moduleVersion)
+        
+        #self.calibModel = pfiDesign.PFIDesign.loadPfi(version, moduleVersion)
+        XMLfile = pathlib.Path('/data/MCS/2020-08-25/001/output/2020-08-25-theta-slow.xml')
+        self.calibModel=pfiDesign.PFIDesign(XMLfile)
         self.calibModel.fixModuleIds()
         self.camSplit = camSplit
 
@@ -130,6 +133,9 @@ class CobraCoach():
         badNums = [e for e in range(1, self.nCobras+1) if e not in goodNums]
         if len(badNums) > 0:
             self.logger.warn("setting bad cobras: %s", badNums)
+
+        goodNums = range(1,58)
+        badNums = range(58,len(self.allCobras)+1)
 
         self.goodIdx = np.array(goodNums, dtype='i4') - 1
         self.badIdx = np.array(badNums, dtype='i4') - 1
@@ -270,6 +276,7 @@ class CobraCoach():
         """
         centroids, filename, bkgd = self.cam.expose(name)
 
+        
         idx = self.visibleIdx
         if tolerance is not None:
             radii = ((self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance))[idx]
@@ -285,7 +292,9 @@ class CobraCoach():
         else:
             centers = guess
 
+        
         positions, indexMap = calculus.matchPositions(centroids, guess=centers, dist=radii)
+        self.logger.info(f'Matched positions = {len(positions)}')
 
         return positions
 
