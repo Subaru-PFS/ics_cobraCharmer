@@ -91,7 +91,7 @@ def moveThetaAngles(cIds, thetas, relative=False, local=True, tolerance=0.002, t
     if relative:
         targets[cIds] = thetas + cc.thetaInfo[cIds]['angle']
     elif not local:
-        targets[cIds] = (thetas - cc.calibModel.tht0[cIds]) % (np.pi*2)
+        targets[cIds] = (thetas - cc.thetaInfo[cIds]['ccwHome']) % (np.pi*2)
     else:
         targets[cIds] = thetas
 
