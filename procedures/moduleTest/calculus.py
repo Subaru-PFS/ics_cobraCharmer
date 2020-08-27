@@ -32,12 +32,19 @@ def circle_fitting(p):
 def filtered_circle_fitting(fw, rv, threshold=1.0):
     data = np.array([], complex)
     for k in range(len(fw)):
-        last = np.where(np.abs(fw[k] - fw[k,-1]) > threshold)[0][-1]
-        data = np.append(data, fw[k,1:last+1])
+        valid = np.where(np.abs(fw[k] - fw[k,-1]) > threshold)[0]
+        if len(valid) > 0:
+            last = valid[-1]
+            data = np.append(data, fw[k,1:last+1])
     for k in range(len(rv)):
-        last = np.where(np.abs(rv[k] - rv[k,-1]) > threshold)[0][-1]
-        data = np.append(data, rv[k,1:last+1])
-    return circle_fitting(data)
+        valid = np.where(np.abs(rv[k] - rv[k,-1]) > threshold)[0]
+        if len(valid) > 0:
+            last = valid[-1]
+            data = np.append(data, rv[k,1:last+1])
+    if len(data) <= 3:
+        return 0, 0, 0
+    else:
+        return circle_fitting(data)
 
 def transform(origPoints, newPoints):
     """ return the tranformation parameters and a function that can convert origPoints to newPoints """
