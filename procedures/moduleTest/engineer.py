@@ -1538,7 +1538,7 @@ def moveDeltaAngles(cIds, thetaAngles=None, phiAngles=None, thetaThreshold=0.1, 
     if mmTheta is None or mmPhi is None:
         raise RuntimeError('Please set on-time maps first!')
 
-    if cc.cobraInfo['position'][0] == 0.0:
+    if np.all(cc.cobraInfo['position'] == 0.0):
         raise RuntimeError('Last position is unkown! Run moveToHome or setCurrentAngles')
 
     if cc.mode == cc.thetaMode:

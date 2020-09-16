@@ -51,8 +51,8 @@ class PFI(object):
         self.calibModel = None
         self.motorMap = None
         self.ontimeScales = cobraState.motorScales
-        self.maxThetaOntime = 0.12
-        self.maxPhiOntime = 0.12
+        self.maxThetaOntime = 0.14
+        self.maxPhiOntime = 0.14
         self.maxThetaSteps = 10000
         self.maxPhiSteps = 6000
 

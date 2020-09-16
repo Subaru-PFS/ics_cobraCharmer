@@ -407,6 +407,7 @@ class CobraCoach():
                     scale = expectedThetas[c_i] / self.moveInfo['movedTheta'][cId]
                     if scale < 0:
                         self.logger.warn(f'scale is negative: Cobra#{cId+1}, steps:{thetaSteps[c_i]}, angle:{angle}')
+                        self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'theta', direction, thetaFast, 3.0)
                     else:
                         scale = (scale - 1) / self.thetaScaleFactor + 1
                         self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'theta', direction, thetaFast, scale)
@@ -423,13 +424,14 @@ class CobraCoach():
                     scale = expectedPhis[c_i] / self.moveInfo['movedPhi'][cId]
                     if scale < 0:
                         self.logger.warn(f'scale is negative: Cobra#{cId+1}, steps:{phiSteps[c_i]}, angle:{angle}')
+                        self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'phi', direction, phiFast, 3.0)
                     else:
                         scale = (scale - 1) / self.phiScaleFactor + 1
                         self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'phi', direction, phiFast, scale)
 
     def moveDeltaAngles(self, cobras, thetaAngles=None, phiAngles=None, thetaFast=False, phiFast=False):
         """ move cobras by the given amount of theta and phi angles """
-        if self.cobraInfo['position'][0] == 0.0:
+        if np.all(self.cobraInfo['position'] == 0.0):
             raise RuntimeError('Last position is unkown! Run moveToHome or setCurrentAngles')
 
         if self.mode == self.thetaMode:
