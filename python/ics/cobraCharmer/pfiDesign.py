@@ -77,7 +77,15 @@ class PFIDesign():
 
         modulePaths = []
         for m in moduleNames:
-            modulePaths.append(butler.mapPathForModule(m, version=moduleVersion))
+            if type(moduleVersion) in (tuple, list):
+                path = None
+                for v in moduleVersion:
+                    path = butler.mapPathForModule(m, version=v)
+                    if path.exists():
+                        break
+            else:
+                path = butler.mapPathForModule(m, version=moduleVersion)
+            modulePaths.append(path)
 
         self = cls(None)
         self.loadModelFiles(modulePaths)
@@ -228,7 +236,7 @@ class PFIDesign():
                                    f"positioner={self.positionerIds[i]}")
 
                 if self.serialIds[i] == self.serialIds[check_i]:
-                    raise KeyError(f"duplicate cobra with serial={self.serialIds[i]}")
+                    raise KeyError(f"duplicate cobra with serial={self.serialIds[i]}. In {self.moduleIds[i]} and {self.moduleIds[check_i]}")
 
             # Save some of the kinematics information
             kinematics = dataContainers[i].find("KINEMATICS")
