@@ -20,18 +20,23 @@ class CobraStatus(enum.IntEnum):
     COBRA_BROKEN_THETA_MASK = COBRA_BROKEN_THETA | COBRA_INVISIBLE
 
 class Motor(object):
-    def __init__(self, limits, fwdMap=None, revMap=None, ontimeScales=None):
+    def __init__(self, limits, fwdMap=None, revMap=None, calibrationFrequency=None, ontimeScales=None):
+        """Create new Motor.
+
+        Args
+        ----
+        limits : (float, float)
+          CCW and CW motion limits. Radians.
+        fwdMap
+        """
         self.angle = np.nan
         self.lastMove = 0
         self.lastOntime = np.nan
         self.limits = limits
+        self.calibrationFrequency = calibrationFrequency
         self.ontimeScales = dict(fwd=1.0, rev=1.0)
         self.maps = dict(fwd=None, rev=None)
         self.setMaps(fwdMap=fwdMap,revMap=revMap)
-
-    def useableStatus(self):
-        return (not (self.status & (CobraStatus.COBRA_INVISIBLE | CobraStatus.COBRA_BROKEN_THETA)),
-                not (self.status & (CobraStatus.COBRA_INVISIBLE | CobraStatus.COBRA_BROKEN_PHI)))
 
     def setPosition(self, angle=np.nan):
         if np.isfinite(angle):
@@ -169,18 +174,8 @@ class Cobra(object):
 
         thetaLimits = None if thetaLimits is None else np.deg2rad(np.array(thetaLimits))
         phiLimits = None if phiLimits is None else np.deg2rad(np.array(phiLimits))
-        self.thetaMotor = ThetaMotor(limits=thetaLimits, frequency=thetaMotorFrequency,
-                                     fwdMap=self.getMap(motor='theta', dir='fwd'),
-                                     revMap=self.getMap(motor='theta', dir='rev'))
-        self.phiMotor = PhiMotor(limits=phiLimits, frequency=phiMotorFrequency,
-                                 fwdMap=self.getMap(motor='phi', dir='fwd'),
-                                 revMap=self.getMap(motor='phi', dir='rev'))
-
-        self.moduleNum, self.cobraInModule = fiberIds.moduleNumsForCobra(cobraId)
-
-    @property
-    def moduleName(self):
-        return f'SC{self.moduleNum:02d}'
+        self.thetaMotor = ThetaMotor(limits=thetaLimits, calibrationFrequency=thetaMotorFrequency)
+        self.phiMotor = PhiMotor(limits=phiLimits, calibrationFrequency=phiMotorFrequency)
 
     def getMap(self, *,
                motor=None, direction=None,
