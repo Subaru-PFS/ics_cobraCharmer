@@ -245,8 +245,8 @@ class Cobra(object):
     def thetaPhiToXY(self, theta, phi):
         pass
 
-    def calculateSteps(self, startTht, deltaTht, startPhi, deltaPhi,
-                       thetaFast=False, phiFast=False):
+    def calculateMove(self, startTht, deltaTht, startPhi, deltaPhi,
+                      thetaMaps=None, phiMaps=None):
         """ Modified from ics_cobraOps MotorMapGroup.py
         Calculates the total number of motor steps required to move the
         cobra the given theta and phi delta angles from
@@ -264,10 +264,9 @@ class Cobra(object):
         deltaPhi: object
             A numpy array with the phi delta offsets relative to the starting
             phi positions.
-        thetaFast: object
-            A boolean value or array for fast/slow theta motor movement.
-        phiFast: object
-            A boolean value or array for fast/slow phi motor movement.
+        thetaMaps : `str`
+        phiMaps : `str`
+            Names of maps to switch to.
 
         Returns
         -------
@@ -290,26 +289,28 @@ class Cobra(object):
 
     @staticmethod
     def to_yaml(dumper, self):
-        output = dict(cobraId=int(self.cobraId),
+        output = dict(moduleName=self.moduleName,
+                      cobraNum=int(self.cobraNum),
+                      moduleNum=int(self.moduleNum),
                       serial=int(self.serial),
                       status=int(self.status),
                       center=[round(float(self.center.real), 4),
                               round(float(self.center.imag), 4)],
-                      thetaLimits=[round(float(f),4) for f in np.rad2deg(self.thetaLimits)],
-                      phiLimits=[round(float(f),4) for f in np.rad2deg(self.phiLimits)],
+                      thetaLimits=[round(float(f),4) for f in np.rad2deg(self.thetaMotor.limits)],
+                      phiLimits=[round(float(f),4) for f in np.rad2deg(self.phiMotor.limits)],
                       L1=round(float(self.L1), 4), L2=round(float(self.L2), 4),
-                      thetaMotorFrequency=round(float(self.thetaMotorFrequency), 4),
-                      phiMotorFrequency=round(float(self.phiMotorFrequency), 4))
+                      thetaMotorFrequency=round(float(self.thetaMotor.calibrationFrequency), 4),
+                      phiMotorFrequency=round(float(self.phiMotor.calibrationFrequency), 4))
 
         return dumper.represent_mapping(self.yaml_tag, output)
 
     @staticmethod
     def from_yaml(loader, node):
         node_map = loader.construct_mapping(node, deep=True)
-        cob = Cobra(node_map['cobraId'])
+        cob = Cobra()
         cob.initFromParts(**node_map)
 
-        cob.logger.warn(f'returning {cob}')
+        cob.logger.debug(f'returning {cob}')
         return cob
 
     def dump(self, path):
