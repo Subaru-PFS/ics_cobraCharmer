@@ -126,7 +126,7 @@ class Cobra(object):
     validMotors = {'theta', 'phi'}
     yaml_tag = '!Cobra'
 
-    def __init__(self, cobraId, butler=None):
+    def __init__(self, butler=None):
         self.logger = logging.getLogger('cobra')
         self.maps = dict(theta=dict(fwd=dict(),
                                     rev=dict()),
@@ -134,7 +134,7 @@ class Cobra(object):
                                   rev=dict()))
 
         self.butler = butler
-        self.initFromParts(cobraId=cobraId)
+        self.initFromParts()
 
     @property
     def butler(self):
@@ -151,18 +151,43 @@ class Cobra(object):
     def butler(self, newButler):
         self._butler = newButler
 
+    def setModuleNum(self, moduleNum):
+        """Override the position of our module in the PFI.
+
+        We know the last place our module was on the PFI, and we know our module name.
+        We persist both our module name and the position in the PFI, but need to be able
+        to be moved around.
+
+        Am really not sure whether to persist ourself, or run some sanity checks?
+
+        """
+        moduleNum = int(moduleNum)
+        if moduleNum < 1 or moduleNum > 42:
+            raise ValueError(f'invalid module number: {moduleNum}')
+
+        lastModuleNum = self.moduleNum
+        self.moduleNum = moduleNum
+
+        return lastModuleNum
+
     def __str__(self):
-        return f"Cobra({self.cobraId}, module={self.moduleNum}, modCobra={self.cobraInModule})"
+        return f"Cobra({self.cobraNum}, module={self.moduleName} slot={self.moduleNum})"
 
     def initFromParts(self, *,
-                      cobraId=None,
+                      cobraNum=None,
+                      moduleNum=None,
+                      moduleName=None,
                       serial=None,
                       status=None,
                       center=None,
                       thetaLimits=None, phiLimits=None,
                       L1=None, L2=None,
                       thetaMotorFrequency=None, phiMotorFrequency=None):
-        self.cobraId = cobraId
+        self.cobraNum = cobraNum
+        self.moduleNum = moduleNum
+        self.moduleName = moduleName
+        self.cobraId = (self.moduleName, self.cobraNum)
+
         self.serial = serial
         self.status = None if status is None else CobraStatus(status)
         if center is None or isinstance(center, complex):
@@ -198,13 +223,15 @@ class Cobra(object):
                  mapName=None):
         """ Add/overwrite map in cache. """
 
+        if self.moduleNum is None:
+            return None
         idDict = locals().copy()
         idDict['moduleName'] = self.moduleName
-        idDict['cobraInModule'] = self.cobraInModule
-        map = self.butler.get('motorMap', idDict)
-        self.maps[motor][direction][mapName] = map
+        idDict['cobraInModule'] = self.cobraNum
+        motorMap = self.butler.get('motorMap', idDict)
+        self.maps[motor][direction][mapName] = motorMap
 
-        return map
+        return motorMap
 
     def getExpectedPosition(self, thetaAngle, phiAngle):
         pass

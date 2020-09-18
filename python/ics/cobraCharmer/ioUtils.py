@@ -11,6 +11,8 @@ import pfs.utils.fiberids
 reload(pfs.utils.fiberids)
 fiberIds = pfs.utils.fiberids.FiberIds()
 
+logging.getLogger().setLevel(logging.INFO)
+
 def convertCobrasFromPfiDesign(butler, pfiDesign):
     """ Convert an XML file to our per-cobra encoding.
 
@@ -24,10 +26,22 @@ def convertCobrasFromPfiDesign(butler, pfiDesign):
 
     """
 
+    logger = logging.getLogger('convert')
+
+    lastModuleNum = None
+    sequentialModuleNum = 0
     for c_i in range(pfiDesign.nCobras):
+        moduleNum = pfiDesign.moduleIds[c_i]
+        if moduleNum != lastModuleNum:
+            sequentialModuleNum += 1
+            moduleName = pfiDesign.moduleNames[sequentialModuleNum]
+            lastModuleNum = moduleNum
+            logger.info(f'converting module {moduleName} {moduleNum}, in position {sequentialModuleNum}')
+
         parts = dict()
-        parts['cobraId'] = fiberIds.cobraIdForModulePlusCobra(pfiDesign.moduleIds[c_i],
-                                                              pfiDesign.positionerIds[c_i])
+        parts['cobraNum'] = pfiDesign.positionerIds[c_i]
+        parts['moduleNum'] = sequentialModuleNum
+        parts['moduleName'] = moduleName
         parts['serial'] = pfiDesign.serialIds[c_i]
         parts['status'] = pfiDesign.status[c_i]
         parts['center'] = pfiDesign.centers[c_i].imag, pfiDesign.centers[c_i].real
@@ -38,12 +52,12 @@ def convertCobrasFromPfiDesign(butler, pfiDesign):
         parts['thetaMotorFrequency'] = pfiDesign.motorFreq1[c_i]
         parts['phiMotorFrequency'] = pfiDesign.motorFreq2[c_i]
 
-        c = cobra.Cobra(parts['cobraId'])
+        c = cobra.Cobra()
         c.initFromParts(**parts)
         createMotormapsFromPfiDesign(butler, pfiDesign, c, c_i)
 
         butler.put(c, 'cobraGeometry', dict(moduleName=c.moduleName,
-                                            cobraInModule=c.cobraInModule))
+                                            cobraInModule=c.cobraNum))
 
 def createMotormapsFromPfiDesign(butler, pfiDesign, cobra, cobraIndex):
     """ Convert the motormaps in an XML file-based cobra to our per-cobra encoding.
@@ -59,13 +73,13 @@ def createMotormapsFromPfiDesign(butler, pfiDesign, cobra, cobraIndex):
     """
 
     def createOneMap(cobra, motor, direction, mapName, ontime, angles, steps):
-        mm = motormap.MotorMap(mapName, cobra.cobraId,
+        mm = motormap.MotorMap(mapName, cobra.moduleName, cobra.cobraNum,
                                motor=motor, direction=direction,
                                angles=angles, steps=steps,
                                ontimes=ontime)
         butler.put(mm, 'motorMap',
                    idDict=dict(moduleName=cobra.moduleName,
-                               cobraInModule=cobra.cobraInModule,
+                               cobraInModule=cobra.cobraNum,
                                motor=motor, direction=direction,
                                mapName=mapName))
 

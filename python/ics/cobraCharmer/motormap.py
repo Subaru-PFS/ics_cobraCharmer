@@ -6,14 +6,16 @@ class MotorMap(object):
     validMotors = {'theta', 'phi'}
     yaml_tag = "!MotorMap"
 
-    def __init__(self, name, cobraId=None, motor=None, direction=None, angles=None, steps=None, ontimes=None):
+    def __init__(self, name, moduleName=None, cobraNum=None,
+                 motor=None, direction=None, angles=None, steps=None, ontimes=None):
         """Encapsulate a motor map: currently a mapping between angles and steps&ontimes. """
         self.name = name
-        self._initFromParts(cobraId=cobraId,
+        self._initFromParts(moduleName=moduleName, cobraNum=cobraNum,
                             motor=motor, direction=direction,
                             angles=angles, steps=steps, ontimes=ontimes)
 
-    def _initFromParts(self, cobraId, motor, direction, angles, steps, ontimes):
+    def _initFromParts(self, moduleName, cobraNum,
+                       motor, direction, angles, steps, ontimes):
         if motor not in self.validMotors:
             raise ValueError(f'motor ({motor}) must be one of {self.validMotors}')
         if direction not in self.validDirections:
@@ -21,7 +23,8 @@ class MotorMap(object):
         if len(angles) != len(steps):
             raise ValueError('angles and steps must have the same shape')
 
-        self.cobraId = cobraId
+        self.moduleName = moduleName
+        self.cobraNum = cobraNum
         self.motor = motor
         self.direction = direction
         self.angles = np.array(angles, dtype='f4')
@@ -80,7 +83,8 @@ class MotorMap(object):
     @staticmethod
     def to_yaml(dumper, self):
         output = dict(name=self.name,
-                      cobraId=int(self.cobraId),
+                      moduleName=self.moduleName,
+                      cobraNum=int(self.cobraNum),
                       motor=self.motor,
                       direction=self.direction,
                       angles=self.angles.round(4).tolist(),
