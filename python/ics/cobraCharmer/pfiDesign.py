@@ -9,6 +9,7 @@ system here should be in F3C.
 from importlib import reload
 import logging
 import pathlib
+import re
 
 import numpy as np
 import xml.etree.ElementTree as ElementTree
@@ -62,9 +63,12 @@ class PFIDesign():
     @classmethod
     def loadModule(cls, moduleName, version=None):
         """ """
+
+        moduleNames = [moduleName]
         modulePath = butler.mapPathForModule(moduleName, version=version)
 
-        return cls(modulePath)
+        self = cls(modulePath)
+        self.moduleNames = [moduleName]
 
     @classmethod
     def loadPfi(cls, version=None, moduleVersion=None):
@@ -129,6 +133,19 @@ class PFIDesign():
 
         return dataContainers, info
 
+    def _getModuleNameForXmlPath(self, path):
+        """Return the module name for a XML path.
+
+        *Abuses* the convention that the XML filename starts with the module name.
+        """
+        name = path.stem
+
+        m = re.search('^(SC[0-4]\d|SP0[12]).*', name)
+        if m is not None:
+            return m.groups()[0]
+
+        raise ValueError(f"Cannot find the name of a module (SC\d\d or Spare[12] at the start of {name}")
+
     def loadModelFiles(self, fileList):
         """Constructs a new cobras calibration product using the information
         contained in a list of XML calibration file.
@@ -147,10 +164,14 @@ class PFIDesign():
 
         dataContainers = []
         self.modelInfo = {}
-        for f in fileList:
+        self.moduleNames = {}
+        for f_i, f in enumerate(fileList):
             fileArms, fileInfo = self._loadCobrasFromModelFile(f)
             dataContainers.extend(fileArms)
             self.modelInfo[f] = fileInfo
+
+            header = fileArms[0].find("DATA_HEADER")
+            self.moduleNames[f_i + 1] = self._getModuleNameForXmlPath(f)
 
         self.origin_dataContainers = dataContainers
         self.dataContainers = deepcopy(dataContainers)
