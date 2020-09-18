@@ -94,10 +94,10 @@ def createMotormapsFromPfiDesign(butler, pfiDesign, cobra, cobraIndex):
     createOneMap(cobra, 'theta', 'rev', 'fast',
                  pfiDesign.motorOntimeRev1[cobraIndex],
                  angles[:thetaCount], pfiDesign.F1Nm[cobraIndex][:thetaCount])
-    createOneMap(cobra, 'theta', 'fwd', '',
+    createOneMap(cobra, 'theta', 'fwd', 'default',
                  pfiDesign.motorOntimeSlowFwd1[cobraIndex],
                  angles[:thetaCount], pfiDesign.S1Pm[cobraIndex][:thetaCount])
-    createOneMap(cobra, 'theta', 'rev', '',
+    createOneMap(cobra, 'theta', 'rev', 'default',
                  pfiDesign.motorOntimeSlowRev1[cobraIndex],
                  angles[:thetaCount], pfiDesign.S1Nm[cobraIndex][:thetaCount])
 
@@ -107,9 +107,9 @@ def createMotormapsFromPfiDesign(butler, pfiDesign, cobra, cobraIndex):
     createOneMap(cobra, 'phi', 'rev', 'fast',
                  pfiDesign.motorOntimeRev2[cobraIndex],
                  angles[:phiCount], pfiDesign.F2Nm[cobraIndex][:phiCount])
-    createOneMap(cobra, 'phi', 'fwd', '',
+    createOneMap(cobra, 'phi', 'fwd', 'default',
                  pfiDesign.motorOntimeSlowFwd2[cobraIndex],
                  angles[:phiCount], pfiDesign.S2Pm[cobraIndex][:phiCount])
-    createOneMap(cobra, 'phi', 'rev', '',
+    createOneMap(cobra, 'phi', 'rev', 'default',
                  pfiDesign.motorOntimeSlowRev2[cobraIndex],
                  angles[:phiCount], pfiDesign.S2Nm[cobraIndex][:phiCount])
