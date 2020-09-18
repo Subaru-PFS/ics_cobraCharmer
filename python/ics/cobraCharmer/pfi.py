@@ -4,13 +4,17 @@ import logging
 import numpy as np
 
 import pfs.utils.fiberids
+
+from . import cobra
+
 reload(pfs.utils.fiberids)
+reload(cobra)
 fiberIds = pfs.utils.fiberids.FiberIds()
 
 class PFI(object):
     COBRAS_PER_MODULE = 57
 
-    def __init__(self, butler=None, doLoad=True):
+    def __init__(self, butler=None, doLoad=True, version=''):
         self.logger = logging.getLogger('pfi')
 
         self.modules = set()
@@ -23,6 +27,8 @@ class PFI(object):
             butler = pfs.utils.butler.Butler()
         self.butler = butler
 
+        self.version = version
+
         if doLoad:
             self.loadCobras()
 
@@ -31,7 +37,7 @@ class PFI(object):
 
     def loadCobras(self, configPath=None):
         if configPath is None:
-            configPath = self.butler.getPath('pfi')
+            configPath = self.butler.getPath('pfi', version=self.version)
 
         cfg = self.butler.getFromPath('pfi', configPath)
         self.modules = set(cfg['modules'])
