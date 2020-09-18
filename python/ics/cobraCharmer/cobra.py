@@ -94,22 +94,22 @@ class Motor(object):
         scale = self.ontimeScales[direction]
 
         newOntime = ontime*scale
-        if newOntime > self.maxThetaOntime:
-            newOntime = self.maxThetaOntime
+        if newOntime > self.maxOntime:
+            newOntime = self.maxOntime
             self.ontimeScales[direction] = newOntime/ontime
             self.logger.warn(f'clipping {mapId} ontime to {newOntime} and '
                              f'scale {scale:0.2f} to {cobraState.motorScales[mapId]}')
 
         return newOntime
 
-     def calculateSteps(self, direction, toAngle, fromAngle=None, map=None):
+    def calculateSteps(self, direction, toAngle, fromAngle=None, map=None):
         if map is None:
             map = self.maps[direction]
         if fromAngle is None:
             fromAngle = self.angle
 
         steps, rawOntime = map.calculateSteps(fromAngle, toAngle),
-        ontime = self.adjustOntime(direction, rawOntime))
+        ontime = self.adjustOntime(direction, rawOntime)
 
         return steps, ontime
 
