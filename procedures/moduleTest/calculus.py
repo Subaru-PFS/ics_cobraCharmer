@@ -46,7 +46,6 @@ def filtered_circle_fitting(fw, rv, threshold=1.0):
     else:
         return circle_fitting(data)
 
-
 def transform(origPoints, newPoints):
     """ return the tranformation parameters and a function that can convert origPoints to newPoints """
     origCenter = np.mean(origPoints)
