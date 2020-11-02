@@ -563,7 +563,8 @@ class PFI(object):
         return newOntime
 
     def moveSteps(self, cobras, thetaSteps, phiSteps, waitThetaSteps=None, waitPhiSteps=None,
-                  interval=2.5, thetaFast=True, phiFast=True, force=False):
+                  interval=2.5, thetaFast=True, phiFast=True, force=False,
+                  thetaOntimes=None, phiOntimes=None):
         """ Move cobras with theta and phi steps
 
             thetaSteps: A numpy array with theta steps to go
@@ -574,7 +575,8 @@ class PFI(object):
             thetaFast: a boolean value for using fast/slow theta movement
             phiFast: a boolean value for using fast/slow phi movement
             force: ignore disabled cobra status
-
+            thetaOntimes: customzied theta on-times
+            phiOntimes: customized phi on-times
         """
 
         if len(cobras) != len(thetaSteps):
@@ -597,6 +599,10 @@ class PFI(object):
             raise RuntimeError("number of phiFast must match number of cobras")
         else:
             _phiFast = phiFast
+        if thetaOntimes is not None and len(cobras) != len(thetaOntimes):
+            raise RuntimeError("number of thetaOntimes must match number of cobras")
+        if phiOntimes is not None and len(cobras) != len(phiOntimes):
+            raise RuntimeError("number of phiOntimes must match number of cobras")
 
         if len(cobras) == 0:
             self.logger.debug(f'skipping RUN command: no cobras')
@@ -625,28 +631,34 @@ class PFI(object):
             if isBad and not force:
                 en = (False, False)
 
-            if _thetaFast[c_i]:
-                if dirs1[0] == 'cw':
-                    ontime1 = self.calibModel.motorOntimeFwd1[cobraId]
+            if thetaOntimes is None:
+                if _thetaFast[c_i]:
+                    if dirs1[0] == 'cw':
+                        ontime1 = self.calibModel.motorOntimeFwd1[cobraId]
+                    else:
+                        ontime1 = self.calibModel.motorOntimeRev1[cobraId]
                 else:
-                    ontime1 = self.calibModel.motorOntimeRev1[cobraId]
+                    if dirs1[0] == 'cw':
+                        ontime1 = self.calibModel.motorOntimeSlowFwd1[cobraId]
+                    else:
+                        ontime1 = self.calibModel.motorOntimeSlowRev1[cobraId]
             else:
-                if dirs1[0] == 'cw':
-                    ontime1 = self.calibModel.motorOntimeSlowFwd1[cobraId]
-                else:
-                    ontime1 = self.calibModel.motorOntimeSlowRev1[cobraId]
+                ontime1 = thetaOntimes[c_i]
             ontime1 = self.adjustThetaOnTime(cobraId, ontime1, fast=_thetaFast[c_i], direction=dirs1[0])
 
-            if _phiFast[c_i]:
-                if dirs1[1] == 'cw':
-                    ontime2 = self.calibModel.motorOntimeFwd2[cobraId]
+            if phiOntimes is None:
+                if _phiFast[c_i]:
+                    if dirs1[1] == 'cw':
+                        ontime2 = self.calibModel.motorOntimeFwd2[cobraId]
+                    else:
+                        ontime2 = self.calibModel.motorOntimeRev2[cobraId]
                 else:
-                    ontime2 = self.calibModel.motorOntimeRev2[cobraId]
+                    if dirs1[1] == 'cw':
+                        ontime2 = self.calibModel.motorOntimeSlowFwd2[cobraId]
+                    else:
+                        ontime2 = self.calibModel.motorOntimeSlowRev2[cobraId]
             else:
-                if dirs1[1] == 'cw':
-                    ontime2 = self.calibModel.motorOntimeSlowFwd2[cobraId]
-                else:
-                    ontime2 = self.calibModel.motorOntimeSlowRev2[cobraId]
+                ontime2 = phiOntimes[c_i]
             ontime2 = self.adjustPhiOnTime(cobraId, ontime2, fast=_phiFast[c_i], direction=dirs1[1])
 
             offtime1 = 0

@@ -6,6 +6,8 @@ import sys
 
 binSize = np.deg2rad(3.6)
 regions = 112
+maxSegments = 100   # print warning when the number of segments is beyond this value
+phiThreshold = 0.6   # minimum phi angle to move in the beginning
 
 def lazyIdentification(centers, spots, radii=None):
     n = len(centers)
@@ -66,7 +68,7 @@ def diffAngle(angle1, angle2):
 def absDiffAngle(angle1, angle2):
     return np.abs(diffAngle(angle1, angle2))
 
-def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, delta=0.01, minSteps=100):
+def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, delta=0.01, minSteps=50):
     """ Adjust theta angles near 0 accounting for possible overshoots given the move """
     angle = angle % (np.pi*2)
 
@@ -76,10 +78,10 @@ def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, delta=0.01, m
 
     if angle < np.pi*0.4:
         # check if the angle is over 2PI
-        if absDiffAngle(angle, fromAngle) < delta and steps > minSteps:
+        if absDiffAngle(angle, fromAngle) < delta and steps >= minSteps:
             # stuck at CW gard stop
             angle += np.pi*2
-        elif angle < fromAngle and steps > minSteps:
+        elif angle < fromAngle and steps >= minSteps:
             angle += np.pi*2
         elif angle < fromAngle - delta and steps > 0:
             angle += np.pi*2
@@ -89,10 +91,10 @@ def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, delta=0.01, m
             angle += np.pi*2
     elif angle > np.pi*1.8:
         # check if the angle is negative
-        if absDiffAngle(angle, fromAngle) < delta and steps < -minSteps:
+        if absDiffAngle(angle, fromAngle) < delta and steps <= -minSteps:
             # stuck at CCW gard stop
             angle -= np.pi*2
-        elif angle > fromAngle and steps < -minSteps:
+        elif angle > fromAngle and steps <= -minSteps:
             angle -= np.pi*2
         elif angle > fromAngle + delta and steps < 0:
             angle -= np.pi*2
@@ -460,3 +462,158 @@ def smooth(x, window_len=11, window='hamming'):
     y = np.convolve(w/w.sum(), s, mode='valid')
 
     return y[(window_len//2):-(window_len//2)]
+
+def calMoveSegments(thetaMoved, phiMoved, thetaFrom, phiFrom, mmTheta, mmPhi, maxSteps, nSegments, phiOffset=0):
+    """ calculate move segments """
+
+    moved = 0
+    n = 0
+    if thetaMoved > 0:
+        while moved < thetaMoved:
+            idx = np.nanargmin(abs(mmTheta[0]['angle'] - thetaFrom - moved))
+            moved += mmTheta[0,idx]['speed'] * maxSteps
+            n += 1
+    elif thetaMoved < 0:
+         while moved > thetaMoved:
+            idx = np.nanargmin(abs(mmTheta[1]['angle'] - thetaFrom - moved))
+            moved += mmTheta[1,idx]['speed'] * maxSteps
+            n += 1
+    if n > maxSegments:
+        logger.warn(f"too many theta segments: {n}, {moved}")
+    nSeg = n
+
+    moved = 0
+    n = 0
+    if phiMoved > 0:
+        while moved < phiMoved:
+            idx = np.nanargmin(abs(mmPhi[0]['angle'] - phiFrom - moved))
+            moved += mmPhi[0,idx]['speed'] * maxSteps
+            n += 1
+    elif phiMoved < 0:
+         while moved > phiMoved:
+            idx = np.nanargmin(abs(mmPhi[1]['angle'] - phiFrom - moved))
+            moved += mmPhi[1,idx]['speed'] * maxSteps
+            n += 1
+    if nSeg < n:
+        nSeg = n
+    if n > maxSegments:
+        logger.warn(f"too many phi segments: {n}, {moved}")
+
+    if nSeg < nSegments:
+        nSeg = nSegments
+
+    tSteps = np.zeros(nSeg, int)
+    pSteps = np.zeros(nSeg, int)
+    tOntimes = np.zeros(nSeg, float)
+    pOntimes = np.zeros(nSeg, float)
+    tMoves = np.zeros(nSeg, float)
+    pMoves = np.zeros(nSeg, float)
+
+    if thetaMoved > 0:
+        # early scheme
+        moved = 0
+        n = 0
+        while n < nSeg:
+            idx = np.nanargmin(abs(mmTheta[0]['angle'] - thetaFrom - moved))
+            speed = mmTheta[0,idx]['speed']
+            tOntimes[n] = mmTheta[0,idx]['ontime']
+            if speed * maxSteps < thetaMoved - moved:
+                moved += speed * maxSteps
+                tSteps[n] = maxSteps
+                tMoves[n] = speed * maxSteps
+                n += 1
+            else:
+                tSteps[n] = int((thetaMoved - moved) / speed)
+                tMoves[n] = speed * tSteps[n]
+                break
+
+    elif thetaMoved < 0:
+        # late scheme
+        moved = thetaMoved
+        n = nSeg - 1
+        while n >= 0:
+            idx = np.nanargmin(abs(mmTheta[1]['angle'] - thetaFrom - moved))
+            speed = mmTheta[1,idx]['speed']
+            tOntimes[n] = mmTheta[1,idx]['ontime']
+            if speed * maxSteps > moved:
+                moved -= speed * maxSteps
+                tSteps[n] = -maxSteps
+                tMoves[n] = speed * maxSteps
+                n -= 1
+            else:
+                tSteps[n] = -int(moved / speed)
+                tMoves[n] = -speed * tSteps[n]
+                break
+
+    if phiMoved > 0:
+        # late scheme, but move away from center if too close
+        left = np.min([phiThreshold - phiOffset - phiFrom, phiMoved])
+        moved = 0
+        n = 0
+        while n < nSeg and moved < left:
+            idx = np.nanargmin(abs(mmPhi[0]['angle'] - phiFrom - moved))
+            speed = mmPhi[0,idx]['speed']
+            pOntimes[n] = mmPhi[0,idx]['ontime']
+            if speed * maxSteps < left - moved:
+                moved += speed * maxSteps
+                pSteps[n] = maxSteps
+                pMoves[n] = speed * maxSteps
+                n += 1
+            else:
+                pSteps[n] = int((left - moved) / speed)
+                pMoves[n] = speed * pSteps[n]
+                moved += pMoves[n]
+                break
+
+        moved = phiMoved - moved
+        n = nSeg - 1
+        while n >= 0:
+            idx = np.nanargmin(abs(mmPhi[0]['angle'] - phiFrom - moved))
+            speed = mmPhi[0,idx]['speed']
+            pOntimes[n] = mmPhi[0,idx]['ontime']
+            if speed * maxSteps < moved:
+                moved -= speed * maxSteps
+                pSteps[n] = maxSteps
+                pMoves[n] = speed * maxSteps
+                n -= 1
+            else:
+                pSteps[n] = int(moved / speed)
+                pMoves[n] = speed * pSteps[n]
+                break
+
+    elif phiMoved < 0:
+        # early scheme
+        moved = 0
+        n = 0
+        while n < nSeg:
+            idx = np.nanargmin(abs(mmPhi[1]['angle'] - phiFrom - moved))
+            speed = mmPhi[1,idx]['speed']
+            pOntimes[n] = mmPhi[1,idx]['ontime']
+            if speed * maxSteps > phiMoved - moved:
+                moved += speed * maxSteps
+                pSteps[n] = -maxSteps
+                pMoves[n] = speed * maxSteps
+                n += 1
+            else:
+                pSteps[n] = -int((phiMoved - moved) / speed)
+                pMoves[n] = -speed * pSteps[n]
+                break
+
+    return tSteps[:nSegments], pSteps[:nSegments], tOntimes[:nSegments], pOntimes[:nSegments], \
+           np.sum(tMoves[:nSegments]), np.sum(pMoves[:nSegments])
+
+def calNSegments(angle, fromAngle, mm, maxSteps):
+    moved = 0
+    n = 0
+    if angle > 0:
+        while moved < angle:
+            idx = np.nanargmin(abs(mm[0]['angle'] - fromAngle - moved))
+            moved += mm[0,idx]['speed'] * maxSteps
+            n += 1
+    elif angle < 0:
+         while moved > angle:
+            idx = np.nanargmin(abs(mm[1]['angle'] - fromAngle - moved))
+            moved += mm[1,idx]['speed'] * maxSteps
+            n += 1
+
+    return n
