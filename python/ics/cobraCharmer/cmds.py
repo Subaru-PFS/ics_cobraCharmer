@@ -26,7 +26,7 @@ def chksum(CMD):
     res = 0
     for b in CMD:
         res = (res + b)%65536 
-    res = 65536 - res
+    res = (65536 - res) & 0xffff
     return res    
  
 # Functions that return ByteArrays for a specific CMD---------------------

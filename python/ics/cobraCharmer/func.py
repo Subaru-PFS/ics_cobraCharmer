@@ -1,9 +1,14 @@
+from importlib import reload
+
 import math
 import os.path
 import csv
 import time
 
 import numpy as np
+
+from . import cmds
+reload(cmds)
 
 from .ethernet import sock
 from .log import full_log, medium_log, short_log, eth_hex_logger
@@ -270,7 +275,7 @@ def RST(sectors=0x3f):
     
     medium_log.log("Sectors Reseting: %s" %sectors_reseting)
     
-    cmd = CMD_pow(255, sectors)
+    cmd = CMD_pow(0, sectors)
     sock.send(cmd, eth_hex_logger, 'h')
     resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
     error = tlm_chk(resp)
@@ -391,7 +396,8 @@ def RUN( cobras, timeout=0, inter=0 ):
         payload += c.p.toList(c.board, c.cobra)
         fpgaState.runCobra(c)
 
-    cmd = CMD_run(payload, cmds=len(cobras), timeout=timeout, inter=inter)
+    cmd = cmds.CMD_run(payload, cmds=len(cobras), timeout=timeout, inter=inter)
+        
     sock.send(cmd, eth_hex_logger, 'h')
 
     error = False
