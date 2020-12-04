@@ -261,7 +261,7 @@ class Camera(object):
                 self._camClose()
                 _ = self.cam
                 time.sleep(2)
-            im = self._camExpose(exptime)
+                im = self._camExpose(exptime)
 
             if self.dark is not None:
                 im -= self.dark

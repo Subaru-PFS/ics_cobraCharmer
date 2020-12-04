@@ -26,7 +26,7 @@ class CobraCoach():
     mmPhi = None
     mmThetaSlow = None
     mmPhiSlow = None
-    maxSegments = 50
+    maxSegments = 10
     maxAllowedSteps = 100
 
     """
@@ -71,13 +71,12 @@ class CobraCoach():
 
         # scaling model
         self.useScaling = True
-        self.thetaScaleFactor = 2.0
-        self.phiScaleFactor = 2.0
+        self.thetaScaleFactor = 4.0
+        self.phiScaleFactor = 4.0
         self.minThetaStepsForScaling = 10
         self.minPhiStepsForScaling = 10
         self.constantThetaSpeed = np.deg2rad(0.06)
         self.constantPhiSpeed = np.deg2rad(0.06)
-        self.minScalingAngle = np.deg2rad(2.0)
         self.thetaModel = SpeedModel(p1=self.thetaModelParameter)
         self.phiModel = SpeedModel(p1=self.phiModelParameter)
 
@@ -101,7 +100,7 @@ class CobraCoach():
         self.connect()
 
     def setScaling(self, enabled=True, thetaScaleFactor=None, phiScaleFactor=None,
-                   minThetaSteps=None, minPhiSteps=None):
+                   minThetaSteps=None, minPhiSteps=None, thetaScaling=None, phiScaling=None):
         """ enable/disable motor scaling """
         self.useScaling = enabled
         if thetaScaleFactor is not None:
@@ -112,6 +111,14 @@ class CobraCoach():
             self.minThetaStepsForScaling = minThetaSteps
         if minPhiSteps is not None:
             self.minPhiStepsForScaling = minPhiSteps
+        if thetaScaling is not None:
+            if len(thetaScaling) != self.nCobras:
+                ValueError(f'len(thetaScaling) should equal to {self.nCobras}')
+            self.thetaScaling = thetaScaling
+        if phiScaling is not None:
+            if len(phiScaling) != self.nCobras:
+                ValueError(f'len(phiScaling) should equal to {self.nCobras}')
+            self.phiScaling = phiScaling
 
     def _setupCobras(self):
         """ define the broken/good cobras """
@@ -155,6 +162,10 @@ class CobraCoach():
                 self.oddCobras.append(c)
         self.oddCobras = np.array(self.oddCobras)
         self.evenCobras = np.array(self.evenCobras)
+
+        # default is all enabled for scaling
+        self.thetaScaling = np.full(self.nCobras, True)
+        self.phiScaling = np.full(self.nCobras, True)
 
     def showStatus(self):
         """ show current cobra status """
@@ -311,14 +322,13 @@ class CobraCoach():
         self.cobraInfo['phiAngle'] = phis[:, 0]
 
     def moveSteps(self, cobras, thetaSteps, phiSteps, thetaFast=False, phiFast=False,
-                  expectedThetas=None, expectedPhis=None, force=False, delta=0.01,
+                  expectedThetas=None, expectedPhis=None, force=False,
                   thetaOntimes=None, phiOntimes=None, nSegments=0):
         """
         move cobras by the given steps and update current positions
 
         parameters:
         expectedThetas, expectedPhis: expected theta, phi angles to move
-        delta: tolerance for theta hard stops
         force: can move both theta/phi arms even in theta/phi mode
         nSegments: number of moves
         """
@@ -392,13 +402,16 @@ class CobraCoach():
             raise RuntimeError("number of phiFast must match number of cobras")
 
         # move and expose
+        if self.cam.filePrefix == 'PFAC':
+            self.cam.startRecord()
         if nSegments == 0:
             self.pfi.moveSteps(cobras, np.clip(thetaSteps, -10000, 10000), np.clip(phiSteps, -6000, 6000), \
                                thetaFast=thetaFast, phiFast=phiFast, thetaOntimes=thetaOntimes, phiOntimes=phiOntimes)
         else:
             for n in range(nSegments):
-#                self.cam.expose(doCentroid=False)
                 self.pfi.moveSteps(cobras, thetaSteps[n], phiSteps[n], thetaOntimes=thetaOntimes[n], phiOntimes=phiOntimes[n])
+        if self.cam.filePrefix == 'PFAC':
+            self.cam.stopRecord()
 
         cIds = self._getIndex(cobras)
         thetas = np.copy(self.cobraInfo['thetaAngle'])
@@ -458,29 +471,31 @@ class CobraCoach():
 
             if not np.isnan(theta):
                 angle = calculus.unwrappedAngle(theta, tSteps, self.cobraInfo['thetaAngle'][cId],
-                                                self.cobraInfo['thetaAngle'][cId] + expectedThetas[c_i], delta)
+                                                self.cobraInfo['thetaAngle'][cId] + expectedThetas[c_i])
                 self.moveInfo['movedTheta'][cId] = angle - self.cobraInfo['thetaAngle'][cId]
                 self.moveInfo['movedPhi'][cId] = phi - self.cobraInfo['phiAngle'][cId]
                 self.cobraInfo['thetaAngle'][cId] = angle
                 self.cobraInfo['phiAngle'][cId] = phi
 
                 if self.useScaling and self.mode == self.normalMode:
-                    if not np.isnan(expectedThetas[c_i]) and not np.isnan(self.moveInfo['movedTheta'][cId]) and abs(tSteps) > self.minThetaStepsForScaling:
+                    if self.thetaScaling[cId] and not np.isnan(expectedThetas[c_i]) and not np.isnan(self.moveInfo['movedTheta'][cId]) and abs(tSteps) > self.minThetaStepsForScaling:
                         direction = 'cw' if expectedThetas[c_i] > 0 else 'ccw'
                         scale = expectedThetas[c_i] / self.moveInfo['movedTheta'][cId]
                         if scale < 0:
                             self.logger.warn(f'Theta scale negative: Cobra#{cId+1}, steps:{tSteps}, angle:{angle}')
                         else:
                             scale = (scale - 1) / self.thetaScaleFactor + 1
-                            self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'theta', direction, thetaFast[c_i], scale)
-                    if not np.isnan(expectedPhis[c_i]) and not np.isnan(self.moveInfo['movedPhi'][cId]) and abs(pSteps) > self.minPhiStepsForScaling:
+                            self.pfi.scaleMotorOntime(cobras[c_i], 'theta', direction, scale)
+#                            self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'theta', direction, thetaFast[c_i], scale, self.moveInfo['thetaOntime'][cId])
+                    if self.phiScaling[cId] and not np.isnan(expectedPhis[c_i]) and not np.isnan(self.moveInfo['movedPhi'][cId]) and abs(pSteps) > self.minPhiStepsForScaling:
                         direction = 'cw' if expectedPhis[c_i] > 0 else 'ccw'
                         scale = expectedPhis[c_i] / self.moveInfo['movedPhi'][cId]
                         if scale < 0:
                             self.logger.warn(f'Phi scale negative: Cobra#{cId+1}, steps:{pSteps}, angle:{phis[cId, 0]}')
                         else:
                             scale = (scale - 1) / self.phiScaleFactor + 1
-                            self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'phi', direction, phiFast[c_i], scale)
+                            self.pfi.scaleMotorOntime(cobras[c_i], 'phi', direction, scale)
+#                            self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'phi', direction, phiFast[c_i], scale, self.moveInfo['phiOntime'][cId])
             else:
                 self.cobraInfo['thetaAngle'][cId] = np.nan
                 self.cobraInfo['phiAngle'][cId] = np.nan
@@ -495,15 +510,15 @@ class CobraCoach():
                 self.moveInfo['movedPhi'][cId] = 0
                 self.thetaInfo['angle'][cId] = angle
 
-                if self.useScaling and not np.isnan(expectedThetas[c_i]) and abs(tSteps) > self.minThetaStepsForScaling:
+                if self.useScaling and self.thetaScaling[cId] and not np.isnan(expectedThetas[c_i]) and abs(tSteps) > self.minThetaStepsForScaling:
                     direction = 'cw' if expectedThetas[c_i] > 0 else 'ccw'
                     scale = expectedThetas[c_i] / self.moveInfo['movedTheta'][cId]
                     if scale < 0:
                         self.logger.warn(f'scale is negative: Cobra#{cId+1}, steps:{tSteps}, angle:{angle}')
-                        self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'theta', direction, thetaFast[c_i], 3.0)
                     else:
                         scale = (scale - 1) / self.thetaScaleFactor + 1
-                        self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'theta', direction, thetaFast[c_i], scale)
+                        self.pfi.scaleMotorOntime(cobras[c_i], 'theta', direction, scale)
+#                        self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'theta', direction, thetaFast[c_i], scale, self.moveInfo['thetaOntime'][cId])
 
             elif self.mode == self.phiMode and self.phiInfoIsValid:
                 angle = np.angle(pos[cId] - self.phiInfo['center'][cId]) - self.phiInfo['ccwHome'][cId]
@@ -512,15 +527,15 @@ class CobraCoach():
                 self.moveInfo['movedPhi'][cId] = angle - self.phiInfo['angle'][cId]
                 self.phiInfo['angle'][cId] = angle
 
-                if self.useScaling and not np.isnan(expectedPhis[c_i]) and abs(pSteps) > self.minPhiStepsForScaling:
+                if self.useScaling and self.phiScaling[cId] and not np.isnan(expectedPhis[c_i]) and abs(pSteps) > self.minPhiStepsForScaling:
                     direction = 'cw' if expectedPhis[c_i] > 0 else 'ccw'
                     scale = expectedPhis[c_i] / self.moveInfo['movedPhi'][cId]
                     if scale < 0:
                         self.logger.warn(f'scale is negative: Cobra#{cId+1}, steps:{pSteps}, angle:{angle}')
-                        self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'phi', direction, phiFast[c_i], 3.0)
                     else:
                         scale = (scale - 1) / self.phiScaleFactor + 1
-                        self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'phi', direction, phiFast[c_i], scale)
+                        self.pfi.scaleMotorOntime(cobras[c_i], 'phi', direction, scale)
+#                        self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'phi', direction, phiFast[c_i], scale, self.moveInfo['phiOntime'][cId])
 
     def moveDeltaAngles(self, cobras, thetaAngles=None, phiAngles=None, thetaFast=False, phiFast=False):
         """ move cobras by the given amount of theta and phi angles """
@@ -649,12 +664,14 @@ class CobraCoach():
             nSegments = 0
             for c_i in range(len(cobras)):
                 cId = cIds[c_i]
+                _mmTheta = self.mmTheta[cId] if thetaFast[c_i] else self.mmThetaSlow[cId]
+                _mmPhi = self.mmPhi[cId] if phiFast[c_i] else self.mmPhiSlow[cId]
 
-                n = calculus.calNSegments(thetaAngles[c_i], fromTheta[c_i], self.mmTheta[cId], self.maxAllowedSteps)
+                n = calculus.calNSegments(thetaAngles[c_i], fromTheta[c_i], _mmTheta, self.maxAllowedSteps)
                 if nSegments < n:
                     nSegments = n
 
-                n = calculus.calNSegments(phiAngles[c_i], fromPhi[c_i], self.mmPhi[cId], self.maxAllowedSteps)
+                n = calculus.calNSegments(phiAngles[c_i], fromPhi[c_i], _mmPhi, self.maxAllowedSteps)
                 if nSegments < n:
                     nSegments = n
 
@@ -677,13 +694,16 @@ class CobraCoach():
 
             dataPath = self.runManager.dataDir
             nowSecond = int(time.time())
-            np.save(dataPath / f'thetaSteps_{nowSecond}', thetaSteps)
-            np.save(dataPath / f'phiSteps_{nowSecond}', phiSteps)
-            np.save(dataPath / f'thetaOntimes_{nowSecond}', thetaOntimes)
-            np.save(dataPath / f'phiOntimes_{nowSecond}', phiOntimes)
+            segmentsDtype = np.dtype([('thetaSteps', 'i2'), ('thetaOntimes', 'f4'), ('phiSteps', 'i2'), ('phiOntimes', 'f4')])
+            segments = np.empty((nSegments, len(cIds)), dtype=segmentsDtype)
+            segments['thetaSteps'] = thetaSteps
+            segments['thetaOntimes'] = thetaOntimes
+            segments['phiSteps'] = phiSteps
+            segments['phiOntimes'] = phiOntimes
+            np.savez(dataPath / f'segments_{nowSecond}', idx=cIds, segs=segments)
 
             # send move command
-            self.moveSteps(cobras, thetaSteps, phiSteps, True, True, thetaAngles, phiAngles, False, 0.01, thetaOntimes, phiOntimes, nSegments)
+            self.moveSteps(cobras, thetaSteps, phiSteps, thetaFast, phiFast, thetaAngles, phiAngles, False, thetaOntimes, phiOntimes, nSegments)
 
         return self.moveInfo['movedTheta'][cIds], self.moveInfo['movedPhi'][cIds]
 

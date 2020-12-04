@@ -68,7 +68,7 @@ def diffAngle(angle1, angle2):
 def absDiffAngle(angle1, angle2):
     return np.abs(diffAngle(angle1, angle2))
 
-def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, delta=0.01, minSteps=50):
+def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, minSteps=50, delta=0.02, delta2=0.2):
     """ Adjust theta angles near 0 accounting for possible overshoots given the move """
     angle = angle % (np.pi*2)
 
@@ -81,9 +81,9 @@ def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, delta=0.01, m
         if absDiffAngle(angle, fromAngle) < delta and steps >= minSteps:
             # stuck at CW gard stop
             angle += np.pi*2
-        elif angle < fromAngle and steps >= minSteps:
+        elif angle < fromAngle - delta and steps >= minSteps:
             angle += np.pi*2
-        elif angle < fromAngle - delta and steps > 0:
+        elif angle < fromAngle - delta2 and steps > 0:
             angle += np.pi*2
         elif not np.isnan(toAngle) and toAngle >= np.pi*1.2:
             angle += np.pi*2
@@ -94,9 +94,9 @@ def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, delta=0.01, m
         if absDiffAngle(angle, fromAngle) < delta and steps <= -minSteps:
             # stuck at CCW gard stop
             angle -= np.pi*2
-        elif angle > fromAngle and steps <= -minSteps:
+        elif angle > fromAngle + delta and steps <= -minSteps:
             angle -= np.pi*2
-        elif angle > fromAngle + delta and steps < 0:
+        elif angle > fromAngle + delta2 and steps < 0:
             angle -= np.pi*2
         elif not np.isnan(toAngle) and toAngle < np.pi*0.8:
             angle -= np.pi*2
@@ -440,7 +440,10 @@ def calculateOntime(ontime, speedRatio, scaling, modelParameter, maxOntime):
     a0 = np.sqrt(b1*b1 + b0*b0) - b0
     a1 = a0*((speedRatio - 1) / scaling + 1) + b0
 
-    return np.rint(min(np.sqrt(a1*a1 - b0*b0), maxOntime)*1000.0) / 1000.0
+    r = min(np.sqrt(a1*a1 - b0*b0), maxOntime)
+    if r > b1 * 1.5:
+        r = b1 * 1.5
+    return np.rint(r * 1000.0) / 1000.0
 
 def smooth(x, window_len=11, window='hamming'):
     """ smooth the data """
@@ -478,8 +481,6 @@ def calMoveSegments(thetaMoved, phiMoved, thetaFrom, phiFrom, mmTheta, mmPhi, ma
             idx = np.nanargmin(abs(mmTheta[1]['angle'] - thetaFrom - moved))
             moved += mmTheta[1,idx]['speed'] * maxSteps
             n += 1
-    if n > maxSegments:
-        logger.warn(f"too many theta segments: {n}, {moved}")
     nSeg = n
 
     moved = 0
@@ -496,8 +497,6 @@ def calMoveSegments(thetaMoved, phiMoved, thetaFrom, phiFrom, mmTheta, mmPhi, ma
             n += 1
     if nSeg < n:
         nSeg = n
-    if n > maxSegments:
-        logger.warn(f"too many phi segments: {n}, {moved}")
 
     if nSeg < nSegments:
         nSeg = nSegments

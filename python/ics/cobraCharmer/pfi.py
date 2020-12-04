@@ -442,9 +442,9 @@ class PFI(object):
             existingScale = 1.0
 
         newScale = existingScale * scale
-        if newScale < 0.5:
-            self.logger.warn(f'clipping scale adjustment from {newScale} to 0.5')
-            newScale = 0.5
+        if newScale < 0.3:
+            self.logger.warn(f'clipping scale adjustment from {newScale} to 0.3')
+            newScale = 0.3
         if newScale > 2.0:
             self.logger.warn(f'clipping scale adjustment from {newScale} to 2.0')
             newScale = 2.0
@@ -452,7 +452,7 @@ class PFI(object):
         cobraState.motorScales[mapId] = newScale
         self.logger.debug(f'setadjust {mapId} {existingScale:0.2f} -> {newScale:0.2f}')
 
-    def scaleMotorOntimeBySpeed(self, cobra, motor, direction, fast, scale):
+    def scaleMotorOntimeBySpeed(self, cobra, motor, direction, fast, scale, ontime=0.0):
         """ Declare that we want a given motor's ontime to be scaled after interpolation.
 
         If there is an existing scaling, the new scaling is applied
@@ -481,8 +481,11 @@ class PFI(object):
             self.logger.warn(f'scale is negative, give up scaling: {scale}')
             return cobraState.motorScales[mapId]
 
-        if motor == 'theta':
-            b0 = self.thetaParameter
+        if ontime != 0.0:
+            nowOntime = ontime
+            ontime /= existingScale
+
+        elif motor == 'theta':
             if fast:
                 if direction == 'cw':
                     ontime = self.calibModel.motorOntimeFwd1[cobraId]
@@ -494,10 +497,8 @@ class PFI(object):
                 else:
                     ontime = self.calibModel.motorOntimeSlowRev1[cobraId]
             nowOntime = existingScale * ontime
-            if nowOntime > self.maxThetaOntime:
-                nowOntime = self.maxThetaOntime
+
         else:
-            b0 = self.phiParameter
             if fast:
                 if direction == 'cw':
                     ontime = self.calibModel.motorOntimeFwd2[cobraId]
@@ -509,8 +510,11 @@ class PFI(object):
                 else:
                     ontime = self.calibModel.motorOntimeSlowRev2[cobraId]
             nowOntime = existingScale * ontime
-            if nowOntime > self.maxPhiOntime:
-                nowOntime = self.maxPhiOntime
+
+        if motor == 'theta':
+            b0 = self.thetaParameter
+        else:
+            b0 = self.phiParameter
 
         a0 = np.sqrt(nowOntime*nowOntime + b0*b0) - b0
         a1 = a0*scale + b0
@@ -519,18 +523,23 @@ class PFI(object):
             self.logger.warn(f'invalid scaling adjustment, give up')
             return 1.0
 
+        if motor == 'theta' and newOntime > self.maxThetaOntime:
+            newOntime = self.maxThetaOntime
+        elif motor == 'phi' and newOntime > self.maxPhiOntime:
+            newOntime = self.maxPhiOntime
+
         ontimeScale = newOntime / ontime
         if ontimeScale < 0.3:
             self.logger.warn(f'clipping scale adjustment from {ontimeScale} to 0.3')
             ontimeScale = 0.3
-        if ontimeScale > 3.0:
-            self.logger.warn(f'clipping scale adjustment from {ontimeScale} to 3.0')
-            ontimeScale = 3.0
+        if ontimeScale > 2.0:
+            self.logger.warn(f'clipping scale adjustment from {ontimeScale} to 2.0')
+            ontimeScale = 2.0
         trueOntime = ontimeScale * ontime
         trueScale = (np.sqrt(trueOntime*trueOntime + b0*b0) - b0) / a0
 
         cobraState.motorScales[mapId] = ontimeScale
-        self.logger.debug(f'setadjust {mapId} {existingScale:0.2f} -> {ontimeScale:0.2f}')
+        self.logger.debug(f'adjust {mapId} {existingScale:0.2f} -> {ontimeScale:0.2f}')
 
         return trueScale
 
