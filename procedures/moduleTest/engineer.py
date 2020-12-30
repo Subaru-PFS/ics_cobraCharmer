@@ -50,15 +50,16 @@ def setNormalMode():
         return
     cc.setMode('normal')
 
-def setConstantOntimeMode():
+def setConstantOntimeMode(maxSteps=2000):
     """ using constant on-time motor maps """
     cc.constantSpeedMode = False
+    cc.maxTotalSteps = maxSteps
 
 def setConstantSpeedMode(maxSegments=10, maxSteps=100):
     """ using constant speed motor maps """
     cc.constantSpeedMode = True
     cc.maxSegments = maxSegments
-    cc.maxAllowedSteps = maxSteps
+    cc.maxStepsPerSeg = maxSteps
 
 def setConstantSpeedMaps(mmTheta, mmPhi, mmThetaSlow, mmPhiSlow):
     cc.mmTheta = mmTheta
@@ -268,7 +269,7 @@ def phiConvergenceTest(cIds, margin=15.0, runs=50, tries=8, fast=False, toleranc
     np.save(dataPath / 'moves', moves)
     return moves
 
-def moveThetaPhi(cIds, thetas, phis, relative=False, local=True, tolerance=0.1, tries=6, homed=False, newDir=True, thetaFast=False, phiFast=False, threshold=3.0):
+def moveThetaPhi(cIds, thetas, phis, relative=False, local=True, tolerance=0.1, tries=6, homed=False, newDir=True, thetaFast=False, phiFast=False, threshold=10.0):
     """
     move cobras to the target angles
 
@@ -439,15 +440,14 @@ def movePositions(cIds, targets, tolerance=0.1, tries=6, thetaMarginCCW=0.1, hom
 
     return dataPath, cc.pfi.anglesToPositions(cobras, atThetas, atPhis), moves
 
-def convergenceTest(cIds, runs=8, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0), tries=8, tolerance=0.2, threshold=3.0, newDir=False, twoSteps=False):
-    """ convergence test """
+def convergenceTest(cIds, runs=8, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0), thetaOffset=0, phiAngle=np.pi*5/6, tries=8, tolerance=0.2, threshold=3.0, newDir=False, twoSteps=False):
+    """ convergence test, all theta arms in the same global direction  """
     cc.connect(False)
     targets = np.zeros((runs, len(cIds), 2))
     moves = np.zeros((runs, len(cIds), tries), dtype=moveDtype)
     positions = np.zeros((runs, len(cIds)), dtype=complex)
     thetaRange = ((cc.calibModel.tht1 - cc.calibModel.tht0 + np.pi) % (np.pi*2) + np.pi)[cIds]
     phiRange = ((cc.calibModel.phiOut - cc.calibModel.phiIn) % (np.pi*2))[cIds]
-    thetaOffset = np.random.rand()*np.pi*2
 
     for i in range(runs):
         thetas = (thetaOffset + np.pi*2*i/runs - cc.calibModel.tht0[cIds]) % (np.pi*2)
@@ -455,8 +455,7 @@ def convergenceTest(cIds, runs=8, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg
         tooBig = thetas > thetaRange - thetaMargin
         thetas[tooBig] = thetaRange[tooBig] - thetaMargin
 
-        phis = np.random.rand() * (np.pi/2 - phiMargin) - cc.calibModel.phiIn[cIds] - np.pi/2
-#        phis = np.random.rand() * (np.pi - phiMargin*2) - cc.calibModel.phiIn[cIds] - np.pi + phiMargin
+        phis = - cc.calibModel.phiIn[cIds] - np.pi + phiAngle
         phis[phis < 0] = 0
         tooBig = phis > phiRange - phiMargin
         phis[tooBig] = phiRange[tooBig] - phiMargin
@@ -479,14 +478,12 @@ def convergenceTest(cIds, runs=8, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg
                     if thetasVia[c] > thetaRange[c]:
                         thetasVia[c] = thetaRange[c]
 
-            _useScaling, _maxSegments = cc.useScaling, cc.maxSegments
-            cc.useScaling = False
-            cc.maxSegments = max(_maxSegments, int(2000/cc.maxAllowedSteps))
+            _useScaling, _maxSegments, _maxTotalSteps = cc.useScaling, cc.maxSegments, cc.maxTotalSteps
+            cc.useScaling, cc.maxSegments, cc.maxTotalSteps = False, _maxSegments * 2, _maxTotalSteps * 2
             dataPath, atThetas, atPhis, moves[i,:,:2] = \
-                moveThetaPhi(cIds, thetasVia, phisVia, False, True, tolerance, 2, True, newDir, True, False, threshold)
+                moveThetaPhi(cIds, thetasVia, phisVia, False, True, tolerance, 2, True, newDir, True, True, threshold)
 
-            cc.useScaling = _useScaling
-            cc.maxSegments = _maxSegments
+            cc.useScaling, cc.maxSegments, cc.maxTotalSteps = _useScaling, _maxSegments, _maxTotalSteps
             dataPath, atThetas, atPhis, moves[i,:,2:] = \
                 moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries-2, False, False, False, True, threshold)
 
@@ -1421,46 +1418,8 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalStep
 
     return dataPath, ontimes, angles, speeds
 
-def convergenceTestZ(cIds, runs=3, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0), tries=8, tolerance=0.1, threshold=3.0, newDir=False):
-    """ convergence test """
-    if tries < 4:
-        raise ValueError("tries parameter should be larger than 4")
-
-    cc.connect(False)
-    targets = np.zeros((runs, len(cIds), 2))
-    moves = np.zeros((runs, len(cIds), tries), dtype=moveDtype)
-    positions = np.zeros((runs, len(cIds)), dtype=complex)
-    thetaRange = ((cc.calibModel.tht1 - cc.calibModel.tht0 + np.pi) % (np.pi*2) + np.pi)[cIds]
-    phiRange = ((cc.calibModel.phiOut - cc.calibModel.phiIn) % (np.pi*2))[cIds]
-    thetaOffset = np.random.rand()*np.pi*2
-
-    for i in range(runs):
-        thetas = (thetaOffset + np.pi*2*i/runs - cc.calibModel.tht0[cIds]) % (np.pi*2)
-        thetas[thetas < thetaMargin] += np.pi*2
-        tooBig = thetas > thetaRange - thetaMargin
-        thetas[tooBig] = thetaRange[tooBig] - thetaMargin
-        phis = np.pi/2 - np.random.rand() * np.pi/3 - cc.calibModel.phiIn[cIds] - np.pi
-#        phis = np.random.rand() * (np.pi/2 - phiMargin) - cc.calibModel.phiIn[cIds] - np.pi/2
-        phis[phis < 0] = 0
-        tooBig = phis > phiRange - phiMargin
-        phis[tooBig] = phiRange[tooBig] - phiMargin
-        targets[i,:,0] = thetas
-        targets[i,:,1] = phis
-        positions[i] = cc.pfi.anglesToPositions(cc.allCobras[cIds], thetas, phis)
-
-        logger.info(f'=== Run {i+1}: Convergence test ===')
-        cc.pfi.resetMotorScaling(cc.allCobras[cIds])
-
-        dataPath, atThetas, atPhis, moves[i,:,:] = \
-            moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries, True, newDir, True, True, threshold)
-
-    np.save(dataPath / 'positions', positions)
-    np.save(dataPath / 'targets', targets)
-    np.save(dataPath / 'moves', moves)
-    return targets, moves
-
 def convergenceTestX(cIds, runs=3, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0), tries=8, tolerance=0.1, threshold=3.0, newDir=False, twoSteps=False):
-    """ convergence test """
+    """ convergence test, even and odd cobras move toward each other in a single module """
     if tries < 4:
         raise ValueError("tries parameter should be larger than 4")
 
@@ -1479,7 +1438,6 @@ def convergenceTestX(cIds, runs=3, thetaMargin=np.deg2rad(15.0), phiMargin=np.de
         tooBig = thetas > thetaRange - thetaMargin
         thetas[tooBig] = thetaRange[tooBig] - thetaMargin
         phis = np.pi - angle*2 - cc.calibModel.phiIn[cIds] - np.pi
-#        phis = np.random.rand() * (np.pi/2 - phiMargin) - cc.calibModel.phiIn[cIds] - np.pi/2
         phis[phis < 0] = 0
         tooBig = phis > phiRange - phiMargin
         phis[tooBig] = phiRange[tooBig] - phiMargin
@@ -1502,14 +1460,12 @@ def convergenceTestX(cIds, runs=3, thetaMargin=np.deg2rad(15.0), phiMargin=np.de
                     if thetasVia[c] > thetaRange[c]:
                         thetasVia[c] = thetaRange[c]
 
-            _useScaling, _maxSegments = cc.useScaling, cc.maxSegments
-            cc.useScaling = False
-            cc.maxSegments = max(_maxSegments, int(2000/cc.maxAllowedSteps))
+            _useScaling, _maxSegments, _maxTotalSteps = cc.useScaling, cc.maxSegments, cc.maxTotalSteps
+            cc.useScaling, cc.maxSegments, cc.maxTotalSteps = False, _maxSegments * 2, _maxTotalSteps * 2
             dataPath, atThetas, atPhis, moves[i,:,:2] = \
-                moveThetaPhi(cIds, thetasVia, phisVia, False, True, tolerance, 2, True, newDir, True, False, threshold)
+                moveThetaPhi(cIds, thetasVia, phisVia, False, True, tolerance, 2, True, newDir, True, True, threshold)
 
-            cc.useScaling = _useScaling
-            cc.maxSegments = _maxSegments
+            cc.useScaling, cc.maxSegments, cc.maxTotalSteps = _useScaling, _maxSegments, _maxTotalSteps
             dataPath, atThetas, atPhis, moves[i,:,2:] = \
                 moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries-2, False, False, False, True, threshold)
 

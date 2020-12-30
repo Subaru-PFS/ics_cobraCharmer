@@ -799,13 +799,11 @@ class PFI(object):
                     thtSteps = self.calibModel.posThtSteps[c]
                 else:
                     thtSteps = self.calibModel.posThtSlowSteps[c]
-                mapId = cobraState.mapId(cobraId, 'theta', 'cw')
             else:
                 if _thetaFast[c]:
                     thtSteps = self.calibModel.negThtSteps[c]
                 else:
                     thtSteps = self.calibModel.negThtSlowSteps[c]
-                mapId = cobraState.mapId(cobraId, 'theta', 'ccw')
 
             # Get the integrated step maps for the phi angle
             if deltaPhi[c] >= 0:
@@ -813,20 +811,18 @@ class PFI(object):
                     phiSteps = self.calibModel.posPhiSteps[c]
                 else:
                     phiSteps = self.calibModel.posPhiSlowSteps[c]
-                mapId = cobraState.mapId(cobraId, 'phi', 'cw')
             else:
                 if _phiFast[c]:
                     phiSteps = self.calibModel.negPhiSteps[c]
                 else:
                     phiSteps = self.calibModel.negPhiSlowSteps[c]
-                mapId = cobraState.mapId(cobraId, 'phi', 'ccw')
 
             # Calculate the total number of motor steps for the theta movement
             stepsRange = np.interp([startTht[c], startTht[c] + deltaTht[c]], self.calibModel.thtOffsets[c],
                                    thtSteps)
             if not np.all(np.isfinite(stepsRange)):
                 raise ValueError(f"theta angle to step interpolation out of range: "
-                                 f"{startTht[c]} {startTht[c] + deltaTht[c]}")
+                                 f"Cobra#{c+1} {startTht[c]} {startTht[c] + deltaTht[c]}")
             nThtSteps[c] = np.rint(stepsRange[1] - stepsRange[0]).astype('i4')
 
             # Calculate the total number of motor steps for the phi movement
@@ -834,7 +830,7 @@ class PFI(object):
                                    phiSteps)
             if not np.all(np.isfinite(stepsRange)):
                 raise ValueError(f"phi angle to step interpolation out of range: "
-                                 f"{startTht[c]} {startTht[c] + deltaTht[c]}")
+                                 f"Cobra#{c+1} {startPhi[c]} {startPhi[c] + deltaPhi[c]}")
             nPhiSteps[c] = np.rint(stepsRange[1] - stepsRange[0]).astype('i4')
 
         self.logger.debug(f'start={startPhi[:3]}, delta={deltaPhi[:3]} move={nPhiSteps[:3]}')

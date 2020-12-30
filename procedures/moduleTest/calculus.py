@@ -6,7 +6,6 @@ import sys
 
 binSize = np.deg2rad(3.6)
 regions = 112
-maxSegments = 100   # print warning when the number of segments is beyond this value
 phiThreshold = 0.6   # minimum phi angle to move in the beginning
 
 def lazyIdentification(centers, spots, radii=None):
@@ -616,3 +615,95 @@ def calNSegments(angle, fromAngle, mm, maxSteps):
             n += 1
 
     return n
+
+def calculateSteps(cId, maxSteps, thetaAngle, phiAngle, fromTheta, fromPhi, thetaFast, phiFast, model):
+    # Get the integrated step maps for the theta angle
+    if thetaAngle >= 0:
+        if thetaFast:
+            thetaModel = model.posThtSteps[cId]
+        else:
+            thetaModel = model.posThtSlowSteps[cId]
+    else:
+        if thetaFast:
+            thetaModel = model.negThtSteps[cId]
+        else:
+            thetaModel = model.negThtSlowSteps[cId]
+
+    # Get the integrated step maps for the phi angle
+    if phiAngle >= 0:
+        if phiFast:
+            phiModel = model.posPhiSteps[cId]
+        else:
+            phiModel = model.posPhiSlowSteps[cId]
+    else:
+        if phiFast:
+            phiModel = model.negPhiSteps[cId]
+        else:
+            phiModel = model.negPhiSlowSteps[cId]
+
+    # Calculate the total number of motor steps for the theta movement
+    stepsRange = np.interp([fromTheta, fromTheta + thetaAngle], model.thtOffsets[cId], thetaModel)
+    if not np.all(np.isfinite(stepsRange)):
+        raise ValueError(f"theta angle to step interpolation out of range: "
+                         f"Cobra#{cId+1} {fromTheta}:{fromTheta + thetaAngle}")
+    thetaSteps = np.rint(stepsRange[1] - stepsRange[0]).astype('i4')
+    thetaFromSteps = stepsRange[0]
+
+    # Calculate the total number of motor steps for the phi movement
+    stepsRange = np.interp([fromPhi, fromPhi + phiAngle], model.phiOffsets[cId], phiModel)
+    if not np.all(np.isfinite(stepsRange)):
+        raise ValueError(f"phi angle to step interpolation out of range: "
+                         f"Cobra#{cId+1} {fromPhi}:{fromPhi + phiAngle}")
+    phiSteps = np.rint(stepsRange[1] - stepsRange[0]).astype('i4')
+    phiFromSteps = stepsRange[0]
+
+    # calculate phi motor steps away from center in the beginning
+    safePhiSteps = 0
+    if phiSteps > 0:
+        safePhiAngle = phiThreshold - model.phiIn[cId] - np.pi
+        if fromPhi < safePhiAngle:
+            stepsRange = np.interp([fromPhi, safePhiAngle], model.phiOffsets[cId], phiModel)
+            if not np.all(np.isfinite(stepsRange)):
+                    raise ValueError(f"phi angle to step interpolation out of range: "
+                                     f"Cobra#{cId+1} {fromPhi}:{safePhiAngle}")
+            safePhiSteps = min(np.rint(stepsRange[1] - stepsRange[0]).astype('i4'), phiSteps, maxSteps)
+
+    if abs(thetaSteps) > maxSteps or abs(phiSteps) > maxSteps:
+        if abs(thetaSteps) >= abs(phiSteps):
+            if phiSteps > 0 and thetaSteps > 0:
+                phiSteps = max(phiSteps - thetaSteps + maxSteps, safePhiSteps)
+                thetaSteps = maxSteps
+            elif phiSteps > 0 and thetaSteps < 0:
+                phiSteps = max(phiSteps + thetaSteps + maxSteps, safePhiSteps)
+                thetaSteps = -maxSteps
+            elif phiSteps < 0 and thetaSteps > 0:
+                phiSteps = max(phiSteps, -maxSteps)
+                thetaSteps = maxSteps
+            elif phiSteps < 0 and thetaSteps < 0:
+                phiSteps = max(phiSteps, -maxSteps)
+                thetaSteps = -maxSteps
+            elif thetaSteps > 0:
+                thetaSteps = maxSteps
+            else:
+                thetaSteps = -maxSteps
+        else:
+            if phiSteps > 0 and thetaSteps > 0:
+                thetaSteps = min(thetaSteps, maxSteps)
+                phiSteps = maxSteps
+            elif phiSteps > 0 and thetaSteps < 0:
+                thetaSteps = min(thetaSteps + phiSteps - maxSteps, 0)
+                phiSteps = maxSteps
+            elif phiSteps < 0 and thetaSteps > 0:
+                thetaSteps = min(thetaSteps, maxSteps)
+                phiSteps = -maxSteps
+            elif phiSteps < 0 and thetaSteps < 0:
+                thetaSteps = min(thetaSteps - phiSteps - maxSteps, 0)
+                phiSteps = -maxSteps
+            elif phiSteps > 0:
+                phiSteps = maxSteps
+            else:
+                phiSteps = -maxSteps
+
+    toTheta = np.interp(thetaFromSteps + thetaSteps, thetaModel, model.thtOffsets[cId])
+    toPhi = np.interp(phiFromSteps + phiSteps, phiModel, model.phiOffsets[cId])
+    return thetaSteps, phiSteps, toTheta - fromTheta, toPhi - fromPhi

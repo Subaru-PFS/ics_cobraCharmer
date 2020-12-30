@@ -27,7 +27,8 @@ class CobraCoach():
     mmThetaSlow = None
     mmPhiSlow = None
     maxSegments = 10
-    maxAllowedSteps = 100
+    maxStepsPerSeg = 100
+    maxTotalSteps = 2000
 
     """
     There are three modes for cobra operation:
@@ -654,8 +655,13 @@ class CobraCoach():
 
         if not self.constantSpeedMode:
             # calculate steps
-            thetaSteps, phiSteps = self.pfi.moveThetaPhi(cobras, thetaAngles, phiAngles, fromTheta, fromPhi,
-                                                         thetaFast, phiFast, doRun=False)
+            thetaSteps = np.zeros(len(cobras))
+            phiSteps = np.zeros(len(cobras))
+            for c_i in range(len(cobras)):
+                thetaSteps[c_i], phiSteps[c_i], thetaAngles[c_i], phiAngles[c_i] = \
+                    calculus.calculateSteps(cIds[c_i], self.maxTotalSteps, thetaAngles[c_i], phiAngles[c_i],
+                                            fromTheta[c_i], fromPhi[c_i], thetaFast[c_i], phiFast[c_i], self.calibModel)
+
             # send move command
             self.moveSteps(cobras, thetaSteps, phiSteps, thetaFast, phiFast, thetaAngles, phiAngles)
 
@@ -667,11 +673,11 @@ class CobraCoach():
                 _mmTheta = self.mmTheta[cId] if thetaFast[c_i] else self.mmThetaSlow[cId]
                 _mmPhi = self.mmPhi[cId] if phiFast[c_i] else self.mmPhiSlow[cId]
 
-                n = calculus.calNSegments(thetaAngles[c_i], fromTheta[c_i], _mmTheta, self.maxAllowedSteps)
+                n = calculus.calNSegments(thetaAngles[c_i], fromTheta[c_i], _mmTheta, self.maxStepsPerSeg)
                 if nSegments < n:
                     nSegments = n
 
-                n = calculus.calNSegments(phiAngles[c_i], fromPhi[c_i], _mmPhi, self.maxAllowedSteps)
+                n = calculus.calNSegments(phiAngles[c_i], fromPhi[c_i], _mmPhi, self.maxStepsPerSeg)
                 if nSegments < n:
                     nSegments = n
 
@@ -690,7 +696,7 @@ class CobraCoach():
 
                 thetaSteps[:,c_i], phiSteps[:,c_i], thetaOntimes[:,c_i], phiOntimes[:,c_i], thetaAngles[c_i], phiAngles[c_i] = \
                     calculus.calMoveSegments(thetaAngles[c_i], phiAngles[c_i], fromTheta[c_i], fromPhi[c_i],
-                                             _mmTheta, _mmPhi, self.maxAllowedSteps, nSegments, phiOffset)
+                                             _mmTheta, _mmPhi, self.maxStepsPerSeg, nSegments, phiOffset)
 
             dataPath = self.runManager.dataDir
             nowSecond = int(time.time())
