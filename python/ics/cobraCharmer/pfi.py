@@ -157,16 +157,16 @@ class PFI(object):
         if phiFreq is not None and len(cobras) != len(phiFreq):
             raise RuntimeError("number of phi frquencies must match number of cobras")
 
-        for c in cobras:
+        for n,c in enumerate(cobras):
             cobraIdx = self._mapCobraIndex(c)
             if thetaFreq is None:
                 thetaPer = self._freqToPeriod(self.calibModel.motorFreq1[cobraIdx]/1000)
             else:
-                thetaPer = self._freqToPeriod(np.array(thetaFreq))
+                thetaPer = self._freqToPeriod(thetaFreq[n]/1000)
             if phiFreq is None:
                 phiPer = self._freqToPeriod(self.calibModel.motorFreq2[cobraIdx]/1000)
             else:
-                phiPer = self._freqToPeriod(np.array(phiFreq))
+                phiPer = self._freqToPeriod(phiFreq[n]/1000)
 
             # print(f'set {c.board},{c.cobra} to {thetaPer},{phiPer} {self.calibModel.motorFreq1[c.cobra]}')
             c.p = func.SetParams(p0=thetaPer, p1=phiPer, en=(True, True))
@@ -788,11 +788,8 @@ class PFI(object):
         # Calculate the total number of motor steps for each angle
         nThtSteps = np.empty(nCobras)
         nPhiSteps = np.empty(nCobras)
-        cobras = self.getAllDefinedCobras()
 
         for c in range(nCobras):
-            cobraId = self._mapCobraIndex(cobras[c])
-
             # Get the integrated step maps for the theta angle
             if deltaTht[c] >= 0:
                 if _thetaFast[c]:
