@@ -465,7 +465,9 @@ def smooth(x, window_len=11, window='hamming'):
 
     return y[(window_len//2):-(window_len//2)]
 
-def calMoveSegments(thetaMoved, phiMoved, thetaFrom, phiFrom, mmTheta, mmPhi, maxSteps, nSegments, phiOffset=0):
+def calMoveSegments(thetaMoved, phiMoved, thetaFrom, phiFrom,
+                    mmTheta, mmPhi, maxSteps, nSegments, phiOffset=0,
+                    trajectory=None, cId=None):
     """ calculate move segments """
 
     moved = 0
@@ -597,8 +599,15 @@ def calMoveSegments(thetaMoved, phiMoved, thetaFrom, phiFrom, mmTheta, mmPhi, ma
                 pMoves[n] = -speed * pSteps[n]
                 break
 
-    return tSteps[:nSegments], pSteps[:nSegments], tOntimes[:nSegments], pOntimes[:nSegments], \
-           np.sum(tMoves[:nSegments]), np.sum(pMoves[:nSegments])
+    if trajectory is not None:
+        allTheta = interpAllConstantSpeedSteps(tSteps[:nSegments], tOntimes[:nSegments],
+                                               tMoves[:nSegments], trajectory.getSpacing())
+        allPhi = interpAllConstantSpeedSteps(pSteps[:nSegments], pOntimes[:nSegments],
+                                             pMoves[:nSegments], trajectory.getSpacing())
+        trajectory.addMotion(cId, allTheta, allPhi)
+
+    return (tSteps[:nSegments], pSteps[:nSegments], tOntimes[:nSegments], pOntimes[:nSegments],
+            np.sum(tMoves[:nSegments]), np.sum(pMoves[:nSegments]))
 
 def calNSegments(angle, fromAngle, mm, maxSteps):
     moved = 0
@@ -616,7 +625,10 @@ def calNSegments(angle, fromAngle, mm, maxSteps):
 
     return n
 
-def calculateSteps(cId, maxSteps, thetaAngle, phiAngle, fromTheta, fromPhi, thetaFast, phiFast, model):
+def calculateSteps(cId, maxSteps,
+                   thetaAngle, phiAngle, fromTheta, fromPhi,
+                   thetaFast, phiFast,
+                   model, trajectory=None):
     # Get the integrated step maps for the theta angle
     if thetaAngle >= 0:
         if thetaFast:
@@ -704,6 +716,44 @@ def calculateSteps(cId, maxSteps, thetaAngle, phiAngle, fromTheta, fromPhi, thet
             else:
                 phiSteps = -maxSteps
 
+    if trajectory is not None:
+        allTheta = interpStepsOnPath(thetaFromSteps, thetaSteps, thetaModel,
+                                     model.thtOffsets[cId], trajectory.getSpacing())
+        allPhi = interpStepsOnPath(phiFromSteps, phiSteps, phiModel,
+                                   model.phiOffsets[cId], trajectory.getSpacing())
+        trajectory.addMotion(cId, allTheta, allPhi)
+
     toTheta = np.interp(thetaFromSteps + thetaSteps, thetaModel, model.thtOffsets[cId])
     toPhi = np.interp(phiFromSteps + phiSteps, phiModel, model.phiOffsets[cId])
     return thetaSteps, phiSteps, toTheta - fromTheta, toPhi - fromPhi
+
+def _spaceInterpolation(startSteps, moveSteps, spacing):
+    return np.linspace(startSteps, startSteps + moveSteps, int(np.abs(moveSteps)//spacing))
+
+def interpStepsOnPath(startSteps, moveSteps, stepMap, angleMap, spacing):
+    """Return the angles taken along a motor's path, equally spaced in steps.
+
+    Args
+    ----
+    startSteps : `int`
+     the starting step position.
+    moveSteps : `int`
+     the number of steps to move (can be negative).
+    stepMap : array
+     the step array we interpolate into
+    angleMap : array
+     the angle array we want interpolations out of.
+    spacing : `float`
+     how tightly to space our interpolation
+
+    Returns
+    -------
+    angles : array
+     the
+    """
+
+    x = _spaceInterpolation(startSteps, moveSteps, spacing)
+    return np.interp(x, stepMap, angleMap)
+
+def interpAllConstantSpeedSteps(steps, ontimes, moves, spacing):
+    raise NotImplementedError('have not done constant speed trajectories yet.')
