@@ -267,7 +267,13 @@ def phiConvergenceTest(cIds, margin=15.0, runs=50, tries=8, fast=False, toleranc
     np.save(dataPath / 'moves', moves)
     return moves
 
-def moveThetaPhi(cIds, thetas, phis, relative=False, local=True, tolerance=0.1, tries=6, homed=False, newDir=True, thetaFast=False, phiFast=False, threshold=10.0, thetaMargin=np.deg2rad(15.0)):
+def moveThetaPhi(cIds, thetas, phis,
+                 relative=False, local=True,
+                 tolerance=0.1, tries=6, homed=False,
+                 newDir=True,
+                 thetaFast=False, phiFast=False,
+                 threshold=10.0, thetaMargin=np.deg2rad(15.0),
+                 trajectory=None, trajectoryOnly=True):
     """
     move cobras to the target angles
 
@@ -285,6 +291,8 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True, tolerance=0.1, 
     phiFast: using fast if true else slow phi motor maps
     threshold: using slow motor maps if the distance to the target is below this value
     thetaMargin : the minimum theta angles to the theta hard stops
+    trajectory : an object which we can send path points to.
+    trajectoryOnly : True if we should not move, etc, but simply return after calculating trajectory.
 
     Returns
     ----
@@ -353,6 +361,9 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True, tolerance=0.1, 
     logger.info(f'Move phi arms to angle={np.round(np.rad2deg(targetPhis[cIds]),2)} degree')
 
     if homed:
+        if trajectory is not None:
+            raise NotImplementedError('cobras must be homed to accumulate trajectories')
+
         # go home for safe movement
         cobras = cc.allCobras[cIds]
         logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
@@ -365,7 +376,11 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True, tolerance=0.1, 
         cc.thetaScaling = np.logical_not(farAwayMask)
         cc.phiScaling = np.logical_not(farAwayMask)
         atThetas[notDoneMask], atPhis[notDoneMask] = \
-            cc.moveToAngles(cobras, targetThetas[notDoneMask], targetPhis[notDoneMask], _thetaFast, _phiFast, True)
+            cc.moveToAngles(cobras, targetThetas[notDoneMask], targetPhis[notDoneMask],
+                            _thetaFast, _phiFast,
+                            True, trajectory=trajectory, trajectoryOnly=trajectoryOnly)
+        if trajectoryOnly:
+            return dataPath, None, None, None
 
         atPositions = cc.cobraInfo['position']
         distances = np.abs(atPositions - targets)
@@ -442,7 +457,12 @@ def movePositions(cIds, targets, tolerance=0.1, tries=6, thetaMarginCCW=0.1, hom
 
     return dataPath, cc.pfi.anglesToPositions(cobras, atThetas, atPhis), moves
 
-def convergenceTest(cIds, runs=8, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0), thetaOffset=0, phiAngle=np.pi*5/6, tries=8, tolerance=0.2, threshold=3.0, newDir=False, twoSteps=False):
+def convergenceTest(cIds, runs=8,
+                    thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0),
+                    thetaOffset=0, phiAngle=np.pi*5/6,
+                    tries=8, tolerance=0.2, threshold=3.0,
+                    newDir=False, twoSteps=False,
+                    trajectory=None, trajectoryOnly=True):
     """ convergence test, all theta arms in the same global direction  """
     cc.connect(False)
     targets = np.zeros((runs, len(cIds), 2))
@@ -483,15 +503,24 @@ def convergenceTest(cIds, runs=8, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg
             _useScaling, _maxSegments, _maxTotalSteps = cc.useScaling, cc.maxSegments, cc.maxTotalSteps
             cc.useScaling, cc.maxSegments, cc.maxTotalSteps = False, _maxSegments * 2, _maxTotalSteps * 2
             dataPath, atThetas, atPhis, moves[i,:,:2] = \
-                moveThetaPhi(cIds, thetasVia, phisVia, False, True, tolerance, 2, True, newDir, True, True, threshold)
+                moveThetaPhi(cIds, thetasVia, phisVia, False, True, tolerance, 2, True, newDir,
+                             True, True, threshold,
+                             trajectory=trajectory, trajectoryOnly=trajectoryOnly)
 
             cc.useScaling, cc.maxSegments, cc.maxTotalSteps = _useScaling, _maxSegments, _maxTotalSteps
             dataPath, atThetas, atPhis, moves[i,:,2:] = \
-                moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries-2, False, False, False, True, threshold)
+                moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries-2, False, False,
+                             False, True, threshold,
+                             trajectory=trajectory, trajectoryOnly=trajectoryOnly)
 
         else:
             dataPath, atThetas, atPhis, moves[i,:,:] = \
-                moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries, True, newDir, False, True, threshold)
+                moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries, True, newDir,
+                             False, True, threshold,
+                             trajectory=trajectory, trajectoryOnly=trajectoryOnly)
+
+        if trajectoryOnly:
+            return targets, moves
 
     np.save(dataPath / 'positions', positions)
     np.save(dataPath / 'targets', targets)
