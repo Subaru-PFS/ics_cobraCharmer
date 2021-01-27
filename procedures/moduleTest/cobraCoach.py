@@ -538,7 +538,10 @@ class CobraCoach():
                         self.pfi.scaleMotorOntime(cobras[c_i], 'phi', direction, scale)
 #                        self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'phi', direction, phiFast[c_i], scale, self.moveInfo['phiOntime'][cId])
 
-    def moveDeltaAngles(self, cobras, thetaAngles=None, phiAngles=None, thetaFast=False, phiFast=False):
+    def moveDeltaAngles(self, cobras,
+                        thetaAngles=None, phiAngles=None,
+                        thetaFast=False, phiFast=False,
+                        trajectory=None, trajectoryOnly=True):
         """ move cobras by the given amount of theta and phi angles """
         if self.constantSpeedMode:
             if self.mmThetaSlow is None or self.mmPhiSlow is None:
@@ -660,8 +663,10 @@ class CobraCoach():
             for c_i in range(len(cobras)):
                 thetaSteps[c_i], phiSteps[c_i], thetaAngles[c_i], phiAngles[c_i] = \
                     calculus.calculateSteps(cIds[c_i], self.maxTotalSteps, thetaAngles[c_i], phiAngles[c_i],
-                                            fromTheta[c_i], fromPhi[c_i], thetaFast[c_i], phiFast[c_i], self.calibModel)
-
+                                            fromTheta[c_i], fromPhi[c_i], thetaFast[c_i], phiFast[c_i],
+                                            self.calibModel, trajectory=trajectory)
+            if trajectoryOnly:
+                return None, None
             # send move command
             self.moveSteps(cobras, thetaSteps, phiSteps, thetaFast, phiFast, thetaAngles, phiAngles)
 
@@ -696,7 +701,10 @@ class CobraCoach():
 
                 thetaSteps[:,c_i], phiSteps[:,c_i], thetaOntimes[:,c_i], phiOntimes[:,c_i], thetaAngles[c_i], phiAngles[c_i] = \
                     calculus.calMoveSegments(thetaAngles[c_i], phiAngles[c_i], fromTheta[c_i], fromPhi[c_i],
-                                             _mmTheta, _mmPhi, self.maxStepsPerSeg, nSegments, phiOffset)
+                                             _mmTheta, _mmPhi, self.maxStepsPerSeg, nSegments, phiOffset,
+                                             trajectory=trajectory, cId=cId)
+            if trajectoryOnly:
+                return None, None
 
             dataPath = self.runManager.dataDir
             nowSecond = int(time.time())
@@ -713,7 +721,10 @@ class CobraCoach():
 
         return self.moveInfo['movedTheta'][cIds], self.moveInfo['movedPhi'][cIds]
 
-    def moveToAngles(self, cobras, thetaAngles=None, phiAngles=None, thetaFast=False, phiFast=False, local=True):
+    def moveToAngles(self, cobras,
+                     thetaAngles=None, phiAngles=None,
+                     thetaFast=False, phiFast=False,
+                     local=True, trajectory=None, trajectoryOnly=True):
         """ move cobras to the given theta and phi angles
             If local is True, both theta and phi angles are measured from CCW hard stops,
             otherwise theta angles are in global coordinate and phi angles are
@@ -782,7 +793,12 @@ class CobraCoach():
             deltaPhi = None
 
         # send the command
-        self.moveDeltaAngles(cobras, deltaTheta, deltaPhi, thetaFast, phiFast)
+        self.moveDeltaAngles(cobras, deltaTheta, deltaPhi,
+                             thetaFast, phiFast,
+                             trajectory=trajectory, trajectoryOnly=trajectoryOnly)
+        if trajectoryOnly:
+            return None, None
+
         if local:
             if self.mode == self.thetaMode:
                 return self.thetaInfo['angle'][cIds], np.zeros(len(cobras))
