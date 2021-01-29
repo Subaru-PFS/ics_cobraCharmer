@@ -3,6 +3,7 @@ import sep
 from ics.cobraCharmer import pfiDesign
 import os
 import sys
+import trajectory
 
 binSize = np.deg2rad(3.6)
 regions = 112
@@ -506,6 +507,8 @@ def calMoveSegments(thetaMoved, phiMoved, thetaFrom, phiFrom, mmTheta, mmPhi, ma
     pOntimes = np.zeros(nSeg, float)
     tMoves = np.zeros(nSeg, float)
     pMoves = np.zeros(nSeg, float)
+    tSpeeds = np.zeros(nSeg, float)
+    pSpeeds = np.zeros(nSeg, float)
 
     if thetaMoved > 0:
         # early scheme
@@ -598,7 +601,7 @@ def calMoveSegments(thetaMoved, phiMoved, thetaFrom, phiFrom, mmTheta, mmPhi, ma
                 break
 
     return tSteps[:nSegments], pSteps[:nSegments], tOntimes[:nSegments], pOntimes[:nSegments], \
-           np.sum(tMoves[:nSegments]), np.sum(pMoves[:nSegments])
+           np.sum(tMoves[:nSegments]), np.sum(pMoves[:nSegments]), tSpeeds[:nSegments], pSpeeds[:nSegments]
 
 def calNSegments(angle, fromAngle, mm, maxSteps):
     moved = 0
@@ -707,3 +710,12 @@ def calculateSteps(cId, maxSteps, thetaAngle, phiAngle, fromTheta, fromPhi, thet
     toTheta = np.interp(thetaFromSteps + thetaSteps, thetaModel, model.thtOffsets[cId])
     toPhi = np.interp(phiFromSteps + phiSteps, phiModel, model.phiOffsets[cId])
     return thetaSteps, phiSteps, toTheta - fromTheta, toPhi - fromPhi
+
+def addMoves(traj, cIds, thetaAngles, phiAngles, thetaSteps, phiSteps, thetaFast, phiFast, model):
+    """ interpolate a single move and add to a trajectory """
+    timeStep = traj.getTimeStep()
+
+def addSegments(traj, cIds, thetaAngles, phiAngles, thetaSteps, phiSteps, thetaSpeeds, phiSpeeds):
+    """ interpolate multiple segment moves and add to a trajectory """
+    timeStep = traj.getTimeStep()
+

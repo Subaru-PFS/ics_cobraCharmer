@@ -5,6 +5,7 @@ import logging
 from copy import deepcopy
 import pathlib
 from procedures.moduleTest.speedModel import SpeedModel
+import trajectory
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
@@ -111,7 +112,7 @@ def moveThetaAngles(cIds, thetas, relative=False, local=True, tolerance=0.002, t
     else:
         targets[cIds] = thetas
 
-    cc.cam.resetStack(f'thetaStack.fits')
+    cc.camResetStack(f'thetaStack.fits')
     logger.info(f'Move theta arms to angle={np.round(np.rad2deg(targets[cIds]),2)} degree')
 
     for j in range(tries):
@@ -137,7 +138,7 @@ def moveThetaAngles(cIds, thetas, relative=False, local=True, tolerance=0.002, t
             logger.info(f'all cobras are in positions')
             break
 
-    cc.cam.resetStack()
+    cc.camResetStack()
     if np.any(notDoneMask):
         logger.warn(f'{(notDoneMask == True).sum()} cobras did not finish: '
                          f'{np.where(notDoneMask)[0]}, '
@@ -190,7 +191,7 @@ def movePhiAngles(cIds, phis, relative=False, local=True, tolerance=0.002, tries
     else:
         targets[cIds] = phis
 
-    cc.cam.resetStack(f'phiStack.fits')
+    cc.camResetStack(f'phiStack.fits')
     logger.info(f'Move phi arms to angle={np.round(np.rad2deg(targets[cIds]),2)} degree')
 
     for j in range(tries):
@@ -217,7 +218,7 @@ def movePhiAngles(cIds, phis, relative=False, local=True, tolerance=0.002, tries
             logger.info(f'all cobras are in positions')
             break
 
-    cc.cam.resetStack()
+    cc.camResetStack()
     if np.any(notDoneMask):
         logger.warn(f'{(notDoneMask == True).sum()} cobras did not finish: '
                          f'{np.where(notDoneMask)[0]}, '
@@ -348,7 +349,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True, tolerance=0.1, 
         targetPhis[cIds] = phis
     targets = cc.pfi.anglesToPositions(cc.allCobras, targetThetas, targetPhis)
 
-    cc.cam.resetStack(f'Stack.fits')
+    cc.camResetStack(f'Stack.fits')
     logger.info(f'Move theta arms to angle={np.round(np.rad2deg(targetThetas[cIds]),2)} degree')
     logger.info(f'Move phi arms to angle={np.round(np.rad2deg(targetPhis[cIds]),2)} degree')
 
@@ -391,7 +392,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True, tolerance=0.1, 
             logger.info(f'all cobras are in positions')
             break
 
-    cc.cam.resetStack()
+    cc.camResetStack()
     cc.thetaScaling = np.full(cc.nCobras, True)
     cc.phiScaling = np.full(cc.nCobras, True)
     if np.any(notDoneMask):
@@ -1066,7 +1067,7 @@ def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=
         notDoneMask[:] = False
         notDoneMask[cIds] = True
 
-        cc.cam.resetStack(f'phiOntimeScanFwd{r+1}.fits')
+        cc.camResetStack(f'phiOntimeScanFwd{r+1}.fits')
         logger.info(f'=== Forward phi on-time scan #{r+1} ===')
 
         if r == 0:
@@ -1115,7 +1116,7 @@ def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=
                 logger.info(f'all cobras reach CW limits')
                 break
 
-        cc.cam.resetStack()
+        cc.camResetStack()
         cc.calibModel.motorOntimeSlowFwd2[:] = oldOntimes
         if np.any(notDoneMask):
             logger.warn(f'{(notDoneMask == True).sum()} cobras did not finish: '
@@ -1125,7 +1126,7 @@ def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=
         notDoneMask[:] = False
         notDoneMask[cIds] = True
 
-        cc.cam.resetStack(f'phiOntimeScanRev{r+1}.fits')
+        cc.camResetStack(f'phiOntimeScanRev{r+1}.fits')
         logger.info(f'=== Reverse phi on-time scan #{r+1} ===')
 
         if r == 0:
@@ -1174,7 +1175,7 @@ def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=
                 logger.info(f'all cobras reach CCW limits')
                 break
 
-        cc.cam.resetStack()
+        cc.camResetStack()
         cc.calibModel.motorOntimeSlowRev2[:] = oldOntimes
         if np.any(notDoneMask):
             logger.warn(f'{(notDoneMask == True).sum()} cobras did not finish: '
@@ -1189,25 +1190,35 @@ def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=
     # build on-time maps, using only the first run
     mm = np.full((angles.shape[0],2,angles.shape[3]-1), np.nan, dtype=mmDtype)
     lim = 0.05
+    smooth_len = 11
 
     for i in range(angles.shape[0]):
         for j in range(2):
             if j == 0:
                 nz = np.where(angles[i,0,j] > angles[i,0,j,0]+lim)[0]
             else:
-                nz = np.where(angles[i,0,j] < angles[i,0,j,0]-lim)[0]
-            lower = nz[0]
+                nz = np.where(angles[i,0,j,1:] < angles[i,0,j,0,1]-lim)[0]
 
-            nz = np.where(ontimes[i,0,j] == 0)[0]
             if len(nz) > 0:
-                upper = nz[0]
+                lower = nz[0] + j
             else:
-                upper = ontimes.shape[3]
+                logger.warn(f'sticky at the beginning: {i}, {j}')
+                continue
+
             if j == 0:
-                nz = np.where(angles[i,0,j] > angles[i,0,j,upper-1]-lim)[0]
+                nz = np.where(angles[i,0,j,:-1] > np.max(angles[i,0,j,:-1])-lim)[0]
             else:
-                nz = np.where(angles[i,0,j] < angles[i,0,j,upper-1]+lim)[0]
-            upper = nz[0]
+                nz = np.where(angles[i,0,j,1:] < np.min(angles[i,0,j,1:])+lim)[0]
+
+            if len(nz) > 0:
+                upper = nz[0] + j
+            else:
+                logger.warn(f'sticky at the end: {i}, {j}')
+                continue
+
+            if upper - lower < smooth_len:
+                logger.warn(f'moving range is too small: {i}, {j}')
+                continue
 
             mm[i,j,:upper-lower]['angle'] = angles[i,0,j,lower:upper]
             mm[i,j,:upper-lower]['ontime'] = cal.smooth(ontimes[i,0,j,lower:upper])
@@ -1275,7 +1286,7 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalStep
         notDoneMask[:] = False
         notDoneMask[cIds] = True
 
-        cc.cam.resetStack(f'thetaOntimeScanFwd{r+1}.fits')
+        cc.camResetStack(f'thetaOntimeScanFwd{r+1}.fits')
         logger.info(f'=== Forward theta on-time scan #{r+1} ===')
 
         if r == 0:
@@ -1320,7 +1331,7 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalStep
                 logger.info(f'all cobras reach CW limits')
                 break
 
-        cc.cam.resetStack()
+        cc.camResetStack()
         cc.calibModel.motorOntimeSlowFwd1[:] = oldOntimes
         if np.any(notDoneMask):
             logger.warn(f'{(notDoneMask == True).sum()} cobras did not finish: '
@@ -1330,7 +1341,7 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalStep
         notDoneMask[:] = False
         notDoneMask[cIds] = True
 
-        cc.cam.resetStack(f'thetaOntimeScanRev{r+1}.fits')
+        cc.camResetStack(f'thetaOntimeScanRev{r+1}.fits')
         logger.info(f'=== Reverse theta on-time scan #{r+1} ===')
 
         if r == 0:
@@ -1375,7 +1386,7 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalStep
                 logger.info(f'all cobras reach CCW limits')
                 break
 
-        cc.cam.resetStack()
+        cc.camResetStack()
         cc.calibModel.motorOntimeSlowRev1[:] = oldOntimes
         if np.any(notDoneMask):
             logger.warn(f'{(notDoneMask == True).sum()} cobras did not finish: '
@@ -1390,25 +1401,35 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalStep
     # build on-time maps, using only the first run
     mm = np.full((angles.shape[0],2,angles.shape[3]-1), np.nan, dtype=mmDtype)
     lim = 0.05
+    smooth_len = 11
 
     for i in range(angles.shape[0]):
         for j in range(2):
             if j == 0:
                 nz = np.where(angles[i,0,j] > angles[i,0,j,0]+lim)[0]
             else:
-                nz = np.where(angles[i,0,j] < angles[i,0,j,0]-lim)[0]
-            lower = nz[0]
+                nz = np.where(angles[i,0,j,1:] < angles[i,0,j,1]-lim)[0]
 
-            nz = np.where(ontimes[i,0,j] == 0)[0]
             if len(nz) > 0:
-                upper = nz[0]
+                lower = nz[0] + j
             else:
-                upper = ontimes.shape[3]
+                logger.warn(f'sticky at the beginning: {i}, {j}')
+                continue
+
             if j == 0:
-                nz = np.where(angles[i,0,j] > angles[i,0,j,upper-1]-lim)[0]
+                nz = np.where(angles[i,0,j,:-1] > np.max(angles[i,0,j,:-1])-lim)[0]
             else:
-                nz = np.where(angles[i,0,j] < angles[i,0,j,upper-1]+lim)[0]
-            upper = nz[0]
+                nz = np.where(angles[i,0,j,1:] < np.min(angles[i,0,j,1:])+lim)[0]
+
+            if len(nz) > 0:
+                upper = nz[0] + j
+            else:
+                logger.warn(f'sticky at the end: {i}, {j}')
+                continue
+
+            if upper - lower < smooth_len:
+                logger.warn(f'moving range is too small: {i}, {j}')
+                continue
 
             mm[i,j,:upper-lower]['angle'] = angles[i,0,j,lower:upper]
             mm[i,j,:upper-lower]['ontime'] = cal.smooth(ontimes[i,0,j,lower:upper])
@@ -1620,3 +1641,64 @@ def convergenceTestX2(cIds, runs=3, thetaMargin=np.deg2rad(15.0), phiMargin=np.d
     np.save(dataPath / 'targets', targets)
     np.save(dataPath / 'moves', moves)
     return targets, moves
+
+def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0, timeStep=10):
+    """ create trajectory objects for given targets
+
+        cIds: the cobra index for generating trajectory
+        thetas, phis: the target angles
+        tried: the number of maximum movements/iterations
+        twoSteps: using one-step or two-steps strategy
+        threshold: the threshold for using slow or fast motor maps
+        timeStep: timeStep resolution for the trajectory
+    """
+    if tries < 4:
+        raise ValueError("tries parameter should be larger than 4")
+
+    targets = np.zeros((len(cIds), 2))
+    moves = np.zeros((len(cIds), tries), dtype=moveDtype)
+    positions = np.zeros(len(cIds), dtype=complex)
+    thetaRange = ((cc.calibModel.tht1 - cc.calibModel.tht0 + np.pi) % (np.pi*2) + np.pi)[cIds]
+    phiRange = ((cc.calibModel.phiOut - cc.calibModel.phiIn) % (np.pi*2))[cIds]
+
+    targets[:,0] = thetas
+    targets[:,1] = phis
+    positions = cc.pfi.anglesToPositions(cc.allCobras[cIds], thetas, phis)
+
+    if not cc.trajectoryOnly:
+        logger.info(f'switch cobraCoach to trajectoryOnly mode')
+        cc.trajectoryOnly = True
+        toggleFlag = True
+    else:
+        toggleFlag = False
+    cc.trajectory = trajectory.Trajectories(cc.calibModel, timeStep)
+
+    tolerance = 0.1
+    if twoSteps:
+        # limit phi angle for first two tries
+        limitPhi = np.pi/3 - cc.calibModel.phiIn[cIds] - np.pi
+        thetasVia = np.copy(thetas)
+        phisVia = np.copy(phis)
+        for c in range(len(cIds)):
+            if phis[c] > limitPhi[c]:
+                phisVia[c] = limitPhi[c]
+                thetasVia[c] = thetas[c] + (phis[c] - limitPhi[c])/2
+                if thetasVia[c] > thetaRange[c]:
+                    thetasVia[c] = thetaRange[c]
+
+        _useScaling, _maxSegments, _maxTotalSteps = cc.useScaling, cc.maxSegments, cc.maxTotalSteps
+        cc.useScaling, cc.maxSegments, cc.maxTotalSteps = False, _maxSegments * 2, _maxTotalSteps * 2
+        dataPath, atThetas, atPhis, moves[:,:2] = \
+            moveThetaPhi(cIds, thetasVia, phisVia, False, True, tolerance, 2, True, False, True, True, threshold)
+
+        cc.useScaling, cc.maxSegments, cc.maxTotalSteps = _useScaling, _maxSegments, _maxTotalSteps
+        dataPath, atThetas, atPhis, moves[:,2:] = \
+            moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries-2, False, False, False, True, threshold)
+
+    else:
+        dataPath, atThetas, atPhis, moves[:,:] = \
+            moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries, True, False, False, True, threshold)
+
+    if toggleFlag:
+        cc.trajectoryOnly = False
+    return cc.trajectory, moves
