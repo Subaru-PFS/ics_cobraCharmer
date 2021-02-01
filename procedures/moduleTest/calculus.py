@@ -518,6 +518,7 @@ def calMoveSegments(thetaMoved, phiMoved, thetaFrom, phiFrom, mmTheta, mmPhi, ma
             idx = np.nanargmin(abs(mmTheta[0]['angle'] - thetaFrom - moved))
             speed = mmTheta[0,idx]['speed']
             tOntimes[n] = mmTheta[0,idx]['ontime']
+            tSpeeds[n] = speed
             if speed * maxSteps < thetaMoved - moved:
                 moved += speed * maxSteps
                 tSteps[n] = maxSteps
@@ -536,6 +537,7 @@ def calMoveSegments(thetaMoved, phiMoved, thetaFrom, phiFrom, mmTheta, mmPhi, ma
             idx = np.nanargmin(abs(mmTheta[1]['angle'] - thetaFrom - moved))
             speed = mmTheta[1,idx]['speed']
             tOntimes[n] = mmTheta[1,idx]['ontime']
+            tSpeeds[n] = speed
             if speed * maxSteps > moved:
                 moved -= speed * maxSteps
                 tSteps[n] = -maxSteps
@@ -555,6 +557,7 @@ def calMoveSegments(thetaMoved, phiMoved, thetaFrom, phiFrom, mmTheta, mmPhi, ma
             idx = np.nanargmin(abs(mmPhi[0]['angle'] - phiFrom - moved))
             speed = mmPhi[0,idx]['speed']
             pOntimes[n] = mmPhi[0,idx]['ontime']
+            pSpeeds[n] = speed
             if speed * maxSteps < left - moved:
                 moved += speed * maxSteps
                 pSteps[n] = maxSteps
@@ -572,6 +575,7 @@ def calMoveSegments(thetaMoved, phiMoved, thetaFrom, phiFrom, mmTheta, mmPhi, ma
             idx = np.nanargmin(abs(mmPhi[0]['angle'] - phiFrom - moved))
             speed = mmPhi[0,idx]['speed']
             pOntimes[n] = mmPhi[0,idx]['ontime']
+            pSpeeds[n] = speed
             if speed * maxSteps < moved:
                 moved -= speed * maxSteps
                 pSteps[n] = maxSteps
@@ -590,6 +594,7 @@ def calMoveSegments(thetaMoved, phiMoved, thetaFrom, phiFrom, mmTheta, mmPhi, ma
             idx = np.nanargmin(abs(mmPhi[1]['angle'] - phiFrom - moved))
             speed = mmPhi[1,idx]['speed']
             pOntimes[n] = mmPhi[1,idx]['ontime']
+            pSpeeds[n] = speed
             if speed * maxSteps > phiMoved - moved:
                 moved += speed * maxSteps
                 pSteps[n] = -maxSteps

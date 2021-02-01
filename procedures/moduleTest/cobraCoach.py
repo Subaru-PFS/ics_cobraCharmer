@@ -732,12 +732,15 @@ class CobraCoach():
 
             dataPath = self.runManager.dataDir
             nowSecond = int(time.time())
-            segmentsDtype = np.dtype([('thetaSteps', 'i2'), ('thetaOntimes', 'f4'), ('phiSteps', 'i2'), ('phiOntimes', 'f4')])
+            segmentsDtype = np.dtype([('thetaSteps', 'i2'), ('thetaOntimes', 'f4'), ('thetaSpeeds', 'f4'), (
+                                       'phiSteps', 'i2'), ('phiOntimes', 'f4'), ('phiSpeeds', 'f4')])
             segments = np.empty((nSegments, len(cIds)), dtype=segmentsDtype)
             segments['thetaSteps'] = thetaSteps
             segments['thetaOntimes'] = thetaOntimes
+            segments['thetaSpeeds'] = thetaSpeeds
             segments['phiSteps'] = phiSteps
             segments['phiOntimes'] = phiOntimes
+            segments['phiSpeeds'] = phiSpeeds
             np.savez(dataPath / f'segments_{nowSecond}', idx=cIds, segs=segments)
 
             # send move command
@@ -957,16 +960,38 @@ class CobraCoach():
         if isinstance(geometryRun, str):
             geometryRun = pathlib.Path(geometryRun)
 
-        self.phiInfo['center'] = np.load(geometryRun / 'data' / 'phiCenter.npy')
+        center = np.load(geometryRun / 'data' / 'phiCenter.npy')
         phiFW = np.load(geometryRun / 'data' / 'phiFW.npy')
         phiRV = np.load(geometryRun / 'data' / 'phiRV.npy')
         angRV = np.load(geometryRun / 'data' / 'phiAngRV.npy')
 
-        maxIdx = np.argmax(angRV[:,:,0], axis=1)
-        for m in range(len(angRV)):
-            n = maxIdx[m]
-            self.phiInfo['ccwHome'][m] = np.angle(phiFW[m,n,0] - self.phiInfo['center'][m])
-            self.phiInfo['cwHome'][m] = np.angle(phiRV[m,n,0] - self.phiInfo['center'][m])
+        cwHome = np.zeros(self.nCobras)
+        ccwHome = np.zeros(self.nCobras)
+        for m in range(self.nCobras):
+            maxR = 0
+            maxIdx = 0
+            for n in range(phiFW.shape[1]):
+                ccwH = np.angle(phiFW[m,n,0] - center[m])
+                cwH = np.angle(phiRV[m,n,0] - center[m])
+                curR = (cwH - ccwH) % (np.pi*2)
+                if curR > maxR:
+                    maxR = curR
+                    maxIdx = n
+            if self.phiInfoIsValid:
+                lastR = (self.phiInfo['cwHome'][m] - self.phiInfo['ccwHome'][m]) % (np.pi*2)
+            else:
+                lastR = 0
+            if curR >= lastR:
+                ccwHome[m] = np.angle(phiFW[m,maxIdx,0] - center[m]) % (np.pi*2)
+                cwHome[m] = np.angle(phiRV[m,maxIdx,0] - center[m]) % (np.pi*2)
+            else:
+                ccwHome[m] = self.phiInfo['ccwHome'][m]
+                cwHome[m] = self.phiInfo['cwHome'][m]
+                center[m] = self.phiInfo['center'][m]
+
+        self.phiInfo['center'] = center
+        self.phiInfo['ccwHome'] = ccwHome
+        self.phiInfo['cwHome'] = cwHome
         self.phiInfo['angle'] = angle
 
         dAng = (self.phiInfo['cwHome'] - self.phiInfo['ccwHome']) % (np.pi*2)
@@ -1006,16 +1031,38 @@ class CobraCoach():
         if isinstance(geometryRun, str):
             geometryRun = pathlib.Path(geometryRun)
 
-        self.thetaInfo['center'] = np.load(geometryRun / 'data' / 'thetaCenter.npy')
+        center = np.load(geometryRun / 'data' / 'thetaCenter.npy')
         thetaFW = np.load(geometryRun / 'data' / 'thetaFW.npy')
         thetaRV = np.load(geometryRun / 'data' / 'thetaRV.npy')
         angRV = np.load(geometryRun / 'data' / 'thetaAngRV.npy')
 
-        maxIdx = np.argmax(angRV[:,:,0], axis=1)
-        for m in range(len(angRV)):
-            n = maxIdx[m]
-            self.thetaInfo['ccwHome'][m] = np.angle(thetaFW[m,n,0] - self.thetaInfo['center'][m])
-            self.thetaInfo['cwHome'][m] = np.angle(thetaRV[m,n,0] - self.thetaInfo['center'][m])
+        cwHome = np.zeros(self.nCobras)
+        ccwHome = np.zeros(self.nCobras)
+        for m in range(self.nCobras):
+            maxR = 0
+            maxIdx = 0
+            for n in range(thetaFW.shape[1]):
+                ccwH = np.angle(thetaFW[m,n,0] - center[m])
+                cwH = np.angle(thetaRV[m,n,0] - center[m])
+                curR = (cwH - ccwH + np.pi) % (np.pi*2) + np.pi
+                if curR > maxR:
+                    maxR = curR
+                    maxIdx = n
+            if self.thetaInfoIsValid:
+                lastR = (self.thetaInfo['cwHome'][m] - self.thetaInfo['ccwHome'][m] + np.pi) % (np.pi*2) + np.pi
+            else:
+                lastR = 0
+            if curR >= lastR:
+                ccwHome[m] = np.angle(thetaFW[m,maxIdx,0] - center[m]) % (np.pi*2)
+                cwHome[m] = np.angle(thetaRV[m,maxIdx,0] - center[m]) % (np.pi*2)
+            else:
+                ccwHome[m] = self.thetaInfo['ccwHome'][m]
+                cwHome[m] = self.thetaInfo['cwHome'][m]
+                center[m] = self.thetaInfo['center'][m]
+
+        self.thetaInfo['center'] = center
+        self.thetaInfo['ccwHome'] = ccwHome
+        self.thetaInfo['cwHome'] = cwHome
         self.thetaInfo['angle'] = angle
 
         dAng = (self.thetaInfo['cwHome'] - self.thetaInfo['ccwHome'] + np.pi) % (np.pi*2) + np.pi

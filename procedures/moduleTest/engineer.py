@@ -539,15 +539,30 @@ def makeThetaMotorMaps(newXml, steps=500, totalSteps=10000, repeat=1, fast=False
     np.save(dataPath / 'badRange', np.where(bad)[0])
 
     # update theta geometry
-    if not cc.thetaInfoIsValid:
-        maxIdx = np.argmax(angR[:,:,0], axis=1)
-        cwHome = np.zeros(cc.nCobras)
-        ccwHome = np.zeros(cc.nCobras)
-        for m in range(cc.nCobras):
-            n = maxIdx[m]
-            ccwHome[m] = np.angle(posF[m,n,0] - center[m])
-            cwHome[m] = np.angle(posR[m,n,0] - center[m])
-        cc.setThetaGeometry(center, ccwHome, cwHome, angle=0, onlyIfClear=False)
+    cwHome = np.zeros(cc.nCobras)
+    ccwHome = np.zeros(cc.nCobras)
+    for m in range(cc.nCobras):
+        maxR = 0
+        maxIdx = 0
+        for n in range(posF.shape[1]):
+            ccwH = np.angle(posF[m,n,0] - center[m])
+            cwH = np.angle(posR[m,n,0] - center[m])
+            curR = (cwH - ccwH + np.pi) % (np.pi*2) + np.pi
+            if curR > maxR:
+                maxR = curR
+                maxIdx = n
+        if cc.thetaInfoIsValid:
+            lastR = (cc.thetaInfo['cwHome'][m] - cc.thetaInfo['ccwHome'][m] + np.pi) % (np.pi*2) + np.pi
+        else:
+            lastR = 0
+        if curR >= lastR:
+            ccwHome[m] = np.angle(posF[m,maxIdx,0] - center[m]) % (np.pi*2)
+            cwHome[m] = np.angle(posR[m,maxIdx,0] - center[m]) % (np.pi*2)
+        else:
+            ccwHome[m] = cc.thetaInfo['ccwHome'][m]
+            cwHome[m] = cc.thetaInfo['cwHome'][m]
+            center[m] = cc.thetaInfo['center'][m]
+    cc.setThetaGeometry(center, ccwHome, cwHome, angle=0, onlyIfClear=False)
 
     # calculate average speeds
     spdF = np.zeros(cc.nCobras, dtype=float)
@@ -635,15 +650,30 @@ def makePhiMotorMaps(newXml, steps=250, totalSteps=5000, repeat=1, fast=False, p
     np.save(dataPath / 'badRange', np.where(bad)[0])
 
     # update phi geometry
-    if not cc.phiInfoIsValid:
-        maxIdx = np.argmax(angR[:,:,0], axis=1)
-        cwHome = np.zeros(cc.nCobras)
-        ccwHome = np.zeros(cc.nCobras)
-        for m in range(cc.nCobras):
-            n = maxIdx[m]
-            ccwHome[m] = np.angle(posF[m,n,0] - center[m])
-            cwHome[m] = np.angle(posR[m,n,0] - center[m])
-        cc.setPhiGeometry(center, ccwHome, cwHome, angle=0, onlyIfClear=False)
+    cwHome = np.zeros(cc.nCobras)
+    ccwHome = np.zeros(cc.nCobras)
+    for m in range(cc.nCobras):
+        maxR = 0
+        maxIdx = 0
+        for n in range(posF.shape[1]):
+            ccwH = np.angle(posF[m,n,0] - center[m])
+            cwH = np.angle(posR[m,n,0] - center[m])
+            curR = (cwH - ccwH) % (np.pi*2)
+            if curR > maxR:
+                maxR = curR
+                maxIdx = n
+        if cc.phiInfoIsValid:
+            lastR = (cc.phiInfo['cwHome'][m] - cc.phiInfo['ccwHome'][m]) % (np.pi*2)
+        else:
+            lastR = 0
+        if curR >= lastR:
+            ccwHome[m] = np.angle(posF[m,maxIdx,0] - center[m]) % (np.pi*2)
+            cwHome[m] = np.angle(posR[m,maxIdx,0] - center[m]) % (np.pi*2)
+        else:
+            ccwHome[m] = cc.phiInfo['ccwHome'][m]
+            cwHome[m] = cc.phiInfo['cwHome'][m]
+            center[m] = cc.phiInfo['center'][m]
+    cc.setPhiGeometry(center, ccwHome, cwHome, angle=0, onlyIfClear=False)
 
     # calculate average speeds
     spdF = np.zeros(cc.nCobras, dtype=float)
