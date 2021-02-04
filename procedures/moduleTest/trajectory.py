@@ -23,6 +23,7 @@ class Trajectories():
         """
         # Store the input parameters
         self.calibrationProduct = calibrationProduct
+        self.nCobras = calibrationProduct.nCobras
         self.timeStep = timeStep
 
         # Initialize the movements list
@@ -44,24 +45,43 @@ class Trajectories():
         """
         return self.timeStep
 
-    def addMovement(self, thetaSteps, phiSteps):
+    def addMovement(self, cIds, thetaAngles, phiAngles):
         """Adds a new cobra movement to the trajectories.
         Note that the theta and phi steps should have the same time step
         resolution as the trajectories.
         Parameters
         ----------
-        thetaSteps: object
-            A 2D numpy array with the movement theta steps to add to the
+        cIds: integer array
+            The index for the moving cobras
+        thetaAngles: object
+            A 2D numpy array with the movement theta angles to add to the
             trajectories.
-        phiSteps: object
-            A 2D numpy array with the movement phi steps to add to the
+        phiAngles: object
+            A 2D numpy array with the movement phi angles to add to the
             trajectories.
         """
+
+        # update positions for moving cobras
+        size = thetaAngles.shape[1]
+        newThetaAngles = np.zeros((self.nCobras, size))
+        newPhiAngles = np.zeros((self.nCobras, size))
+
+        for c in range(len(cIds)):
+            newThetaAngles[cIds[c],:] = thetaAngles[c]
+            newPhiAngles[cIds[c],:] = phiAngles[c]
+
+        # copy last positions for non moving cobras
+        if self.steps > 0:
+            for c in range(self.nCobras):
+                if c not in cIds:
+                    newThetaAngles[c,:] = self.movements[-1][0][c,-1]
+                    newPhiAngles[c,:] = self.movements[-1][1][c,-1]
+
         # Add the movement information to the list
-        self.movements.append([thetaSteps, phiSteps])
+        self.movements.append([newThetaAngles, newPhiAngles])
 
         # Increase the time step counter
-        self.steps += thetaSteps.shape[1]
+        self.steps += size
 
         # Set to None the fiber and elbow position arrays, since they are now
         # outdated

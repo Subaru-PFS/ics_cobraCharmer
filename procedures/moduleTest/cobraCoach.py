@@ -425,21 +425,22 @@ class CobraCoach():
         phiSteps = np.clip(phiSteps, -6000, 6000)
 
         if self.trajectoryOnly:
+            timeStep = self.trajectory.getTimeStep()
             if nSegments == 0:
-                calculus.addMoves(self.trajectory, cIds, self.cobraInfo['thetaAngle'], self.cobraInfo['phiAngle'], thetaSteps, phiSteps, thetaFast, phiFast, model)
+                thetaT, phiT = calculus.interpolateMoves(cIds, timeStep, self.cobraInfo['thetaAngle'][cIds], self.cobraInfo['phiAngle'][cIds], thetaSteps, phiSteps, thetaFast, phiFast, self.calibModel)
             else:
-                calculus.addSegments(self.trajectory, cIds, self.cobraInfo['thetaAngle'], self.cobraInfo['phiAngle'], thetaSteps, phiSteps, thetaSpeeds, phiSpeeds)
+                thetaT, phiT = calculus.interpolateSegments(timeStep, self.cobraInfo['thetaAngle'][cIds], self.cobraInfo['phiAngle'][cIds], thetaSteps, phiSteps, thetaSpeeds, phiSpeeds)
+            self.trajectory.addMovement(cIds, thetaT, phiT)
+
+        if not self.trajectoryOnly and self.cam.filePrefix == 'PFAC':
+            self.cam.startRecord()
+        if nSegments == 0:
+            self.pfi.moveSteps(cobras, thetaSteps, phiSteps, thetaFast=thetaFast, phiFast=phiFast, thetaOntimes=thetaOntimes, phiOntimes=phiOntimes, trajectoryOnly=self.trajectoryOnly)
         else:
-            if self.cam.filePrefix == 'PFAC':
-                self.cam.startRecord()
-            if nSegments == 0:
-                self.pfi.moveSteps(cobras, np.clip(thetaSteps, -10000, 10000), np.clip(phiSteps, -6000, 6000), \
-                                   thetaFast=thetaFast, phiFast=phiFast, thetaOntimes=thetaOntimes, phiOntimes=phiOntimes)
-            else:
-                for n in range(nSegments):
-                    self.pfi.moveSteps(cobras, thetaSteps[n], phiSteps[n], thetaOntimes=thetaOntimes[n], phiOntimes=phiOntimes[n])
-            if self.cam.filePrefix == 'PFAC':
-                self.cam.stopRecord()
+            for n in range(nSegments):
+                self.pfi.moveSteps(cobras, thetaSteps[n], phiSteps[n], thetaOntimes=thetaOntimes[n], phiOntimes=phiOntimes[n], trajectoryOnly=self.trajectoryOnly)
+        if not self.trajectoryOnly and self.cam.filePrefix == 'PFAC':
+            self.cam.stopRecord()
 
         thetas = np.copy(self.cobraInfo['thetaAngle'])
         phis = np.copy(self.cobraInfo['phiAngle'])
@@ -884,7 +885,7 @@ class CobraCoach():
                 phis = np.zeros(len(cobras))
             else:
                 phis = self.cobraInfo['phiAngle'][cIds]
-            self.cobraInfo['position'][cIdx] = self.pfi.anglesToPositions(cobras, thetas, phis)
+            self.cobraInfo['position'][cIds] = self.pfi.anglesToPositions(cobras, thetas, phis)
 
         else:
             self.pfi.moveAllSteps(cobras, thetaSteps, phiSteps, thetaFast=True, phiFast=True)

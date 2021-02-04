@@ -573,7 +573,7 @@ class PFI(object):
 
     def moveSteps(self, cobras, thetaSteps, phiSteps, waitThetaSteps=None, waitPhiSteps=None,
                   interval=2.5, thetaFast=True, phiFast=True, force=False,
-                  thetaOntimes=None, phiOntimes=None):
+                  thetaOntimes=None, phiOntimes=None, trajectoryOnly=False):
         """ Move cobras with theta and phi steps
 
             thetaSteps: A numpy array with theta steps to go
@@ -695,11 +695,12 @@ class PFI(object):
                                  en=en,
                                  dir=dirs1)
         # temperarily fix for interval and timeout
-        err = func.RUN(cobras, inter=int(interval*1000/16), timeout=65535)
-        if err:
-            self.logger.error(f'send RUN command failed')
-        else:
-            self.logger.debug(f'send RUN command succeeded')
+        if not trajectoryOnly:
+            err = func.RUN(cobras, inter=int(interval*1000/16), timeout=65535)
+            if err:
+                self.logger.error(f'send RUN command failed')
+            else:
+                self.logger.debug(f'send RUN command succeeded')
 
     def homePhi(self, cobras, nsteps=-5000, fast=True):
         # go to the hard stops for phi arms

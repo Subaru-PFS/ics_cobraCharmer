@@ -716,11 +716,128 @@ def calculateSteps(cId, maxSteps, thetaAngle, phiAngle, fromTheta, fromPhi, thet
     toPhi = np.interp(phiFromSteps + phiSteps, phiModel, model.phiOffsets[cId])
     return thetaSteps, phiSteps, toTheta - fromTheta, toPhi - fromPhi
 
-def addMoves(traj, cIds, thetaAngles, phiAngles, thetaSteps, phiSteps, thetaFast, phiFast, model):
-    """ interpolate a single move and add to a trajectory """
-    timeStep = traj.getTimeStep()
+def interpolateSteps(thetaStep, phiStep, maxStep, timeStep):
+    # set delay parameters for safer operation, same logic as in pfi.py
+    if phiStep > 0 and thetaStep < 0:
+        thetaDelay = maxStep + thetaStep
+        phiDelay = maxStep - phiStep
+    elif phiStep > 0 and thetaStep > 0:
+        thetaDelay = 0
+        phiDelay = maxStep - phiStep
+    elif phiStep < 0 and thetaStep < 0:
+        thetaDelay = maxStep + thetaStep
+        phiDelay = 0
+    else:
+        thetaDelay = 0
+        phiDelay = 0
 
-def addSegments(traj, cIds, thetaAngles, phiAngles, thetaSteps, phiSteps, thetaSpeeds, phiSpeeds):
-    """ interpolate multiple segment moves and add to a trajectory """
-    timeStep = traj.getTimeStep()
+    size = int(np.ceil(maxStep / timeStep))
+    thetaSteps = np.zeros(size, int)
+    phiSteps = np.zeros(size, int)
+    stepPtr = 0
 
+    if thetaStep >=0:
+        thetaNeg = False
+    else:
+        thetaNeg = True
+        thetaStep = -thetaStep
+    if phiStep >=0:
+        phiNeg = False
+    else:
+        phiNeg = True
+        phiStep = -phiStep
+
+    for m in range(size):
+        if stepPtr < thetaDelay + thetaStep and stepPtr > thetaDelay - timeStep:
+            thetaSteps[m] = timeStep
+            exceed = thetaDelay - stepPtr
+            if exceed > 0:
+                thetaSteps[m] -= exceed
+            exceed = stepPtr + timeStep - thetaDelay - thetaStep
+            if exceed > 0:
+                thetaSteps[m] -= exceed
+
+        if stepPtr < phiDelay + phiStep and stepPtr > phiDelay - timeStep:
+            phiSteps[m] = timeStep
+            exceed = phiDelay - stepPtr
+            if exceed > 0:
+                phiSteps[m] -= exceed
+            exceed = stepPtr + timeStep - phiDelay - phiStep
+            if exceed > 0:
+                phiSteps[m] -= exceed
+
+        stepPtr += timeStep
+
+    if thetaNeg:
+        thetaStep = -thetaStep
+        thetaSteps = -thetaSteps
+    if phiNeg:
+        phiStep = -phiStep
+        phiSteps = -phiSteps
+
+    return thetaSteps, phiSteps
+
+def interpolateMoves(cIds, timeStep, thetaAngles, phiAngles, thetaSteps, phiSteps, thetaFast, phiFast, model):
+    """ interpolate a single move  """
+    thetaT = thetaAngles[:,np.newaxis]
+    phiT = phiAngles[:,np.newaxis]
+
+    maxStep = np.max(np.abs([thetaSteps, phiSteps]))
+    size = int(np.ceil(maxStep / timeStep))
+    thetaT = np.concatenate((thetaT, np.zeros((len(thetaT), size))), axis=1)
+    phiT = np.concatenate((phiT, np.zeros((len(phiT), size))), axis=1)
+
+    for c in range(len(thetaAngles)):
+        thetaS, phiS = interpolateSteps(thetaSteps[c], phiSteps[c], maxStep, timeStep)
+
+        # Get the integrated step maps for the theta angle
+        if thetaSteps[c] >= 0:
+            if thetaFast[c]:
+                thetaModelSteps = model.posThtSteps[cIds[c]]
+            else:
+                thetaModelSteps = model.posThtSlowSteps[cIds[c]]
+        else:
+            if thetaFast[c]:
+                thetaModelSteps = model.negThtSteps[cIds[c]]
+            else:
+                thetaModelSteps = model.negThtSlowSteps[cIds[c]]
+
+        # Get the integrated step maps for the phi angle
+        if phiSteps[c] >= 0:
+            if phiFast[c]:
+                phiModelSteps = model.posPhiSteps[cIds[c]]
+            else:
+                phiModelSteps = model.posPhiSlowSteps[cIds[c]]
+        else:
+            if phiFast[c]:
+                phiModelSteps = model.negPhiSteps[cIds[c]]
+            else:
+                phiModelSteps = model.negPhiSlowSteps[cIds[c]]
+
+        # Calculate trajectory
+        thtStart = np.interp(thetaAngles[c], model.thtOffsets[cIds[c]], thetaModelSteps)
+        phiStart = np.interp(phiAngles[c], model.phiOffsets[cIds[c]], phiModelSteps)
+        thetaT[c,1:] = np.interp(np.cumsum(thetaS) + thtStart, thetaModelSteps, model.thtOffsets[cIds[c]])
+        phiT[c,1:] = np.interp(np.cumsum(phiS) + phiStart, phiModelSteps, model.phiOffsets[cIds[c]])
+
+    return thetaT, phiT
+
+def interpolateSegments(timeStep, thetaAngles, phiAngles, thetaSteps, phiSteps, thetaSpeeds, phiSpeeds):
+    """ interpolate multiple segment """
+    thetaT = thetaAngles[:,np.newaxis]
+    phiT = phiAngles[:,np.newaxis]
+
+    for m in range(len(thetaSteps)):
+        maxStep = np.max(np.abs([thetaSteps[m], phiSteps[m]]))
+        size = int(np.ceil(maxStep / timeStep))
+        if (size == 0):
+            continue
+
+        thetaT = np.concatenate((thetaT, np.zeros((len(thetaT), size))), axis=1)
+        phiT = np.concatenate((phiT, np.zeros((len(phiT), size))), axis=1)
+        for c in range(len(thetaAngles)):
+            thetaS, phiS = interpolateSteps(thetaSteps[m,c], phiSteps[m,c], maxStep, timeStep)
+            thetaT[c,-size:] = np.cumsum(thetaS) * abs(thetaSpeeds[m,c]) + thetaT[c,-size-1]
+            phiT[c,-size:] = np.cumsum(phiS) * abs(phiSpeeds[m,c]) + phiT[c,-size-1]
+
+    return thetaT, phiT
