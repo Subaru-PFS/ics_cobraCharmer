@@ -1680,7 +1680,7 @@ def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0
         tried: the number of maximum movements/iterations
         twoSteps: using one-step or two-steps strategy
         threshold: the threshold for using slow or fast motor maps
-        timeStep: timeStep resolution for the trajectory
+        timeStep: timeStep parameter for the trajectory
     """
     if tries < 4:
         raise ValueError("tries parameter should be larger than 4")
@@ -1695,9 +1695,9 @@ def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0
     targets[:,1] = phis
     positions = cc.pfi.anglesToPositions(cc.allCobras[cIds], thetas, phis)
 
-    if not cc.trajectoryOnly:
-        logger.info(f'switch cobraCoach to trajectoryOnly mode')
-        cc.trajectoryOnly = True
+    if not cc.trajectoryMode:
+        logger.info(f'switch cobraCoach to trajectoryMode mode')
+        cc.trajectoryMode = True
         toggleFlag = True
     else:
         toggleFlag = False
@@ -1730,5 +1730,5 @@ def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0
             moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries, True, False, False, True, threshold)
 
     if toggleFlag:
-        cc.trajectoryOnly = False
+        cc.trajectoryMode = False
     return cc.trajectory, moves

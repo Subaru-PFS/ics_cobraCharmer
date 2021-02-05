@@ -573,7 +573,7 @@ class PFI(object):
 
     def moveSteps(self, cobras, thetaSteps, phiSteps, waitThetaSteps=None, waitPhiSteps=None,
                   interval=2.5, thetaFast=True, phiFast=True, force=False,
-                  thetaOntimes=None, phiOntimes=None, trajectoryOnly=False):
+                  thetaOntimes=None, phiOntimes=None, trajectoryMode=False):
         """ Move cobras with theta and phi steps
 
             thetaSteps: A numpy array with theta steps to go
@@ -695,7 +695,7 @@ class PFI(object):
                                  en=en,
                                  dir=dirs1)
         # temperarily fix for interval and timeout
-        if not trajectoryOnly:
+        if not trajectoryMode:
             err = func.RUN(cobras, inter=int(interval*1000/16), timeout=65535)
             if err:
                 self.logger.error(f'send RUN command failed')
@@ -923,6 +923,9 @@ class PFI(object):
         flags = np.full((len(cobras), 2), 0, dtype='u2')
 
         for i in range(len(positions)):
+            if L1[i] == 0 or L2[i] == 0:
+                # bad cobras
+                continue
             if distance[i] > L1[i] + L2[i]:
                 # too far away, return theta= spot angle and phi=PI
                 flags[i][0] |= self.TOO_FAR_FROM_CENTER

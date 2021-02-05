@@ -58,7 +58,7 @@ class CobraCoach():
                                      'phiSteps', 'movedPhi', 'expectedPhi', 'phiOntime', 'phiFast'],
                               formats=['i4', 'f4', 'f4', 'f4', '?', 'i4', 'f4', 'f4', 'f4', '?']))
 
-    def __init__(self, fpgaHost='localhost', loadModel=True, logLevel=logging.INFO, trajectoryOnly=False):
+    def __init__(self, fpgaHost='localhost', loadModel=True, logLevel=logging.INFO, trajectoryMode=False):
         self.logger = logging.getLogger('cobraCoach')
         self.logger.setLevel(logLevel)
 
@@ -82,7 +82,7 @@ class CobraCoach():
         self.phiModel = SpeedModel(p1=self.phiModelParameter)
 
         # create cobra trajectory
-        self.trajectoryOnly = trajectoryOnly
+        self.trajectoryMode = trajectoryMode
         self.trajectory = None
 
     def loadModel(self, version=None, moduleVersion=None, camSplit=28):
@@ -250,7 +250,7 @@ class CobraCoach():
 
         # Initializing COBRA module
         reload(pfiControl)
-        if self.trajectoryOnly:
+        if self.trajectoryMode:
             self.pfi = pfiControl.PFI(doLoadModel=False,
                                       doConnect=False,
                                       logDir=self.runManager.logDir)
@@ -260,7 +260,7 @@ class CobraCoach():
                                       logDir=self.runManager.logDir)
         self.pfi.calibModel = self.calibModel
 
-        if self.trajectoryOnly:
+        if self.trajectoryMode:
             return
 
         if setFreq:
@@ -327,8 +327,8 @@ class CobraCoach():
         """
         expose and get current cobra positions
         """
-        if self.trajectoryOnly:
-            raise RuntimeError('roundTrip command not available in trajectoryOnly mode!')
+        if self.trajectoryMode:
+            raise RuntimeError('roundTrip command not available in trajectoryMode mode!')
 
         pos = np.zeros(self.nCobras, 'complex')
         pos[self.visibleIdx] = self.exposeAndExtractPositions()
@@ -424,7 +424,7 @@ class CobraCoach():
         thetaSteps = np.clip(thetaSteps, -10000, 10000)
         phiSteps = np.clip(phiSteps, -6000, 6000)
 
-        if self.trajectoryOnly:
+        if self.trajectoryMode:
             timeStep = self.trajectory.getTimeStep()
             if nSegments == 0:
                 thetaT, phiT = calculus.interpolateMoves(cIds, timeStep, self.cobraInfo['thetaAngle'][cIds], self.cobraInfo['phiAngle'][cIds], thetaSteps, phiSteps, thetaFast, phiFast, self.calibModel)
@@ -432,14 +432,14 @@ class CobraCoach():
                 thetaT, phiT = calculus.interpolateSegments(timeStep, self.cobraInfo['thetaAngle'][cIds], self.cobraInfo['phiAngle'][cIds], thetaSteps, phiSteps, thetaSpeeds, phiSpeeds)
             self.trajectory.addMovement(cIds, thetaT, phiT)
 
-        if not self.trajectoryOnly and self.cam.filePrefix == 'PFAC':
+        if not self.trajectoryMode and self.cam.filePrefix == 'PFAC':
             self.cam.startRecord()
         if nSegments == 0:
-            self.pfi.moveSteps(cobras, thetaSteps, phiSteps, thetaFast=thetaFast, phiFast=phiFast, thetaOntimes=thetaOntimes, phiOntimes=phiOntimes, trajectoryOnly=self.trajectoryOnly)
+            self.pfi.moveSteps(cobras, thetaSteps, phiSteps, thetaFast=thetaFast, phiFast=phiFast, thetaOntimes=thetaOntimes, phiOntimes=phiOntimes, trajectoryMode=self.trajectoryMode)
         else:
             for n in range(nSegments):
-                self.pfi.moveSteps(cobras, thetaSteps[n], phiSteps[n], thetaOntimes=thetaOntimes[n], phiOntimes=phiOntimes[n], trajectoryOnly=self.trajectoryOnly)
-        if not self.trajectoryOnly and self.cam.filePrefix == 'PFAC':
+                self.pfi.moveSteps(cobras, thetaSteps[n], phiSteps[n], thetaOntimes=thetaOntimes[n], phiOntimes=phiOntimes[n], trajectoryMode=self.trajectoryMode)
+        if not self.trajectoryMode and self.cam.filePrefix == 'PFAC':
             self.cam.stopRecord()
 
         thetas = np.copy(self.cobraInfo['thetaAngle'])
@@ -451,7 +451,7 @@ class CobraCoach():
         targets[invalid] = self.calibModel.centers[invalid]
 
         pos = np.zeros(self.nCobras, 'complex')
-        if self.trajectoryOnly:
+        if self.trajectoryMode:
             pos[self.visibleIdx] = targets[self.visibleIdx]
         else:
             pos[self.visibleIdx] = self.exposeAndExtractPositions(guess=targets[self.visibleIdx])
@@ -873,7 +873,7 @@ class CobraCoach():
 
         # move cobras and update information
         self.logger.info(f'home cobras: theta={thetaSteps}, phi={phiSteps}')
-        if self.trajectoryOnly:
+        if self.trajectoryMode:
             if thetaEnable:
                 if thetaCCW:
                     thetas = np.zeros(len(cobras))
@@ -1177,8 +1177,8 @@ class CobraCoach():
             limitSteps=5000
         ):
         """ move all phi arms from CCW to CW hard stops and then back, in steps and return the positions """
-        if self.trajectoryOnly:
-            raise RuntimeError('roundTrip command not available in trajectoryOnly mode!')
+        if self.trajectoryMode:
+            raise RuntimeError('roundTrip command not available in trajectoryMode mode!')
         if self.mode != self.phiMode:
             raise RuntimeError('Switch to phi mode for this operation!')
         self.connect(False)
@@ -1311,8 +1311,8 @@ class CobraCoach():
             force=False
         ):
         """ move all theta arms from CCW to CW hard stops and then back, in steps and return the positions """
-        if self.trajectoryOnly:
-            raise RuntimeError('roundTrip command not available in trajectoryOnly mode!')
+        if self.trajectoryMode:
+            raise RuntimeError('roundTrip command not available in trajectoryMode mode!')
         if self.mode != self.thetaMode:
             raise RuntimeError('Switch to theta mode for this operation!')
         self.connect(False)
@@ -1433,5 +1433,5 @@ class CobraCoach():
         return dataPath, thetaFW, thetaRV
 
     def camResetStack(self, doStack=False):
-        if not self.trajectoryOnly:
+        if not self.trajectoryMode:
             self.cam.resetStack(doStack)
