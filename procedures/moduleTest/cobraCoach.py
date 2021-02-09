@@ -442,13 +442,24 @@ class CobraCoach():
         if not self.trajectoryMode and self.cam.filePrefix == 'PFAC':
             self.cam.stopRecord()
 
-        thetas = np.copy(self.cobraInfo['thetaAngle'])
-        phis = np.copy(self.cobraInfo['phiAngle'])
-        thetas[cIds] += expectedThetas
-        phis[cIds] += expectedPhis
-        targets = self.pfi.anglesToPositions(self.allCobras, thetas, phis)
-        invalid = np.isnan(targets)
-        targets[invalid] = self.calibModel.centers[invalid]
+        if self.mode == self.thetaMode:
+            thetas = self.thetaInfo['angle'] + self.thetaInfo['ccwHome']
+            thetas[cIds] += expectedThetas
+            L1 = np.abs(self.cobraInfo['position'] - self.thetaInfo['center'])
+            targets = self.thetaInfo['center'] + L1 * np.exp(thetas * 1j)
+        elif self.mode == self.phiMode:
+            phis = self.phiInfo['angle'] + self.phiInfo['ccwHome']
+            phis[cIds] += expectedPhis
+            L2 = np.abs(self.cobraInfo['position'] - self.phiInfo['center'])
+            targets = self.phiInfo['center'] + L2 * np.exp(phis * 1j)
+        else:
+            thetas = np.copy(self.cobraInfo['thetaAngle'])
+            phis = np.copy(self.cobraInfo['phiAngle'])
+            thetas[cIds] += expectedThetas
+            phis[cIds] += expectedPhis
+            targets = self.pfi.anglesToPositions(self.allCobras, thetas, phis)
+            invalid = np.isnan(targets)
+            targets[invalid] = self.calibModel.centers[invalid]
 
         pos = np.zeros(self.nCobras, 'complex')
         if self.trajectoryMode:

@@ -1041,6 +1041,40 @@ def convertXML1(newXml):
     old.createCalibrationFile(fn)
     return fn
 
+def convertXML2(newXml, homePhi=True):
+    """ update old XML to a new coordinate by taking 'phi homed' images
+        assuming the shift of cobra bench is small
+    """
+    cc.connect(False)
+
+    idx = cc.visibleIdx
+    oldPos = cc.calibModel.centers
+    newPos = np.zeros(cc.nCobras, dtype=complex)
+
+    # go home and measure new positions
+    if homePhi:
+        cc.moveToHome(cc.allCobras, thetaEnable=False, phiEnable=True)
+    newPos[idx] = cc.exposeAndExtractPositions()
+
+    # calculation tranformation
+    offset, scale, tilt, convert = cal.transform(oldPos[idx], newPos[idx])
+
+    old = cc.calibModel
+    new = deepcopy(old)
+    new.centers[:] = convert(old.centers)
+    new.tht0[:] = (old.tht0 + tilt) % (2*np.pi)
+    new.tht1[:] = (old.tht1 + tilt) % (2*np.pi)
+    new.L1[:] = old.L1*scale
+    new.L2[:] = old.L2*scale
+
+    # create a new XML file
+    old.updateGeometry(new.centers, new.L1, new.L2)
+    old.updateThetaHardStops(new.tht0, new.tht1)
+
+    fn = cc.runManager.outputDir / newXml
+    old.createCalibrationFile(fn)
+    return fn
+
 def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=6000, repeat=1, scaling=4.0, tolerance=np.deg2rad(1.0)):
     """
     find the on times of phi motors for a given speed
