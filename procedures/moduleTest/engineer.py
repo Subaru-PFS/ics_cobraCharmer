@@ -1117,6 +1117,7 @@ def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=
     ontimes = np.zeros((len(cIds), repeat, 2, tries+1))
     angles = np.zeros((len(cIds), repeat, 2, tries+1))
     speeds = np.zeros((len(cIds), repeat, 2, tries+1))
+    positions = np.zeros((len(cIds), repeat, 2, tries), 'complex')
 
     nowDone = np.zeros(cc.nCobras, 'bool')
     notDoneMask = np.zeros(cc.nCobras, 'bool')
@@ -1151,6 +1152,7 @@ def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=
             cobras = cc.allCobras[notDoneMask]
             cc.calibModel.motorOntimeSlowFwd2[cIds] = ontimes[:, r, 0, j]
             cc.moveSteps(cobras, 0, steps)
+            positions[:, r, 0, j] = cc.cobraInfo['position'][cIds]
             for ci in range(len(cIds)):
                 if notDoneMask[cIds[ci]]:
                     ontimes[ci, r, 0, j] = cc.moveInfo['phiOntime'][cIds[ci]]
@@ -1210,6 +1212,7 @@ def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=
             cobras = cc.allCobras[notDoneMask]
             cc.calibModel.motorOntimeSlowRev2[cIds] = ontimes[:, r, 1, j]
             cc.moveSteps(cobras, 0, -steps)
+            positions[:, r, 1, j] = cc.cobraInfo['position'][cIds]
             for ci in range(len(cIds)):
                 if notDoneMask[cIds[ci]]:
                     ontimes[ci, r, 1, j] = cc.moveInfo['phiOntime'][cIds[ci]]
@@ -1249,6 +1252,7 @@ def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=
     np.save(dataPath / 'angles', angles)
     np.save(dataPath / 'speeds', speeds)
     np.save(dataPath / 'cobras', cIds)
+    np.save(dataPath / 'positions', positions)
     np.save(dataPath / 'parameters', [speed, steps, scaling, tolerance])
 
     # build on-time maps, using only the first run
@@ -1261,7 +1265,7 @@ def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=
             if j == 0:
                 nz = np.where(angles[i,0,j] > angles[i,0,j,0]+lim)[0]
             else:
-                nz = np.where(angles[i,0,j,1:] < angles[i,0,j,0,1]-lim)[0]
+                nz = np.where(angles[i,0,j,1:] < angles[i,0,j,1]-lim)[0]
 
             if len(nz) > 0:
                 lower = nz[0] + j
@@ -1336,6 +1340,7 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalStep
     ontimes = np.zeros((len(cIds), repeat, 2, tries+1))
     angles = np.zeros((len(cIds), repeat, 2, tries+1))
     speeds = np.zeros((len(cIds), repeat, 2, tries+1))
+    positions = np.zeros((len(cIds), repeat, 2, tries), 'complex')
 
     nowDone = np.zeros(cc.nCobras, 'bool')
     notDoneMask = np.zeros(cc.nCobras, 'bool')
@@ -1366,6 +1371,7 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalStep
             cobras = cc.allCobras[notDoneMask]
             cc.calibModel.motorOntimeSlowFwd1[cIds] = ontimes[:, r, 0, j]
             cc.moveSteps(cobras, steps, 0)
+            positions[:, r, 0, j] = cc.cobraInfo['position'][cIds]
             for ci in range(len(cIds)):
                 if notDoneMask[cIds[ci]]:
                     ontimes[ci, r, 0, j] = cc.moveInfo['thetaOntime'][cIds[ci]]
@@ -1421,6 +1427,7 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalStep
             cobras = cc.allCobras[notDoneMask]
             cc.calibModel.motorOntimeSlowRev1[cIds] = ontimes[:, r, 1, j]
             cc.moveSteps(cobras, -steps, 0)
+            positions[:, r, 1, j] = cc.cobraInfo['position'][cIds]
             for ci in range(len(cIds)):
                 if notDoneMask[cIds[ci]]:
                     ontimes[ci, r, 1, j] = cc.moveInfo['thetaOntime'][cIds[ci]]
@@ -1460,6 +1467,7 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalStep
     np.save(dataPath / 'angles', angles)
     np.save(dataPath / 'speeds', speeds)
     np.save(dataPath / 'cobras', cIds)
+    np.save(dataPath / 'positions', positions)
     np.save(dataPath / 'parameters', [speed, steps, scaling, tolerance])
 
     # build on-time maps, using only the first run

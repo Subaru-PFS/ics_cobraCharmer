@@ -458,17 +458,24 @@ class CobraCoach():
             thetas[cIds] += expectedThetas
             phis[cIds] += expectedPhis
             targets = self.pfi.anglesToPositions(self.allCobras, thetas, phis)
-            invalid = np.isnan(targets)
-            targets[invalid] = self.calibModel.centers[invalid]
+
+        invalid = np.isnan(targets)
+        if self.mode == self.thetaMode and self.thetaInfoIsValid:
+            targets[invalid] = self.thetaInfo['center'][invalid]
+        elif self.mode == self.phiMode and self.phiInfoIsValid:
+            targets[invalid] = self.phiInfo['center'][invalid]
+
+        invalid = np.isnan(targets)
+        targets[invalid] = self.calibModel.centers[invalid]
 
         pos = np.zeros(self.nCobras, 'complex')
         if self.trajectoryMode:
             pos[self.visibleIdx] = targets[self.visibleIdx]
         else:
             pos[self.visibleIdx] = self.exposeAndExtractPositions(guess=targets[self.visibleIdx])
-        thetas, phis, flags = self.pfi.positionsToAngles(self.allCobras, pos)
 
         # update status
+        thetas, phis, flags = self.pfi.positionsToAngles(self.allCobras, pos)
         for c_i in range(len(cobras)):
             cId = cIds[c_i]
             if nSegments == 0:
