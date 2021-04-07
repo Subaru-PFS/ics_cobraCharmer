@@ -1,5 +1,6 @@
 from subprocess import Popen, PIPE
 import pathlib
+import threading
 
 import numpy as np
 import astropy.io.fits as pyfits
@@ -15,6 +16,7 @@ class AsrdCamera(Camera):
         self.devIds = 1,2
         self.data = None
         self.logger.info('asrd...')
+        self._lock = threading.Lock()
 
     def _camConnect(self):
         if self.simulationPath is not None:
@@ -65,3 +67,33 @@ class AsrdCamera(Camera):
 
         w = (y > 600) & (y < 1400)
         return w
+
+    def _record(self):
+        with self._lock:
+            im = self._camExpose(self.exptime)
+            if self.dark is not None:
+                im -= self.dark
+            self._imRecord = np.full(im.shape, im, 'float')
+
+        while self._recording:
+            with self._lock:
+                im = self._camExpose(self.exptime)
+                if self.dark is not None:
+                    im -= self.dark
+                self._imRecord += im
+
+    def startRecord(self):
+        """Start recording
+        """
+        self._recording = True
+        t = threading.Thread(target=self._record, daemon=True)
+        t.start()
+
+    def stopRecord(self, name=None):
+        """ Stop recording
+        """
+        self._recording = False
+        with self._lock:
+            filename = self.saveImage(self._imRecord, extraName=name)
+
+        return filename

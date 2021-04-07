@@ -3,9 +3,11 @@ import sep
 from ics.cobraCharmer import pfiDesign
 import os
 import sys
+import trajectory
 
 binSize = np.deg2rad(3.6)
 regions = 112
+phiThreshold = 0.6   # minimum phi angle to move in the beginning
 
 def lazyIdentification(centers, spots, radii=None):
     n = len(centers)
@@ -66,7 +68,7 @@ def diffAngle(angle1, angle2):
 def absDiffAngle(angle1, angle2):
     return np.abs(diffAngle(angle1, angle2))
 
-def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, delta=0.01, minSteps=100):
+def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, minSteps=50, delta=0.02, delta2=0.2):
     """ Adjust theta angles near 0 accounting for possible overshoots given the move """
     angle = angle % (np.pi*2)
 
@@ -76,10 +78,12 @@ def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, delta=0.01, m
 
     if angle < np.pi*0.4:
         # check if the angle is over 2PI
-        if absDiffAngle(angle, fromAngle) < delta and steps > minSteps:
+        if absDiffAngle(angle, fromAngle) < delta and steps >= minSteps:
             # stuck at CW gard stop
             angle += np.pi*2
-        elif angle < fromAngle and steps > minSteps:
+        elif angle < fromAngle - delta and steps >= minSteps:
+            angle += np.pi*2
+        elif angle < fromAngle - delta2 and steps > 0:
             angle += np.pi*2
         elif angle < fromAngle - delta and steps > 0:
             angle += np.pi*2
@@ -89,10 +93,12 @@ def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, delta=0.01, m
             angle += np.pi*2
     elif angle > np.pi*1.8:
         # check if the angle is negative
-        if absDiffAngle(angle, fromAngle) < delta and steps < -minSteps:
+        if absDiffAngle(angle, fromAngle) < delta and steps <= -minSteps:
             # stuck at CCW gard stop
             angle -= np.pi*2
-        elif angle > fromAngle and steps < -minSteps:
+        elif angle > fromAngle + delta and steps <= -minSteps:
+            angle -= np.pi*2
+        elif angle > fromAngle + delta2 and steps < 0:
             angle -= np.pi*2
         elif angle > fromAngle + delta and steps < 0:
             angle -= np.pi*2
@@ -438,7 +444,10 @@ def calculateOntime(ontime, speedRatio, scaling, modelParameter, maxOntime):
     a0 = np.sqrt(b1*b1 + b0*b0) - b0
     a1 = a0*((speedRatio - 1) / scaling + 1) + b0
 
-    return np.rint(min(np.sqrt(a1*a1 - b0*b0), maxOntime)*1000.0) / 1000.0
+    r = min(np.sqrt(a1*a1 - b0*b0), maxOntime)
+    if r > b1 * 1.5:
+        r = b1 * 1.5
+    return np.rint(r * 1000.0) / 1000.0
 
 def smooth(x, window_len=11, window='hamming'):
     """ smooth the data """
@@ -460,3 +469,379 @@ def smooth(x, window_len=11, window='hamming'):
     y = np.convolve(w/w.sum(), s, mode='valid')
 
     return y[(window_len//2):-(window_len//2)]
+
+def calMoveSegments(thetaMoved, phiMoved, thetaFrom, phiFrom, mmTheta, mmPhi, maxSteps, nSegments, phiOffset=0):
+    """ calculate move segments """
+
+    moved = 0
+    n = 0
+    if thetaMoved > 0:
+        while moved < thetaMoved:
+            idx = np.nanargmin(abs(mmTheta[0]['angle'] - thetaFrom - moved))
+            moved += mmTheta[0,idx]['speed'] * maxSteps
+            n += 1
+    elif thetaMoved < 0:
+         while moved > thetaMoved:
+            idx = np.nanargmin(abs(mmTheta[1]['angle'] - thetaFrom - moved))
+            moved += mmTheta[1,idx]['speed'] * maxSteps
+            n += 1
+    nSeg = n
+
+    moved = 0
+    n = 0
+    if phiMoved > 0:
+        while moved < phiMoved:
+            idx = np.nanargmin(abs(mmPhi[0]['angle'] - phiFrom - moved))
+            moved += mmPhi[0,idx]['speed'] * maxSteps
+            n += 1
+    elif phiMoved < 0:
+         while moved > phiMoved:
+            idx = np.nanargmin(abs(mmPhi[1]['angle'] - phiFrom - moved))
+            moved += mmPhi[1,idx]['speed'] * maxSteps
+            n += 1
+    if nSeg < n:
+        nSeg = n
+
+    if nSeg < nSegments:
+        nSeg = nSegments
+
+    tSteps = np.zeros(nSeg, int)
+    pSteps = np.zeros(nSeg, int)
+    tOntimes = np.zeros(nSeg, float)
+    pOntimes = np.zeros(nSeg, float)
+    tMoves = np.zeros(nSeg, float)
+    pMoves = np.zeros(nSeg, float)
+    tSpeeds = np.zeros(nSeg, float)
+    pSpeeds = np.zeros(nSeg, float)
+
+    if thetaMoved > 0:
+        # early scheme
+        moved = 0
+        n = 0
+        while n < nSeg:
+            idx = np.nanargmin(abs(mmTheta[0]['angle'] - thetaFrom - moved))
+            speed = mmTheta[0,idx]['speed']
+            tOntimes[n] = mmTheta[0,idx]['ontime']
+            tSpeeds[n] = speed
+            if speed * maxSteps < thetaMoved - moved:
+                moved += speed * maxSteps
+                tSteps[n] = maxSteps
+                tMoves[n] = speed * maxSteps
+                n += 1
+            else:
+                tSteps[n] = int((thetaMoved - moved) / speed)
+                tMoves[n] = speed * tSteps[n]
+                break
+
+    elif thetaMoved < 0:
+        # late scheme
+        moved = thetaMoved
+        n = nSeg - 1
+        while n >= 0:
+            idx = np.nanargmin(abs(mmTheta[1]['angle'] - thetaFrom - moved))
+            speed = mmTheta[1,idx]['speed']
+            tOntimes[n] = mmTheta[1,idx]['ontime']
+            tSpeeds[n] = speed
+            if speed * maxSteps > moved:
+                moved -= speed * maxSteps
+                tSteps[n] = -maxSteps
+                tMoves[n] = speed * maxSteps
+                n -= 1
+            else:
+                tSteps[n] = -int(moved / speed)
+                tMoves[n] = -speed * tSteps[n]
+                break
+
+    if phiMoved > 0:
+        # late scheme, but move away from center if too close
+        left = np.min([phiThreshold - phiOffset - phiFrom, phiMoved])
+        moved = 0
+        n = 0
+        while n < nSeg and moved < left:
+            idx = np.nanargmin(abs(mmPhi[0]['angle'] - phiFrom - moved))
+            speed = mmPhi[0,idx]['speed']
+            pOntimes[n] = mmPhi[0,idx]['ontime']
+            pSpeeds[n] = speed
+            if speed * maxSteps < left - moved:
+                moved += speed * maxSteps
+                pSteps[n] = maxSteps
+                pMoves[n] = speed * maxSteps
+                n += 1
+            else:
+                pSteps[n] = int((left - moved) / speed)
+                pMoves[n] = speed * pSteps[n]
+                moved += pMoves[n]
+                break
+
+        moved = phiMoved - moved
+        n = nSeg - 1
+        while n >= 0:
+            idx = np.nanargmin(abs(mmPhi[0]['angle'] - phiFrom - moved))
+            speed = mmPhi[0,idx]['speed']
+            pOntimes[n] = mmPhi[0,idx]['ontime']
+            pSpeeds[n] = speed
+            if speed * maxSteps < moved:
+                moved -= speed * maxSteps
+                pSteps[n] = maxSteps
+                pMoves[n] = speed * maxSteps
+                n -= 1
+            else:
+                pSteps[n] = int(moved / speed)
+                pMoves[n] = speed * pSteps[n]
+                break
+
+    elif phiMoved < 0:
+        # early scheme
+        moved = 0
+        n = 0
+        while n < nSeg:
+            idx = np.nanargmin(abs(mmPhi[1]['angle'] - phiFrom - moved))
+            speed = mmPhi[1,idx]['speed']
+            pOntimes[n] = mmPhi[1,idx]['ontime']
+            pSpeeds[n] = speed
+            if speed * maxSteps > phiMoved - moved:
+                moved += speed * maxSteps
+                pSteps[n] = -maxSteps
+                pMoves[n] = speed * maxSteps
+                n += 1
+            else:
+                pSteps[n] = -int((phiMoved - moved) / speed)
+                pMoves[n] = -speed * pSteps[n]
+                break
+
+    return tSteps[:nSegments], pSteps[:nSegments], tOntimes[:nSegments], pOntimes[:nSegments], \
+           np.sum(tMoves[:nSegments]), np.sum(pMoves[:nSegments]), tSpeeds[:nSegments], pSpeeds[:nSegments]
+
+def calNSegments(angle, fromAngle, mm, maxSteps):
+    moved = 0
+    n = 0
+    if angle > 0:
+        while moved < angle:
+            idx = np.nanargmin(abs(mm[0]['angle'] - fromAngle - moved))
+            moved += mm[0,idx]['speed'] * maxSteps
+            n += 1
+    elif angle < 0:
+         while moved > angle:
+            idx = np.nanargmin(abs(mm[1]['angle'] - fromAngle - moved))
+            moved += mm[1,idx]['speed'] * maxSteps
+            n += 1
+
+    return n
+
+def calculateSteps(cId, maxSteps, thetaAngle, phiAngle, fromTheta, fromPhi, thetaFast, phiFast, model):
+    # Get the integrated step maps for the theta angle
+    if thetaAngle >= 0:
+        if thetaFast:
+            thetaModel = model.posThtSteps[cId]
+        else:
+            thetaModel = model.posThtSlowSteps[cId]
+    else:
+        if thetaFast:
+            thetaModel = model.negThtSteps[cId]
+        else:
+            thetaModel = model.negThtSlowSteps[cId]
+
+    # Get the integrated step maps for the phi angle
+    if phiAngle >= 0:
+        if phiFast:
+            phiModel = model.posPhiSteps[cId]
+        else:
+            phiModel = model.posPhiSlowSteps[cId]
+    else:
+        if phiFast:
+            phiModel = model.negPhiSteps[cId]
+        else:
+            phiModel = model.negPhiSlowSteps[cId]
+
+    # Calculate the total number of motor steps for the theta movement
+    stepsRange = np.interp([fromTheta, fromTheta + thetaAngle], model.thtOffsets[cId], thetaModel)
+    if not np.all(np.isfinite(stepsRange)):
+        raise ValueError(f"theta angle to step interpolation out of range: "
+                         f"Cobra#{cId+1} {fromTheta}:{fromTheta + thetaAngle}")
+    thetaSteps = np.rint(stepsRange[1] - stepsRange[0]).astype('i4')
+    thetaFromSteps = stepsRange[0]
+
+    # Calculate the total number of motor steps for the phi movement
+    stepsRange = np.interp([fromPhi, fromPhi + phiAngle], model.phiOffsets[cId], phiModel)
+    if not np.all(np.isfinite(stepsRange)):
+        raise ValueError(f"phi angle to step interpolation out of range: "
+                         f"Cobra#{cId+1} {fromPhi}:{fromPhi + phiAngle}")
+    phiSteps = np.rint(stepsRange[1] - stepsRange[0]).astype('i4')
+    phiFromSteps = stepsRange[0]
+
+    # calculate phi motor steps away from center in the beginning
+    safePhiSteps = 0
+    if phiSteps > 0:
+        safePhiAngle = phiThreshold - model.phiIn[cId] - np.pi
+        if fromPhi < safePhiAngle:
+            stepsRange = np.interp([fromPhi, safePhiAngle], model.phiOffsets[cId], phiModel)
+            if not np.all(np.isfinite(stepsRange)):
+                    raise ValueError(f"phi angle to step interpolation out of range: "
+                                     f"Cobra#{cId+1} {fromPhi}:{safePhiAngle}")
+            safePhiSteps = min(np.rint(stepsRange[1] - stepsRange[0]).astype('i4'), phiSteps, maxSteps)
+
+    if abs(thetaSteps) > maxSteps or abs(phiSteps) > maxSteps:
+        if abs(thetaSteps) >= abs(phiSteps):
+            if phiSteps > 0 and thetaSteps > 0:
+                phiSteps = max(phiSteps - thetaSteps + maxSteps, safePhiSteps)
+                thetaSteps = maxSteps
+            elif phiSteps > 0 and thetaSteps < 0:
+                phiSteps = max(phiSteps + thetaSteps + maxSteps, safePhiSteps)
+                thetaSteps = -maxSteps
+            elif phiSteps < 0 and thetaSteps > 0:
+                phiSteps = max(phiSteps, -maxSteps)
+                thetaSteps = maxSteps
+            elif phiSteps < 0 and thetaSteps < 0:
+                phiSteps = max(phiSteps, -maxSteps)
+                thetaSteps = -maxSteps
+            elif thetaSteps > 0:
+                thetaSteps = maxSteps
+            else:
+                thetaSteps = -maxSteps
+        else:
+            if phiSteps > 0 and thetaSteps > 0:
+                thetaSteps = min(thetaSteps, maxSteps)
+                phiSteps = maxSteps
+            elif phiSteps > 0 and thetaSteps < 0:
+                thetaSteps = min(thetaSteps + phiSteps - maxSteps, 0)
+                phiSteps = maxSteps
+            elif phiSteps < 0 and thetaSteps > 0:
+                thetaSteps = min(thetaSteps, maxSteps)
+                phiSteps = -maxSteps
+            elif phiSteps < 0 and thetaSteps < 0:
+                thetaSteps = min(thetaSteps - phiSteps - maxSteps, 0)
+                phiSteps = -maxSteps
+            elif phiSteps > 0:
+                phiSteps = maxSteps
+            else:
+                phiSteps = -maxSteps
+
+    toTheta = np.interp(thetaFromSteps + thetaSteps, thetaModel, model.thtOffsets[cId])
+    toPhi = np.interp(phiFromSteps + phiSteps, phiModel, model.phiOffsets[cId])
+    return thetaSteps, phiSteps, toTheta - fromTheta, toPhi - fromPhi
+
+def interpolateSteps(thetaStep, phiStep, maxStep, timeStep):
+    # set delay parameters for safer operation, same logic as in pfi.py
+    if phiStep > 0 and thetaStep < 0:
+        thetaDelay = maxStep + thetaStep
+        phiDelay = maxStep - phiStep
+    elif phiStep > 0 and thetaStep > 0:
+        thetaDelay = 0
+        phiDelay = maxStep - phiStep
+    elif phiStep < 0 and thetaStep < 0:
+        thetaDelay = maxStep + thetaStep
+        phiDelay = 0
+    else:
+        thetaDelay = 0
+        phiDelay = 0
+
+    size = int(np.ceil(maxStep / timeStep))
+    thetaSteps = np.zeros(size, int)
+    phiSteps = np.zeros(size, int)
+    stepPtr = 0
+
+    if thetaStep >=0:
+        thetaNeg = False
+    else:
+        thetaNeg = True
+        thetaStep = -thetaStep
+    if phiStep >=0:
+        phiNeg = False
+    else:
+        phiNeg = True
+        phiStep = -phiStep
+
+    for m in range(size):
+        if stepPtr < thetaDelay + thetaStep and stepPtr > thetaDelay - timeStep:
+            thetaSteps[m] = timeStep
+            exceed = thetaDelay - stepPtr
+            if exceed > 0:
+                thetaSteps[m] -= exceed
+            exceed = stepPtr + timeStep - thetaDelay - thetaStep
+            if exceed > 0:
+                thetaSteps[m] -= exceed
+
+        if stepPtr < phiDelay + phiStep and stepPtr > phiDelay - timeStep:
+            phiSteps[m] = timeStep
+            exceed = phiDelay - stepPtr
+            if exceed > 0:
+                phiSteps[m] -= exceed
+            exceed = stepPtr + timeStep - phiDelay - phiStep
+            if exceed > 0:
+                phiSteps[m] -= exceed
+
+        stepPtr += timeStep
+
+    if thetaNeg:
+        thetaStep = -thetaStep
+        thetaSteps = -thetaSteps
+    if phiNeg:
+        phiStep = -phiStep
+        phiSteps = -phiSteps
+
+    return thetaSteps, phiSteps
+
+def interpolateMoves(cIds, timeStep, thetaAngles, phiAngles, thetaSteps, phiSteps, thetaFast, phiFast, model):
+    """ interpolate a single move  """
+    thetaT = thetaAngles[:,np.newaxis]
+    phiT = phiAngles[:,np.newaxis]
+
+    maxStep = np.max(np.abs([thetaSteps, phiSteps]))
+    size = int(np.ceil(maxStep / timeStep))
+    thetaT = np.concatenate((thetaT, np.zeros((len(thetaT), size))), axis=1)
+    phiT = np.concatenate((phiT, np.zeros((len(phiT), size))), axis=1)
+
+    for c in range(len(thetaAngles)):
+        thetaS, phiS = interpolateSteps(thetaSteps[c], phiSteps[c], maxStep, timeStep)
+
+        # Get the integrated step maps for the theta angle
+        if thetaSteps[c] >= 0:
+            if thetaFast[c]:
+                thetaModelSteps = model.posThtSteps[cIds[c]]
+            else:
+                thetaModelSteps = model.posThtSlowSteps[cIds[c]]
+        else:
+            if thetaFast[c]:
+                thetaModelSteps = model.negThtSteps[cIds[c]]
+            else:
+                thetaModelSteps = model.negThtSlowSteps[cIds[c]]
+
+        # Get the integrated step maps for the phi angle
+        if phiSteps[c] >= 0:
+            if phiFast[c]:
+                phiModelSteps = model.posPhiSteps[cIds[c]]
+            else:
+                phiModelSteps = model.posPhiSlowSteps[cIds[c]]
+        else:
+            if phiFast[c]:
+                phiModelSteps = model.negPhiSteps[cIds[c]]
+            else:
+                phiModelSteps = model.negPhiSlowSteps[cIds[c]]
+
+        # Calculate trajectory
+        thtStart = np.interp(thetaAngles[c], model.thtOffsets[cIds[c]], thetaModelSteps)
+        phiStart = np.interp(phiAngles[c], model.phiOffsets[cIds[c]], phiModelSteps)
+        thetaT[c,1:] = np.interp(np.cumsum(thetaS) + thtStart, thetaModelSteps, model.thtOffsets[cIds[c]])
+        phiT[c,1:] = np.interp(np.cumsum(phiS) + phiStart, phiModelSteps, model.phiOffsets[cIds[c]])
+
+    return thetaT, phiT
+
+def interpolateSegments(timeStep, thetaAngles, phiAngles, thetaSteps, phiSteps, thetaSpeeds, phiSpeeds):
+    """ interpolate multiple segment """
+    thetaT = thetaAngles[:,np.newaxis]
+    phiT = phiAngles[:,np.newaxis]
+
+    for m in range(len(thetaSteps)):
+        maxStep = np.max(np.abs([thetaSteps[m], phiSteps[m]]))
+        size = int(np.ceil(maxStep / timeStep))
+        if (size == 0):
+            continue
+
+        thetaT = np.concatenate((thetaT, np.zeros((len(thetaT), size))), axis=1)
+        phiT = np.concatenate((phiT, np.zeros((len(phiT), size))), axis=1)
+        for c in range(len(thetaAngles)):
+            thetaS, phiS = interpolateSteps(thetaSteps[m,c], phiSteps[m,c], maxStep, timeStep)
+            thetaT[c,-size:] = np.cumsum(thetaS) * abs(thetaSpeeds[m,c]) + thetaT[c,-size-1]
+            phiT[c,-size:] = np.cumsum(phiS) * abs(phiSpeeds[m,c]) + phiT[c,-size-1]
+
+    return thetaT, phiT

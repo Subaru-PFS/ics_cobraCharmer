@@ -24,8 +24,8 @@ class PFI(object):
     IN_OVERLAPPING_REGION    = 0x0002  # 1 if the position in overlapping region
     PHI_NEGATIVE             = 0x0004  # 1 if phi angle is negative(phi CCW limit < 0)
     PHI_BEYOND_PI            = 0x0008  # 1 if phi angle is beyond PI(phi CW limit > PI)
-    TOO_CLOSE_TO_CENTER      = 0x0016  # 1 if the position is too close to the center
-    TOO_FAR_FROM_CENTER      = 0x0032  # 1 if the position is too far from the center
+    TOO_CLOSE_TO_CENTER      = 0x0010  # 1 if the position is too close to the center
+    TOO_FAR_FROM_CENTER      = 0x0020  # 1 if the position is too far from the center
 
     # on time vs speed model parameters
     thetaParameter = 0.09
@@ -54,7 +54,7 @@ class PFI(object):
         self.maxThetaOntime = 0.14
         self.maxPhiOntime = 0.14
         self.maxThetaSteps = 10000
-        self.maxPhiSteps = 7000
+        self.maxPhiSteps = 6000
 
         self.flipPowerPolarity = (fpgaHost == 'pfi')
         if fpgaHost in {'fpga', 'pfi'}:
@@ -171,16 +171,16 @@ class PFI(object):
         if phiFreq is not None and len(cobras) != len(phiFreq):
             raise RuntimeError("number of phi frquencies must match number of cobras")
 
-        for c in cobras:
+        for n,c in enumerate(cobras):
             cobraIdx = self._mapCobraIndex(c)
             if thetaFreq is None:
                 thetaPer = self._freqToPeriod(self.calibModel.motorFreq1[cobraIdx]/1000)
             else:
-                thetaPer = self._freqToPeriod(np.array(thetaFreq))
+                thetaPer = self._freqToPeriod(thetaFreq[n]/1000)
             if phiFreq is None:
                 phiPer = self._freqToPeriod(self.calibModel.motorFreq2[cobraIdx]/1000)
             else:
-                phiPer = self._freqToPeriod(np.array(phiFreq))
+                phiPer = self._freqToPeriod(phiFreq[n]/1000)
 
             # print(f'set {c.board},{c.cobra} to {thetaPer},{phiPer} {self.calibModel.motorFreq1[c.cobra]}')
             c.p = func.SetParams(p0=thetaPer, p1=phiPer, en=(True, True))
@@ -456,9 +456,9 @@ class PFI(object):
             existingScale = 1.0
 
         newScale = existingScale * scale
-        if newScale < 0.5:
-            self.logger.warn(f'clipping scale adjustment from {newScale} to 0.5')
-            newScale = 0.5
+        if newScale < 0.3:
+            self.logger.warn(f'clipping scale adjustment from {newScale} to 0.3')
+            newScale = 0.3
         if newScale > 2.0:
             self.logger.warn(f'clipping scale adjustment from {newScale} to 2.0')
             newScale = 2.0
@@ -466,7 +466,7 @@ class PFI(object):
         cobraState.motorScales[mapId] = newScale
         self.logger.debug(f'setadjust {mapId} {existingScale:0.2f} -> {newScale:0.2f}')
 
-    def scaleMotorOntimeBySpeed(self, cobra, motor, direction, fast, scale):
+    def scaleMotorOntimeBySpeed(self, cobra, motor, direction, fast, scale, ontime=0.0):
         """ Declare that we want a given motor's ontime to be scaled after interpolation.
 
         If there is an existing scaling, the new scaling is applied
@@ -482,7 +482,7 @@ class PFI(object):
         direction : {'ccw', 'cw'}
            Which motor map to adjust
         scale : `float`
-           Scaling for the motor speed
+           Ontime scaling for the motor speed
         fast : `bool`
            Using fast or slow motor map
         """
@@ -495,8 +495,11 @@ class PFI(object):
             self.logger.warn(f'scale is negative, give up scaling: {scale}')
             return cobraState.motorScales[mapId]
 
-        if motor == 'theta':
-            b0 = self.thetaParameter
+        if ontime != 0.0:
+            nowOntime = ontime
+            ontime /= existingScale
+
+        elif motor == 'theta':
             if fast:
                 if direction == 'cw':
                     ontime = self.calibModel.motorOntimeFwd1[cobraId]
@@ -508,10 +511,8 @@ class PFI(object):
                 else:
                     ontime = self.calibModel.motorOntimeSlowRev1[cobraId]
             nowOntime = existingScale * ontime
-            if nowOntime > self.maxThetaOntime:
-                nowOntime = self.maxThetaOntime
+
         else:
-            b0 = self.phiParameter
             if fast:
                 if direction == 'cw':
                     ontime = self.calibModel.motorOntimeFwd2[cobraId]
@@ -523,28 +524,38 @@ class PFI(object):
                 else:
                     ontime = self.calibModel.motorOntimeSlowRev2[cobraId]
             nowOntime = existingScale * ontime
-            if nowOntime > self.maxPhiOntime:
-                nowOntime = self.maxPhiOntime
+
+        if motor == 'theta':
+            b0 = self.thetaParameter
+        else:
+            b0 = self.phiParameter
 
         a0 = np.sqrt(nowOntime*nowOntime + b0*b0) - b0
         a1 = a0*scale + b0
         newOntime = np.sqrt(a1*a1 - b0*b0)
         if not np.isfinite(newOntime):
             self.logger.warn(f'invalid scaling adjustment, give up')
-            return existingScale
+            return 1.0
 
-        newScale = newOntime / ontime
-        if newScale < 0.3:
-            self.logger.warn(f'clipping scale adjustment from {newScale} to 0.3')
-            newScale = 0.3
-        if newScale > 3.0:
-            self.logger.warn(f'clipping scale adjustment from {newScale} to 3.0')
-            newScale = 3.0
+        if motor == 'theta' and newOntime > self.maxThetaOntime:
+            newOntime = self.maxThetaOntime
+        elif motor == 'phi' and newOntime > self.maxPhiOntime:
+            newOntime = self.maxPhiOntime
 
-        cobraState.motorScales[mapId] = newScale
-        self.logger.debug(f'setadjust {mapId} {existingScale:0.2f} -> {newScale:0.2f}')
+        ontimeScale = newOntime / ontime
+        if ontimeScale < 0.3:
+            self.logger.warn(f'clipping scale adjustment from {ontimeScale} to 0.3')
+            ontimeScale = 0.3
+        if ontimeScale > 2.0:
+            self.logger.warn(f'clipping scale adjustment from {ontimeScale} to 2.0')
+            ontimeScale = 2.0
+        trueOntime = ontimeScale * ontime
+        trueScale = (np.sqrt(trueOntime*trueOntime + b0*b0) - b0) / a0
 
-        return newScale
+        cobraState.motorScales[mapId] = ontimeScale
+        self.logger.debug(f'adjust {mapId} {existingScale:0.2f} -> {ontimeScale:0.2f}')
+
+        return trueScale
 
     def adjustThetaOnTime(self, cobraId, ontime, fast, direction):
         mapId = cobraState.mapId(cobraId, 'theta', direction)
@@ -575,7 +586,8 @@ class PFI(object):
         return newOntime
 
     def moveSteps(self, cobras, thetaSteps, phiSteps, waitThetaSteps=None, waitPhiSteps=None,
-                  interval=2.5, thetaFast=True, phiFast=True, force=False):
+                  interval=2.5, thetaFast=True, phiFast=True, force=False,
+                  thetaOntimes=None, phiOntimes=None, trajectoryMode=False):
         """ Move cobras with theta and phi steps
 
             thetaSteps: A numpy array with theta steps to go
@@ -586,7 +598,8 @@ class PFI(object):
             thetaFast: a boolean value for using fast/slow theta movement
             phiFast: a boolean value for using fast/slow phi movement
             force: ignore disabled cobra status
-
+            thetaOntimes: customzied theta on-times
+            phiOntimes: customized phi on-times
         """
 
         if len(cobras) != len(thetaSteps):
@@ -609,6 +622,10 @@ class PFI(object):
             raise RuntimeError("number of phiFast must match number of cobras")
         else:
             _phiFast = phiFast
+        if thetaOntimes is not None and len(cobras) != len(thetaOntimes):
+            raise RuntimeError("number of thetaOntimes must match number of cobras")
+        if phiOntimes is not None and len(cobras) != len(phiOntimes):
+            raise RuntimeError("number of phiOntimes must match number of cobras")
 
         if len(cobras) == 0:
             self.logger.debug(f'skipping RUN command: no cobras')
@@ -637,29 +654,35 @@ class PFI(object):
             if isBad and not force:
                 en = (False, False)
 
-            if _thetaFast[c_i]:
-                if dirs1[0] == 'cw':
-                    ontime1 = self.calibModel.motorOntimeFwd1[cobraId]
+            if thetaOntimes is None:
+                if _thetaFast[c_i]:
+                    if dirs1[0] == 'cw':
+                        ontime1 = self.calibModel.motorOntimeFwd1[cobraId]
+                    else:
+                        ontime1 = self.calibModel.motorOntimeRev1[cobraId]
                 else:
-                    ontime1 = self.calibModel.motorOntimeRev1[cobraId]
+                    if dirs1[0] == 'cw':
+                        ontime1 = self.calibModel.motorOntimeSlowFwd1[cobraId]
+                    else:
+                        ontime1 = self.calibModel.motorOntimeSlowRev1[cobraId]
             else:
-                if dirs1[0] == 'cw':
-                    ontime1 = self.calibModel.motorOntimeSlowFwd1[cobraId]
-                else:
-                    ontime1 = self.calibModel.motorOntimeSlowRev1[cobraId]
-                ontime1 = self.adjustThetaOnTime(cobraId, ontime1, fast=_thetaFast[c_i], direction=dirs1[0])
+                ontime1 = thetaOntimes[c_i]
+            ontime1 = self.adjustThetaOnTime(cobraId, ontime1, fast=_thetaFast[c_i], direction=dirs1[0])
 
-            if _phiFast[c_i]:
-                if dirs1[1] == 'cw':
-                    ontime2 = self.calibModel.motorOntimeFwd2[cobraId]
+            if phiOntimes is None:
+                if _phiFast[c_i]:
+                    if dirs1[1] == 'cw':
+                        ontime2 = self.calibModel.motorOntimeFwd2[cobraId]
+                    else:
+                        ontime2 = self.calibModel.motorOntimeRev2[cobraId]
                 else:
-                    ontime2 = self.calibModel.motorOntimeRev2[cobraId]
+                    if dirs1[1] == 'cw':
+                        ontime2 = self.calibModel.motorOntimeSlowFwd2[cobraId]
+                    else:
+                        ontime2 = self.calibModel.motorOntimeSlowRev2[cobraId]
             else:
-                if dirs1[1] == 'cw':
-                    ontime2 = self.calibModel.motorOntimeSlowFwd2[cobraId]
-                else:
-                    ontime2 = self.calibModel.motorOntimeSlowRev2[cobraId]
-                ontime2 = self.adjustPhiOnTime(cobraId, ontime2, fast=_phiFast[c_i], direction=dirs1[1])
+                ontime2 = phiOntimes[c_i]
+            ontime2 = self.adjustPhiOnTime(cobraId, ontime2, fast=_phiFast[c_i], direction=dirs1[1])
 
             offtime1 = 0
             offtime2 = 0
@@ -687,11 +710,12 @@ class PFI(object):
                                  en=en,
                                  dir=dirs1)
         # temperarily fix for interval and timeout
-        err = func.RUN(cobras, inter=int(interval*1000/16), timeout=65535)
-        if err:
-            self.logger.error(f'send RUN command failed')
-        else:
-            self.logger.debug(f'send RUN command succeeded')
+        if not trajectoryMode:
+            err = func.RUN(cobras, inter=int(interval*1000/16), timeout=65535)
+            if err:
+                self.logger.error(f'send RUN command failed')
+            else:
+                self.logger.debug(f'send RUN command succeeded')
 
     def homePhi(self, cobras, nsteps=-5000, fast=True):
         # go to the hard stops for phi arms
@@ -811,7 +835,7 @@ class PFI(object):
                                    thtSteps)
             if not np.all(np.isfinite(stepsRange)):
                 raise ValueError(f"theta angle to step interpolation out of range: "
-                                 f"{c} {startTht[c]} {startTht[c] + deltaTht[c]}")
+                                 f"Cobra#{c+1} {startTht[c]} {startTht[c] + deltaTht[c]}")
             nThtSteps[c] = np.rint(stepsRange[1] - stepsRange[0]).astype('i4')
 
             # Calculate the total number of motor steps for the phi movement
@@ -819,7 +843,7 @@ class PFI(object):
                                    phiSteps)
             if not np.all(np.isfinite(stepsRange)):
                 raise ValueError(f"phi angle to step interpolation out of range: "
-                                 f"{startTht[c]} {startTht[c] + deltaTht[c]}")
+                                 f"Cobra#{c+1} {startPhi[c]} {startPhi[c] + deltaPhi[c]}")
             nPhiSteps[c] = np.rint(stepsRange[1] - stepsRange[0]).astype('i4')
 
         self.logger.debug(f'start={startPhi[:3]}, delta={deltaPhi[:3]} move={nPhiSteps[:3]}')
@@ -914,6 +938,9 @@ class PFI(object):
         flags = np.full((len(cobras), 2), 0, dtype='u2')
 
         for i in range(len(positions)):
+            if L1[i] == 0 or L2[i] == 0:
+                # bad cobras
+                continue
             if distance[i] > L1[i] + L2[i]:
                 # too far away, return theta= spot angle and phi=PI
                 flags[i][0] |= self.TOO_FAR_FROM_CENTER
