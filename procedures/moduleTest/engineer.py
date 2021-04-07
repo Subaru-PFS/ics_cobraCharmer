@@ -23,6 +23,8 @@ moveDtype = np.dtype(dict(names=['position', 'thetaAngle', 'thetaSteps', 'thetaO
 mmDtype = np.dtype(dict(names=['angle', 'ontime', 'speed'], formats=['f4', 'f4', 'f4']))
 
 cc = None
+mmTheta = None
+mmPhi = None
 
 def setCobraCoach(cobraCoach):
     global cc

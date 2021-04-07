@@ -78,6 +78,10 @@ class CobraCoach():
         self.minPhiStepsForScaling = 10
         self.constantThetaSpeed = np.deg2rad(0.06)
         self.constantPhiSpeed = np.deg2rad(0.06)
+<<<<<<< HEAD
+=======
+        self.minScalingAngle = np.deg2rad(2.0)
+>>>>>>> master
         self.thetaModel = SpeedModel(p1=self.thetaModelParameter)
         self.phiModel = SpeedModel(p1=self.phiModelParameter)
 

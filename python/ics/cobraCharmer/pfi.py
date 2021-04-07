@@ -56,7 +56,8 @@ class PFI(object):
         self.maxThetaSteps = 10000
         self.maxPhiSteps = 6000
 
-        if fpgaHost == 'fpga':
+        self.flipPowerPolarity = (fpgaHost == 'pfi')
+        if fpgaHost in {'fpga', 'pfi'}:
             fpgaHost = '128.149.77.24'  # A JPL address which somehow got burned into the FPGAs. See INSTRM-464
         self.fpgaHost = fpgaHost
         if doConnect:
@@ -83,9 +84,12 @@ class PFI(object):
         """ Load a motormap XML file. """
         import ics.cobraCharmer.pfiDesign as pfiDesign
         reload(pfiDesign)
-
+        des = pfiDesign.PFIDesign()
+        #des.loadModelFiles(filename)
+        
         if filename is not None:
-            self.calibModel = pfiDesign.PFIDesign(filename)
+            des.loadModelFiles(filename)
+            self.calibModel = des
             self.logger.info(f'load cobra model from {filename}')
         else:
             self.calibModel = pfiDesign.PFIDesign.loadPfi(version, moduleVersion)
@@ -115,11 +119,21 @@ class PFI(object):
             self.logger.error(f'send RST command failed')
         else:
             self.logger.debug(f'send RST command succeeded')
-
+        
     def diag(self):
         """ Get fpga board inventory"""
         res = func.DIA()
         self.logger.info("Board Counts: %s" %(res) )
+        return res
+    
+    def admin(self, debugLevel=0):
+        """ Set debug level, get version and uptime """
+        err, version, uptime = func.ADMIN(debugLevel=debugLevel)
+        if err:
+            self.logger.error(f'send ADMIN command failed')
+        else:
+            self.logger.debug(f'send ADMIN command succeeded')
+        return version, uptime
 
     def power(self, sectors=0x3f):
         """ Set COBRA PSU on/off """
@@ -689,6 +703,7 @@ class PFI(object):
                 if waitPhiSteps is not None:
                     offtime2 = waitPhiSteps[c_i]
 
+            #self.logger.info(f'{c_i} {cobraId} {ontime1} {ontime2}')
             c.p = func.RunParams(pu=(int(1000*ontime1), int(1000*ontime2)),
                                  st=(steps1),
                                  sl=(int(offtime1), int(offtime2)),

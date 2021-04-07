@@ -2,17 +2,17 @@ from array import array
 
 N_BOARDS = 84
 COBRAS_PER_BOARD = 29
-OPCODES = {'run':1,'cal':2,'set':3,'hk':4,'pow':5,'dia':6,'exit':7}
+OPCODES = {'run':1,'cal':2,'set':3,'hk':4,'pow':5,'dia':6,'admin':7}
 CMD_NAMES = {
     1:'Run', 2:'Calibrate', 3:'SetFrequency', 4:'HouseKeeping', \
-    5:'Power', 6:'Diagnostic', 7:'Exit', 0:'Invalid_CMD' \
+    5:'Power', 6:'Diagnostic', 7:'Admin', 0:'Invalid_CMD' \
     }
 
 TLM_LEN = 6
 HK_TLM_HDR_LEN = 12
 HK_TLM_LEN = HK_TLM_HDR_LEN + 8*COBRAS_PER_BOARD
 DIA_TLM_LEN = 12
-
+ADMIN_TLM_LEN = 12
 
 def cmd_gen( hdr_vals, payload=[] ):
     t = hdr_vals + [0,0] + payload
@@ -26,7 +26,7 @@ def chksum(CMD):
     res = 0
     for b in CMD:
         res = (res + b)%65536 
-    res = 65536 - res
+    res = (65536 - res) & 0xffff
     return res    
  
 # Functions that return ByteArrays for a specific CMD---------------------
@@ -62,3 +62,7 @@ def CMD_dia(count=0):
 def CMD_exit(count=0):
     hdr_vals = [ OPCODES['exit'], count ]
     return cmd_gen( hdr_vals )
+
+def CMD_admin(debugLevel=0, count=0):
+    hdr_vals = [OPCODES['admin'], count, debugLevel&0xff, 0, 0, 100]
+    return cmd_gen(hdr_vals)

@@ -56,7 +56,7 @@ class PFIDesign():
             return
 
         self.loadModelFiles([fileName])
-        self.moduleIds[:] = 1
+        #self.moduleIds[:] = 1
 
     @classmethod
     def loadModule(cls, moduleName, version=None):
@@ -218,9 +218,9 @@ class PFIDesign():
 
                     raise KeyError(f"duplicate cobra id: module={self.moduleIds[i]} "
                                    f"positioner={self.positionerIds[i]}")
-
+                
                 if self.serialIds[i] == self.serialIds[check_i]:
-                    raise KeyError(f"duplicate cobra with serial={self.serialIds[i]}")
+                    raise KeyError(f"duplicate cobra with serial={self.serialIds[i]} in SC{self.moduleIds[i]}PID{self.positionerIds[i]} and SC{self.moduleIds[check_i]}PID{self.positionerIds[check_i]}")
 
             # Save some of the kinematics information
             kinematics = dataContainers[i].find("KINEMATICS")

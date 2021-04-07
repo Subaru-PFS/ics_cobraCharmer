@@ -29,7 +29,7 @@ def whereAmI():
     # Need to distinguish the ASRD bench, the ASRD MCS, the Subaru MCS.
     # Can use network address for Subaru
 
-    return 'asrd'
+    return 'rmod'
 
 def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None):
     if doClear or simulationPath is not None:
@@ -196,10 +196,10 @@ class Camera(object):
         self.logger.debug(f'median={np.median(data_sub)} std={np.std(data_sub)} '
                           f'thresh={thresh} {len(objects)} objects')
 
-        keep_w = self.trim(objects['x'], objects['y'])
-        if len(keep_w) != len(objects):
-            self.logger.info(f'trimming {len(objects)} objects to {len(keep_w)}')
-        objects = objects[keep_w]
+        #keep_w = self.trim(objects['x'], objects['y'])
+        #if len(keep_w) != len(objects):
+        #    self.logger.info(f'trimming {len(objects)} objects to {len(keep_w)}')
+        #objects = objects[keep_w]
 
         # Add exposure and spot IDs
         expids = np.zeros((len(objects)), dtype='U12')

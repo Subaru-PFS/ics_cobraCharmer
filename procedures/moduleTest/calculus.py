@@ -85,6 +85,8 @@ def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, minSteps=50, 
             angle += np.pi*2
         elif angle < fromAngle - delta2 and steps > 0:
             angle += np.pi*2
+        elif angle < fromAngle - delta and steps > 0:
+            angle += np.pi*2
         elif not np.isnan(toAngle) and toAngle >= np.pi*1.2:
             angle += np.pi*2
         elif np.isnan(toAngle) and fromAngle > np.pi*2.0:
@@ -97,6 +99,8 @@ def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, minSteps=50, 
         elif angle > fromAngle + delta and steps <= -minSteps:
             angle -= np.pi*2
         elif angle > fromAngle + delta2 and steps < 0:
+            angle -= np.pi*2
+        elif angle > fromAngle + delta and steps < 0:
             angle -= np.pi*2
         elif not np.isnan(toAngle) and toAngle < np.pi*0.8:
             angle -= np.pi*2
