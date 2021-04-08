@@ -54,10 +54,6 @@ class RmodCamera(camera.Camera):
     def trim(self, x, y):
         """ Return indices or mask of all valid points. """
 
-<<<<<<< HEAD
-        return np.arange(len(x))
-=======
         # x = 2000 - x
         w = (y < (x + 500)) & (y > (x - 500))
         return w
->>>>>>> master
