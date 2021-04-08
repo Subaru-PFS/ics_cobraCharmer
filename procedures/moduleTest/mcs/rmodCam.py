@@ -57,3 +57,34 @@ class RmodCamera(camera.Camera):
         # x = 2000 - x
         w = (y < (x + 500)) & (y > (x - 500))
         return w
+
+        def _record(self):
+        with self._lock:
+            im = self._camExpose(self.exptime)
+            if self.dark is not None:
+                im -= self.dark
+            self._imRecord = np.full(im.shape, im, 'float')
+
+        while self._recording:
+            with self._lock:
+                im = self._camExpose(self.exptime)
+                if self.dark is not None:
+                    im -= self.dark
+                self._imRecord += im
+
+    def startRecord(self):
+        """Start recording
+        """
+        self._recording = True
+        t = threading.Thread(target=self._record, daemon=True)
+        t.start()
+
+    def stopRecord(self, name=None):
+        """ Stop recording
+        """
+        self._recording = False
+        with self._lock:
+            filename = self.saveImage(self._imRecord, extraName=name)
+
+        return filename
+
