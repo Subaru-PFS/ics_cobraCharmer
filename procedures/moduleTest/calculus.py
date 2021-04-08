@@ -613,15 +613,22 @@ def calMoveSegments(thetaMoved, phiMoved, thetaFrom, phiFrom, mmTheta, mmPhi, ma
            np.sum(tMoves[:nSegments]), np.sum(pMoves[:nSegments]), tSpeeds[:nSegments], pSpeeds[:nSegments]
 
 def calNSegments(angle, fromAngle, mm, maxSteps):
+    #print(f'{angle}, {fromAngle}, {mm}, {maxSteps}')
     moved = 0
     n = 0
     if angle > 0:
         while moved < angle:
+            # Asking program to look for pasitive speed in on-time map. Otherwise, it will fall into
+            # infinite loop.
+            #idx=np.nanargmin(abs(mm[0,np.where(mm[0]['speed']>0)]['angle']- fromAngle - moved))
             idx = np.nanargmin(abs(mm[0]['angle'] - fromAngle - moved))
             moved += mm[0,idx]['speed'] * maxSteps
             n += 1
     elif angle < 0:
          while moved > angle:
+            # Asking program to look for negtive speed in on-time map. Otherwise, it will fall into
+            # infinite loop.
+            #idx=np.nanargmin(abs(mm[1,np.where(mm[1]['speed']<0)]['angle']- fromAngle - moved))
             idx = np.nanargmin(abs(mm[1]['angle'] - fromAngle - moved))
             moved += mm[1,idx]['speed'] * maxSteps
             n += 1
