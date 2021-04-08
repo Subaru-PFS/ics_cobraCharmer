@@ -151,7 +151,7 @@ class Camera(object):
 
         return filename
 
-    def getObjects(self, im, expid, sigma=10.0, threshold=None):
+    def getObjects(self, im, expid, sigma=1.5, threshold=None):
         """ Measure the centroids in the image.
 
         Args
