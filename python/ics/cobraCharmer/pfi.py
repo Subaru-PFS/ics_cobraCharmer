@@ -58,7 +58,7 @@ class PFI(object):
 
         self.flipPowerPolarity = (fpgaHost == 'pfi')
         if fpgaHost in {'fpga', 'pfi'}:
-            fpgaHost = '128.149.77.24'  # A JPL address which somehow got burned into the FPGAs. See INSTRM-464
+            fpgaHost = '133.40.164.110'  # A JPL address which somehow got burned into the FPGAs. See INSTRM-464
         self.fpgaHost = fpgaHost
         if doConnect:
             self.connect()
@@ -82,10 +82,7 @@ class PFI(object):
 
     def loadModel(self, filename=None, version=None, moduleVersion=None):
         """ Load a motormap XML file. """
-        import ics.cobraCharmer.pfiDesign as pfiDesign
-        reload(pfiDesign)
         des = pfiDesign.PFIDesign()
-        #des.loadModelFiles(filename)
         
         if filename is not None:
             des.loadModelFiles(filename)
