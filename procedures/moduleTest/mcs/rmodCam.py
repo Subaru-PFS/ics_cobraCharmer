@@ -3,6 +3,7 @@ import numpy as np
 import time
 import subprocess as sub
 import astropy.io.fits as pyfits
+import threading
 
 from . import camera
 reload(camera)
@@ -15,6 +16,7 @@ class RmodCamera(camera.Camera):
         self.logger.info('RMOD 71M Camera')
         self.imageSize = (8960, 5778)
         self._exptime = 0.5
+        self._lock = threading.Lock()
 
     def _camConnect(self):
         if self.simulationPath is not None:
@@ -58,7 +60,7 @@ class RmodCamera(camera.Camera):
         w = (y < (x + 500)) & (y > (x - 500))
         return w
 
-        def _record(self):
+    def _record(self):
         with self._lock:
             im = self._camExpose(self.exptime)
             if self.dark is not None:
@@ -87,4 +89,3 @@ class RmodCamera(camera.Camera):
             filename = self.saveImage(self._imRecord, extraName=name)
 
         return filename
-
