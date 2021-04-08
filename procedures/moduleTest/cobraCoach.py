@@ -78,10 +78,6 @@ class CobraCoach():
         self.minPhiStepsForScaling = 10
         self.constantThetaSpeed = np.deg2rad(0.06)
         self.constantPhiSpeed = np.deg2rad(0.06)
-<<<<<<< HEAD
-=======
-        self.minScalingAngle = np.deg2rad(2.0)
->>>>>>> master
         self.thetaModel = SpeedModel(p1=self.thetaModelParameter)
         self.phiModel = SpeedModel(p1=self.phiModelParameter)
 
@@ -89,9 +85,14 @@ class CobraCoach():
         self.trajectoryMode = trajectoryMode
         self.trajectory = None
 
-    def loadModel(self, version=None, moduleVersion=None, camSplit=28):
-        self.calibModel = pfiDesign.PFIDesign.loadPfi(version, moduleVersion)
+    def loadModel(self, file=None, version=None, moduleVersion=None, camSplit=28):
+        if file is not None:
+            self.calibModel = pfiDesign.PFIDesign(file)
+        else:
+            self.calibModel = pfiDesign.PFIDesign.loadPfi(version, moduleVersion)
+        
         self.calibModel.fixModuleIds()
+
         self.camSplit = camSplit
 
         # define the cobras and index
@@ -268,9 +269,32 @@ class CobraCoach():
             return
 
         if setFreq:
-            self.pfi.setFreq()
-
-        # initialize cameras
+            if True:
+                self.pfi.diag()
+                self.pfi.power(0)
+                time.sleep(1)
+                self.pfi.reset()
+                time.sleep(1)
+                self.pfi.diag()
+            else:
+                self.pfi.power(0x3f)
+                time.sleep(1)
+                self.pfi.power(0x3f)
+                time.sleep(1)
+                self.pfi.reset()
+                time.sleep(1)
+                self.pfi.diag()
+                time.sleep(1)
+                self.pfi.power(0)
+                time.sleep(1)
+                self.pfi.power(0)
+                time.sleep(1)
+                self.pfi.reset()
+                time.sleep(1)
+                self.pfi.diag()
+            
+            self.pfi.calibModel = self.calibModel
+            self.pfi.setFreq()        # initialize cameras
         try:
             self.cam = camera.cameraFactory(doClear=True, runManager=self.runManager)
         except:
@@ -724,11 +748,17 @@ class CobraCoach():
                 cId = cIds[c_i]
                 _mmTheta = self.mmTheta[cId] if thetaFast[c_i] else self.mmThetaSlow[cId]
                 _mmPhi = self.mmPhi[cId] if phiFast[c_i] else self.mmPhiSlow[cId]
-
+                
+                self.logger.warn(f'''Calulate theta arm {c_i}/{len(cobras)}, {thetaAngles[c_i]}, 
+                    {fromTheta[c_i]} {self.maxStepsPerSeg}''')
+                
                 n = calculus.calNSegments(thetaAngles[c_i], fromTheta[c_i], _mmTheta, self.maxStepsPerSeg)
                 if nSegments < n:
                     nSegments = n
 
+                self.logger.warn(f'''Calulate phi arm {c_i}/{len(cobras)}, {phiAngles[c_i]}, 
+                    {fromPhi[c_i]} {self.maxStepsPerSeg}''')
+                
                 n = calculus.calNSegments(phiAngles[c_i], fromPhi[c_i], _mmPhi, self.maxStepsPerSeg)
                 if nSegments < n:
                     nSegments = n
