@@ -23,15 +23,62 @@ class McsCamera(camera.Camera):
             return None
 
         self.logger.info('text="Starting camera initialization."')
-        #p = sub.Popen(['/opt/EDTpdv/initcam', '-f', '/home/pfs/mhs/devel/ics_cobraCharmer/etc/illusnis-71mp.cfg'],
-        #              stdout=sub.PIPE, stderr=sub.PIPE)
-        #output, errors = p.communicate()
-        #string=errors[23:-1]
-        #if (string == 'done'):
-        #    self.logger.info('text="Camera initialization message: %s"' % (string))
-
-    def _camExpose(self, exptime, _takeDark=False):
         
+        if self.actor is None:
+            p = sub.Popen(['/opt/EDTpdv/initcam', '-f', '/home/pfs/mhs/devel/ics_cobraCharmer/etc/illusnis-71mp.cfg'],
+                      stdout=sub.PIPE, stderr=sub.PIPE)
+            output, errors = p.communicate()
+            string=errors[23:-1]
+            if (string == 'done'):
+                self.logger.info('text="Camera initialization message: %s"' % (string))
+        else:
+            cmdString = f'status'
+            cmdVar = self.actor.cmdr.call(actor='mcs', cmdStr=cmdString,
+                                      forUserCmd=cmd)
+            if cmdVar.didFail:
+                self.logger.warn('text="Camera initialization failed: %s"' % (string))
+                return None
+        
+    def _camExpose(self, exptime, _takeDark=False):
+        t1=time.time()
+
+        if self.actor is None:
+            # Command camera to do exposure sequence
+            slicename='/tmp/rmodexpose.fits'
+
+            self.logger.info('slice name: %s' % (slicename))
+            p = sub.Popen(['rmodexposure', '-f', slicename, '-l', '1'],stdout=sub.PIPE, stderr=sub.PIPE)
+
+            output, errors = p.communicate()
+            t2=time.time()
+    
+            self.logger.info('exposureState="reading"')                
+            f = pyfits.open(slicename)
+
+            image = f[0].data
+            t3=time.time()    
+        
+        else:
+
+
+            cmdString = "expose object expTime=%0.1f %s" % (expTime,
+                                                                   'doCentroid' if doCentroid else '')
+            cmdVar = self.actor.cmdr.call(actor='mcs', cmdStr=cmdString,
+                                      forUserCmd=cmd, timeLim=expTime+30)
+            if cmdVar.didFail:
+                cmd.warn('text=%s' % (qstr('Failed to expose with %s' % (cmdString))))
+                return None
+
+            t2=time.time()
+        
+            filekey= self.actor.models['mcs'].keyVarDict['filename'][0]
+            filename = pathlib.Path(filekey)
+            datapath = filename.parents[0]
+            frameId = int(filename.stem[4:], base=10)
+
+            f = pyfits.open(slicename)
+            image = f[0].data
+
         # t1=time.time()
     
         # # Command camera to do exposure sequence
@@ -47,9 +94,10 @@ class McsCamera(camera.Camera):
         # f = pyfits.open(slicename)
 
         # image = f[0].data
-        # t3=time.time()
-        # self.logger.info('Time for exposure = %f. '% ((t2-t1)/1.))
-        # self.logger.info('text="Time for image loading= %f. '% ((t3-t2)/1.))
+        t3=time.time()
+        
+        self.logger.info('Time for exposure = %f. '% ((t2-t1)/1.))
+        self.logger.info('text="Time for image loading= %f. '% ((t3-t2)/1.))
 
         return image
 
