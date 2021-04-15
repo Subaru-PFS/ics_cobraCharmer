@@ -58,11 +58,11 @@ class CobraCoach():
                                      'phiSteps', 'movedPhi', 'expectedPhi', 'phiOntime', 'phiFast'],
                               formats=['i4', 'f4', 'f4', 'f4', '?', 'i4', 'f4', 'f4', 'f4', '?']))
 
-    def __init__(self, fpgaHost='localhost', loadModel=True, logLevel=logging.INFO, trajectoryMode=False):
+    def __init__(self, fpgaHost='localhost', loadModel=True, logLevel=logging.INFO, trajectoryMode=False, rootDir=None):
         self.logger = logging.getLogger('cobraCoach')
         self.logger.setLevel(logLevel)
 
-        self.runManager = butler.RunTree(doCreate=False)
+        self.runManager = butler.RunTree(doCreate=False, rootDir=rootDir)
         self.pfi = None
         self.cam = None
         self.fpgaHost = fpgaHost

@@ -7,12 +7,12 @@ class Trajectories():
     trajectory until target convergence.
     """
 
-    def __init__(self, calibrationProduct, timeStep=10):
+    def __init__(self, nCobras, timeStep=10):
         """Constructs a new Trajectories instance.
         Parameters
         ----------
-        calibrationProduct: object
-            The cobras calibration product containing the cobra properties.
+        nCobras: int
+            The total number of cobras.
         timeStep: integer, optional
             The trajectories time step resolution in steps. Default is 10
             steps.
@@ -22,8 +22,7 @@ class Trajectories():
             The Trajectories instance.
         """
         # Store the input parameters
-        self.calibrationProduct = calibrationProduct
-        self.nCobras = calibrationProduct.nCobras
+        self.nCobras = nCobras
         self.timeStep = timeStep
 
         # Initialize the movements list
@@ -41,7 +40,7 @@ class Trajectories():
         Returns
         -------
         float
-            The trajectories time step resolution in seconds.
+            The trajectories time step resolution in step units.
         """
         return self.timeStep
 
@@ -60,36 +59,39 @@ class Trajectories():
             A 2D numpy array with the movement phi angles to add to the
             trajectories.
         """
+        # Create the arrays for the new movement information
+        movementSteps = thetaAngles.shape[1]
+        newThetaAngles = np.empty((self.nCobras, movementSteps))
+        newPhiAngles = np.empty((self.nCobras, movementSteps))
 
         # update positions for moving cobras
-        size = thetaAngles.shape[1]
-        newThetaAngles = np.zeros((self.nCobras, size))
-        newPhiAngles = np.zeros((self.nCobras, size))
-
-        for c in range(len(cIds)):
-            newThetaAngles[cIds[c],:] = thetaAngles[c]
-            newPhiAngles[cIds[c],:] = phiAngles[c]
+        newThetaAngles[cIds] = thetaAngles
+        newPhiAngles[cIds] = phiAngles
 
         # copy last positions for non moving cobras
-        if self.steps > 0:
-            for c in range(self.nCobras):
-                if c not in cIds:
-                    newThetaAngles[c,:] = self.movements[-1][0][c,-1]
-                    newPhiAngles[c,:] = self.movements[-1][1][c,-1]
+        if len(self.movements) > 0:
+            notMoving = np.full(self.nCobras, True)
+            notMoving[cIds] = False
+            newThetaAngles[notMoving] = (self.movements[-1][0][notMoving, -1])[:, np.newaxis]
+            newPhiAngles[notMoving] = (self.movements[-1][1][notMoving, -1])[:, np.newaxis]
 
         # Add the movement information to the list
         self.movements.append([newThetaAngles, newPhiAngles])
 
         # Increase the time step counter
-        self.steps += size
+        self.steps += movementSteps
 
         # Set to None the fiber and elbow position arrays, since they are now
         # outdated
         self._fiberPositions = None
         self._elbowPositions = None
 
-    def calculateFiberPositions(self):
+    def calculateFiberPositions(self, cobraCoach):
         """Calculates the fiber positions along the cobras trajectories.
+        Parameters
+        ----------
+        cobrasCroach: object
+            A cobra coach instance.
         Returns
         -------
         object
@@ -105,27 +107,27 @@ class Trajectories():
             return self._fiberPositions
 
         # Initialize the fiber positions array
-        cobras = self.movements[0][0].shape[0]
-        self._fiberPositions = np.empty((cobras, self.steps))
+        self._fiberPositions = np.empty((self.nCobras, self.steps), dtype=np.complex)
 
         # Calculate the fiber positions for each cobra movement
-        centers = self.calibrationProduct.centers
-        L1 = self.calibrationProduct.L1
-        L2 = self.calibrationProduct.L2
         lastStep = 0
 
         for movement in self.movements:
             thetaSteps = movement[0]
             phiSteps = movement[1]
-            movementSteps = len(thetaSteps.shape[1])
-            self._fiberPositions[:, lastStep:movementSteps] = centers + L1 * np.exp(
-                1j * thetaSteps) + L2 * np.exp(1j * (thetaSteps + phiSteps))
+            movementSteps = thetaSteps.shape[1]
+            self._fiberPositions[:, lastStep:lastStep + movementSteps] = cobraCoach.pfi.anglesToPositions(
+                cobraCoach.allCobras, thetaSteps, phiSteps)
             lastStep += movementSteps
 
         return self._fiberPositions
 
-    def calculateElbowPositions(self):
+    def calculateElbowPositions(self, cobraCoach):
         """Calculates the elbow positions along the cobras trajectories.
+        Parameters
+        ----------
+        cobrasCroach: object
+            A cobra coach instance.
         Returns
         -------
         object
@@ -141,47 +143,16 @@ class Trajectories():
             return self._elbowPositions
 
         # Initialize the elbow positions array
-        cobras = self.movements[0][0].shape[0]
-        self._elbowPositions = np.empty((cobras, self.steps))
+        self._elbowPositions = np.empty((self.nCobras, self.steps), dtype=np.complex)
 
         # Calculate the elbow positions for each cobra movement
-        centers = self.calibrationProduct.centers
-        L1 = self.calibrationProduct.L1
         lastStep = 0
 
         for movement in self.movements:
             thetaSteps = movement[0]
-            movementSteps = len(thetaSteps.shape[1])
-            self._elbowPositions[:, lastStep:movementSteps] = centers + L1 * np.exp(
-                1j * thetaSteps)
+            movementSteps = thetaSteps.shape[1]
+            self._elbowPositions[:, lastStep:lastStep + movementSteps] = cobraCoach.pfi.anglesToElbowPositions(
+                cobraCoach.allCobras, thetaSteps)
             lastStep += movementSteps
 
         return self._elbowPositions
-
-    def simulateMCSimage(self, step):
-        """Simulates an MCS image at the given trajectories time step position.
-        Parameters
-        ----------
-        step: int
-            The trajectories time step where the MCS image should be simulated.
-        Returns
-        -------
-        object
-            The simulated MCSImage.
-        """
-        # Calculate the fiber positions at the given time step
-        fiberPositions = self.calculateFiberPositions()[:, step]
-
-        # This needs to be implemented using some code from Jennifer
-        return simulateImage(fiberPositions)
-
-    def detectCobraCollisions(self):
-        """Detects cobra collision using the trajectories information.
-        """
-        # Calculate the fiber and elbow positions
-        fiberPositions = self.calculateFiberPositions()
-        elbowPositions = self.calculateElbowPositions()
-
-        # This needs to be implemented using some code from ics_cobraOps
-        return detectCollisions(fiberPositions, elbowPositions)
-

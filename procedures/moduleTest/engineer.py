@@ -5,7 +5,7 @@ import logging
 from copy import deepcopy
 import pathlib
 from procedures.moduleTest.speedModel import SpeedModel
-import trajectory
+from procedures.moduleTest.trajectory import Trajectories
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
@@ -1745,7 +1745,7 @@ def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0
         toggleFlag = True
     else:
         toggleFlag = False
-    cc.trajectory = trajectory.Trajectories(cc.calibModel, timeStep)
+    cc.trajectory = Trajectories(cc.nCobras, timeStep)
 
     tolerance = 0.1
     if twoSteps:
