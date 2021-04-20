@@ -5,7 +5,7 @@ import logging
 from copy import deepcopy
 import pathlib
 from procedures.moduleTest.speedModel import SpeedModel
-import trajectory
+from ics.cobraCharmer.procedures.moduleTest import trajectory
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")

@@ -3,7 +3,7 @@ import sep
 from ics.cobraCharmer import pfiDesign
 import os
 import sys
-import trajectory
+from ics.cobraCharmer.procedures.moduleTest import trajectory
 
 binSize = np.deg2rad(3.6)
 regions = 112
