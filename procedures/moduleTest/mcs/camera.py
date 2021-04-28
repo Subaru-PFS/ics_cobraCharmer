@@ -31,7 +31,8 @@ def whereAmI():
 
     return 'rmod'
 
-def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None):
+def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None, 
+actor=None,cmd=None):
     if doClear or simulationPath is not None:
         try:
             del cameraFactory.__camera
@@ -42,11 +43,16 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None
     except:
         if name is None:
             name = whereAmI()
-        if name == 'cit':
+        if name == 'mcs':
+            from . import mcsCam
+            reload(mcsCam)
+            cameraFactory.__camera = mcsCam.McsCamera(simulationPath=simulationPath,actor=actor,
+                                                        cmd=cmd,runManager=runManager)
+        elif name == 'cit':
             from . import citCam
             reload(citCam)
             cameraFactory.__camera = citCam.CitCamera(simulationPath=simulationPath,
-                                                      runManager=runManager)
+                                                        runManager=runManager)
         elif name == 'asrd':
             from . import asrdCam
             reload(asrdCam)
@@ -68,13 +74,13 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None
 class Camera(object):
     filePrefix = 'PFXC'
 
-    def __init__(self, runManager=None, simulationPath=None, logLevel=logging.INFO):
+    def __init__(self, runManager=None, simulationPath=None, logLevel=logging.INFO, cmd=None):
         self.logger = logging.getLogger('camera')
         self.logger.setLevel(logLevel)
 
         self._cam = None
         self.dark = None
-        self.exptime = 0.25
+        self.exptime = 0.5
 
         if runManager is None:
             runManager = butler.RunTree()
@@ -84,6 +90,9 @@ class Camera(object):
         self.outputDir = runManager.outputDir
         self.sequenceNumberFilename = "nextSequenceNumber"
         self.resetStack(doStack=False)
+        self.cmd = None
+        if cmd is not None:
+            self.cmd=cmd
 
         if simulationPath is not None:
             simulationPath = pathlib.Path(simulationPath)
@@ -254,6 +263,7 @@ class Camera(object):
             im = self._readNextSimulatedImage()
         else:
             if exptime is None:
+                self.logger.info(f'camera exposure time = {self.exptime}')
                 exptime = self.exptime
             im = self._camExpose(exptime)
             if np.all(im == 0):

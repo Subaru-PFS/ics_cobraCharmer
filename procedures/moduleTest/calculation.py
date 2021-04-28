@@ -22,6 +22,8 @@ def lazyIdentification(centers, spots, radii=None):
     return ans
 
 def circle_fitting(p):
+    # Remove nan in array
+    p=p[~np.isnan(p)]
     x = np.real(p)
     y = np.imag(p)
     m = np.vstack([x, y, np.ones(len(p))]).T
