@@ -78,9 +78,12 @@ class McsCamera(camera.Camera):
             filename = pathlib.Path(filekey)
             datapath = filename.parents[0]
             frameId = int(filename.stem[4:], base=10)
+            
+            self.logger.info(f'MCS frame ID={frameId}')
+            self.logger.info(f'MCS image datapath={datapath}, filename={filename}')
 
             f = pyfits.open(filename)
-            image = f[0].data
+            image = f[1].data
 
         # t1=time.time()
     

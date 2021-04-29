@@ -10,6 +10,7 @@ import numpy.lib.recfunctions as recfuncs
 import astropy.io.fits as pyfits
 
 from ics.cobraCharmer.utils import butler
+from ics.fpsActor import najaVenator
 
 # Configure the default formatter and logger.
 logging.basicConfig(datefmt = "%Y-%m-%d %H:%M:%S", level=logging.DEBUG,
@@ -160,6 +161,14 @@ class Camera(object):
 
         return filename
 
+    def getPositionsForFrame(self, frameId):
+        self.nv = najaVenator.NajaVenator()
+        mcsData = self.nv.readCentroid(frameId)
+        self.logger.info(f'mcs data {mcsData.shape[0]}')
+        centroids = {'x':mcsData['centroidx'].values.astype('float'),
+                     'y':mcsData['centroidy'].values.astype('float')}
+        return centroids
+
     def getObjects(self, im, expid, sigma=1.5, threshold=None):
         """ Measure the centroids in the image.
 
@@ -275,9 +284,11 @@ class Camera(object):
 
             if self.dark is not None:
                 im -= self.dark
-
+        
+        
         filename = self.saveImage(im, extraName=name)
-
+        self.logger.info(f'Safing image as filename {filename}')
+        
         if doCentroid:
             t0 = time.time()
             objects, data_sub, bkgd = self.getObjects(im, filename.stem)
@@ -285,7 +296,7 @@ class Camera(object):
             self.appendSpots(filename, objects)
             t2=time.time()
 
-            self.logger.debug(f'{filename.stem}: {len(objects)} spots, '
+            self.logger.info(f'{filename.stem}: {len(objects)} spots, '
                               f'get: {t1-t0:0.3f} save: {t2-t1:0.3f} total: {t2-t0:0.3f}')
         else:
             objects = None
