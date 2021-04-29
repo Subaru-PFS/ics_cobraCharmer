@@ -287,11 +287,17 @@ class Camera(object):
         
         
         filename = self.saveImage(im, extraName=name)
-        self.logger.info(f'Safing image as filename {filename}')
+        self.logger.info(f'Saving image as filename {filename}')
         
         if doCentroid:
             t0 = time.time()
-            objects, data_sub, bkgd = self.getObjects(im, filename.stem)
+            if self.frameId is None:
+                self.logger.info(f'Gen2 Frame ID is not given. Run SExtractor.')
+                objects, data_sub, bkgd = self.getObjects(im, filename.stem)
+            else:
+                self.logger.info(f'Gen2 Frame ID {self.frameId} is given. Get position from DB')
+                objects = self.getPositionsForFrame(self.frameId)
+
             t1 = time.time()
             self.appendSpots(filename, objects)
             t2=time.time()

@@ -20,7 +20,7 @@ class McsCamera(camera.Camera):
         self.imageSize = (8960, 5778)
         self._exptime = 0.5
         self._lock = threading.Lock()
-        
+        self.frameId = None
 
     def _camConnect(self):
         if self.simulationPath is not None:
@@ -79,6 +79,8 @@ class McsCamera(camera.Camera):
             datapath = filename.parents[0]
             frameId = int(filename.stem[4:], base=10)
             
+            self.frameId = frameId
+
             self.logger.info(f'MCS frame ID={frameId}')
             self.logger.info(f'MCS image datapath={datapath}, filename={filename}')
 
