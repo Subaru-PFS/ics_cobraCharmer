@@ -78,7 +78,8 @@ class Camera(object):
     def __init__(self, runManager=None, simulationPath=None, logLevel=logging.INFO, cmd=None):
         self.logger = logging.getLogger('camera')
         self.logger.setLevel(logLevel)
-
+        self.frameId = None
+        
         self._cam = None
         self.dark = None
         self.exptime = 0.5
