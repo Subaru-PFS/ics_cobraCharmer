@@ -3,20 +3,24 @@ import numpy as np
 import time
 import subprocess as sub
 import astropy.io.fits as pyfits
-
+import threading
+import pathlib
 from . import camera
 reload(camera)
 
 class McsCamera(camera.Camera):
     filePrefix = 'PFSC'
 
-    def __init__(self, actor=None, **kw):
+    def __init__(self,actor=None, **kw):
         super().__init__(**kw)
         if actor is not None:
             self.actor = actor
+
         self.logger.info('MCS camera')
         self.imageSize = (8960, 5778)
         self._exptime = 0.5
+        self._lock = threading.Lock()
+        self.frameId = None
 
     def _camConnect(self):
         if self.simulationPath is not None:
@@ -60,11 +64,10 @@ class McsCamera(camera.Camera):
         
         else:
 
-
-            cmdString = "expose object expTime=%0.1f %s" % (expTime,
-                                                                   'doCentroid' if doCentroid else '')
+            cmdString = "expose object expTime=%0.1f %s" % (exptime,'doCentroid')
+            self.logger.info('exposureState="reading"')
             cmdVar = self.actor.cmdr.call(actor='mcs', cmdStr=cmdString,
-                                      forUserCmd=cmd, timeLim=expTime+30)
+                                      forUserCmd=self.cmd, timeLim=exptime+30)
             if cmdVar.didFail:
                 cmd.warn('text=%s' % (qstr('Failed to expose with %s' % (cmdString))))
                 return None
@@ -75,9 +78,14 @@ class McsCamera(camera.Camera):
             filename = pathlib.Path(filekey)
             datapath = filename.parents[0]
             frameId = int(filename.stem[4:], base=10)
+            
+            self.frameId = frameId
 
-            f = pyfits.open(slicename)
-            image = f[0].data
+            self.logger.info(f'MCS frame ID={frameId}')
+            self.logger.info(f'MCS image datapath={datapath}, filename={filename}')
+
+            f = pyfits.open(filename)
+            image = f[1].data
 
         # t1=time.time()
     
@@ -108,7 +116,7 @@ class McsCamera(camera.Camera):
         w = (y < (x + 500)) & (y > (x - 500))
         return w
 
-        def _record(self):
+    def _record(self):
         with self._lock:
             im = self._camExpose(self.exptime)
             if self.dark is not None:

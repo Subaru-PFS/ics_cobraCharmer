@@ -10,6 +10,7 @@ import numpy.lib.recfunctions as recfuncs
 import astropy.io.fits as pyfits
 
 from ics.cobraCharmer.utils import butler
+from ics.fpsActor import najaVenator
 
 # Configure the default formatter and logger.
 logging.basicConfig(datefmt = "%Y-%m-%d %H:%M:%S", level=logging.DEBUG,
@@ -31,7 +32,8 @@ def whereAmI():
 
     return 'rmod'
 
-def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None):
+def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None, 
+actor=None,cmd=None):
     if doClear or simulationPath is not None:
         try:
             del cameraFactory.__camera
@@ -42,11 +44,16 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None
     except:
         if name is None:
             name = whereAmI()
-        if name == 'cit':
+        if name == 'mcs':
+            from . import mcsCam
+            reload(mcsCam)
+            cameraFactory.__camera = mcsCam.McsCamera(simulationPath=simulationPath,actor=actor,
+                                                        cmd=cmd,runManager=runManager)
+        elif name == 'cit':
             from . import citCam
             reload(citCam)
             cameraFactory.__camera = citCam.CitCamera(simulationPath=simulationPath,
-                                                      runManager=runManager)
+                                                        runManager=runManager)
         elif name == 'asrd':
             from . import asrdCam
             reload(asrdCam)
@@ -68,13 +75,14 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None
 class Camera(object):
     filePrefix = 'PFXC'
 
-    def __init__(self, runManager=None, simulationPath=None, logLevel=logging.INFO):
+    def __init__(self, runManager=None, simulationPath=None, logLevel=logging.INFO, cmd=None):
         self.logger = logging.getLogger('camera')
         self.logger.setLevel(logLevel)
+        self.frameId = None
 
         self._cam = None
         self.dark = None
-        self.exptime = 0.25
+        self.exptime = 0.5
 
         if runManager is None:
             runManager = butler.RunTree()
@@ -84,6 +92,9 @@ class Camera(object):
         self.outputDir = runManager.outputDir
         self.sequenceNumberFilename = "nextSequenceNumber"
         self.resetStack(doStack=False)
+        self.cmd = None
+        if cmd is not None:
+            self.cmd=cmd
 
         if simulationPath is not None:
             simulationPath = pathlib.Path(simulationPath)
@@ -150,6 +161,18 @@ class Camera(object):
         self.darkFile = filename
 
         return filename
+
+    def getPositionsForFrame(self, frameId):
+        self.nv = najaVenator.NajaVenator()
+        mcsData = self.nv.readCentroid(frameId)
+        self.logger.info(f'mcs data {mcsData.shape[0]}')
+        #centroids = {'x':mcsData['centroidx'].values.astype('float'),
+        #             'y':mcsData['centroidy'].values.astype('float')}
+        
+        centroids=np.rec.array([mcsData['centroidx'].values.astype('float'),
+              mcsData['centroidy'].values.astype('float')],
+              formats='float,float',names='x,y')
+        return centroids
 
     def getObjects(self, im, expid, sigma=1.5, threshold=None):
         """ Measure the centroids in the image.
@@ -254,6 +277,7 @@ class Camera(object):
             im = self._readNextSimulatedImage()
         else:
             if exptime is None:
+                self.logger.info(f'camera exposure time = {self.exptime}')
                 exptime = self.exptime
             im = self._camExpose(exptime)
             if np.all(im == 0):
@@ -265,17 +289,26 @@ class Camera(object):
 
             if self.dark is not None:
                 im -= self.dark
-
+        
+        
         filename = self.saveImage(im, extraName=name)
-
+        self.logger.info(f'Saving image as filename {filename}')
+        
         if doCentroid:
             t0 = time.time()
-            objects, data_sub, bkgd = self.getObjects(im, filename.stem)
+            #objects, data_sub, bkgd = self.getObjects(im, filename.stem)
+            if self.frameId is None:
+                self.logger.info(f'Gen2 Frame ID is not given. Run SExtractor.')
+                objects, data_sub, bkgd = self.getObjects(im, filename.stem)
+            else:
+                self.logger.info(f'Gen2 Frame ID {self.frameId} is given. Get position from DB')
+                objects = self.getPositionsForFrame(self.frameId)
+                bkgd = None
             t1 = time.time()
             self.appendSpots(filename, objects)
             t2=time.time()
 
-            self.logger.debug(f'{filename.stem}: {len(objects)} spots, '
+            self.logger.info(f'{filename.stem}: {len(objects)} spots, '
                               f'get: {t1-t0:0.3f} save: {t2-t1:0.3f} total: {t2-t0:0.3f}')
         else:
             objects = None

@@ -58,7 +58,9 @@ class CobraCoach():
                                      'phiSteps', 'movedPhi', 'expectedPhi', 'phiOntime', 'phiFast'],
                               formats=['i4', 'f4', 'f4', 'f4', '?', 'i4', 'f4', 'f4', 'f4', '?']))
 
-    def __init__(self, fpgaHost='localhost', loadModel=True, logLevel=logging.INFO, trajectoryMode=False, rootDir=None):
+
+    def __init__(self, fpgaHost='localhost', loadModel=True, logLevel=logging.INFO, 
+    trajectoryMode=False, rootDir=None, actor=None, cmd=None):
         self.logger = logging.getLogger('cobraCoach')
         self.logger.setLevel(logLevel)
 
@@ -84,6 +86,14 @@ class CobraCoach():
         # create cobra trajectory
         self.trajectoryMode = trajectoryMode
         self.trajectory = None
+        
+        self.actor = None
+        self.cmd = None
+        if actor is not None:
+            self.actor = actor
+
+        if cmd is not None:
+            self.cmd = cmd
 
     def loadModel(self, file=None, version=None, moduleVersion=None, camSplit=28):
         if file is not None:
@@ -251,6 +261,7 @@ class CobraCoach():
             return 'normal'
 
     def connect(self, setFreq=True):
+        self.logger.info('cc connecting ....')
         self.runManager.newRun()
 
         # Initializing COBRA module
@@ -296,8 +307,19 @@ class CobraCoach():
             self.pfi.calibModel = self.calibModel
             self.pfi.setFreq()        # initialize cameras
         try:
-            self.cam = camera.cameraFactory(doClear=True, runManager=self.runManager)
+            #if self.actor is not None:
+            #    self.cam = camera.cameraFactory(name='mcs',doClear=True, 
+            #        runManager=self.runManager, actor=self.actor)
+            #else:    
+            if self.actor is not None:
+                self.logger.info('MCS actor is given, try using MCS camera')
+                self.cam = camera.cameraFactory(name='mcs',doClear=True, 
+                    runManager=self.runManager, actor=self.actor, cmd=self.cmd)
+            else:
+                self.logger.info('MCS actor is not present, using RMOD camera')    
+                self.cam = camera.cameraFactory(name='rmod',doClear=True, runManager=self.runManager)
         except:
+            self.logger.info('Problem when connecting to camera.')
             self.cam = None
 
     def _getIndex(self, cobras):
@@ -346,7 +368,7 @@ class CobraCoach():
             raise RuntimeError('len(guess) should be equal to the visible cobras or total cobras')
         else:
             centers = guess
-
+        self.logger.info('Running object matching!')
         positions, indexMap = calculus.matchPositions(centroids, guess=centers, dist=radii)
 
         return positions
@@ -1427,6 +1449,7 @@ class CobraCoach():
 
             # forward theta motor maps
             thetaFW[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'thetaBegin{n}.fits')
+
             self.cobraInfo['position'][self.visibleIdx] = thetaFW[self.visibleIdx, n, 0]
 
             notdoneMask = np.zeros(self.nCobras, 'bool')
@@ -1434,7 +1457,8 @@ class CobraCoach():
             for k in range(iteration):
                 self.logger.info(f'{n+1}/{repeat} theta forward to {(k+1)*steps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], steps, 0, thetaFast=False)
-                thetaFW[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaForward{n}N{k}.fits')
+                thetaFW[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaForward{n}N{k}.fits',tolerance=0.02)
+
                 self.cobraInfo['position'][self.visibleIdx] = thetaFW[self.visibleIdx, n, k+1]
 
                 doneMask, lastAngles = self.thetaFWDone(thetaFW[:,n,:], k)
@@ -1468,7 +1492,7 @@ class CobraCoach():
             for k in range(iteration):
                 self.logger.info(f'{n+1}/{repeat} theta backward to {(k+1)*steps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], -steps, 0, thetaFast=False)
-                thetaRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaReverse{n}N{k}.fits')
+                thetaRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaReverse{n}N{k}.fits',tolerance=0.02)
                 self.cobraInfo['position'][self.visibleIdx] = thetaRV[self.visibleIdx, n, k+1]
                 doneMask, lastAngles = self.thetaRVDone(thetaRV[:,n,:], k)
                 if doneMask is not None and not force:

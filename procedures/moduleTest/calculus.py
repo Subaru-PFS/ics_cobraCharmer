@@ -4,6 +4,10 @@ from ics.cobraCharmer import pfiDesign
 import os
 import sys
 
+
+#from ics.cobraCharmer.procedures.moduleTest import trajectory
+
+
 binSize = np.deg2rad(3.6)
 regions = 112
 phiThreshold = 0.6   # minimum phi angle to move in the beginning
@@ -23,6 +27,7 @@ def lazyIdentification(centers, spots, radii=None):
     return ans
 
 def circle_fitting(p):
+    p=p[~np.isnan(p)]
     x = np.real(p)
     y = np.imag(p)
     m = np.vstack([x, y, np.ones(len(p))]).T
