@@ -367,7 +367,7 @@ class CobraCoach():
             raise RuntimeError('len(guess) should be equal to the visible cobras or total cobras')
         else:
             centers = guess
-
+        self.logger.info('Running object matching!')
         positions, indexMap = calculus.matchPositions(centroids, guess=centers, dist=radii)
 
         return positions

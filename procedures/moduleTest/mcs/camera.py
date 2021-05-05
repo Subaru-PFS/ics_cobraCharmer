@@ -79,7 +79,7 @@ class Camera(object):
         self.logger = logging.getLogger('camera')
         self.logger.setLevel(logLevel)
         self.frameId = None
-        
+
         self._cam = None
         self.dark = None
         self.exptime = 0.5
@@ -166,8 +166,12 @@ class Camera(object):
         self.nv = najaVenator.NajaVenator()
         mcsData = self.nv.readCentroid(frameId)
         self.logger.info(f'mcs data {mcsData.shape[0]}')
-        centroids = {'x':mcsData['centroidx'].values.astype('float'),
-                     'y':mcsData['centroidy'].values.astype('float')}
+        #centroids = {'x':mcsData['centroidx'].values.astype('float'),
+        #             'y':mcsData['centroidy'].values.astype('float')}
+        
+        centroids=np.rec.array([mcsData['centroidx'].values.astype('float'),
+              mcsData['centroidy'].values.astype('float')],
+              formats='float,float',names='x,y')
         return centroids
 
     def getObjects(self, im, expid, sigma=1.5, threshold=None):
@@ -292,13 +296,14 @@ class Camera(object):
         
         if doCentroid:
             t0 = time.time()
+            #objects, data_sub, bkgd = self.getObjects(im, filename.stem)
             if self.frameId is None:
                 self.logger.info(f'Gen2 Frame ID is not given. Run SExtractor.')
                 objects, data_sub, bkgd = self.getObjects(im, filename.stem)
             else:
                 self.logger.info(f'Gen2 Frame ID {self.frameId} is given. Get position from DB')
                 objects = self.getPositionsForFrame(self.frameId)
-
+                bkgd = None
             t1 = time.time()
             self.appendSpots(filename, objects)
             t2=time.time()
