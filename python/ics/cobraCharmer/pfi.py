@@ -869,16 +869,50 @@ class PFI(object):
             raise RuntimeError("number of phi angles must match number of cobras")
 
         cIdx = np.array([self._mapCobraIndex(c) for c in cobras])
+
+        if thetaAngles.ndim == 2:
+            cIdx = cIdx[:, np.newaxis]
+
         thtRange = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx] + np.pi) % (2*np.pi) + np.pi
-        if np.any(np.zeros(len(cIdx)) > thetaAngles) or np.any(thtRange < thetaAngles):
+        if np.any(0 > thetaAngles) or np.any(thtRange < thetaAngles):
             self.logger.error('Some theta angles are out of range')
         phiRange = self.calibModel.phiOut[cIdx] - self.calibModel.phiIn[cIdx]
-        if np.any(np.zeros(len(cIdx)) > phiAngles) or np.any(phiRange < phiAngles):
+        if np.any(0 > phiAngles) or np.any(phiRange < phiAngles):
             self.logger.error('Some phi angles are out of range')
 
         ang1 = self.calibModel.tht0[cIdx] + thetaAngles
         ang2 = ang1 + phiAngles + self.calibModel.phiIn[cIdx]
         return self.calibModel.centers[cIdx] + self.calibModel.L1[cIdx] * np.exp(1j * ang1) + self.calibModel.L2[cIdx] * np.exp(1j * ang2)
+
+    def anglesToElbowPositions(self, cobras, thetaAngles):
+        """Convert the theta angles to elbow positions.
+
+        Parameters
+        ----------
+        cobras: a list of cobras
+        thetaAngles: object
+            A numpy array with the theta angles from CCW limit.
+
+        Returns
+        -------
+        numpy array
+            A complex numpy array with the elbow positions.
+
+        """
+        if len(cobras) != len(thetaAngles):
+            raise RuntimeError("number of theta angles must match number of cobras")
+
+        cIdx = np.array([self._mapCobraIndex(c) for c in cobras])
+
+        if thetaAngles.ndim == 2:
+            cIdx = cIdx[:, np.newaxis]
+
+        thtRange = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx] + np.pi) % (2*np.pi) + np.pi
+        if np.any(0 > thetaAngles) or np.any(thtRange < thetaAngles):
+            self.logger.error('Some theta angles are out of range')
+
+        ang = self.calibModel.tht0[cIdx] + thetaAngles
+        return self.calibModel.centers[cIdx] + self.calibModel.L1[cIdx] * np.exp(1j * ang)
 
     def positionsToAngles(self, cobras, positions):
         """Convert the fiber positions to theta, phi angles from CCW limit.
