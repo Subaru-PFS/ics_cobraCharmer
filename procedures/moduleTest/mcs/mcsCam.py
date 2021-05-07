@@ -17,7 +17,7 @@ class McsCamera(camera.Camera):
             self.actor = actor
 
         self.logger.info('MCS camera')
-        self.imageSize = (8960, 5778)
+        self.imageSize = (7096, 10000)
         self._exptime = 0.5
         self._lock = threading.Lock()
         self.frameId = None

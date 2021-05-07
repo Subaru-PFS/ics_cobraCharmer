@@ -1584,11 +1584,12 @@ def moveToSafePosition(cIds, tolerance=0.2, tries=10, homed=True, newDir=False, 
     thetas = thetas % (np.pi*2)
 
     cc.pfi.resetMotorScaling()
-    #dataPath, thetas, phis, moves = moveThetaPhi(cIds, thetas, np.pi/3, False, False, tolerance, tries, homed, newDir, True, True, threshold, thetaMargin)
+    dataPath, thetas, phis, moves = moveThetaPhi(cIds, thetas, np.pi/3, False, False, tolerance, tries, homed, newDir, True, True, threshold, thetaMargin)
     
     # Define safe location to be phi = 80-degree outward
-    dataPath, thetas, phis, moves = moveThetaPhi(cIds, thetas, np.pi*(4/9), False, False, tolerance, tries, homed, newDir, True, True, threshold, thetaMargin)
+    #dataPath, thetas, phis, moves = moveThetaPhi(cIds, thetas, np.pi*(4/9), False, False, tolerance, tries, homed, newDir, True, True, threshold, thetaMargin)
 
+    
 
 def convergenceTest2(cIds, runs=8, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0), thetaOffset=0, phiAngle=(np.pi*5/6, np.pi/3, np.pi/4), tries=8, tolerance=0.2, threshold=20.0, newDir=False, twoSteps=False):
     """ convergence test, all theta arms in the same global direction. Three non-interfere groups use different phi angles  """

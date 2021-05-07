@@ -295,6 +295,19 @@ class PFIDesign():
 
     def findAllCobras(self):
         return range(self.nCobras)
+ 
+    def findCobraByCobraIndex(self, cobraIdx):
+        """ Find cobra at a given module and positioner."""
+        
+        cobraNum = cobraIdx + 1
+        ModuleID = int(cobraNum/57)+1
+        positionerId = cobraNum % 57
+
+        if position == 0 & cobraNum != 0:
+            ModuleID -= 1
+            positionerId = 57
+
+        return ModuleID, positionerId
 
     def findCobraByModuleAndPositioner(self, moduleId, positionerId):
         """ Find cobra at a given module and positioner.
