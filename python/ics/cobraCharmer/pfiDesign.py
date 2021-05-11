@@ -296,10 +296,11 @@ class PFIDesign():
     def findAllCobras(self):
         return range(self.nCobras)
  
-    def findCobraByCobraIndex(self, cobraIdx):
+    def findCobraByCobraIndex(self, cobraIdx, readable=False):
         """ Find cobra at a given module and positioner."""
 
-        cobraNum = cobraIdx + 1
+
+        cobraNum = np.array(cobraIdx) + 1
         cobraList = []
         for i in range(len(cobraNum)):
             ModuleID = int(cobraNum[i]/57)+1
@@ -308,9 +309,15 @@ class PFIDesign():
             if positionerId == 0:
                 ModuleID -= 1
                 positionerId = 57
-                
-            cobraList.append([ModuleID,positionerId])
+            if readable is True:
+                cobraList.append(f'SC{ModuleID}/PID{positionerId:02d}')
+            else:
+                cobraList.append([ModuleID,positionerId])
+
+        cobraList=np.array(cobraList)
+
         return cobraList
+
 
     def findCobraByModuleAndPositioner(self, moduleId, positionerId):
         """ Find cobra at a given module and positioner.
@@ -731,7 +738,7 @@ class PFIDesign():
                 self.phiOut[i] = cw[i] - np.pi
                 kinematics.find("Joint2_CW_limit_angle").text = str(np.rad2deg(cw[i]))
 
-    def updateOntimes(self, thetaFwd=None, thetaRev=None, thtFwd=None, thtRev=None, phiFwd=None, phiRev=None, fast=True):
+    def updateOntimes(self, thetaFwd=None, thetaRev=None, phiFwd=None, phiRev=None, fast=True):
         """Update cobra ontimes
 
         Parameters
