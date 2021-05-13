@@ -4,7 +4,6 @@ import struct
 import multiprocessing
 
 from . import convert
-from .convert import get_freq, conv_temp, conv_volt, conv_current
 from . import fpgaProtocol as proto
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(filename)s:%(lineno)s %(message)s",
@@ -131,7 +130,7 @@ class FPGAProtocolLogger(object):
                 else:
                     self.mainTlmHandler(tlm)
         except Exception as e:
-            self.logger.error(f"unexpected or unhandled response for {tlm}: {e}")
+            self.logger.error(f"unexpected or unhandled response for TLM {tlm}: {e}")
 
     def runHandler(self, header, data):
         """ Log a RUN command """
@@ -264,7 +263,7 @@ class FPGAProtocolLogger(object):
 
         expectedCmd = proto.ADMIN_CMD
 
-        cmd, cmdNum, debugLevel, timeLimit, CRC = struct.unpack('>BBBHH', header)
+        cmd, cmdNum, debugLevel, _, timeLimit, CRC = struct.unpack('>BBBBHH', header)
         if cmd != expectedCmd:
             raise RuntimeError(f"incorrect command type; expected {expectedCmd}, got {cmd}")
         self.logger.info(f"CMD admin cmdNum= {cmdNum} timeLimit= {timeLimit}")
@@ -305,15 +304,10 @@ class FPGAProtocolLogger(object):
         """ Log a reply ("TLM") for a housekeeping command. """
 
         if isinstance(tlm, (bytes, bytearray)):
-            cmd, cmdNum, responseCode, boardNumber, temp1, temp2, voltage = struct.unpack('BBHHHHH', tlm[:12])
+            cmd, cmdNum, responseCode, boardNumber, temp1, temp2, voltage = struct.unpack('>BBHHHHH', tlm[:12])
             tlmData = tlm[12:]
         else:
             cmd, cmdNum, responseCode, boardNumber, temp1, temp2, voltage = [int(i) for i in tlm]
-
-        boardNumber = convert.swapBytes(boardNumber)
-        temp1 = convert.swapBytes(temp1)
-        temp2 = convert.swapBytes(temp2)
-        voltage = convert.swapBytes(voltage)
 
         self.logger.info(f"TLM hk {cmd} cmdNum= {cmdNum} board= {boardNumber} temps= {convert.conv_temp(temp1):5.2f} {convert.conv_temp(temp2):5.2f} {convert.conv_volt(voltage):5.2f}")
 
@@ -333,7 +327,7 @@ class FPGAProtocolLogger(object):
         """ Log a reply ("TLM") for a DIAG commands. """
 
         if isinstance(tlm, (bytes, bytearray)):
-            cmd, cmdNum, *inventory, errorCode, detail = struct.unpack('BBBBBBBBHH', tlm)
+            cmd, cmdNum, *inventory, errorCode, detail = struct.unpack('>BBBBBBBBHH', tlm)
         else:
             cmd, cmdNum, *inventory, errorCode, detail = tlm
         errorString = self.errors.get(int(errorCode), f"UNKNOWN ERROR CODE {errorCode}")
@@ -344,7 +338,7 @@ class FPGAProtocolLogger(object):
         """ Log a reply ("TLM") for an ADMIN commands. """
 
         if isinstance(tlm, (bytes, bytearray)):
-            cmd, cmdNum, major, minor, uptime, errorCode, detail = struct.unpack('BBBBLHH', tlm)
+            cmd, cmdNum, major, minor, uptime, errorCode, detail = struct.unpack('>BBBBIHH', tlm)
         else:
             cmd, cmdNum, major, minor, uptime, errorCode, detail = tlm
         errorString = self.errors.get(int(errorCode), f"UNKNOWN ERROR CODE {errorCode}")
