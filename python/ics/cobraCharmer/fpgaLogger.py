@@ -305,15 +305,10 @@ class FPGAProtocolLogger(object):
         """ Log a reply ("TLM") for a housekeeping command. """
 
         if isinstance(tlm, (bytes, bytearray)):
-            cmd, cmdNum, responseCode, boardNumber, temp1, temp2, voltage = struct.unpack('BBHHHHH', tlm[:12])
+            cmd, cmdNum, responseCode, boardNumber, temp1, temp2, voltage = struct.unpack('>BBHHHHH', tlm[:12])
             tlmData = tlm[12:]
         else:
             cmd, cmdNum, responseCode, boardNumber, temp1, temp2, voltage = [int(i) for i in tlm]
-
-        boardNumber = convert.swapBytes(boardNumber)
-        temp1 = convert.swapBytes(temp1)
-        temp2 = convert.swapBytes(temp2)
-        voltage = convert.swapBytes(voltage)
 
         self.logger.info(f"TLM hk {cmd} cmdNum= {cmdNum} board= {boardNumber} temps= {convert.conv_temp(temp1):5.2f} {convert.conv_temp(temp2):5.2f} {convert.conv_volt(voltage):5.2f}")
 
@@ -333,7 +328,7 @@ class FPGAProtocolLogger(object):
         """ Log a reply ("TLM") for a DIAG commands. """
 
         if isinstance(tlm, (bytes, bytearray)):
-            cmd, cmdNum, *inventory, errorCode, detail = struct.unpack('BBBBBBBBHH', tlm)
+            cmd, cmdNum, *inventory, errorCode, detail = struct.unpack('>BBBBBBBBHH', tlm)
         else:
             cmd, cmdNum, *inventory, errorCode, detail = tlm
         errorString = self.errors.get(int(errorCode), f"UNKNOWN ERROR CODE {errorCode}")
@@ -344,7 +339,7 @@ class FPGAProtocolLogger(object):
         """ Log a reply ("TLM") for an ADMIN commands. """
 
         if isinstance(tlm, (bytes, bytearray)):
-            cmd, cmdNum, major, minor, uptime, errorCode, detail = struct.unpack('BBBBLHH', tlm)
+            cmd, cmdNum, major, minor, uptime, errorCode, detail = struct.unpack('>BBBBIHH', tlm)
         else:
             cmd, cmdNum, major, minor, uptime, errorCode, detail = tlm
         errorString = self.errors.get(int(errorCode), f"UNKNOWN ERROR CODE {errorCode}")
