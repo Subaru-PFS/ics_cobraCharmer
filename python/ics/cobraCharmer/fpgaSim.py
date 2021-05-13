@@ -32,7 +32,10 @@ class FPGAProtocol(asyncio.Protocol):
 
     """
 
-    def __init__(self, fpga=None, debug=False):
+    major = 1
+    minor = 2
+
+    def __init__(self, fpga=None, debug=False, boards=None):
         """ Accept a new connection. Print out commands and optionally forwar to real FPGA.
 
         Args:
@@ -47,6 +50,10 @@ class FPGAProtocol(asyncio.Protocol):
         self.ioLogger.setLevel(logging.DEBUG if debug else logging.INFO)
         self.fpga = fpga
         self.fpgaLogger = FPGAProtocolLogger(debug=True)
+
+        if boards is None:
+            boards = [14,14,14,14,14,14]
+        self.boards = boards
 
         self.resetBuffer()
         self.pleaseFinishLoop = False
@@ -233,8 +240,7 @@ class FPGAProtocol(asyncio.Protocol):
         self._respond(TLM)
 
     def diagHandler(self):
-        counts = [5,0,0,0,0,0]
-        TLM = struct.pack('>BBBBBBBBHH', self.cmdCode, self.cmdNum, *counts, 0, 0)
+        TLM = struct.pack('>BBBBBBBBHH', self.cmdCode, self.cmdNum, *self.boards, 0, 0)
         self._respond(TLM)
 
     def XXpowerHandler(self):
