@@ -264,7 +264,7 @@ class FPGAProtocolLogger(object):
 
         expectedCmd = proto.ADMIN_CMD
 
-        cmd, cmdNum, debugLevel, timeLimit, CRC = struct.unpack('>BBBHH', header)
+        cmd, cmdNum, debugLevel, _, timeLimit, CRC = struct.unpack('>BBBBHH', header)
         if cmd != expectedCmd:
             raise RuntimeError(f"incorrect command type; expected {expectedCmd}, got {cmd}")
         self.logger.info(f"CMD admin cmdNum= {cmdNum} timeLimit= {timeLimit}")

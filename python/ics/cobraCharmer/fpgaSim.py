@@ -242,6 +242,17 @@ class FPGAProtocol(asyncio.Protocol):
 
         if len(self.data) < proto.POWER_HEADER_SIZE:
             raise IncompleteDataError()
+    def adminHandler(self, header, data):
+        try:
+            _, _, debugLevel, _, timeout, CRC = struct.unpack('>BBBBHH', header)
+        except:
+            self.logger.warn('admin unpack WTF: %f', header)
+        self.logger.info('admin debugLevel=%d', debugLevel)
+
+        uptime = int(time.time() - self.connectTime)
+        TLM = struct.pack('>BBBBLHH', self.cmdCode, self.cmdNum,
+                          self.major, self.minor, uptime, 0, 0)
+        self._respond(TLM)
 
         data, self.data = self.data[2:proto.POWER_HEADER_SIZE], self.data[proto.POWER_HEADER_SIZE:]
 
