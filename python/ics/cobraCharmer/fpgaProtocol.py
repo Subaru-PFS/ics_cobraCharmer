@@ -6,6 +6,10 @@ POWER_CMD = 5
 DIAG_CMD = 6
 ADMIN_CMD = 7
 
+# Pseudo-commands for the simulator
+EXIT_CMD = 8
+FLUSH_CMD = 9
+
 RUN_HEADER_SIZE = 10
 RUN_ARM_SIZE = 14
 CAL_HEADER_SIZE = 8

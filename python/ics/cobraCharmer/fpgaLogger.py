@@ -4,7 +4,6 @@ import struct
 import multiprocessing
 
 from . import convert
-from .convert import get_freq, conv_temp, conv_volt, conv_current
 from . import fpgaProtocol as proto
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(filename)s:%(lineno)s %(message)s",
@@ -131,7 +130,7 @@ class FPGAProtocolLogger(object):
                 else:
                     self.mainTlmHandler(tlm)
         except Exception as e:
-            self.logger.error(f"unexpected or unhandled response for {tlm}: {e}")
+            self.logger.error(f"unexpected or unhandled response for TLM {tlm}: {e}")
 
     def runHandler(self, header, data):
         """ Log a RUN command """

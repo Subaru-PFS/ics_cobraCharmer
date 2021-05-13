@@ -97,6 +97,9 @@ class FPGAProtocol(asyncio.Protocol):
                 return
             except KeyError:
                 raise RuntimeError(f"unknown call: {self.data[0]}")
+            except Exception as e:
+                self.logger.error('uncaught exception while processing command %s: %s', self.cmdCode, e)
+
             self.ioLogger.debug('command %d,%d handled; %d bytes in buffer',
                                 self.cmdCode, self.cmdNum, len(self.data))
 
@@ -184,7 +187,7 @@ class FPGAProtocol(asyncio.Protocol):
         checksum = (sum(buf[:cmdLen]) - header[-2] - header[-1]) & 0xffff
         hdrChecksum = (header[-2] << 8) + header[-1]
         if (checksum + hdrChecksum) != 65536:
-            raise ChecksumError(f"cmd={cmd} cmdNum={cmdNum} checksum={checksum}/{hdrChecksum} header={header} data={data}")
+            raise ChecksumError(f"cmd={cmd} checksum={checksum}/{hdrChecksum} header={header} data={data}")
 
         return header, data, buf[cmdLen:]
 
