@@ -32,8 +32,7 @@ def whereAmI():
 
     return 'rmod'
 
-def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None, 
-actor=None,cmd=None):
+def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None, actor=None,cmd=None):
     if doClear or simulationPath is not None:
         try:
             del cameraFactory.__camera
@@ -44,6 +43,7 @@ actor=None,cmd=None):
     except:
         if name is None:
             name = whereAmI()
+            
         if name == 'mcs':
             from . import mcsCam
             reload(mcsCam)

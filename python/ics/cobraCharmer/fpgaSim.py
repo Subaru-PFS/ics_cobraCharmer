@@ -106,6 +106,9 @@ class FPGAProtocol(asyncio.Protocol):
         if cmd == proto.DIAG_CMD:
             self.diagHandler()
             return
+        if cmd == proto.POWER_CMD:
+            self.XXpowerHandler()
+            return
 
         if cmd == proto.EXIT_CMD:
             self.pleaseFinishLoop = True
@@ -233,7 +236,7 @@ class FPGAProtocol(asyncio.Protocol):
         self._respond(TLM)
 
     def diagHandler(self):
-        counts = [5,0,0,0,0,0]
+        counts = [14,14,14,14,14,14]
         TLM = struct.pack('>BBBBBBBBHH', self.cmdCode, self.cmdNum, *counts, 0, 0)
         self._respond(TLM)
 

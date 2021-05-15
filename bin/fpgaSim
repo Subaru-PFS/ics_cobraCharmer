@@ -1,1 +1,2 @@
-python3 -m ics.cobraCharmer.fpgaSim "$@"
+#!/bin/sh
+/home/pfs/anaconda3/bin/python3 -m ics.cobraCharmer.fpgaSim "$@"
