@@ -2,6 +2,7 @@ import argparse
 import logging
 import struct
 import asyncio
+import time
 
 from . import convert
 from . import fpgaProtocol as proto
@@ -32,7 +33,10 @@ class FPGAProtocol(asyncio.Protocol):
 
     """
 
-    def __init__(self, fpga=None, debug=False):
+    major = 1
+    minor = 2
+
+    def __init__(self, fpga=None, debug=False, boards=None):
         """ Accept a new connection. Print out commands and optionally forwar to real FPGA.
 
         Args:
@@ -48,6 +52,10 @@ class FPGAProtocol(asyncio.Protocol):
         self.fpga = fpga
         self.fpgaLogger = FPGAProtocolLogger(debug=True)
 
+        if boards is None:
+            boards = [14,14,14,14,14,14]
+        self.boards = boards
+
         self.resetBuffer()
         self.pleaseFinishLoop = False
 
@@ -55,6 +63,7 @@ class FPGAProtocol(asyncio.Protocol):
         peername = transport.get_extra_info('peername')
         self.ioLogger.info(f'FPGA connection from {peername}')
         self.transport = transport
+        self.connectTime = time.time()
 
     def connection_lost(self, exc):
         self.ioLogger.warn('FPGA connection lost')
@@ -88,6 +97,9 @@ class FPGAProtocol(asyncio.Protocol):
                 return
             except KeyError:
                 raise RuntimeError(f"unknown call: {self.data[0]}")
+            except Exception as e:
+                self.logger.error('uncaught exception while processing command %s: %s', self.cmdCode, e)
+
             self.ioLogger.debug('command %d,%d handled; %d bytes in buffer',
                                 self.cmdCode, self.cmdNum, len(self.data))
 
@@ -107,7 +119,10 @@ class FPGAProtocol(asyncio.Protocol):
             self.diagHandler()
             return
         if cmd == proto.POWER_CMD:
-            self.XXpowerHandler()
+            self.powerHandler(header)
+            return
+        if cmd == proto.ADMIN_CMD:
+            self.adminHandler(header, data)
             return
 
         if cmd == proto.EXIT_CMD:
@@ -172,7 +187,7 @@ class FPGAProtocol(asyncio.Protocol):
         checksum = (sum(buf[:cmdLen]) - header[-2] - header[-1]) & 0xffff
         hdrChecksum = (header[-2] << 8) + header[-1]
         if (checksum + hdrChecksum) != 65536:
-            raise ChecksumError(f"cmd={cmd} cmdNum={cmdNum} checksum={checksum}/{hdrChecksum} header={header} data={data}")
+            raise ChecksumError(f"cmd={cmd} checksum={checksum}/{hdrChecksum} header={header} data={data}")
 
         return header, data, buf[cmdLen:]
 
@@ -219,8 +234,7 @@ class FPGAProtocol(asyncio.Protocol):
     def housekeepingHandler(self, header, data):
         self.respond()
 
-        boardNum, timeLimit, CRC = struct.unpack('>HHH',
-                                                 header[2:proto.HOUSEKEEPING_HEADER_SIZE])
+        _, _, boardNum, timeLimit, CRC = struct.unpack('>BBHHH', header)
         nCobras = 29
 
         temp1 = convert.tempToAdc(23.1);
@@ -231,24 +245,32 @@ class FPGAProtocol(asyncio.Protocol):
         mot = struct.pack('>%s' % ('H'*(4*nCobras)),
                           *([convert.get_per(65.0), 30000,
                              convert.get_per(100.0), 30000] * nCobras))
-        TLMheader = struct.pack('>BBHHHHH', self.cmdCode, self.cmdNum, 0, boardNum, temp1, temp2, v)
+        TLMheader = struct.pack('>BBHHHHH', self.cmdCode, self.cmdNum, 0,
+                                boardNum&0x7f,
+                                temp1, temp2, v)
         TLM = TLMheader + mot
         self._respond(TLM)
 
     def diagHandler(self):
-        counts = [14,14,14,14,14,14]
-        TLM = struct.pack('>BBBBBBBBHH', self.cmdCode, self.cmdNum, *counts, 0, 0)
+        TLM = struct.pack('>BBBBBBBBHH', self.cmdCode, self.cmdNum, *self.boards, 0, 0)
         self._respond(TLM)
 
-    def XXpowerHandler(self):
+    def adminHandler(self, header, data):
+        try:
+            _, _, debugLevel, _, timeout, CRC = struct.unpack('>BBBBHH', header)
+        except:
+            self.logger.warn('admin unpack WTF: %f', header)
+        self.logger.info('admin debugLevel=%d', debugLevel)
+
+        uptime = int(time.time() - self.connectTime)
+        TLM = struct.pack('>BBBBLHH', self.cmdCode, self.cmdNum,
+                          self.major, self.minor, uptime, 0, 0)
+        self._respond(TLM)
+
+    def powerHandler(self, header):
         """ Look for a complete RST command and process it. """
 
-        if len(self.data) < proto.POWER_HEADER_SIZE:
-            raise IncompleteDataError()
-
-        data, self.data = self.data[2:proto.POWER_HEADER_SIZE], self.data[proto.POWER_HEADER_SIZE:]
-
-        sectorPower, sectorReset, timeout, CRC = struct.unpack('>BBHH', data)
+        _, _, sectorPower, sectorReset, timeout, CRC = struct.unpack('>BBBBHH', header)
 
         self.respond()
 

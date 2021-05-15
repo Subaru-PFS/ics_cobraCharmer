@@ -10,7 +10,7 @@ import numpy as np
 from . import cmds
 reload(cmds)
 
-from .ethernet import sock
+from . import ethernet
 from .log import full_log, medium_log, short_log, eth_hex_logger
 from .convert import *
 from .cmds import *
@@ -260,8 +260,8 @@ def POW(sectors=0x3f):
     medium_log.log("Sectors Without Power: %s" %sectors_off)
     
     cmd = CMD_pow(sectors, 0)
-    sock.send(cmd, eth_hex_logger, 'h')
-    resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
+    ethernet.sock.send(cmd, eth_hex_logger, 'h')
+    resp = ethernet.sock.recv(TLM_LEN, eth_hex_logger, 'h')
     error = tlm_chk(resp)
     return error
     
@@ -276,16 +276,16 @@ def RST(sectors=0x3f):
     medium_log.log("Sectors Reseting: %s" %sectors_reseting)
     
     cmd = CMD_pow(0, sectors)
-    sock.send(cmd, eth_hex_logger, 'h')
-    resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
+    ethernet.sock.send(cmd, eth_hex_logger, 'h')
+    resp = ethernet.sock.recv(TLM_LEN, eth_hex_logger, 'h')
     error = tlm_chk(resp)
     return error
     
 def DIA():
     short_log.log("--- DIAGNOSTIC INFO ---")
     cmd = CMD_dia()
-    sock.send(cmd, eth_hex_logger, 'h')
-    resp = sock.recv(DIA_TLM_LEN, eth_hex_logger, 'h')
+    ethernet.sock.send(cmd, eth_hex_logger, 'h')
+    resp = ethernet.sock.recv(DIA_TLM_LEN, eth_hex_logger, 'h')
     
     boards_per_sector = [
         int(resp[2]), int(resp[3]), int(resp[4]), int(resp[5]), int(resp[6]), int(resp[7])
@@ -295,8 +295,8 @@ def DIA():
     
 def ADMIN(debugLevel=0):
     cmd = CMD_admin(debugLevel=debugLevel)
-    sock.send(cmd, eth_hex_logger, 'h')
-    resp = sock.recv(ADMIN_TLM_LEN, eth_hex_logger, 'h')
+    ethernet.sock.send(cmd, eth_hex_logger, 'h')
+    resp = ethernet.sock.recv(ADMIN_TLM_LEN, eth_hex_logger, 'h')
 
     error = int(resp[8])
     version = f"{resp[2]}.{resp[3]}"
@@ -316,13 +316,13 @@ def HK(cobras, export=0, feedback=False, updateModel=None):
     short_log.log("--- ISSUE HK & VERIFY (brd:%d) ---" %board)      
     
     cmd = CMD_hk(board, timeout=2000)
-    sock.send(cmd, eth_hex_logger, 'h')
+    ethernet.sock.send(cmd, eth_hex_logger, 'h')
     
-    resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
+    resp = ethernet.sock.recv(TLM_LEN, eth_hex_logger, 'h')
     er1 = tlm_chk(resp)
 
     tlmLen = HK_TLM_HDR_LEN + nCobras*8
-    resp = sock.recv(tlmLen, eth_hex_logger, 'h')
+    resp = ethernet.sock.recv(tlmLen, eth_hex_logger, 'h')
     if feedback:
         er2, t1, t2, v, f1, c1, f2, c2 = hk_chk(resp, cobras, export, feedback,
                                                 updateModel=updateModel)
@@ -356,11 +356,11 @@ def CAL( cobras, timeout=0 ):
         payload += c.p.toList(c.board, c.cobra)
 
     cmd = CMD_cal(payload, cmds=len(cobras), timeout=timeout)
-    sock.send(cmd, eth_hex_logger, 'h')
+    ethernet.sock.send(cmd, eth_hex_logger, 'h')
     
     error = False
     for i in range(2):
-        resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
+        resp = ethernet.sock.recv(TLM_LEN, eth_hex_logger, 'h')
         error |= tlm_chk(resp)
     return error
 
@@ -398,11 +398,11 @@ def RUN( cobras, timeout=0, inter=0 ):
 
     cmd = cmds.CMD_run(payload, cmds=len(cobras), timeout=timeout, inter=inter)
         
-    sock.send(cmd, eth_hex_logger, 'h')
+    ethernet.sock.send(cmd, eth_hex_logger, 'h')
 
     error = False
     for i in range(2):
-        resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
+        resp = ethernet.sock.recv(TLM_LEN, eth_hex_logger, 'h')
         error |= tlm_chk(resp)
     return error
     
@@ -415,18 +415,18 @@ def SET( cobras ):
         payload += c.p.toList(c.board, c.cobra)
 
     cmd = CMD_set(payload, cmds=len(cobras), timeout=2000)
-    sock.send(cmd, eth_hex_logger, 'h')
+    ethernet.sock.send(cmd, eth_hex_logger, 'h')
 
     error = False
     for i in range(2):
-        resp = sock.recv(TLM_LEN, eth_hex_logger, 'h')
+        resp = ethernet.sock.recv(TLM_LEN, eth_hex_logger, 'h')
         error |= tlm_chk(resp)
     return error
 
 def EXIT():
     short_log.log("--- EXIT FPGA ---")
     cmd = CMD_exit()
-    sock.send(cmd, eth_hex_logger, 'h')
+    ethernet.sock.send(cmd, eth_hex_logger, 'h')
 
     return True
 
