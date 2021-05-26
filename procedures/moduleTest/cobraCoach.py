@@ -60,7 +60,7 @@ class CobraCoach():
 
 
     def __init__(self, fpgaHost='localhost', loadModel=True, logLevel=logging.INFO, 
-    trajectoryMode=False, rootDir=None, actor=None, cmd=None):
+    trajectoryMode=False, rootDir=None, actor=None, cmd=None, simDataPath=None):
         self.logger = logging.getLogger('cobraCoach')
         self.logger.setLevel(logLevel)
 
@@ -86,6 +86,11 @@ class CobraCoach():
         # create cobra trajectory
         self.trajectoryMode = trajectoryMode
         self.trajectory = None
+        
+        self.simMode=False
+        if simDataPath is not None:
+            self.simMode = True
+            self.simDataPath = simDataPath
         
         self.actor = None
         self.cmd = None
@@ -312,15 +317,19 @@ class CobraCoach():
             #        runManager=self.runManager, actor=self.actor)
             #else:    
             if self.actor is not None:
-                self.logger.info('MCS actor is given, try using MCS camera')
-                self.cam = camera.cameraFactory(name='mcs',doClear=True, 
-                    runManager=self.runManager, actor=self.actor, cmd=self.cmd)
+                self.logger.info(f'MCS actor is given, try using MCS camera. simMode = {self.simMode}')
+                self.cam = camera.cameraFactory(name='mcs',doClear=True, runManager=self.runManager, actor=self.actor, cmd=self.cmd)
+
+                if self.simMode is True:
+                    self.logger.info(f'MCS actor is given, try using MCS camera in simulation mode')
+                    self.cam = camera.cameraFactory(name='mcs',doClear=True, 
+                    runManager=self.runManager, actor=self.actor, cmd=self.cmd, simulationPath=self.simDataPath)
             else:
                 self.logger.info('MCS actor is not present, using RMOD camera')    
                 self.cam = camera.cameraFactory(name='rmod',doClear=True, runManager=self.runManager)
         except:
             self.logger.info('Problem when connecting to camera.')
-            self.cam = None
+            #self.cam = None
 
     def _getIndex(self, cobras):
         cIds = np.zeros(len(cobras), 'int')
@@ -563,11 +572,13 @@ class CobraCoach():
             elif flags[cId, 0] & self.pfi.TOO_FAR_FROM_CENTER != 0:
                 self.logger.warn(f'Cobra#{cId+1} is too far from center')
                 theta = thetas[cId, 0]
-            elif flags[cId, 0] & self.pfi.TOO_CLOSE_TO_CENTER != 0:
+            #elif flags[cId, 0] & self.pfi.TOO_CLOSE_TO_CENTER != 0:
+            else:
                 self.logger.warn(f'Cobra#{cId+1} is too close to center')
                 theta = self.cobraInfo['thetaAngle'][cId] + expectedThetas[c_i]
             phi = phis[cId, 0]
 
+            #self.logger.info(f'print {theta}')
             if not np.isnan(theta):
                 angle = calculus.unwrappedAngle(theta, tSteps, self.cobraInfo['thetaAngle'][cId],
                                                 self.cobraInfo['thetaAngle'][cId] + expectedThetas[c_i])
@@ -761,6 +772,7 @@ class CobraCoach():
                                             fromTheta[c_i], fromPhi[c_i], thetaFast[c_i], phiFast[c_i], self.calibModel)
 
             # send move command
+            #self.logger.info(f'thetaSteps = {thetaSteps}')
             self.moveSteps(cobras, thetaSteps, phiSteps, thetaFast, phiFast, thetaAngles, phiAngles)
 
         else:
@@ -892,6 +904,8 @@ class CobraCoach():
             deltaPhi = None
 
         # send the command
+        #self.logger.debug(f'Moving deltaTheta = {deltaTheta}')
+        #self.logger.debug(f'Moving deltaPhi = {deltaPhi}')
         self.moveDeltaAngles(cobras, deltaTheta, deltaPhi, thetaFast, phiFast)
         if local:
             if self.mode == self.thetaMode:

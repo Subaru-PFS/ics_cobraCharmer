@@ -3,7 +3,7 @@ import sep
 from ics.cobraCharmer import pfiDesign
 import os
 import sys
-
+import cv2
 
 #from ics.cobraCharmer.procedures.moduleTest import trajectory
 
@@ -52,6 +52,94 @@ def filtered_circle_fitting(fw, rv, threshold=1.0):
     else:
         return circle_fitting(data)
 
+
+def mapF3CtoMCS(ff_mcs, ff_f3c, cobra_f3c):
+    """ Mapping cobra position in pixel unit to F3C coordinate """
+
+    # Give the image size in (width, height)
+    imageSize= (10000, 7096)
+    
+    # preparing two arrays for opencv operation.
+    objarr=[]
+    imgarr=[]
+    
+    # Re-arrange the array for CV2 convention
+    for i in range(len(ff_mcs)):
+
+        if ~np.isnan(ff_mcs[i][0]):
+
+            imgarr.append([ff_mcs[i][0],ff_mcs[i][1]])
+            objarr.append([ff_f3c[i][0],ff_f3c[i][1],0])
+    
+    objarr=np.array([objarr])
+    imgarr=np.array([imgarr])
+
+    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objarr.astype(np.float32),
+                                                       imgarr.astype(np.float32),imageSize, None, None)
+    
+    tot_error = 0
+    
+    for i in range(len(objarr)):
+        imgpoints2, _ = cv2.projectPoints(objarr[i].astype(np.float32), rvecs[i], tvecs[i], mtx, dist)
+        error = cv2.norm(imgarr[i].astype(np.float32),imgpoints2[:,0,:], cv2.NORM_L2)/len(imgpoints2[:,0,:])
+        tot_error = tot_error+error
+
+    print("total error: ", tot_error/len(objarr))
+    
+    cobra_obj=np.array([cobra_f3c.T[0],cobra_f3c.T[1],np.zeros(len(cobra_f3c.T[0]))]).T
+    
+    imgpoints2, _ = cv2.projectPoints(cobra_obj.astype(np.float32), 
+                                  rvecs[0], tvecs[0], mtx, dist)
+
+    imgarr2=imgpoints2[:,0,:]
+    
+    return imgarr2
+    
+    
+def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
+    """ Mapping cobra position in pixel unit to F3C coordinate """
+    
+    # Give the image size in (width, height)
+    imageSize= (10000, 7096)
+    
+    # preparing two arrays for opencv operation.
+    objarr=[]
+    imgarr=[]
+    
+    # Re-arrange the array for CV2 convention
+    for i in range(len(ff_mcs)):
+
+        if ~np.isnan(ff_mcs[i][0]):
+
+            imgarr.append([ff_f3c[i][0],ff_f3c[i][1]])
+            objarr.append([ff_mcs[i][0],ff_mcs[i][1],0])
+    
+    objarr=np.array([objarr])
+    imgarr=np.array([imgarr])
+
+    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objarr.astype(np.float32),
+                                                       imgarr.astype(np.float32),imageSize, None, None)
+    
+    tot_error = 0
+    
+    for i in range(len(objarr)):
+        imgpoints2, _ = cv2.projectPoints(objarr[i].astype(np.float32), rvecs[i], tvecs[i], mtx, dist)
+        error = cv2.norm(imgarr[i].astype(np.float32),imgpoints2[:,0,:], cv2.NORM_L2)/len(imgpoints2[:,0,:])
+        tot_error = tot_error+error
+
+    print("total error: ", tot_error/len(objarr))
+    
+    cobra_obj=np.array([cobra_mcs.T[0],cobra_mcs.T[1],np.zeros(len(cobra_mcs.T[0]))]).T
+    
+    
+    imgpoints2, _ = cv2.projectPoints(cobra_obj.astype(np.float32), 
+                                  rvecs[0], tvecs[0], mtx, dist)
+
+    imgarr2=imgpoints2[:,0,:]
+    
+    return imgarr2
+
+        
 def transform(origPoints, newPoints):
     """ return the tranformation parameters and a function that can convert origPoints to newPoints """
     origCenter = np.mean(origPoints)
