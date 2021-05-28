@@ -66,10 +66,10 @@ def mapF3CtoMCS(ff_mcs, ff_f3c, cobra_f3c):
     # Re-arrange the array for CV2 convention
     for i in range(len(ff_mcs)):
 
-        if ~np.isnan(ff_mcs[i][0]):
+        if ~np.isnan(ff_mcs[i].real):
 
-            imgarr.append([ff_mcs[i][0],ff_mcs[i][1]])
-            objarr.append([ff_f3c[i][0],ff_f3c[i][1],0])
+            imgarr.append([ff_mcs[i].real,ff_mcs[i].imag])
+            objarr.append([ff_f3c[i].real,ff_f3c[i].imag,0])
     
     objarr=np.array([objarr])
     imgarr=np.array([imgarr])
@@ -92,13 +92,14 @@ def mapF3CtoMCS(ff_mcs, ff_f3c, cobra_f3c):
                                   rvecs[0], tvecs[0], mtx, dist)
 
     imgarr2=imgpoints2[:,0,:]
+    output=imgarr2[:,0]+imgarr2[:,1]*1j
     
-    return imgarr2
+    return output
     
     
 def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
     """ Mapping cobra position in pixel unit to F3C coordinate """
-    
+
     # Give the image size in (width, height)
     imageSize= (10000, 7096)
     
@@ -109,10 +110,10 @@ def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
     # Re-arrange the array for CV2 convention
     for i in range(len(ff_mcs)):
 
-        if ~np.isnan(ff_mcs[i][0]):
+        if ~np.isnan(ff_mcs[i].real):
 
-            imgarr.append([ff_f3c[i][0],ff_f3c[i][1]])
-            objarr.append([ff_mcs[i][0],ff_mcs[i][1],0])
+            imgarr.append([ff_f3c[i].real,ff_f3c[i].imag])
+            objarr.append([ff_mcs[i].real,ff_mcs[i].imag,0])
     
     objarr=np.array([objarr])
     imgarr=np.array([imgarr])
@@ -136,8 +137,9 @@ def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
                                   rvecs[0], tvecs[0], mtx, dist)
 
     imgarr2=imgpoints2[:,0,:]
+    output=imgarr2[:,0]+imgarr2[:,1]*1j
     
-    return imgarr2
+    return output
 
         
 def transform(origPoints, newPoints):
