@@ -54,8 +54,6 @@ def filtered_circle_fitting(fw, rv, threshold=1.0):
 
 
 def mapF3CtoMCS(ff_mcs, ff_f3c, cobra_f3c):
-    """ Mapping cobra position in pixel unit to F3C coordinate """
-
     # Give the image size in (width, height)
     imageSize= (10000, 7096)
     
@@ -66,10 +64,10 @@ def mapF3CtoMCS(ff_mcs, ff_f3c, cobra_f3c):
     # Re-arrange the array for CV2 convention
     for i in range(len(ff_mcs)):
 
-        if ~np.isnan(ff_mcs[i][0]):
+        if ~np.isnan(ff_mcs[i].real):
 
-            imgarr.append([ff_mcs[i][0],ff_mcs[i][1]])
-            objarr.append([ff_f3c[i][0],ff_f3c[i][1],0])
+            imgarr.append([ff_mcs[i].real,ff_mcs[i].imag])
+            objarr.append([ff_f3c[i].real,ff_f3c[i].imag,0])
     
     objarr=np.array([objarr])
     imgarr=np.array([imgarr])
@@ -86,19 +84,19 @@ def mapF3CtoMCS(ff_mcs, ff_f3c, cobra_f3c):
 
     print("total error: ", tot_error/len(objarr))
     
-    cobra_obj=np.array([cobra_f3c.T[0],cobra_f3c.T[1],np.zeros(len(cobra_f3c.T[0]))]).T
+    cobra_obj=np.array([cobra_f3c.real, cobra_f3c.imag, np.zeros(len(cobra_f3c))]).T
     
     imgpoints2, _ = cv2.projectPoints(cobra_obj.astype(np.float32), 
                                   rvecs[0], tvecs[0], mtx, dist)
 
     imgarr2=imgpoints2[:,0,:]
     
-    return imgarr2
+    output=imgarr2[:,0]+imgarr2[:,1]*1j
+    
+    return output
     
     
 def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
-    """ Mapping cobra position in pixel unit to F3C coordinate """
-    
     # Give the image size in (width, height)
     imageSize= (10000, 7096)
     
@@ -109,10 +107,10 @@ def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
     # Re-arrange the array for CV2 convention
     for i in range(len(ff_mcs)):
 
-        if ~np.isnan(ff_mcs[i][0]):
+        if ~np.isnan(ff_mcs[i].real):
 
-            imgarr.append([ff_f3c[i][0],ff_f3c[i][1]])
-            objarr.append([ff_mcs[i][0],ff_mcs[i][1],0])
+            imgarr.append([ff_f3c[i].real,ff_f3c[i].imag])
+            objarr.append([ff_mcs[i].real,ff_mcs[i].imag,0])
     
     objarr=np.array([objarr])
     imgarr=np.array([imgarr])
@@ -129,7 +127,7 @@ def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
 
     print("total error: ", tot_error/len(objarr))
     
-    cobra_obj=np.array([cobra_mcs.T[0],cobra_mcs.T[1],np.zeros(len(cobra_mcs.T[0]))]).T
+    cobra_obj=np.array([cobra_mcs.real,cobra_mcs.imag,np.zeros(len(cobra_mcs))]).T
     
     
     imgpoints2, _ = cv2.projectPoints(cobra_obj.astype(np.float32), 
@@ -138,6 +136,8 @@ def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
     imgarr2=imgpoints2[:,0,:]
     
     return imgarr2
+
+
 
         
 def transform(origPoints, newPoints):
