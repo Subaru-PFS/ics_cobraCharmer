@@ -61,8 +61,8 @@ class Trajectories():
         """
         # Create the arrays for the new movement information
         movementSteps = thetaAngles.shape[1]
-        newThetaAngles = np.empty((self.nCobras, movementSteps))
-        newPhiAngles = np.empty((self.nCobras, movementSteps))
+        newThetaAngles = np.zeros((self.nCobras, movementSteps))
+        newPhiAngles = np.zeros((self.nCobras, movementSteps))
 
         # update positions for moving cobras
         newThetaAngles[cIds] = thetaAngles
