@@ -95,22 +95,12 @@ def mapF3CtoMCS(ff_mcs, ff_f3c, cobra_f3c):
     imgarr2=imgpoints2[:,0,:]
     output=imgarr2[:,0]+imgarr2[:,1]*1j
     
-<<<<<<< HEAD
-    return output
-=======
     output=imgarr2[:,0]+imgarr2[:,1]*1j
->>>>>>> cf078fe2a8ae0dd50c0e9a0365634900a52dd4f3
     
     return output, camProperty
     
-<<<<<<< HEAD
-def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
-    """ Mapping cobra position in pixel unit to F3C coordinate """
-
-=======
     
 def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
->>>>>>> cf078fe2a8ae0dd50c0e9a0365634900a52dd4f3
     # Give the image size in (width, height)
     imageSize= (10000, 7096)
     
@@ -152,10 +142,6 @@ def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
 
     imgarr2=imgpoints2[:,0,:]
     output=imgarr2[:,0]+imgarr2[:,1]*1j
-<<<<<<< HEAD
-    
-    return output
-=======
     
     return output, camProperty
 
@@ -204,7 +190,6 @@ def pointMatch(target, source):
     for i in range(len(target)):
         d=np.sqrt(np.sum((target[i]-source)**2,axis=1))
 
->>>>>>> cf078fe2a8ae0dd50c0e9a0365634900a52dd4f3
 
         idx=np.where(d<dist)
         nmatched = len(idx[0])
