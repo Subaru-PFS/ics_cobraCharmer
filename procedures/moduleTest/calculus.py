@@ -4,6 +4,7 @@ from ics.cobraCharmer import pfiDesign
 import os
 import sys
 import cv2
+import math
 
 #from ics.cobraCharmer.procedures.moduleTest import trajectory
 
@@ -54,8 +55,6 @@ def filtered_circle_fitting(fw, rv, threshold=1.0):
 
 
 def mapF3CtoMCS(ff_mcs, ff_f3c, cobra_f3c):
-    """ Mapping cobra position in pixel unit to F3C coordinate """
-
     # Give the image size in (width, height)
     imageSize= (10000, 7096)
     
@@ -77,6 +76,8 @@ def mapF3CtoMCS(ff_mcs, ff_f3c, cobra_f3c):
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objarr.astype(np.float32),
                                                        imgarr.astype(np.float32),imageSize, None, None)
     
+    camProperty = {'camMatrix':mtx, 'camDistor': dist, 'camRotVec':rvecs, 'camTranVec':tvecs}
+    
     tot_error = 0
     
     for i in range(len(objarr)):
@@ -86,7 +87,7 @@ def mapF3CtoMCS(ff_mcs, ff_f3c, cobra_f3c):
 
     print("total error: ", tot_error/len(objarr))
     
-    cobra_obj=np.array([cobra_f3c.T[0],cobra_f3c.T[1],np.zeros(len(cobra_f3c.T[0]))]).T
+    cobra_obj=np.array([cobra_f3c.real, cobra_f3c.imag, np.zeros(len(cobra_f3c))]).T
     
     imgpoints2, _ = cv2.projectPoints(cobra_obj.astype(np.float32), 
                                   rvecs[0], tvecs[0], mtx, dist)
@@ -94,12 +95,22 @@ def mapF3CtoMCS(ff_mcs, ff_f3c, cobra_f3c):
     imgarr2=imgpoints2[:,0,:]
     output=imgarr2[:,0]+imgarr2[:,1]*1j
     
+<<<<<<< HEAD
     return output
+=======
+    output=imgarr2[:,0]+imgarr2[:,1]*1j
+>>>>>>> cf078fe2a8ae0dd50c0e9a0365634900a52dd4f3
     
+    return output, camProperty
     
+<<<<<<< HEAD
 def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
     """ Mapping cobra position in pixel unit to F3C coordinate """
 
+=======
+    
+def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
+>>>>>>> cf078fe2a8ae0dd50c0e9a0365634900a52dd4f3
     # Give the image size in (width, height)
     imageSize= (10000, 7096)
     
@@ -121,6 +132,9 @@ def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objarr.astype(np.float32),
                                                        imgarr.astype(np.float32),imageSize, None, None)
     
+    camProperty = {'camMatrix':mtx, 'camDistor': dist, 'camRotVec':rvecs, 'camTranVec':tvecs}
+
+
     tot_error = 0
     
     for i in range(len(objarr)):
@@ -130,7 +144,7 @@ def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
 
     print("total error: ", tot_error/len(objarr))
     
-    cobra_obj=np.array([cobra_mcs.T[0],cobra_mcs.T[1],np.zeros(len(cobra_mcs.T[0]))]).T
+    cobra_obj=np.array([cobra_mcs.real,cobra_mcs.imag,np.zeros(len(cobra_mcs))]).T
     
     
     imgpoints2, _ = cv2.projectPoints(cobra_obj.astype(np.float32), 
@@ -138,9 +152,77 @@ def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
 
     imgarr2=imgpoints2[:,0,:]
     output=imgarr2[:,0]+imgarr2[:,1]*1j
+<<<<<<< HEAD
     
     return output
+=======
+    
+    return output, camProperty
 
+def projectFCtoPixel(coord, scale, rotation, fieldCenter):
+    
+    xx=(coord[0]*scale)+fieldCenter[0]
+    yy=(coord[1]*scale)+fieldCenter[1]
+    rx,ry=rotatePoint2([xx,yy],[fieldCenter[0],fieldCenter[1]], rotation)
+
+    return rx, ry
+    
+
+
+def rotatePoint2(coord, ori, angle):
+    """Only rotate a point around the origin (0, 0)."""
+    radians = np.deg2rad(angle)
+    x = coord[0] - ori[0]
+    y = coord[1] - ori[1]
+    xx = x * math.cos(radians) + y * math.sin(radians)
+    yy = -x * math.sin(radians) + y * math.cos(radians)
+    
+    return xx+ori[0], yy+ori[1]
+
+
+def pointMatch(target, source):
+
+    """
+        target: the origin position 
+        source: detected source to be searched for matching, 
+                in the form of (x0, y0), (x1, y1) ....... 
+    
+    """
+    # Looking for proper distance 
+    dist_all = []
+    for i in range(len(target)):
+        d=np.sqrt(np.sum((target[i]-source)**2,axis=1))
+        dist_all.append(np.min(d))
+
+        #print(np.min(d))
+    dist_all=np.array(dist_all)
+    dist = np.median(dist_all)+0.1*np.std(dist_all)
+
+
+    #print(f'dist={dist}')
+    matched=[]
+    for i in range(len(target)):
+        d=np.sqrt(np.sum((target[i]-source)**2,axis=1))
+
+>>>>>>> cf078fe2a8ae0dd50c0e9a0365634900a52dd4f3
+
+        idx=np.where(d<dist)
+        nmatched = len(idx[0])
+        if nmatched == 1:
+            matched.append(source[idx[0]][0])
+
+        elif nmatched > 1:
+
+            newIdx=np.where(d == np.min(d))
+
+            matched.append(source[newIdx[0][0]])
+        else:
+            matched.append(np.array([np.nan,np.nan]))
+
+    matched=np.array(matched)
+
+    
+    return matched
         
 def transform(origPoints, newPoints):
     """ return the tranformation parameters and a function that can convert origPoints to newPoints """
