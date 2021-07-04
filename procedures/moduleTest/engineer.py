@@ -848,7 +848,7 @@ def thetaOnTimeSearch(newXml, speeds=(0.06,0.12), steps=(1000,500), iteration=3,
     # build motor maps
     logger.info(f'Build slow motor maps, best onTime = {np.round([ontF, ontR],4)}')
     runDir, duds = makeThetaMotorMaps(newXml, repeat=repeat, steps=steps[0], thetaOnTime=[ontF, ontR], fast=False)
-    cc.pfi.loadModel(runDir / 'output' / newXml)
+    cc.pfi.loadModel([pathlib.Path(f'{runDir}/output/{newXml}')])
 
     # for fast on time
     ontF = searchOnTime(speeds[1], np.array(_spdF), np.array(_ontF))
@@ -859,7 +859,7 @@ def thetaOnTimeSearch(newXml, speeds=(0.06,0.12), steps=(1000,500), iteration=3,
     # build motor maps
     logger.info(f'Build fast motor maps, best onTime = {np.round([ontF, ontR],4)}')
     runDir, duds = makeThetaMotorMaps(newXml, repeat=repeat, steps=steps[1], thetaOnTime=[ontF, ontR], fast=True)
-    cc.pfi.loadModel(runDir / 'output' / newXml)
+    cc.pfi.loadModel([pathlib.Path(f'{runDir}/output/{newXml}')])
 
     return runDir / 'output' / newXml
 
@@ -948,7 +948,7 @@ def phiOnTimeSearch(newXml, speeds=(0.06,0.12), steps=(500,250), iteration=3, re
     # build slow motor maps
     logger.info(f'Build slow motor maps, best onTime = {np.round([ontF, ontR],4)}')
     runDir, duds = makePhiMotorMaps(newXml, repeat=repeat, steps=steps[0], phiOnTime=[ontF, ontR], fast=False)
-    cc.pfi.loadModel(runDir / 'output' / newXml)
+    cc.pfi.loadModel([pathlib.Path(f'{runDir}/output/{newXml}')])
 
     # for fast motor maps
     ontF = searchOnTime(speeds[1], np.array(_spdF), np.array(_ontF))
@@ -959,7 +959,7 @@ def phiOnTimeSearch(newXml, speeds=(0.06,0.12), steps=(500,250), iteration=3, re
     # build motor maps
     logger.info(f'Build fast motor maps, best onTime = {np.round([ontF, ontR],4)}')
     runDir, duds = makePhiMotorMaps(newXml, repeat=repeat, steps=steps[1], phiOnTime=[ontF, ontR], fast=True)
-    cc.pfi.loadModel(runDir / 'output' / newXml)
+    cc.pfi.loadModel([pathlib.Path(f'{runDir}/output/{newXml}')])
 
     return runDir / 'output' / newXml
 
