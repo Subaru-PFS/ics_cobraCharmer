@@ -12,6 +12,7 @@ class Logger:
     def __init__(self, name, filePath, fileName='default.log'):
         self.name = name
         self.filePath = filePath
+        self.fileName = fileName
         self.logger = logging.getLogger(name)
         self.logger.setLevel(logging.INFO)
         self.logger.propagate = False
@@ -53,7 +54,7 @@ class Logger:
         logger = logging.getLogger(name)
         return logger
 
-logPath = os.path.join(os.path.dirname(__file__), 'log')
+logPath = '.'
 full_log = Logger('log.full', logPath, 'full.log')
 dia_log = Logger('log.dia', logPath, 'dia.log')
 medium_log = Logger('log.medium', logPath, 'med.log')
