@@ -3,6 +3,7 @@ import numpy as np
 import fitsio
 import sep
 
+
 def getObjects(im, sigma=5.0):
     data = im.astype('f4')
     bkg = sep.Background(data)
@@ -14,6 +15,7 @@ def getObjects(im, sigma=5.0):
     objects = sep.extract(data_sub, thresh=thresh)
 
     return objects, data_sub, bkg
+
 
 def spots(name, sigma=5.0, doTrim=True, disp=None):
     im = fitsio.read(name)

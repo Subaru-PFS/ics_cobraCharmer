@@ -9,6 +9,7 @@ from . import fpgaProtocol as proto
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(filename)s:%(lineno)s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
 
+
 def loggerProcess(queue):
     """ The logger process itself. Simply loops on queue input.
 
@@ -19,6 +20,7 @@ def loggerProcess(queue):
     while True:
         item = queue.get()
         logger.log(item)
+
 
 def launchLogger():
     """ Fire up a logging process.
@@ -36,6 +38,7 @@ def launchLogger():
 
     return loggerProcess
 
+
 class FPGAProtocolLogger(object):
     """
     A logger for the PFI FPGA protocol.
@@ -50,16 +53,16 @@ class FPGAProtocolLogger(object):
     ics_cobraCharmer packages, I'll use the original canonical names.
     """
 
-    errors = {0:"OK",
-              1:"Timeout",
-              2:"Bad execution",
-              3:"Bad checksum",
-              4:"Invalid Motor #",
-              5:"Invalid Board #",
-              6:"Invalid Frequency",
-              7:"Invalid Runtime",
-              8:"Invalid Interleave",
-              9:"Too many sub-commands"}
+    errors = {0: "OK",
+              1: "Timeout",
+              2: "Bad execution",
+              3: "Bad checksum",
+              4: "Invalid Motor #",
+              5: "Invalid Board #",
+              6: "Invalid Frequency",
+              7: "Invalid Runtime",
+              8: "Invalid Interleave",
+              9: "Too many sub-commands"}
 
     def __init__(self, debug=False, logRoot=None):
         """ Parse both MSIM logs and binary FPGA data, and log it nicely.
@@ -84,7 +87,7 @@ class FPGAProtocolLogger(object):
                             proto.HOUSEKEEPING_CMD: self.housekeepingHandler,
                             proto.POWER_CMD: self.powerHandler,
                             proto.DIAG_CMD: self.diagHandler,
-                            proto.ADMIN_CMD: self.adminHandler,}
+                            proto.ADMIN_CMD: self.adminHandler, }
 
     def log(self, item):
         """ Accept something passed in from the main process.
@@ -140,13 +143,14 @@ class FPGAProtocolLogger(object):
         cmd, cmdNum, nCobras, timeLimit, interleave, CRC = struct.unpack('>BBHHHH', header)
         if cmd != expectedCmd:
             raise RuntimeError(f"incorrect command type; expected {expectedCmd}, got {cmd}")
-        self.logger.info(f"CMD run cmdNum= {cmdNum} nCobras= {nCobras} timeLimit= {timeLimit} interleave= {interleave}")
+        self.logger.info(
+            f"CMD run cmdNum= {cmdNum} nCobras= {nCobras} timeLimit= {timeLimit} interleave= {interleave}")
 
         expectedSize = nCobras * proto.RUN_ARM_SIZE
         if len(data) != expectedSize:
             raise RuntimeError(f"data size wrong; expected {expectedSize} got {len(data)}")
 
-        dirName = {False:' cw', True:'ccw'}
+        dirName = {False: ' cw', True: 'ccw'}
         for c_i in range(nCobras):
             (flags,
              thetaOntime, thetaSteps, thetaOfftime,
@@ -181,7 +185,7 @@ class FPGAProtocolLogger(object):
         if len(data) != expectedSize:
             raise RuntimeError(f"data size wrong; expected {expectedSize} got {len(data)}")
 
-        dirName = {False:' cw', True:'ccw'}
+        dirName = {False: ' cw', True: 'ccw'}
         for c_i in range(nCobras):
             (flags, thetaRangeLo, thetaRangeHi,
              phiRangeLo, phiRangeHi) = struct.unpack('>HHHHH',
@@ -196,7 +200,8 @@ class FPGAProtocolLogger(object):
 
             self.logger.info(' cal cobra: %2d %2d  Theta: %d %s %0.2f %0.2f  Phi: %d %s %0.2f %0.2f' %
                              (boardId, cobraId,
-                              setTheta, dirName[thetaDir], convert.get_freq(thetaRangeLo), convert.get_freq(thetaRangeHi),
+                              setTheta, dirName[thetaDir], convert.get_freq(
+                                  thetaRangeLo), convert.get_freq(thetaRangeHi),
                               setPhi, dirName[phiDir], convert.get_freq(phiRangeLo), convert.get_freq(phiRangeHi)))
 
     def setFreqHandler(self, header, data):
@@ -304,12 +309,14 @@ class FPGAProtocolLogger(object):
         """ Log a reply ("TLM") for a housekeeping command. """
 
         if isinstance(tlm, (bytes, bytearray)):
-            cmd, cmdNum, responseCode, boardNumber, temp1, temp2, voltage = struct.unpack('>BBHHHHH', tlm[:12])
+            cmd, cmdNum, responseCode, boardNumber, temp1, temp2, voltage = struct.unpack(
+                '>BBHHHHH', tlm[:12])
             tlmData = tlm[12:]
         else:
             cmd, cmdNum, responseCode, boardNumber, temp1, temp2, voltage = [int(i) for i in tlm]
 
-        self.logger.info(f"TLM hk {cmd} cmdNum= {cmdNum} board= {boardNumber} temps= {convert.conv_temp(temp1):5.2f} {convert.conv_temp(temp2):5.2f} {convert.conv_volt(voltage):5.2f}")
+        self.logger.info(
+            f"TLM hk {cmd} cmdNum= {cmdNum} board= {boardNumber} temps= {convert.conv_temp(temp1):5.2f} {convert.conv_temp(temp2):5.2f} {convert.conv_volt(voltage):5.2f}")
 
         if isinstance(tlmData, (bytes, bytearray)):
             nbytes = len(tlmData)
@@ -332,7 +339,8 @@ class FPGAProtocolLogger(object):
             cmd, cmdNum, *inventory, errorCode, detail = tlm
         errorString = self.errors.get(int(errorCode), f"UNKNOWN ERROR CODE {errorCode}")
 
-        self.logger.info(f"TLM DIAG {cmd} cmdNum= {cmdNum} inventory= {inventory} error= {errorCode} {detail} {errorString}")
+        self.logger.info(
+            f"TLM DIAG {cmd} cmdNum= {cmdNum} inventory= {inventory} error= {errorCode} {detail} {errorString}")
 
     def adminTlmHandler(self, tlm):
         """ Log a reply ("TLM") for an ADMIN commands. """
@@ -343,5 +351,5 @@ class FPGAProtocolLogger(object):
             cmd, cmdNum, major, minor, uptime, errorCode, detail = tlm
         errorString = self.errors.get(int(errorCode), f"UNKNOWN ERROR CODE {errorCode}")
 
-        self.logger.info(f"TLM ADMIN {cmd} cmdNum= {cmdNum} version= {major}.{minor} uptime= {uptime} error= {errorCode} {detail} {errorString}")
-        
+        self.logger.info(
+            f"TLM ADMIN {cmd} cmdNum= {cmdNum} version= {major}.{minor} uptime= {uptime} error= {errorCode} {detail} {errorString}")

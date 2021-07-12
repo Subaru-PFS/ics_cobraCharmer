@@ -3,10 +3,11 @@ import os
 
 LOG_TYPES = ["Short", "Medium", "Full", "Dia"]
 NUM_LOGS = 4
-LOGS = [] # Filled in after declaration
+LOGS = []  # Filled in after declaration
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(filename)s:%(lineno)s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
+
 
 class Logger:
     def __init__(self, name, filePath, fileName='default.log'):
@@ -54,6 +55,7 @@ class Logger:
         logger = logging.getLogger(name)
         return logger
 
+
 logPath = '.'
 full_log = Logger('log.full', logPath, 'full.log')
 dia_log = Logger('log.dia', logPath, 'dia.log')
@@ -62,6 +64,7 @@ short_log = Logger('log.short', logPath, 'short.log')
 eth_hex_logger = Logger('log.eth', logPath, 'eth.log')
 
 LOGS = [short_log, medium_log, full_log, dia_log]
+
 
 def setupLogPaths(logPath):
     for l in LOGS:

@@ -10,6 +10,7 @@ from . import fpgaLogger, fpgaProtocol
 
 fpgaLog = fpgaLogger.FPGAProtocolLogger()
 
+
 def dispatchCmd(cmdStr):
     cmd, ts, data = cmdStr.split(',')
     data = bytes.fromhex(data)
@@ -17,6 +18,7 @@ def dispatchCmd(cmdStr):
 
     header, data = data[:headerSize], data[headerSize:]
     fpgaLog.logCommand(header, data, ts=ts)
+
 
 def dispatchTlm(tlmStr):
     try:
@@ -33,9 +35,11 @@ def dispatchTlm(tlmStr):
     tlmType, cmd, ts, *header = header
     fpgaLog.logTlm(header, ts=ts, hkData=data)
 
+
 def nextLine(f):
     for line in f:
         yield line
+
 
 def main(f):
     for l in nextLine(f):
@@ -46,6 +50,7 @@ def main(f):
             dispatchTlm(l)
         else:
             dispatchCmd(l)
+
 
 if __name__ == "__main__":
     import sys

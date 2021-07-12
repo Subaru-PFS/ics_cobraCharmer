@@ -11,11 +11,14 @@ from .fpgaLogger import FPGAProtocolLogger
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
 
+
 class IncompleteDataError(Exception):
     pass
 
+
 class ChecksumError(Exception):
     pass
+
 
 class FPGAProtocol(asyncio.Protocol):
     """
@@ -53,7 +56,7 @@ class FPGAProtocol(asyncio.Protocol):
         self.fpgaLogger = FPGAProtocolLogger(debug=True)
 
         if boards is None:
-            boards = [14,14,14,14,14,14]
+            boards = [14, 14, 14, 14, 14, 14]
         self.boards = boards
 
         self.resetBuffer()
@@ -197,7 +200,7 @@ class FPGAProtocol(asyncio.Protocol):
         if len(self.data) < proto.CAL_HEADER_SIZE:
             raise IncompleteDataError()
 
-        dirName = {False:' cw', True:'ccw'}
+        dirName = {False: ' cw', True: 'ccw'}
 
         nCobras, timeLimit, CRC = struct.unpack('>HHH',
                                                 self.data[2:proto.CAL_HEADER_SIZE])
@@ -237,8 +240,8 @@ class FPGAProtocol(asyncio.Protocol):
         _, _, boardNum, timeLimit, CRC = struct.unpack('>BBHHH', header)
         nCobras = 29
 
-        temp1 = convert.tempToAdc(23.1);
-        temp2 = convert.tempToAdc(24.0);
+        temp1 = convert.tempToAdc(23.1)
+        temp2 = convert.tempToAdc(24.0)
         v = convert.voltToAdc(9.89)
         self.logger.debug(f'temps=0x{temp1:x},0x{temp2:x} volts=0x{v:x}')
 
@@ -246,7 +249,7 @@ class FPGAProtocol(asyncio.Protocol):
                           *([convert.get_per(65.0), 30000,
                              convert.get_per(100.0), 30000] * nCobras))
         TLMheader = struct.pack('>BBHHHHH', self.cmdCode, self.cmdNum, 0,
-                                boardNum&0x7f,
+                                boardNum & 0x7f,
                                 temp1, temp2, v)
         TLM = TLMheader + mot
         self._respond(TLM)
@@ -282,6 +285,7 @@ class FPGAProtocol(asyncio.Protocol):
         TLM = struct.pack('>BBHH', self.cmdCode, self.cmdNum, respCode, respDetail)
         self._respond(TLM)
 
+
 def main():
     parser = argparse.ArgumentParser('fpgaSim')
     parser.add_argument('--host', nargs='?', type=str, default='localhost',
@@ -314,6 +318,7 @@ def main():
         loop.close()
 
     logging.info('finished with server')
+
 
 if __name__ == "__main__":
     main()
