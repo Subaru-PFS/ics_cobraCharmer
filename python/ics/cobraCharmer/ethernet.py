@@ -9,16 +9,17 @@ from .hexprint import arr2Hex
 #  Replace all array with bytearray
 #  Have timeouts mean something, packet-by-packet.
 
+
 def bytesAsString(msg, type=''):
     if type == 'h' or type == 'B':
         s = arr2Hex(msg, seperator='')
         length = len(s)
         newstr = ''
-        for char in range(1,length+1):
-            newstr += s[char-1] 
-            if( char%16 == 0 ):
+        for char in range(1, length+1):
+            newstr += s[char-1]
+            if(char%16 == 0):
                 newstr += '\t'
-            if( char%64 == 0 and char!=length):
+            if(char%64 == 0 and char != length):
                 newstr += '\n'
         s = newstr
     elif type == 's':
@@ -26,6 +27,7 @@ def bytesAsString(msg, type=''):
     else:
         s = ''
     return s
+
 
 class Sock:
     def __init__(self):
@@ -43,10 +45,10 @@ class Sock:
         self._s.settimeout(30)
 
         if logger is not None:
-            logger.log("(ETH)Connection Made. %s:%s" %(ip,port))
+            logger.log("(ETH)Connection Made. %s:%s" % (ip, port))
 
     def send(self, msg, logger=None, type=None):
-        type='B'
+        type = 'B'
         # msg is a byteArray
         if logger is None:
             logger = self.logger
@@ -59,7 +61,7 @@ class Sock:
         self._s.send(msg)
 
     def recv(self, tgt_len, logger=None, type=None):
-        type='B'
+        type = 'B'
         if logger is None:
             logger = self.logger
 

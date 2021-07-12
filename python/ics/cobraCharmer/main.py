@@ -6,22 +6,25 @@ ctrl_ip = '127.0.0.1'
 lcl_ip = '127.0.0.1'
 port = 4001
 
+
 def setup(ip=ctrl_ip):
     # Setup the logs
     for i in LOGS:
-        i.setup() 
-    
+        i.setup()
+
     # Socket connect
     sock.connect(ctrl_ip, port, short_log)
-    
-    
+
+
 def closure():
     # close the logs
     for i in LOGS:
-        i.close() 
-    
+        i.close()
+
     # socket close
     sock.close(short_log)
+
+
 '''
 def main():
     setup()

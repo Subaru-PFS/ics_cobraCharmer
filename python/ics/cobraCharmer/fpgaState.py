@@ -1,9 +1,10 @@
 import numpy as np
 
+
 class FpgaState(object):
     """ Track state of FPGA. Currently just tracks the last move made, per-cobra """
 
-    def  __init__(self):
+    def __init__(self):
         self.cobraMoves = dict()
 
     def cobraId(self, cobra):
@@ -53,5 +54,6 @@ class FpgaState(object):
             return self.cobraMoves[cobraId]
         except KeyError:
             return self._blankMove()
+
 
 fpgaState = FpgaState()

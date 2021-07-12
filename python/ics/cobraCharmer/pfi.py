@@ -15,17 +15,18 @@ from ics.cobraCharmer import cobraState
 reload(pfiDesign)
 reload(func)
 
+
 class PFI(object):
     nCobrasPerModule = 57
     nModules = 42
 
     # bit array for (x,y) to (theta, phi) convertion
-    SOLUTION_OK              = 0x0001  # 1 if the solution is valid
-    IN_OVERLAPPING_REGION    = 0x0002  # 1 if the position in overlapping region
-    PHI_NEGATIVE             = 0x0004  # 1 if phi angle is negative(phi CCW limit < 0)
-    PHI_BEYOND_PI            = 0x0008  # 1 if phi angle is beyond PI(phi CW limit > PI)
-    TOO_CLOSE_TO_CENTER      = 0x0010  # 1 if the position is too close to the center
-    TOO_FAR_FROM_CENTER      = 0x0020  # 1 if the position is too far from the center
+    SOLUTION_OK = 0x0001  # 1 if the solution is valid
+    IN_OVERLAPPING_REGION = 0x0002  # 1 if the position in overlapping region
+    PHI_NEGATIVE = 0x0004  # 1 if phi angle is negative(phi CCW limit < 0)
+    PHI_BEYOND_PI = 0x0008  # 1 if phi angle is beyond PI(phi CW limit > PI)
+    TOO_CLOSE_TO_CENTER = 0x0010  # 1 if the position is too close to the center
+    TOO_FAR_FROM_CENTER = 0x0020  # 1 if the position is too far from the center
 
     # on time vs speed model parameters
     thetaParameter = 0.09
@@ -83,7 +84,7 @@ class PFI(object):
     def loadModel(self, filename=None, version=None, moduleVersion=None):
         """ Load a motormap XML file. """
         des = pfiDesign.PFIDesign()
-        
+
         if filename is not None:
             des.loadModelFiles(filename)
             self.calibModel = des
@@ -116,13 +117,13 @@ class PFI(object):
             self.logger.error(f'send RST command failed')
         else:
             self.logger.debug(f'send RST command succeeded')
-        
+
     def diag(self):
         """ Get fpga board inventory"""
         res = func.DIA()
-        self.logger.info("Board Counts: %s" %(res) )
+        self.logger.info("Board Counts: %s" % (res))
         return res
-    
+
     def admin(self, debugLevel=0):
         """ Set debug level, get version and uptime """
         err, version, uptime = func.ADMIN(debugLevel=debugLevel)
@@ -168,7 +169,7 @@ class PFI(object):
         if phiFreq is not None and len(cobras) != len(phiFreq):
             raise RuntimeError("number of phi frquencies must match number of cobras")
 
-        for n,c in enumerate(cobras):
+        for n, c in enumerate(cobras):
             cobraIdx = self._mapCobraIndex(c)
             if thetaFreq is None:
                 thetaPer = self._freqToPeriod(self.calibModel.motorFreq1[cobraIdx]/1000)
@@ -190,7 +191,7 @@ class PFI(object):
     def calibrateFreq(self, cobras=None,
                       thetaLow=60.4, thetaHigh=70.3, phiLow=94.4, phiHigh=108.2,
                       clockwise=True,
-                      enabled=(True,True)):
+                      enabled=(True, True)):
         """ Calibrate COBRA motor frequency """
         if cobras is None:
             cobras = self.getAllDefinedCobras()
@@ -206,7 +207,7 @@ class PFI(object):
         else:
             self.logger.debug(f'send Calibrate command succeeded')
 
-    def houseKeeping(self, modules=None, m0=(0,1000), m1=(0,1000), temps=(16.0,31.0), cur=(0.25,1.2), volt=(9.5,10.5)):
+    def houseKeeping(self, modules=None, m0=(0, 1000), m1=(0, 1000), temps=(16.0, 31.0), cur=(0.25, 1.2), volt=(9.5, 10.5)):
         """ HK command """
 
         if modules is None:
@@ -267,7 +268,8 @@ class PFI(object):
             phiHomes = np.zeros(nCobras)
             phiMoves = np.zeros(nCobras) + np.abs(phiMove)
 
-        thetaSteps, phiSteps = self.calculateSteps(thetaHomes, thetaMoves, phiHomes, phiMoves, thetaFast, phiFast)
+        thetaSteps, phiSteps = self.calculateSteps(
+            thetaHomes, thetaMoves, phiHomes, phiMoves, thetaFast, phiFast)
 
         cIdx = [self._mapCobraIndex(c) for c in cobras]
         cThetaSteps = thetaSteps[cIdx]
@@ -345,7 +347,8 @@ class PFI(object):
         else:
             raise RuntimeError("number of phiFast must match number of cobras")
 
-        thetaSteps, phiSteps = self.calculateSteps(_thetaFroms, _thetaMoves, _phiFroms, _phiMoves, _thetaFast, _phiFast)
+        thetaSteps, phiSteps = self.calculateSteps(
+            _thetaFroms, _thetaMoves, _phiFroms, _phiMoves, _thetaFast, _phiFast)
         cThetaSteps = thetaSteps[cIdx]
         cPhiSteps = phiSteps[cIdx]
 
@@ -1056,7 +1059,7 @@ class PFI(object):
         startTht, startPhi, _ = self.positionsToAngles(cobras, startPositions)
         targetTht, targetPhi, _ = self.positionsToAngles(cobras, targetPositions)
 
-        valids = np.all([np.isnan(startTht[:,0]) == False, np.isnan(targetTht[:,0]) == False], axis=0)
+        valids = np.all([np.isnan(startTht[:, 0]) == False, np.isnan(targetTht[:, 0]) == False], axis=0)
         valid_cobras = cobras[valids]
         if len(valid_cobras) <= 0:
             raise RuntimeError("no valid target positions are found")
@@ -1066,15 +1069,15 @@ class PFI(object):
         cIdx = [self._mapCobraIndex(c) for c in cobras]
         gapTht = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx] + np.pi) % (2*np.pi) - np.pi
         for c_i in np.where(valids)[0]:
-            if targetTht[c_i,0] < gapTht[c_i] and overlappingCW:
-                targetTht[c_i,0] += np.pi*2
-            if startTht[c_i,0] < gapTht[c_i] + delta and targetTht[c_i,0] > np.pi:
-                startTht[c_i,0] += np.pi*2
-            elif startTht[c_i,0] > np.pi*2 - delta and targetTht[c_i,0] < np.pi:
-                startTht[c_i,0] -= np.pi*2
+            if targetTht[c_i, 0] < gapTht[c_i] and overlappingCW:
+                targetTht[c_i, 0] += np.pi*2
+            if startTht[c_i, 0] < gapTht[c_i] + delta and targetTht[c_i, 0] > np.pi:
+                startTht[c_i, 0] += np.pi*2
+            elif startTht[c_i, 0] > np.pi*2 - delta and targetTht[c_i, 0] < np.pi:
+                startTht[c_i, 0] -= np.pi*2
 
-        deltaTht = targetTht[valids,0] - startTht[valids,0]
-        deltaPhi = targetPhi[valids,0] - startPhi[valids,0]
+        deltaTht = targetTht[valids, 0] - startTht[valids, 0]
+        deltaPhi = targetPhi[valids, 0] - startPhi[valids, 0]
         thetaFast = np.zeros(len(valid_cobras), 'bool')
         thetaFast[np.abs(deltaTht) > thetaThreshold] = True
         phiFast = np.zeros(len(valid_cobras), 'bool')
@@ -1085,7 +1088,8 @@ class PFI(object):
             self.logger.info(f"engaged cobras: {[(c.module,c.cobraNum) for c in valid_cobras]}")
             self.logger.info(f"move to: {np.stack((targetTht[valids,0], targetPhi[valids,0]))}")
             self.logger.info(f"move from: {np.stack((startTht[valids,0], startPhi[valids,0]))}")
-        self.moveThetaPhi(valid_cobras, deltaTht, deltaPhi, startTht[valids,0], startPhi[valids,0], thetaFast, phiFast)
+        self.moveThetaPhi(valid_cobras, deltaTht, deltaPhi,
+                          startTht[valids, 0], startPhi[valids, 0], thetaFast, phiFast)
 
     def moveXYfromHome(self, cobras, targetPositions, ccwLimit=True, thetaThreshold=-1.0, phiThreshold=-1.0):
         """Move the Cobras in XY coordinate from hard stops.
@@ -1111,7 +1115,7 @@ class PFI(object):
         targetTht, targetPhi, _ = self.positionsToAngles(cobras, targetPositions)
 
         # check if there is a solution
-        valids = np.isnan(targetTht[:,0]) == False
+        valids = np.isnan(targetTht[:, 0]) == False
         valid_cobras = cobras[valids]
         if len(valid_cobras) <= 0:
             raise RuntimeError("no valid target position found")
@@ -1130,8 +1134,8 @@ class PFI(object):
         self.logger.info(f"move from: {list(zip(thtHomes, phiHomes))}")
 
         # move cobras by angles
-        deltaTht = targetTht[valids,0] - thtHomes
-        deltaPhi = targetPhi[valids,0] - phiHomes
+        deltaTht = targetTht[valids, 0] - thtHomes
+        deltaPhi = targetPhi[valids, 0] - phiHomes
         thetaFast = np.full(len(valid_cobras), True)
         thetaFast[np.abs(deltaTht) < thetaThreshold] = False
         phiFast = np.full(len(valid_cobras), True)
@@ -1162,7 +1166,7 @@ class PFI(object):
         targetTht, targetPhi, _ = self.positionsToAngles(cobras, targetPositions)
 
         # check if there is a solution
-        valids = np.isnan(targetTht[:,0]) == False
+        valids = np.isnan(targetTht[:, 0]) == False
         valid_cobras = cobras[valids]
         if len(valid_cobras) <= 0:
             raise RuntimeError("no valid target positions are found")
@@ -1179,14 +1183,13 @@ class PFI(object):
             self.logger.info(f"move from: {np.stack((thtHomes, phiHomes))}")
 
         # move cobras by angles
-        deltaTht = targetTht[valids,0] - thtHomes
-        deltaPhi = targetPhi[valids,0] - phiHomes
+        deltaTht = targetTht[valids, 0] - thtHomes
+        deltaPhi = targetPhi[valids, 0] - phiHomes
         self.moveThetaPhi(valid_cobras, deltaTht, deltaPhi, thtHomes, phiHomes, thetaFast=False, phiFast=True)
-
 
     @classmethod
     def allocateAllCobras(cls):
-        return cls.allocateCobraRange(range(1,cls.nModules))
+        return cls.allocateCobraRange(range(1, cls.nModules))
 
     @classmethod
     def allocateCobraRange(cls, modules, cobraNums=None):
@@ -1207,7 +1210,7 @@ class PFI(object):
             if m == 0:
                 raise IndexError('module numbers are 1-indexed, grrr.')
             if cobraNums is None:
-                _cobraNums = range(1,cls.nCobrasPerModule+1)
+                _cobraNums = range(1, cls.nCobrasPerModule+1)
             else:
                 _cobraNums = cobraNums
 
@@ -1236,7 +1239,7 @@ class PFI(object):
     @classmethod
     def allocateCobraModule(cls, moduleId=1):
         moduleId = pfiDesign.PFIDesign.getRealModuleId(moduleId)
-        cobraIds = range(1,cls.nCobrasPerModule+1)
+        cobraIds = range(1, cls.nCobrasPerModule+1)
         cobras = []
         for c in cobraIds:
             cobras.append(func.Cobra(moduleId, c))
@@ -1248,10 +1251,10 @@ class PFI(object):
         module = pfiDesign.PFIDesign.getRealModuleId(module)
         if module < 1 or module > cls.nModules:
             raise IndexError(f'module numbers are 1..{cls.nModules}')
-        if board not in (1,2):
+        if board not in (1, 2):
             raise IndexError('board numbers are 1 or 2.')
         cobras = []
-        for c in range(1,cls.nCobrasPerModule+1):
+        for c in range(1, cls.nCobrasPerModule+1):
             if (c%2 == 1 and board == 1) or (c%2 == 0 and board == 2):
                 cobras.append(func.Cobra(module, c))
 
@@ -1295,10 +1298,9 @@ class PFI(object):
         if boards % 2 != 0:
             raise RuntimeError("number of boards are not even.")
 
-        cobras = self.allocateCobraRange(range(1,boards//2+1))
+        cobras = self.allocateCobraRange(range(1, boards//2+1))
 
         return cobras
-
 
     @classmethod
     def setModelParameters(cls, thetaParameter=None, phiParameter=None):

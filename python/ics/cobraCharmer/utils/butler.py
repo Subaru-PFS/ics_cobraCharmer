@@ -10,6 +10,7 @@ logger = logging.getLogger('butler')
 
 dataRoot = pathlib.Path("/data/MCS")
 
+
 class RunTree(object):
     def __init__(self, rootDir=None, runDir=None, doCreate=True):
         """ Create and track "runs": sequences of exposures taken as a unit, plus some output.
@@ -81,7 +82,7 @@ class RunTree(object):
         if not doFind:
             raise NotImplementedError()
 
-        if moduleName is not  None or version is not None:
+        if moduleName is not None or version is not None:
             raise RuntimeError("can only look for any map for now")
 
         mapPaths = tuple(mapDir.glob('*.xml'))
@@ -90,6 +91,7 @@ class RunTree(object):
         elif len(mapPaths) > 1:
             raise RuntimeError("more than one xml file found")
         return mapPaths[0]
+
 
 def mapForRun(runDir):
     """ Find any model in a run. """
@@ -102,13 +104,16 @@ def mapForRun(runDir):
         raise RuntimeError("more than one xml file found")
     return mapPaths[0]
 
+
 def pathForRun(run):
     runPath = dataRoot / run
     return runPath
 
+
 def spotsForRun(run):
     runPath = pathForRun(run)
     return runPath / 'output/' / 'spots.npz'
+
 
 def _instDataDir():
     """ Return the directory under which instrument configuration is stored. """
@@ -117,6 +122,7 @@ def _instDataDir():
     if not instDataRoot:
         raise ValueError("PFS_INSTDATA_DIR environment variable must be set!")
     return pathlib.Path(instDataRoot)
+
 
 def configPathForPfi(version=None, rootDir=None):
     """ Return the pathname for a PFI config file.
@@ -143,6 +149,7 @@ def configPathForPfi(version=None, rootDir=None):
 
     return rootDir / fname
 
+
 def configPathForModule(module, version=None, rootDir=None):
     """ Return the pathname for a module config file.
 
@@ -168,6 +175,7 @@ def configPathForModule(module, version=None, rootDir=None):
 
     return rootDir / fname
 
+
 def modulesForPfi(version=None, rootDir=None):
     """ Return the list of active modules in the PFI.
 
@@ -178,6 +186,7 @@ def modulesForPfi(version=None, rootDir=None):
         config = yaml.load(yamlFile)
 
     return [c.strip() for c in config['modules']]
+
 
 def mapPathForModule(moduleName, version=None, rootDir=None):
     """ Return the pathname for a module's map file.
@@ -207,6 +216,7 @@ def mapPathForModule(moduleName, version=None, rootDir=None):
 
     return rootDir / fname
 
+
 def mapForModule(moduleName, version=None):
     """ Return the content of the given module's map.
 
@@ -218,6 +228,7 @@ def mapForModule(moduleName, version=None):
     with open(mapPath, mode='rt') as mapFile:
         content = mapFile.read()
         return content
+
 
 def publishMapForModule(moduleName, fromRunPath, version=None):
     """ Copy a run's XML file into the data product.

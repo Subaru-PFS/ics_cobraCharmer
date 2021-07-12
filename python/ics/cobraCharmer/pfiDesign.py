@@ -16,13 +16,14 @@ from copy import deepcopy
 from .utils import butler
 reload(butler)
 
+
 class PFIDesign():
     """ Class describing a cobras calibration product, the "motor map"  """
 
-    COBRA_OK_MASK           = 0x0001  # a synthetic summary bit: 1 for good, 0 for bad.
-    COBRA_INVISIBLE_MASK    = 0x0002  # 1 if the fiber is not visible
+    COBRA_OK_MASK = 0x0001  # a synthetic summary bit: 1 for good, 0 for bad.
+    COBRA_INVISIBLE_MASK = 0x0002  # 1 if the fiber is not visible
     COBRA_BROKEN_THETA_MASK = 0x0004  # 1 if the phi motor do not work
-    COBRA_BROKEN_PHI_MASK   = 0x0008  # 1 if the theta motor does not work
+    COBRA_BROKEN_PHI_MASK = 0x0008  # 1 if the theta motor does not work
 
     COBRA_BROKEN_MOTOR_MASK = COBRA_BROKEN_THETA_MASK | COBRA_BROKEN_PHI_MASK
 
@@ -214,17 +215,19 @@ class PFIDesign():
             # Check for conflicts:
             for check_i in range(i):
                 if (self.moduleIds[i] == self.moduleIds[check_i] and
-                    self.positionerIds[i] == self.positionerIds[check_i]):
+                        self.positionerIds[i] == self.positionerIds[check_i]):
 
                     raise KeyError(f"duplicate cobra id: module={self.moduleIds[i]} "
                                    f"positioner={self.positionerIds[i]}")
-                
+
                 if self.serialIds[i] == self.serialIds[check_i]:
-                    raise KeyError(f"duplicate cobra with serial={self.serialIds[i]} in SC{self.moduleIds[i]}PID{self.positionerIds[i]} and SC{self.moduleIds[check_i]}PID{self.positionerIds[check_i]}")
+                    raise KeyError(
+                        f"duplicate cobra with serial={self.serialIds[i]} in SC{self.moduleIds[i]}PID{self.positionerIds[i]} and SC{self.moduleIds[check_i]}PID{self.positionerIds[check_i]}")
 
             # Save some of the kinematics information
             kinematics = dataContainers[i].find("KINEMATICS")
-            self.centers[i] = float(kinematics.find("Global_base_pos_x").text) + float(kinematics.find("Global_base_pos_y").text) * 1j
+            self.centers[i] = float(kinematics.find("Global_base_pos_x").text) + \
+                float(kinematics.find("Global_base_pos_y").text) * 1j
             self.tht0[i] = np.deg2rad(float(kinematics.find("CCW_Global_base_ori_z").text))
             self.tht1[i] = np.deg2rad(float(kinematics.find("CW_Global_base_ori_z").text))
             self.phiIn[i] = np.deg2rad(float(kinematics.find("Joint2_CCW_limit_angle").text)) - np.pi
@@ -295,10 +298,9 @@ class PFIDesign():
 
     def findAllCobras(self):
         return range(self.nCobras)
- 
+
     def findCobraByCobraIndex(self, cobraIdx, readable=False):
         """ Find cobra at a given module and positioner."""
-
 
         cobraNum = np.array(cobraIdx) + 1
         cobraList = []
@@ -312,12 +314,11 @@ class PFIDesign():
             if readable is True:
                 cobraList.append(f'SC{ModuleID}/PID{positionerId:02d}')
             else:
-                cobraList.append([ModuleID,positionerId])
+                cobraList.append([ModuleID, positionerId])
 
-        cobraList=np.array(cobraList)
+        cobraList = np.array(cobraList)
 
         return cobraList
-
 
     def findCobraByModuleAndPositioner(self, moduleId, positionerId):
         """ Find cobra at a given module and positioner.
@@ -637,7 +638,8 @@ class PFIDesign():
             raise ValueError(f"length of phi and theta arrays must match. Found {len(phi)} and {len(theta)}")
 
         if len(theta) != len(idx):
-            raise RuntimeError(f"number of motor frequencies ({len(theta)}) must match number of cobras ({len(idx)})")
+            raise RuntimeError(
+                f"number of motor frequencies ({len(theta)}) must match number of cobras ({len(idx)})")
 
         for i_i, i in enumerate(idx):
             header = self.dataContainers[i].find("DATA_HEADER")
@@ -827,14 +829,15 @@ class PFIDesign():
 
         # Save the new XML calibration file
         newXmlTree.write(outputFileName, encoding="UTF-8", xml_declaration=True)
-        self.logger.info(f'wrote pfiDesign file for {self.nCobras} cobras and name={name} to {str(outputFileName)}')
+        self.logger.info(
+            f'wrote pfiDesign file for {self.nCobras} cobras and name={name} to {str(outputFileName)}')
 
     def validatePhiLimits(self, rangeOnly=True):
         """ Confirm that the phi limits are sane. """
 
         phiRange = self.phiOut - self.phiIn
-        phiRange[phiRange<0] += 2*np.pi
-        phiRange[phiRange>=2*np.pi] -= 2*np.pi
+        phiRange[phiRange < 0] += 2*np.pi
+        phiRange[phiRange >= 2*np.pi] -= 2*np.pi
 
         if not rangeOnly:
             raise NotImplementedError('not checking phi limit _positions_ yet.')
@@ -851,8 +854,8 @@ class PFIDesign():
         """ Confirm that the theta limits are sane. """
 
         thetaRange = self.tht1 - self.tht0
-        thetaRange[thetaRange<0] += 2*np.pi
-        thetaRange[thetaRange<np.pi/4] += 2*np.pi
+        thetaRange[thetaRange < 0] += 2*np.pi
+        thetaRange[thetaRange < np.pi/4] += 2*np.pi
         duds = thetaRange < np.deg2rad(370)
 
         for cidx in np.where(duds)[0]:
