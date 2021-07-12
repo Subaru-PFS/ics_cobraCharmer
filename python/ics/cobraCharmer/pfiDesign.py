@@ -20,10 +20,10 @@ reload(butler)
 class PFIDesign():
     """ Class describing a cobras calibration product, the "motor map"  """
 
-    COBRA_OK_MASK = 0x0001  # a synthetic summary bit: 1 for good, 0 for bad.
-    COBRA_INVISIBLE_MASK = 0x0002  # 1 if the fiber is not visible
+    COBRA_OK_MASK           = 0x0001  # a synthetic summary bit: 1 for good, 0 for bad.
+    COBRA_INVISIBLE_MASK    = 0x0002  # 1 if the fiber is not visible
     COBRA_BROKEN_THETA_MASK = 0x0004  # 1 if the phi motor do not work
-    COBRA_BROKEN_PHI_MASK = 0x0008  # 1 if the theta motor does not work
+    COBRA_BROKEN_PHI_MASK   = 0x0008  # 1 if the theta motor does not work
 
     COBRA_BROKEN_MOTOR_MASK = COBRA_BROKEN_THETA_MASK | COBRA_BROKEN_PHI_MASK
 
