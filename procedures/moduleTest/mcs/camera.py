@@ -11,6 +11,7 @@ import astropy.io.fits as pyfits
 
 from ics.cobraCharmer.utils import butler
 from ics.fpsActor import najaVenator
+reload(najaVenator)
 
 # Configure the default formatter and logger.
 logging.basicConfig(datefmt = "%Y-%m-%d %H:%M:%S", level=logging.DEBUG,
@@ -113,7 +114,7 @@ class Camera(object):
 
         self.runManager.newRun()
         self.imageDir = self.runManager.dataDir
-        self.outputDir = runManager.dataDir
+        self.outputDir = self.runManager.outputDir
         self.resetStack(doStack=doStack)
 
     def resetStack(self, doStack=False):
@@ -146,6 +147,7 @@ class Camera(object):
     def _readNextSimulatedImage(self):
         path, idx = self.simulationPath
         files = sorted(path.glob('*.fits'))
+        self.logger.info(f"simulation path={path}, nfiles={len(files)}")
 
         nextFile = files[idx]
         idx = idx+1

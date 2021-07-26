@@ -57,11 +57,6 @@ class McsActorCamera(camera.Camera):
         t1=time.time()
         cmdString = f"expose {expType} expTime={exptime:0.2f} {frameArg} {doCentroidArg}"
         self.logger.info(f'calling mcs {cmdString} with cmd={cmd} from {threading.current_thread()}')
-
-        cmdVar = self.actor.cmdr.call(actor='hub', cmdStr='actors',
-                                      forUserCmd=cmd, timeLim=5)
-        self.cmd.inform(f'text="hub actors: {cmdVar.lastCode} {cmdVar.replyList}"')
-
         cmdVar = self.actor.cmdr.call(actor='mcs', cmdStr=cmdString,
                                       forUserCmd=cmd, timeLim=exptime+30)
         if cmdVar.didFail:
@@ -76,7 +71,7 @@ class McsActorCamera(camera.Camera):
         datapath = filename.parents[0]
         frameId = int(filename.stem[4:], base=10)
 
-        self.logger.info(f'MCS frame ID={frameId} datapath={datapath}, filename={filename}')
+        self.logger.info(f'MCS frame ID={frameId} filename={filename}')
         self.logger.info('Time for exposure = %f. '% (t2-t1))
 
         return filename
@@ -140,17 +135,19 @@ class McsActorCamera(camera.Camera):
 
         filename = self._camExpose(exptime, doCentroid=doCentroid, frameNum=frameNum,
                                    cmd=cmd)
+        t1 = time.time()
         self.linkImage(filename, extraName=name)
+        t2 = time.time()
 
         self.logger.info(f"Getting positions from DB for frame {frameNum}")
         objects = self.getPositionsForFrame(frameNum)
 
-        t1 = time.time()
+        t3 = time.time()
         self.appendSpots(filename, objects)
-        t2=time.time()
+        t4=time.time()
 
         self.logger.info(f'{filename.stem}: {len(objects)} spots, '
-                         f'get: {t1-t0:0.3f} save: {t2-t1:0.3f} total: {t2-t0:0.3f}')
+                         f'get: {t1-t0:0.3f} saveAndStack: {t2-t1:0.3f} db: {t3-t2:0.3f} spots: {t4-t3:0.3f} total: {t4-t0:0.3f}')
 
         return objects, filename, None
 
