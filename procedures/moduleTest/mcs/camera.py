@@ -44,8 +44,15 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None
     except:
         if name is None:
             name = whereAmI()
-            
-        if name == 'mcs':
+
+        if name == 'mcsActor':
+            from . import mcsActorCam
+            reload(mcsActorCam)
+            if simulationPath is not None:
+                raise NotImplementedError("for mcsActorCam, you *must* use the mcsActor-side simulation.")
+            cameraFactory.__camera = mcsActorCam.McsActorCamera(actor=actor,
+                                                                cmd=cmd,runManager=runManager)
+        elif name == 'mcs':
             from . import mcsCam
             reload(mcsCam)
             cameraFactory.__camera = mcsCam.McsCamera(simulationPath=simulationPath,actor=actor,

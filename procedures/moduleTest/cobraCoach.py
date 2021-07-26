@@ -312,13 +312,15 @@ class CobraCoach():
             #        runManager=self.runManager, actor=self.actor)
             #else:    
             if self.actor is not None:
-                self.logger.info(f'MCS actor is given, try using MCS camera. simMode = {self.simMode}')
-                self.cam = camera.cameraFactory(name='mcs',doClear=True, runManager=self.runManager, actor=self.actor, cmd=self.cmd)
-
-                if self.simMode is True:
-                    self.logger.info(f'MCS actor is given, try using MCS camera in simulation mode')
-                    self.cam = camera.cameraFactory(name='mcs',doClear=True, 
-                    runManager=self.runManager, actor=self.actor, cmd=self.cmd, simulationPath=self.simDataPath)
+                if self.simMode is False:
+                    self.logger.info(f'MCS actor is given, try using mcsActor camera. simMode = {self.simMode}')
+                    self.cam = camera.cameraFactory(name='mcsActor',doClear=True, runManager=self.runManager,
+                                                    actor=self.actor, cmd=self.cmd)
+                else:
+                    self.logger.info(f'MCS actor is given, try using mcsActor camera in simulation mode')
+                    self.cam = camera.cameraFactory(name='mcsActor',doClear=True,
+                                                    runManager=self.runManager, actor=self.actor,
+                                                    cmd=self.cmd, simulationPath=self.simDataPath)
             else:
                 self.logger.info('MCS actor is not present, using RMOD camera')    
                 self.cam = camera.cameraFactory(name='rmod',doClear=True, runManager=self.runManager)
@@ -356,8 +358,12 @@ class CobraCoach():
         Not at all convinced that we should return anything if no matching spot found.
 
         """
-        centroids, filename, bkgd = self.cam.expose(name)
 
+        cmd = self.actor.visitor.cmd
+        frameNum = self.actor.visitor.getNextFrameNum()
+        centroids, filename, bkgd = self.cam.expose(name,
+                                                    frameNum=frameNum,
+                                                    cmd=cmd)
         idx = self.visibleIdx
         if tolerance is not None:
             radii = ((self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance))[idx]
