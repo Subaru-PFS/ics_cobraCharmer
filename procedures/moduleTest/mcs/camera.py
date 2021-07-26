@@ -378,7 +378,7 @@ class Camera(object):
             stack += img
         except FileNotFoundError:
             stackFits = pyfits.open(stackPath, mode="append")
-            stackFits.append(pyfits.CompImageHDU(img, name='IMAGE', uint=True))
+            stackFits.append(pyfits.CompImageHDU(img.astype('f4'), name='IMAGE', uint=True))
 
         stackFits.flush()
         stackFits.close()
