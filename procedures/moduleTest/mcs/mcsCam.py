@@ -43,7 +43,7 @@ class McsCamera(camera.Camera):
                 self.logger.warn('text="Camera initialization failed: %s"' % (string))
                 return None
         
-    def _camExpose(self, exptime, _takeDark=False):
+    def _camExpose(self, exptime, frameNum=None, _takeDark=False):
         t1=time.time()
 
         if self.actor is None:
@@ -63,8 +63,11 @@ class McsCamera(camera.Camera):
             t3=time.time()    
         
         else:
-
-            cmdString = "expose object expTime=%0.1f %s" % (exptime,'doCentroid')
+            if frameNum is not None:
+                frameArg = "frameId={frameNum} "
+            else:
+                frameArg = ""
+            cmdString = f"expose object expTime={exptime:0.2f} {frameArg} doCentroid"
             self.logger.info('exposureState="reading"')
             cmdVar = self.actor.cmdr.call(actor='mcs', cmdStr=cmdString,
                                           forUserCmd=self.cmd, timeLim=exptime+10)

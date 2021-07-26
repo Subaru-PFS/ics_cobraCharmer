@@ -238,7 +238,7 @@ class Camera(object):
 
         return objects, data_sub, bkg
 
-    def expose(self, name=None, exptime=None, doCentroid=True):
+    def expose(self, name=None, exptime=None, doCentroid=True, frameNum=None):
         """Take an exposure, usually measure centroids, and save the outputs.
 
         Args
@@ -252,6 +252,9 @@ class Camera(object):
 
         doCentroid: `bool`
           Whether to measure and save centroids.
+
+        frameNum : `int`
+          The visit+frame nmber for the file.
 
         Returns
         -------
@@ -286,15 +289,14 @@ class Camera(object):
                 self._camClose()
                 _ = self.cam
                 time.sleep(2)
-                im = self._camExpose(exptime)
+                im = self._camExpose(exptime, frameNum=frameNum)
 
             if self.dark is not None:
                 im -= self.dark
-        
-        
-        filename = self.saveImage(im, extraName=name)
+
+        filename = self.saveImage(im, extraName=name, frameNum=frameNum)
         self.logger.info(f'Saving image as filename {filename}')
-        
+
         if doCentroid:
             t0 = time.time()
             #objects, data_sub, bkgd = self.getObjects(im, filename.stem)
@@ -384,8 +386,8 @@ class Camera(object):
         stackFits.close()
         del stackFits
 
-    def saveImage(self, img, cleanImg=None, extraName=None, doStack=True):
-        filename = self._getNextName()
+    def saveImage(self, img, cleanImg=None, extraName=None, doStack=True, frameNum=None):
+        filename = self._getNextName(frameNum=frameNum)
 
         hdus = pyfits.HDUList()
         hdus.append(pyfits.CompImageHDU(img, name='IMAGE', uint=True))
