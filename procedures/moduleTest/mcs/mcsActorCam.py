@@ -147,8 +147,8 @@ class McsActorCamera(camera.Camera):
         t4=time.time()
 
         self.logger.info(f'{filename.stem}: {len(objects)} spots, '
-                         f'get: {t1-t0:0.3f} saveAndStack: {t2-t1:0.3f} db: {t3-t2:0.3f} spots: {t4-t3:0.3f} total: {t4-t0:0.3f}')
-
+                         f'get: {t1-t0:0.3f} saveAndStack: {t2-t1:0.3f} db: {t3-t2:0.3f} spots: {t4-t3:0.3f}'
+                         f'total: {t4-t0:0.3f}')
         return objects, filename, None
 
     def linkImage(self, filename, extraName=None, doStack=True):
