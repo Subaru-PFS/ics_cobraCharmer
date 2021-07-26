@@ -32,7 +32,8 @@ def whereAmI():
 
     return 'rmod'
 
-def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None, actor=None,cmd=None):
+def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None,
+                  actor=None, cmd=None):
     if doClear or simulationPath is not None:
         try:
             del cameraFactory.__camera
@@ -48,12 +49,12 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None
             from . import mcsCam
             reload(mcsCam)
             cameraFactory.__camera = mcsCam.McsCamera(simulationPath=simulationPath,actor=actor,
-                                                        cmd=cmd,runManager=runManager)
+                                                      cmd=cmd,runManager=runManager)
         elif name == 'cit':
             from . import citCam
             reload(citCam)
             cameraFactory.__camera = citCam.CitCamera(simulationPath=simulationPath,
-                                                        runManager=runManager)
+                                                      runManager=runManager)
         elif name == 'asrd':
             from . import asrdCam
             reload(asrdCam)
@@ -92,9 +93,7 @@ class Camera(object):
         self.outputDir = runManager.outputDir
         self.sequenceNumberFilename = "nextSequenceNumber"
         self.resetStack(doStack=False)
-        self.cmd = None
-        if cmd is not None:
-            self.cmd=cmd
+        self.cmd = cmd
 
         if simulationPath is not None:
             simulationPath = pathlib.Path(simulationPath)
@@ -170,8 +169,8 @@ class Camera(object):
         #             'y':mcsData['centroidy'].values.astype('float')}
         
         centroids=np.rec.array([mcsData['centroidx'].values.astype('float'),
-              mcsData['centroidy'].values.astype('float')],
-              formats='float,float',names='x,y')
+                                mcsData['centroidy'].values.astype('float')],
+                               formats='float,float',names='x,y')
         return centroids
 
     def getObjects(self, im, expid, sigma=1.5, threshold=None):
@@ -218,11 +217,6 @@ class Camera(object):
                               deblend_cont=1.0)
         self.logger.debug(f'median={np.median(data_sub)} std={np.std(data_sub)} '
                           f'thresh={thresh} {len(objects)} objects')
-
-        #keep_w = self.trim(objects['x'], objects['y'])
-        #if len(keep_w) != len(objects):
-        #    self.logger.info(f'trimming {len(objects)} objects to {len(keep_w)}')
-        #objects = objects[keep_w]
 
         # Add exposure and spot IDs
         expids = np.zeros((len(objects)), dtype='U12')
