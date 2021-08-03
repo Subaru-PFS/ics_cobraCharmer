@@ -1529,7 +1529,9 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None,
 
     return dataPath, ontimes, angles, speeds
 
-def convergenceTestX(cIds, runs=3, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0), tries=8, tolerance=0.1, threshold=3.0, newDir=False, twoSteps=False):
+def convergenceTestX(cIds, runs=3, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0), 
+        tries=8, tolerance=0.1, threshold=3.0, newDir=False, twoSteps=False):
+    
     """ convergence test, even and odd cobras move toward each other in a single module """
     if tries < 4:
         raise ValueError("tries parameter should be larger than 4")
