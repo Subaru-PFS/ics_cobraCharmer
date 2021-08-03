@@ -270,7 +270,10 @@ def phiConvergenceTest(cIds, margin=15.0, runs=50, tries=8, fast=False, toleranc
     np.save(dataPath / 'moves', moves)
     return moves
 
-def moveThetaPhi(cIds, thetas, phis, relative=False, local=True, tolerance=0.1, tries=6, homed=False, newDir=True, thetaFast=False, phiFast=False, threshold=10.0, thetaMargin=np.deg2rad(15.0)):
+def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
+                 tolerance=0.1, tries=6, homed=False,
+                 newDir=True, thetaFast=False, phiFast=False,
+                 threshold=10.0, thetaMargin=np.deg2rad(15.0)):
     """
     move cobras to the target angles
 
@@ -445,7 +448,11 @@ def movePositions(cIds, targets, tolerance=0.1, tries=6, thetaMarginCCW=0.1, hom
 
     return dataPath, cc.pfi.anglesToPositions(cobras, atThetas, atPhis), moves
 
-def convergenceTest(cIds, runs=8, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0), thetaOffset=0, phiAngle=np.pi*5/6, tries=8, tolerance=0.2, threshold=3.0, newDir=False, twoSteps=False):
+def convergenceTest(cIds, runs=8,
+                    thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0),
+                    thetaOffset=0, phiAngle=np.pi*5/6,
+                    tries=8, tolerance=0.2, threshold=3.0,
+                    newDir=False, twoSteps=False):
     """ convergence test, all theta arms in the same global direction  """
     cc.connect(False)
     targets = np.zeros((runs, len(cIds), 2))
@@ -486,15 +493,18 @@ def convergenceTest(cIds, runs=8, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg
             _useScaling, _maxSegments, _maxTotalSteps = cc.useScaling, cc.maxSegments, cc.maxTotalSteps
             cc.useScaling, cc.maxSegments, cc.maxTotalSteps = False, _maxSegments * 2, _maxTotalSteps * 2
             dataPath, atThetas, atPhis, moves[i,:,:2] = \
-                moveThetaPhi(cIds, thetasVia, phisVia, False, True, tolerance, 2, True, newDir, True, True, threshold)
+                moveThetaPhi(cIds, thetasVia, phisVia, False, True, tolerance, 2, True,
+                             newDir, True, True, threshold)
 
             cc.useScaling, cc.maxSegments, cc.maxTotalSteps = _useScaling, _maxSegments, _maxTotalSteps
             dataPath, atThetas, atPhis, moves[i,:,2:] = \
-                moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries-2, False, False, False, True, threshold)
+                moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries-2, False,
+                             False, False, True, threshold)
 
         else:
             dataPath, atThetas, atPhis, moves[i,:,:] = \
-                moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries, True, newDir, False, True, threshold)
+                moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries, True,
+                             newDir, False, True, threshold)
 
     np.save(dataPath / 'positions', positions)
     np.save(dataPath / 'targets', targets)
@@ -519,7 +529,8 @@ def makeThetaMotorMaps(newXml, steps=500, totalSteps=10000, repeat=1, fast=False
         raise RuntimeError('Not in theta mode!!!')
 
     # aquire data for motor maps
-    dataPath, posF, posR = cc.roundTripForTheta(steps, totalSteps, repeat, fast, thetaOnTime, limitOnTime, limitSteps, force)
+    dataPath, posF, posR = cc.roundTripForTheta(steps, totalSteps, repeat, fast,
+                                                thetaOnTime, limitOnTime, limitSteps, force)
 
     # calculate centers and theta angles
     center = np.zeros(cc.nCobras, dtype=complex)
@@ -1300,7 +1311,10 @@ def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=
 
     return dataPath, ontimes, angles, speeds
 
-def thetaOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=10000, repeat=1, scaling=4.0, tolerance=np.deg2rad(1.0)):
+def thetaOntimeScan(cIds=None, speed=None, initOntimes=None,
+                    steps=10, totalSteps=10000,
+                    repeat=1, scaling=4.0,
+                    tolerance=np.deg2rad(1.0)):
     """
     find the on times of theta motors for a given speed
 

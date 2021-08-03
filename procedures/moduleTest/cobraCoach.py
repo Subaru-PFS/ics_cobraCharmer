@@ -58,9 +58,9 @@ class CobraCoach():
                                      'phiSteps', 'movedPhi', 'expectedPhi', 'phiOntime', 'phiFast'],
                               formats=['i4', 'f4', 'f4', 'f4', '?', 'i4', 'f4', 'f4', 'f4', '?']))
 
-
-    def __init__(self, fpgaHost='localhost', loadModel=True, logLevel=logging.INFO, 
-    trajectoryMode=False, rootDir=None, actor=None, cmd=None, simDataPath=None):
+    def __init__(self, fpgaHost='localhost', loadModel=True, logLevel=logging.INFO,
+                 trajectoryMode=False, rootDir=None, actor=None, cmd=None,
+                 simDataPath=None):
         self.logger = logging.getLogger('cobraCoach')
         self.logger.setLevel(logLevel)
 
@@ -92,13 +92,8 @@ class CobraCoach():
             self.simMode = True
             self.simDataPath = simDataPath
         
-        self.actor = None
-        self.cmd = None
-        if actor is not None:
-            self.actor = actor
-
-        if cmd is not None:
-            self.cmd = cmd
+        self.actor = actor
+        self.cmd = cmd
 
     def loadModel(self, file=None, version=None, moduleVersion=None, camSplit=28):
         if file is not None:
@@ -266,7 +261,7 @@ class CobraCoach():
             return 'normal'
 
     def connect(self, setFreq=True):
-        self.logger.info('cc connecting ....')
+        self.logger.info(f'cc connecting to {self.fpgaHost}....')
         self.runManager.newRun()
 
         # Initializing COBRA module
@@ -317,18 +312,20 @@ class CobraCoach():
             #        runManager=self.runManager, actor=self.actor)
             #else:    
             if self.actor is not None:
-                self.logger.info(f'MCS actor is given, try using MCS camera. simMode = {self.simMode}')
-                self.cam = camera.cameraFactory(name='mcs',doClear=True, runManager=self.runManager, actor=self.actor, cmd=self.cmd)
-
-                if self.simMode is True:
-                    self.logger.info(f'MCS actor is given, try using MCS camera in simulation mode')
-                    self.cam = camera.cameraFactory(name='mcs',doClear=True, 
-                    runManager=self.runManager, actor=self.actor, cmd=self.cmd, simulationPath=self.simDataPath)
+                if self.simMode is False:
+                    self.logger.info(f'MCS actor is given, try using mcsActor camera. simMode = {self.simMode}')
+                    self.cam = camera.cameraFactory(name='mcsActor',doClear=True, runManager=self.runManager,
+                                                    actor=self.actor, cmd=self.cmd)
+                else:
+                    self.logger.info(f'MCS actor is given, try using mcsActor camera in simulation mode')
+                    self.cam = camera.cameraFactory(name='mcsActor',doClear=True,
+                                                    runManager=self.runManager, actor=self.actor,
+                                                    cmd=self.cmd, simulationPath=self.simDataPath)
             else:
                 self.logger.info('MCS actor is not present, using RMOD camera')    
                 self.cam = camera.cameraFactory(name='rmod',doClear=True, runManager=self.runManager)
-        except:
-            self.logger.info('Problem when connecting to camera.')
+        except Exception as e:
+            self.logger.warn(f'Problem when connecting to camera: {e}')
             #self.cam = None
 
     def _getIndex(self, cobras):
@@ -361,8 +358,12 @@ class CobraCoach():
         Not at all convinced that we should return anything if no matching spot found.
 
         """
-        centroids, filename, bkgd = self.cam.expose(name)
 
+        cmd = self.actor.visitor.cmd
+        frameNum = self.actor.visitor.getNextFrameNum()
+        centroids, filename, bkgd = self.cam.expose(name,
+                                                    frameNum=frameNum,
+                                                    cmd=cmd)
         idx = self.visibleIdx
         if tolerance is not None:
             radii = ((self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance))[idx]
@@ -377,12 +378,15 @@ class CobraCoach():
             raise RuntimeError('len(guess) should be equal to the visible cobras or total cobras')
         else:
             centers = guess
+
+        # Or fetch mcs-based match table here.
         self.logger.info('Running object matching!')
         positions, indexMap = calculus.matchPositions(centroids, guess=centers, dist=radii)
+        self.logger.info(f'ncen={len(centroids)} npos={len(positions)} nguess={len(centers)}')
 
         return positions
 
-    def getCurrentPositions(self):
+    def getCurrentPositionsUNUSED(self):
         """
         expose and get current cobra positions
         """
@@ -486,18 +490,31 @@ class CobraCoach():
         if self.trajectoryMode:
             timeStep = self.trajectory.getTimeStep()
             if nSegments == 0:
-                thetaT, phiT = calculus.interpolateMoves(cIds, timeStep, self.cobraInfo['thetaAngle'][cIds], self.cobraInfo['phiAngle'][cIds], thetaSteps, phiSteps, thetaFast, phiFast, self.calibModel)
+                thetaT, phiT = calculus.interpolateMoves(cIds, timeStep,
+                                                         self.cobraInfo['thetaAngle'][cIds],
+                                                         self.cobraInfo['phiAngle'][cIds],
+                                                         thetaSteps, phiSteps, thetaFast, phiFast,
+                                                         self.calibModel)
             else:
-                thetaT, phiT = calculus.interpolateSegments(timeStep, self.cobraInfo['thetaAngle'][cIds], self.cobraInfo['phiAngle'][cIds], thetaSteps, phiSteps, thetaSpeeds, phiSpeeds)
+                thetaT, phiT = calculus.interpolateSegments(timeStep,
+                                                            self.cobraInfo['thetaAngle'][cIds],
+                                                            self.cobraInfo['phiAngle'][cIds],
+                                                            thetaSteps, phiSteps,
+                                                            thetaSpeeds, phiSpeeds)
             self.trajectory.addMovement(cIds, thetaT, phiT)
 
         if not self.trajectoryMode and self.cam.filePrefix == 'PFAC':
             self.cam.startRecord()
         if nSegments == 0:
-            self.pfi.moveSteps(cobras, thetaSteps, phiSteps, thetaFast=thetaFast, phiFast=phiFast, thetaOntimes=thetaOntimes, phiOntimes=phiOntimes, trajectoryMode=self.trajectoryMode)
+            self.pfi.moveSteps(cobras, thetaSteps, phiSteps,
+                               thetaFast=thetaFast, phiFast=phiFast,
+                               thetaOntimes=thetaOntimes, phiOntimes=phiOntimes,
+                               trajectoryMode=self.trajectoryMode)
         else:
             for n in range(nSegments):
-                self.pfi.moveSteps(cobras, thetaSteps[n], phiSteps[n], thetaOntimes=thetaOntimes[n], phiOntimes=phiOntimes[n], trajectoryMode=self.trajectoryMode)
+                self.pfi.moveSteps(cobras, thetaSteps[n], phiSteps[n],
+                                   thetaOntimes=thetaOntimes[n], phiOntimes=phiOntimes[n],
+                                   trajectoryMode=self.trajectoryMode)
         if not self.trajectoryMode and self.cam.filePrefix == 'PFAC':
             self.cam.stopRecord()
 
@@ -966,7 +983,8 @@ class CobraCoach():
                 if thetaCCW:
                     thetas = np.zeros(len(cobras))
                 else:
-                    thetas = (self.calibModel.tht1[cIds] - self.calibModel.tht0[cIds] + np.pi) % (np.pi*2) + np.pi
+                    thetas = ((self.calibModel.tht1[cIds] - self.calibModel.tht0[cIds] + np.pi)
+                              % (np.pi*2) + np.pi)
             else:
                 thetas = self.cobraInfo['thetaAngle'][cIds]
             if phiEnable:
@@ -989,13 +1007,15 @@ class CobraCoach():
                 thetas = (self.calibModel.tht1[cIds] - self.calibModel.tht0[cIds] + np.pi) % (np.pi*2) + np.pi
             self.cobraInfo['thetaAngle'][cIds] = thetas
             if self.mode == self.thetaMode and self.thetaInfoIsValid:
-                thetas2 = (np.angle(self.cobraInfo['position'] - self.thetaInfo['center']) - self.thetaInfo['ccwHome'])[cIds]
+                thetas2 = (np.angle(self.cobraInfo['position'] - self.thetaInfo['center'])
+                           - self.thetaInfo['ccwHome'])[cIds]
                 if thetaCCW:
                     self.thetaInfo['angle'][cIds] = (thetas2 + np.pi) % (np.pi*2) - np.pi
                     diff = self.thetaInfo['angle'][cIds]
                 else:
                     self.thetaInfo['angle'][cIds] = (thetas2 + np.pi) % (np.pi*2) + np.pi
-                    diff = calculus.diffAngle(self.thetaInfo['angle'], self.thetaInfo['cwHome'] - self.thetaInfo['ccwHome'])[cIds]
+                    diff = calculus.diffAngle(self.thetaInfo['angle'],
+                                              self.thetaInfo['cwHome'] - self.thetaInfo['ccwHome'])[cIds]
         else:
             thetas = self.cobraInfo['thetaAngle'][cIds]
 
@@ -1003,13 +1023,15 @@ class CobraCoach():
             phis = np.zeros(len(cobras))
             self.cobraInfo['phiAngle'][cIds] = phis
             if self.mode == self.phiMode and self.phiInfoIsValid:
-                diff = calculus.diffAngle(np.angle(self.cobraInfo['position'] - self.phiInfo['center']), self.phiInfo['ccwHome'])[cIds]
+                diff = calculus.diffAngle(np.angle(self.cobraInfo['position'] - self.phiInfo['center']),
+                                          self.phiInfo['ccwHome'])[cIds]
                 self.phiInfo['angle'][cIds] = diff
         else:
             phis = self.cobraInfo['phiAngle'][cIds]
 
         if self.mode == self.normalMode and thetaEnable and phiEnable:
-            diff = np.abs(self.cobraInfo['position'][cIds] - self.pfi.anglesToPositions(cobras, thetas, phis))
+            diff = np.abs(self.cobraInfo['position'][cIds] - self.pfi.anglesToPositions(cobras, thetas,
+                                                                                        phis))
 
         return diff
 
@@ -1256,14 +1278,13 @@ class CobraCoach():
             return None, None
 
     def roundTripForPhi(self,
-            steps=250,
-            totalSteps=5000,
-            repeat=1,
-            fast=False,
-            phiOnTime=None,
-            limitOnTime=0.08,
-            limitSteps=5000
-        ):
+                        steps=250,
+                        totalSteps=5000,
+                        repeat=1,
+                        fast=False,
+                        phiOnTime=None,
+                        limitOnTime=0.08,
+                        limitSteps=5000):
         """ move all phi arms from CCW to CW hard stops and then back, in steps and return the positions """
         if self.trajectoryMode:
             raise RuntimeError('roundTrip command not available in trajectoryMode mode!')
@@ -1364,7 +1385,8 @@ class CobraCoach():
 
             # reverse phi motor maps
             self.cam.resetStack(f'phiReverseStack{n}.fits')
-            phiRV[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiEnd{n}.fits', guess=centers[self.visibleIdx])
+            phiRV[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiEnd{n}.fits',
+                                                                          guess=centers[self.visibleIdx])
             self.cobraInfo['position'][self.visibleIdx] = phiRV[self.visibleIdx, n, 0]
 
             notdoneMask = np.zeros(len(phiRV), 'bool')
@@ -1372,7 +1394,8 @@ class CobraCoach():
             for k in range(iteration):
                 self.logger.info(f'{n+1}/{repeat} phi backward to {(k+1)*steps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], 0, -steps, phiFast=False)
-                phiRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'phiReverse{n}N{k}.fits', guess=centers[self.visibleIdx])
+                phiRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'phiReverse{n}N{k}.fits',
+                                                                                guess=centers[self.visibleIdx])
                 self.cobraInfo['position'][self.visibleIdx] = phiRV[self.visibleIdx, n, k+1]
                 doneMask, lastAngles = self.phiRVDone(phiRV[:,n,:], k)
                 if doneMask is not None:
@@ -1471,7 +1494,8 @@ class CobraCoach():
             for k in range(iteration):
                 self.logger.info(f'{n+1}/{repeat} theta forward to {(k+1)*steps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], steps, 0, thetaFast=False)
-                thetaFW[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaForward{n}N{k}.fits',tolerance=0.02)
+                thetaFW[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaForward{n}N{k}.fits',
+                                                                                  tolerance=0.02)
 
                 self.cobraInfo['position'][self.visibleIdx] = thetaFW[self.visibleIdx, n, k+1]
 
@@ -1506,7 +1530,8 @@ class CobraCoach():
             for k in range(iteration):
                 self.logger.info(f'{n+1}/{repeat} theta backward to {(k+1)*steps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], -steps, 0, thetaFast=False)
-                thetaRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaReverse{n}N{k}.fits',tolerance=0.02)
+                thetaRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaReverse{n}N{k}.fits',
+                                                                                  tolerance=0.02)
                 self.cobraInfo['position'][self.visibleIdx] = thetaRV[self.visibleIdx, n, k+1]
                 doneMask, lastAngles = self.thetaRVDone(thetaRV[:,n,:], k)
                 if doneMask is not None and not force:

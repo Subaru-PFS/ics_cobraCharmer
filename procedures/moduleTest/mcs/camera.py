@@ -11,6 +11,7 @@ import astropy.io.fits as pyfits
 
 from ics.cobraCharmer.utils import butler
 from ics.fpsActor import najaVenator
+reload(najaVenator)
 
 # Configure the default formatter and logger.
 logging.basicConfig(datefmt = "%Y-%m-%d %H:%M:%S", level=logging.DEBUG,
@@ -32,7 +33,8 @@ def whereAmI():
 
     return 'rmod'
 
-def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None, actor=None,cmd=None):
+def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None,
+                  actor=None, cmd=None):
     if doClear or simulationPath is not None:
         try:
             del cameraFactory.__camera
@@ -43,17 +45,24 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None
     except:
         if name is None:
             name = whereAmI()
-            
-        if name == 'mcs':
+
+        if name == 'mcsActor':
+            from . import mcsActorCam
+            reload(mcsActorCam)
+            if simulationPath is not None:
+                raise NotImplementedError("for mcsActorCam, you *must* use the mcsActor-side simulation.")
+            cameraFactory.__camera = mcsActorCam.McsActorCamera(actor=actor,
+                                                                cmd=cmd,runManager=runManager)
+        elif name == 'mcs':
             from . import mcsCam
             reload(mcsCam)
             cameraFactory.__camera = mcsCam.McsCamera(simulationPath=simulationPath,actor=actor,
-                                                        cmd=cmd,runManager=runManager)
+                                                      cmd=cmd,runManager=runManager)
         elif name == 'cit':
             from . import citCam
             reload(citCam)
             cameraFactory.__camera = citCam.CitCamera(simulationPath=simulationPath,
-                                                        runManager=runManager)
+                                                      runManager=runManager)
         elif name == 'asrd':
             from . import asrdCam
             reload(asrdCam)
@@ -92,9 +101,7 @@ class Camera(object):
         self.outputDir = runManager.outputDir
         self.sequenceNumberFilename = "nextSequenceNumber"
         self.resetStack(doStack=False)
-        self.cmd = None
-        if cmd is not None:
-            self.cmd=cmd
+        self.cmd = cmd
 
         if simulationPath is not None:
             simulationPath = pathlib.Path(simulationPath)
@@ -107,7 +114,7 @@ class Camera(object):
 
         self.runManager.newRun()
         self.imageDir = self.runManager.dataDir
-        self.outputDir = runManager.dataDir
+        self.outputDir = self.runManager.outputDir
         self.resetStack(doStack=doStack)
 
     def resetStack(self, doStack=False):
@@ -140,6 +147,7 @@ class Camera(object):
     def _readNextSimulatedImage(self):
         path, idx = self.simulationPath
         files = sorted(path.glob('*.fits'))
+        self.logger.info(f"simulation path={path}, nfiles={len(files)}")
 
         nextFile = files[idx]
         idx = idx+1
@@ -170,8 +178,8 @@ class Camera(object):
         #             'y':mcsData['centroidy'].values.astype('float')}
         
         centroids=np.rec.array([mcsData['centroidx'].values.astype('float'),
-              mcsData['centroidy'].values.astype('float')],
-              formats='float,float',names='x,y')
+                                mcsData['centroidy'].values.astype('float')],
+                               formats='float,float',names='x,y')
         return centroids
 
     def getObjects(self, im, expid, sigma=1.5, threshold=None):
@@ -219,11 +227,6 @@ class Camera(object):
         self.logger.debug(f'median={np.median(data_sub)} std={np.std(data_sub)} '
                           f'thresh={thresh} {len(objects)} objects')
 
-        #keep_w = self.trim(objects['x'], objects['y'])
-        #if len(keep_w) != len(objects):
-        #    self.logger.info(f'trimming {len(objects)} objects to {len(keep_w)}')
-        #objects = objects[keep_w]
-
         # Add exposure and spot IDs
         expids = np.zeros((len(objects)), dtype='U12')
         expids[:] = expid
@@ -237,7 +240,7 @@ class Camera(object):
 
         return objects, data_sub, bkg
 
-    def expose(self, name=None, exptime=None, doCentroid=True):
+    def expose(self, name=None, exptime=None, doCentroid=True, frameNum=None):
         """Take an exposure, usually measure centroids, and save the outputs.
 
         Args
@@ -251,6 +254,9 @@ class Camera(object):
 
         doCentroid: `bool`
           Whether to measure and save centroids.
+
+        frameNum : `int`
+          The visit+frame nmber for the file.
 
         Returns
         -------
@@ -285,15 +291,14 @@ class Camera(object):
                 self._camClose()
                 _ = self.cam
                 time.sleep(2)
-                im = self._camExpose(exptime)
+                im = self._camExpose(exptime, frameNum=frameNum)
 
             if self.dark is not None:
                 im -= self.dark
-        
-        
-        filename = self.saveImage(im, extraName=name)
+
+        filename = self.saveImage(im, extraName=name, frameNum=frameNum)
         self.logger.info(f'Saving image as filename {filename}')
-        
+
         if doCentroid:
             t0 = time.time()
             #objects, data_sub, bkgd = self.getObjects(im, filename.stem)
@@ -377,14 +382,14 @@ class Camera(object):
             stack += img
         except FileNotFoundError:
             stackFits = pyfits.open(stackPath, mode="append")
-            stackFits.append(pyfits.CompImageHDU(img, name='IMAGE', uint=True))
+            stackFits.append(pyfits.CompImageHDU(img.astype('f4'), name='IMAGE', uint=True))
 
         stackFits.flush()
         stackFits.close()
         del stackFits
 
-    def saveImage(self, img, cleanImg=None, extraName=None, doStack=True):
-        filename = self._getNextName()
+    def saveImage(self, img, cleanImg=None, extraName=None, doStack=True, frameNum=None):
+        filename = self._getNextName(frameNum=frameNum)
 
         hdus = pyfits.HDUList()
         hdus.append(pyfits.CompImageHDU(img, name='IMAGE', uint=True))

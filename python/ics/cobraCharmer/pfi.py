@@ -159,6 +159,21 @@ class PFI(object):
 
         return ret
 
+    def boardHk(self, fpgaBoard, updateModel=False):
+        """ Fetch housekeeping info for an FPGA (1-84) board."""
+        module = (fpgaBoard - 1)//2 + 1
+        board = (fpgaBoard -1)%2 + 1
+        cobras = self.allocateCobraBoard(module, board)
+        ret = func.HK(cobras, updateModel=(self.calibModel if updateModel else None),
+                      feedback=True)
+        err = ret[0]
+        if err:
+            self.logger.error(f'send HK command failed: {err}')
+        else:
+            self.logger.debug(f'send HK command succeeded')
+
+        return ret
+
     def setFreq(self, cobras=None, thetaFreq=None, phiFreq=None):
         """ Set COBRA motor frequency """
         if cobras is None:
