@@ -157,10 +157,18 @@ class Calculation():
 
         return pos, target
 
-    def extractPositions1(self, data, guess=None, tolerance=None):
+    def extractPositionsFromImage(self, data, arm=None, guess=None, tolerance=None):
         idx = self.visibleIdx
+        
+        if arm is None:
+            arm_radii = (self.calibModel.L1 + self.calibModel.L2)
+        if arm is 'phi':
+            arm_radii = self.calibModel.L2
+        if arm is 'theta':
+            arm_radii = self.calibModel.L1
+        
         if tolerance is not None:
-            radii = (self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance)
+            radii = arm_radii * (1 + tolerance)
         else:
             radii = None
 

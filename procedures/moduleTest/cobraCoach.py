@@ -335,7 +335,7 @@ class CobraCoach():
 
         return cIds
 
-    def exposeAndExtractPositions(self, name=None, guess=None, tolerance=None):
+    def exposeAndExtractPositions(self, name=None, arm=None, guess=None, tolerance=None):
         """ Take an exposure, measure centroids, match to cobras, save info.
 
         Args
@@ -365,8 +365,16 @@ class CobraCoach():
                                                     frameNum=frameNum,
                                                     cmd=cmd)
         idx = self.visibleIdx
+
+        if arm is None:
+            arm_radii = (self.calibModel.L1 + self.calibModel.L2)
+        if arm is 'phi':
+            arm_radii = self.calibModel.L2
+        if arm is 'theta':
+            arm_radii = self.calibModel.L1
+
         if tolerance is not None:
-            radii = ((self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance))[idx]
+            radii = (arm_radii * (1 + tolerance))[idx]
         else:
             radii = None
 
@@ -1330,7 +1338,7 @@ class CobraCoach():
             self.cam.resetStack(f'phiForwardStack{n}.fits')
 
             # forward phi motor maps
-            phiFW[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiBegin{n}.fits')
+            phiFW[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiBegin{n}.fits', arm='phi')
             self.cobraInfo['position'][self.visibleIdx] = phiFW[self.visibleIdx, n, 0]
 
             notdoneMask = np.zeros(len(phiFW), 'bool')
@@ -1339,7 +1347,7 @@ class CobraCoach():
                 self.logger.info(f'{n+1}/{repeat} phi forward to {(k+1)*steps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], 0, steps, phiFast=False)
                 phiFW[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'phiForward{n}N{k}.fits',
-                                                                                guess=phiFW[self.visibleIdx, n, k])
+                                                    arm='phi',guess=phiFW[self.visibleIdx, n, k],tolerance=0.1)
                 self.cobraInfo['position'][self.visibleIdx] = phiFW[self.visibleIdx, n, k+1]
                 doneMask, lastAngles = self.phiFWDone(phiFW[:,n,:], k)
                 if doneMask is not None:
@@ -1385,8 +1393,8 @@ class CobraCoach():
 
             # reverse phi motor maps
             self.cam.resetStack(f'phiReverseStack{n}.fits')
-            phiRV[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiEnd{n}.fits',
-                                                                          guess=centers[self.visibleIdx])
+            phiRV[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiEnd{n}.fits', arm='phi'
+                                                        guess=centers[self.visibleIdx],tolerance=0.1)
             self.cobraInfo['position'][self.visibleIdx] = phiRV[self.visibleIdx, n, 0]
 
             notdoneMask = np.zeros(len(phiRV), 'bool')
@@ -1394,8 +1402,8 @@ class CobraCoach():
             for k in range(iteration):
                 self.logger.info(f'{n+1}/{repeat} phi backward to {(k+1)*steps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], 0, -steps, phiFast=False)
-                phiRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'phiReverse{n}N{k}.fits',
-                                                                                guess=centers[self.visibleIdx])
+                phiRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'phiReverse{n}N{k}.fits', arm='phi'
+                                                            guess=centers[self.visibleIdx],tolerance=0.1)
                 self.cobraInfo['position'][self.visibleIdx] = phiRV[self.visibleIdx, n, k+1]
                 doneMask, lastAngles = self.phiRVDone(phiRV[:,n,:], k)
                 if doneMask is not None:
