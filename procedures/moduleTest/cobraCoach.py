@@ -1393,7 +1393,7 @@ class CobraCoach():
 
             # reverse phi motor maps
             self.cam.resetStack(f'phiReverseStack{n}.fits')
-            phiRV[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiEnd{n}.fits', arm='phi'
+            phiRV[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiEnd{n}.fits', arm='phi',
                                                         guess=centers[self.visibleIdx],tolerance=0.1)
             self.cobraInfo['position'][self.visibleIdx] = phiRV[self.visibleIdx, n, 0]
 
@@ -1402,7 +1402,7 @@ class CobraCoach():
             for k in range(iteration):
                 self.logger.info(f'{n+1}/{repeat} phi backward to {(k+1)*steps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], 0, -steps, phiFast=False)
-                phiRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'phiReverse{n}N{k}.fits', arm='phi'
+                phiRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'phiReverse{n}N{k}.fits', arm='phi',
                                                             guess=centers[self.visibleIdx],tolerance=0.1)
                 self.cobraInfo['position'][self.visibleIdx] = phiRV[self.visibleIdx, n, k+1]
                 doneMask, lastAngles = self.phiRVDone(phiRV[:,n,:], k)
