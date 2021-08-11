@@ -560,6 +560,13 @@ def matchPositions(objects, guess, dist=None):
 
     pos = np.zeros(len(guess), dtype=complex)
     for n, k in enumerate(target):
+            if k < 0:
+                # If the target failed to match, use last position (guess)
+                mpos[n] = guess[n]
+            else:
+                mpos[n] = measPos[k]
+    
+    for n, k in enumerate(target):
         if k >= 0:
             pos[n] = measPos[k]
 

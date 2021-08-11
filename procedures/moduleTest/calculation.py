@@ -184,7 +184,8 @@ class Calculation():
         mpos = np.zeros(len(idx), dtype=complex)
         for n, k in enumerate(target):
             if k < 0:
-                mpos[n] = self.calibModel.centers[idx[n]]
+                # If the target failed to match, use last position (guess)
+                mpos[n] = centers[idx[n]]
             else:
                 mpos[n] = pos[k]
 
