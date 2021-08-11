@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 import glob
-from astropy.io import fits
+import astropy.io.fits as pyfits
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -26,29 +26,39 @@ from bokeh.transform import linear_cmap
 from bokeh.palettes import Category20
 
 from ics.cobraCharmer import pfiDesign
+from ics.cobraCharmer import func
+import fnmatch
 
 
 class VisDianosticPlot(object):
 
-    def __init__(self, datapath, brokens=None, camSplit=26):
-        self.path = datapath
+    def __init__(self, runDir, arm=None):
         
-        self.camSplit = camSplit
-        self.brokens = []
+        
+        if arm is None:
+            raise Exception('Define the arm')
+        self.arm = arm
+        self.path = f'/data/MCS/{runDir}/'
+        xml = pathlib.Path(f'{self._findXML(self.path)[0]}')
+        des = pfiDesign.PFIDesign(xml)
+        self.calibModel = des
+        cobras = []
+        for i in des.findAllCobras():
+            c = func.Cobra(des.moduleIds[i],
+                        des.positionerIds[i])
+            cobras.append(c)
+        allCobras = np.array(cobras)
+        nCobras = len(allCobras)
 
-        if brokens is None:
-            self.brokens = []
-        else:
-            self.brokens = brokens
-     
-        self.visibles= [e for e in range(1,1198) if e not in brokens]
-        self.badIdx = np.array(brokens) - 1
-        self.goodIdx = np.array(self.visibles) - 1
+        goodNums = [i+1 for i,c in enumerate(allCobras) if
+                des.cobraIsGood(c.cobraNum, c.module)]
+        badNums = [e for e in range(1, nCobras+1) if e not in goodNums]
 
-        # two groups for two cameras
-        cam_split = self.camSplit
-        self.group1 = self.goodIdx[self.goodIdx <= cam_split]
-        self.group2 = self.goodIdx[self.goodIdx > cam_split]
+
+        self.goodIdx = np.array(goodNums, dtype='i4') - 1
+        self.badIdx = np.array(badNums, dtype='i4') - 1
+
+        self._loadCobraData(arm=arm)
 
     def __del__(self):
         del(self.fw)
@@ -58,43 +68,43 @@ class VisDianosticPlot(object):
         del(self.sf)
         del(self.sr)
 
+    def _findXML(self,path):
+        result = []
+        for root, dirs, files in os.walk(path):
+            for name in files:
+                if fnmatch.fnmatch(name, '*.xml'):
+                    result.append(os.path.join(root, name))
+        return result
+
+
     def _loadCobraData(self, arm=None) :
-        path = self.path
+        path = self.path+'data/'
         
-        if arm == 'phi':
-            self.centers = np.load(path + 'phiCenter.npy')
-            self.radius = np.load(path + 'phiRadius.npy')
-            self.fw = np.load(path + 'phiFW.npy')
-            self.rv = np.load(path + 'phiRV.npy')
-            self.af = np.load(path + 'phiAngFW.npy')
-            self.ar = np.load(path + 'phiAngRV.npy')
-            self.sf = np.load(path + 'phiSpeedFW.npy')
-            self.sr = np.load(path + 'phiSpeedRV.npy')
-            self.mf = np.load(path + 'phiMMFW.npy')
-            self.mr = np.load(path + 'phiMMRV.npy')
-            self.bad = np.load(path + 'bad.npy')
-            #self.mf2 = np.load(path + 'phiMMFW2.npy')
-            #self.mr2 = np.load(path + 'phiMMRV2.npy')
-            #self.bad2 = np.load(path + 'bad2.npy')
-
-        if arm == 'theta':
-            self.centers = np.load(path + 'thetaCenter.npy')
-            self.radius = np.load(path + 'thetaRadius.npy')
-            self.fw = np.load(path + 'thetaFW.npy')
-            self.rv = np.load(path + 'thetaRV.npy')
-            self.af = np.load(path + 'thetaAngFW.npy')
-            self.ar = np.load(path + 'thetaAngRV.npy')
-            self.sf = np.load(path + 'thetaSpeedFW.npy')
-            self.sr = np.load(path + 'thetaSpeedRV.npy')
-            self.mf = np.load(path + 'thetaMMFW.npy')
-            self.mr = np.load(path + 'thetaMMRV.npy')
-            self.bad = np.load(path + 'bad.npy')
-            #self.mf2 = np.load(path + 'thetaMMFW2.npy')
-            #self.mr2 = np.load(path + 'thetaMMRV2.npy')
-            #self.bad2 = np.load(path + 'bad2.npy')
-
         if arm is None:
             raise Exception('Define the arm')
+
+        fits= f'{path}{arm}ForwardStack0.fits'
+
+        f =pyfits.open(fits)
+        self.imgdata=f[1].data
+
+        self.centers = np.load(path + f'{arm}Center.npy')
+        self.radius = np.load(path + f'{arm}Radius.npy')
+        self.fw = np.load(path + f'{arm}FW.npy')
+        self.rv = np.load(path + f'{arm}RV.npy')
+        self.af = np.load(path + f'{arm}AngFW.npy')
+        self.ar = np.load(path + f'{arm}AngRV.npy')
+        self.sf = np.load(path + f'{arm}SpeedFW.npy')
+        self.sr = np.load(path + f'{arm}SpeedRV.npy')
+        self.mf = np.load(path + f'{arm}MMFW.npy')
+        self.mr = np.load(path + f'{arm}MMRV.npy')
+        self.badMM = np.load(path + 'badMotorMap.npy')
+        self.badrange = np.load(path + 'badRange.npy')
+        #self.mf2 = np.load(path + 'phiMMFW2.npy')
+        #self.mr2 = np.load(path + 'phiMMRV2.npy')
+        #self.bad2 = np.load(path + 'bad2.npy')        
+
+
 
     def visPlotGeometry(self, arm=None, pngfile=None):
         try:
@@ -133,44 +143,39 @@ class VisDianosticPlot(object):
         else:
             plt.show()
 
-    def visPlotFiberDot(self, arm = None):
-        try:
-            self.fw
-        except AttributeError:
-            self._loadCobraData(arm=arm)
+    def visPlotFiberDot(self, cobraIdx=None):
+
+        data = self.imgdata
+        m, s = np.mean(data), np.std(data)
+        fig, ax = plt.subplots(figsize=(10,10))
+        im = ax.imshow(data, interpolation='nearest', 
+                    cmap='gray', vmin=m-s, vmax=m+3*s, origin='lower')
         
-        if arm is None:
-            raise Exception('Define the arm')
+        if cobraIdx is None:
+            cobra = self.goodIdx
+        else:
+            cobra = cobraIdx
 
-        plt.figure(figsize=(10, 20))
-        plt.clf()
+        for idx in cobra:
+            c = plt.Circle((self.calibModel.centers[idx].real, self.calibModel.centers[idx].imag), 5, color='g', fill=False)
+            ax.add_artist(c)
 
-        plt.subplot(211)
-        ax = plt.gca()
-        ax.axis('equal')
 
-        for n in range(1):
-            for k in self.group1:
-                if k % 3 == 0:
-                    c = 'r'
-                    d = 'c'
-                elif k % 3 == 1:
-                    c = 'g'
-                    d = 'm'
-                else:
-                    c = 'b'
-                    d = 'y'
-                ax.plot(self.fw[k][n,0].real, self.fw[k][n,0].imag, c + 'o')
-                ax.plot(self.rv[k][n,0].real, self.rv[k][n,0].imag, d + 's')
-                ax.plot(self.fw[k][n,1:].real, self.fw[k][n,1:].imag, c + '.')
-                ax.plot(self.rv[k][n,1:].real, self.rv[k][n,1:].imag, d + '.')
+        for idx in cobra:
+            d = plt.Circle((self.centers[idx].real, self.centers[idx].imag), self.radius[idx], color='red', fill=False)
+            ax.add_artist(d)
 
-        plt.subplot(212)
-        ax = plt.gca()
-        ax.axis('equal')
+        # Plot DOT location
+        #for dotidx in range(2394):
+        #    e = plt.Circle((dotdf['x_dot'][dotidx], dotdf['y_dot'][dotidx]), dotdf['r_dot'][dotidx], 
+        #                color='blue', fill=False)
+            
+        #    ax.add_artist(e)
+            
+        #ax.scatter(centers[cobra].real,centers[cobra].imag,color='red')    
 
         for n in range(1):
-            for k in self.group2:
+            for k in cobra:
                 if k % 3 == 0:
                     c = 'r'
                     d = 'c'
