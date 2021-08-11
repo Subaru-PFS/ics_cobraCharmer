@@ -1084,11 +1084,25 @@ def convertXML2(newXml, homePhi=True):
     newPos[idx] = cc.exposeAndExtractPositions()
 
     # calculation tranformation
-    offset, scale, tilt, convert = cal.transform(oldPos[idx], newPos[idx])
+    #offset, scale, tilt, convert = cal.transform(oldPos[idx], newPos[idx])
 
+    afCoeff = cal.tranformAffine(oldPos[idx], newPos[idx])
+
+    offset = afCoeff[0, 2]+afCoeff[1, 2]*1j
+    scale = np.sqrt(afCoeff[0, 0]**2+afCoeff[0, 1]**2)
+    tilt = np.rad2deg(np.arctan2(afCoeff[1, 0]/np.sqrt(afCoeff[0, 0]**2+afCoeff[0, 1]**2),
+                                  afCoeff[1, 1]/np.sqrt(afCoeff[1, 0]**2+afCoeff[1, 1]**2)))
+
+    ori=np.array([oldPos[goodIdx].real,oldPos[goodIdx].imag]).T
+
+    afCor=cv2.transform(np.array([ori]),afCoeff)
+    newcenters= afCor[0,:,0]+afCor[0,:,1]*1j
+    
     old = cc.calibModel
     new = deepcopy(old)
-    new.centers[:] = convert(old.centers)
+    #new.centers[:] = convert(old.centers)
+    new.centers[:]=newcenters
+
     new.tht0[:] = (old.tht0 + tilt) % (2*np.pi)
     new.tht1[:] = (old.tht1 + tilt) % (2*np.pi)
     new.L1[:] = old.L1*scale

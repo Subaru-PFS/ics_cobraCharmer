@@ -223,6 +223,17 @@ def transform(origPoints, newPoints):
         return x * scale * np.exp(tilt * (1j)) + offset
     return offset, scale, tilt, tr
 
+
+def tranformAffine(origPoints, newPoints):
+    origPoints.real
+    
+    ori=np.array([origPoints.real,origPoints.imag]).T
+    new=np.array([newPoints.real,newPoints.imag]).T
+
+    afCoeff,inlier=cv2.estimateAffinePartial2D(np.array(ori), np.array(new))
+
+    return afCoeff
+
 def diffAngle(angle1, angle2):
     return (angle1 - angle2 + np.pi) % (np.pi*2) - np.pi
 
