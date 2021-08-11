@@ -27,11 +27,11 @@ mmTheta = None
 mmPhi = None
 
 
-def def findXML(path):
+def findXML(path):
     '''
     Returns the XML files in a directory
     '''
-    
+
     result = []
     for root, dirs, files in os.walk(path):
         for name in files:

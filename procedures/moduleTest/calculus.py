@@ -562,13 +562,13 @@ def matchPositions(objects, guess, dist=None):
     for n, k in enumerate(target):
             if k < 0:
                 # If the target failed to match, use last position (guess)
-                mpos[n] = guess[n]
+                pos[n] = guess[n]
             else:
-                mpos[n] = measPos[k]
+                pos[n] = measPos[k]
     
-    for n, k in enumerate(target):
-        if k >= 0:
-            pos[n] = measPos[k]
+    #for n, k in enumerate(target):
+    #    if k >= 0:
+    #        pos[n] = measPos[k]
 
     return pos, target
 
