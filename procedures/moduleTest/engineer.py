@@ -1068,7 +1068,7 @@ def convertXML1(newXml):
     old.createCalibrationFile(fn)
     return fn
 
-def convertXML2(newXml, homePhi=True):
+def convertXML2(newXml, homePhi=True, usePhiHome = False):
     """ update old XML to a new coordinate by taking 'phi homed' images
         assuming the shift of cobra bench is small
     """
@@ -1101,8 +1101,13 @@ def convertXML2(newXml, homePhi=True):
     old = cc.calibModel
     new = deepcopy(old)
     #new.centers[:] = convert(old.centers)
-    new.centers[:]=newcenters
-
+    
+    
+    if usePhiHome is False:
+        new.centers[:]=newcenters
+    else:
+        new.centers[:]=newPos
+        
     new.tht0[:] = (old.tht0 + tilt) % (2*np.pi)
     new.tht1[:] = (old.tht1 + tilt) % (2*np.pi)
     new.L1[:] = old.L1*scale
