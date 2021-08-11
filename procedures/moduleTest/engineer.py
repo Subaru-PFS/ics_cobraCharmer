@@ -26,6 +26,20 @@ cc = None
 mmTheta = None
 mmPhi = None
 
+
+def def findXML(path):
+    '''
+    Returns the XML files in a directory
+    '''
+    
+    result = []
+    for root, dirs, files in os.walk(path):
+        for name in files:
+            if fnmatch.fnmatch(name, '*.xml'):
+                result.append(os.path.join(root, name))
+    return result
+
+
 def setCobraCoach(cobraCoach):
     global cc
     cc = cobraCoach
@@ -1797,3 +1811,10 @@ def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0
     if toggleFlag:
         cc.trajectoryMode = False
     return cc.trajectory, moves
+
+
+def buildMotorMapFromRunId(arm=None, runDir=None):
+    '''
+        Build motor map from given runDir.   This is used when we need to re-calculate the  
+    '''
+    pass
