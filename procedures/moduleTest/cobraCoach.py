@@ -187,6 +187,8 @@ class CobraCoach():
         self.thetaScaling = np.full(self.nCobras, True)
         self.phiScaling = np.full(self.nCobras, True)
 
+
+
     def showStatus(self):
         """ show current cobra status """
         if self.mode == self.thetaMode:
