@@ -8,7 +8,7 @@ system here should be in F3C.
 """
 from importlib import reload
 import logging
-
+import pandas as pd
 import numpy as np
 import xml.etree.ElementTree as ElementTree
 from copy import deepcopy
@@ -93,6 +93,20 @@ class PFIDesign():
             self.moduleIds[i] = mod
 
         return mod
+
+    def _loadDotLocations(self):
+        """
+        Loading dot position together with FF.  To calibrate
+        """
+        ffDotDF=pd.read_csv(butler.configPathForFFDot())
+        dotDF = pd.read_csv(butler.configPathForDot())
+        
+        self.dotpos=dotDF['x_dot'].values+dotDF['y_dot'].values*1j
+        self.dotradii = dotDF['r_dot'].values
+        self.ffpos = ffDotDF['x_pixel'].values+ffDotDF['y_pixel'].values
+        
+        
+
 
     def _loadCobrasFromModelFile(self, fileName):
         """Loads the per-cobra structures from the given model file
@@ -295,6 +309,10 @@ class PFIDesign():
             self.negThtSteps = np.hstack((zeros, np.cumsum(self.F1Nm, axis=1)))
             self.posPhiSteps = np.hstack((zeros, np.cumsum(self.F2Pm, axis=1)))
             self.negPhiSteps = np.hstack((zeros, np.cumsum(self.F2Nm, axis=1)))
+        
+        # In the end, load dot location
+        self._loadDotLocations()
+
 
     def findAllCobras(self):
         return range(self.nCobras)
