@@ -95,6 +95,9 @@ class CobraCoach():
         self.actor = actor
         self.cmd = cmd
 
+        self.frameNum = None
+
+
     def loadModel(self, file=None, version=None, moduleVersion=None, camSplit=28):
         if file is not None:
             self.calibModel = pfiDesign.PFIDesign(file)
@@ -366,6 +369,10 @@ class CobraCoach():
         centroids, filename, bkgd = self.cam.expose(name,
                                                     frameNum=frameNum,
                                                     cmd=cmd)
+
+        self.frameNum = frameNum
+        self.logger.info(f'Exposure done and filename = {self.frameNum}')
+
         idx = self.visibleIdx
 
         if arm is None:
