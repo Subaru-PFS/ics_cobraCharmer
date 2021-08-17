@@ -225,7 +225,7 @@ def transform(origPoints, newPoints):
 
 
 def tranformAffine(origPoints, newPoints):
-    origPoints.real
+
     
     ori=np.array([origPoints.real,origPoints.imag]).T
     new=np.array([newPoints.real,newPoints.imag]).T
