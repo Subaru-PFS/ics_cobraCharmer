@@ -6,6 +6,8 @@ from copy import deepcopy
 import pathlib
 from procedures.moduleTest.speedModel import SpeedModel
 from procedures.moduleTest.trajectory import Trajectories
+import cv2
+
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
@@ -675,6 +677,8 @@ def makePhiMotorMaps(newXml, steps=250, totalSteps=5000, repeat=1, fast=False, p
     np.save(dataPath / 'phiAngFW', angF)
     np.save(dataPath / 'phiAngRV', angR)
     np.save(dataPath / 'badRange', np.where(bad)[0])
+    np.save(dataPath / 'dotlocation',cc.calibModel.dotpos)
+    np.save(dataPath / 'dotradii',cc.calibModel.dotradii)
 
     # update phi geometry
     cwHome = np.zeros(cc.nCobras)
@@ -1068,6 +1072,7 @@ def convertXML1(newXml):
     old.createCalibrationFile(fn)
     return fn
 
+
 def convertXML2(newXml, homePhi=True, usePhiHome = False):
     """ update old XML to a new coordinate by taking 'phi homed' images
         assuming the shift of cobra bench is small
@@ -1093,7 +1098,7 @@ def convertXML2(newXml, homePhi=True, usePhiHome = False):
     tilt = np.rad2deg(np.arctan2(afCoeff[1, 0]/np.sqrt(afCoeff[0, 0]**2+afCoeff[0, 1]**2),
                                   afCoeff[1, 1]/np.sqrt(afCoeff[1, 0]**2+afCoeff[1, 1]**2)))
 
-    ori=np.array([oldPos[goodIdx].real,oldPos[goodIdx].imag]).T
+    ori=np.array([oldPos.real,oldPos.imag]).T
 
     afCor=cv2.transform(np.array([ori]),afCoeff)
     newcenters= afCor[0,:,0]+afCor[0,:,1]*1j
