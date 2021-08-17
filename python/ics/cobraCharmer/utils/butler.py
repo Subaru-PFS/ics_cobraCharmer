@@ -149,7 +149,53 @@ def configPathForPfi(version=None, rootDir=None):
 
     return rootDir / fname
 
+def configPathForDot(version=None, rootDir=None):
+    """ Return the pathname for a dot config file.
 
+    Args
+    ----
+    version : str
+       An identifying string. If not set, the "latest" one.
+       PFI.yaml or $PFI_$version.yaml
+    rootDir : str/Path
+       If set, where to look for the config file.
+       By default $PFS_INSTDATA_DIR/data/pfi/
+
+    """
+
+    if rootDir is None:
+        instDataRoot = _instDataDir()
+        rootDir = instDataRoot / 'data' / 'pfi' / 'dot'
+
+    if version is None:
+        fname = 'dot_subaru_20210710_el90_rot+00_ave.csv'
+    
+
+    return rootDir / fname
+
+def configPathForFFDot(version=None, rootDir=None):
+    """ Return the pathname for a FF locatiopn file when dot is measured.
+
+    Args
+    ----
+    version : str
+       An identifying string. If not set, the "latest" one.
+       PFI.yaml or $PFI_$version.yaml
+    rootDir : str/Path
+       If set, where to look for the config file.
+       By default $PFS_INSTDATA_DIR/data/pfi/
+
+    """
+
+    if rootDir is None:
+        instDataRoot = _instDataDir()
+        rootDir = instDataRoot / 'data' / 'pfi' / 'dot'
+
+    if version is None:
+        fname = 'ff_subaru_20210710_el90_rot+00_ave.csv'
+    
+
+    return rootDir / fname
 def configPathForModule(module, version=None, rootDir=None):
     """ Return the pathname for a module config file.
 
