@@ -103,7 +103,7 @@ class PFIDesign():
         
         self.dotpos=dotDF['x_dot'].values+dotDF['y_dot'].values*1j
         self.dotradii = dotDF['r_dot'].values
-        self.ffpos = ffDotDF['x_pixel'].values+ffDotDF['y_pixel'].values
+        self.ffpos = ffDotDF['x_pixel'].values+ffDotDF['y_pixel'].values*1j
         
         
 
