@@ -28,11 +28,11 @@ from bokeh.palettes import Category20
 from ics.cobraCharmer import pfiDesign
 from ics.cobraCharmer import func
 import fnmatch
-
+from ics.fpsActor import fpsFunction as fpstool
 
 class VisDianosticPlot(object):
 
-    def __init__(self, runDir, arm=None):
+    def __init__(self, runDir, arm=None, datatype='MM'):
         
         
         if arm is None:
@@ -58,7 +58,8 @@ class VisDianosticPlot(object):
         self.goodIdx = np.array(goodNums, dtype='i4') - 1
         self.badIdx = np.array(badNums, dtype='i4') - 1
 
-        self._loadCobraData(arm=arm)
+        if datatype is 'MM':
+            self._loadCobraMMData(arm=arm)
 
     def __del__(self):
         del(self.fw)
@@ -77,7 +78,7 @@ class VisDianosticPlot(object):
         return result
 
 
-    def _loadCobraData(self, arm=None) :
+    def _loadCobraMMData(self, arm=None) :
         path = self.path+'data/'
         
         if arm is None:
@@ -104,6 +105,48 @@ class VisDianosticPlot(object):
         #self.mr2 = np.load(path + 'phiMMRV2.npy')
         #self.bad2 = np.load(path + 'bad2.npy')        
 
+    def visCreateNewPlot(self,title, xLabel, yLabel, size=(8, 8), 
+        aspectRatio="equal", **kwargs):
+
+
+        #plt.figure(figsize=size, facecolor="white", tight_layout=True, **kwargs)
+        fig, ax = plt.subplots(figsize=(10,10))
+        plt.title(title)
+        plt.xlabel(xLabel)
+        plt.ylabel(yLabel)
+        plt.show(block=False)
+
+        # Set the axes aspect ratio
+        ax = plt.gca()
+        ax.set_aspect(aspectRatio)
+    
+    def visSetAxesLimits(self, xLim, yLim):
+        """Sets the axes limits of an already initialized figure.
+        
+        Parameters
+        ----------
+        xLim: object
+            A numpy array with the x axis limits.
+        yLim: object
+            A numpy array with the y axis limits.
+        """
+        ax = plt.gca()
+        ax.set_xlim(xLim)
+        ax.set_ylim(yLim)
+    
+    def visPauseExecution(self):
+        """Pauses the general program execution to allow figure inspection.
+        
+        """
+        plt.show()
+
+
+    def visCobraLocation(self, moveRunDir, phiGeoRunDir=None, thetaGeoRunDir = None):
+
+        if phiGeoRunDir is not None:
+            
+            angleList=np.load(f'/data/MCS/{phiGeoRunDir}/output/phiOpenAngle.npy')
+                
 
 
     def visPlotGeometry(self, arm=None, pngfile=None):
@@ -143,11 +186,30 @@ class VisDianosticPlot(object):
         else:
             plt.show()
 
-    def visPlotFiberDot(self, cobraIdx=None):
+    def visDotLocation(self, FF=False):
+        
+        ax = plt.gca()
+
+        newDot, rDot, newFFpos =fpstool.alignDotOnImage(self.path,arm='theta')
+
+        # Plot DOT location
+        for dotidx in range(len(newDot)):
+            e = plt.Circle((newDot[dotidx].real, newDot[dotidx].imag), rDot[dotidx], 
+                        color='red', fill=True, alpha=0.5)
+            ax.add_artist(e)
+
+        if FF is True:
+            for i in range(len(newFFpos)):
+                c = plt.Circle((newFFpos[i].real, newFFpos[i].imag), 5, 
+                        color='red', fill=False, alpha=0.5)
+                ax.add_artist(c)
+
+    def visPlotFiberSpots(self, cobraIdx=None):
 
         data = self.imgdata
         m, s = np.mean(data), np.std(data)
-        fig, ax = plt.subplots(figsize=(10,10))
+        #fig, ax = plt.subplots(figsize=(10,10))
+        ax = plt.gca()
         im = ax.imshow(data, interpolation='nearest', 
                     cmap='gray', vmin=m-s, vmax=m+3*s, origin='lower')
         
@@ -164,15 +226,8 @@ class VisDianosticPlot(object):
         for idx in cobra:
             d = plt.Circle((self.centers[idx].real, self.centers[idx].imag), self.radius[idx], color='red', fill=False)
             ax.add_artist(d)
-
-        # Plot DOT location
-        #for dotidx in range(2394):
-        #    e = plt.Circle((dotdf['x_dot'][dotidx], dotdf['y_dot'][dotidx]), dotdf['r_dot'][dotidx], 
-        #                color='blue', fill=False)
-            
-        #    ax.add_artist(e)
-            
-        #ax.scatter(centers[cobra].real,centers[cobra].imag,color='red')    
+  
+        ax.scatter(self.centers[cobra].real,self.centers[cobra].imag,color='red')    
 
         for n in range(1):
             for k in cobra:
