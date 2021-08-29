@@ -1513,7 +1513,7 @@ class CobraCoach():
                 self.logger.info(f'{n+1}/{repeat} theta forward to {(k+1)*steps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], steps, 0, thetaFast=False)
                 thetaFW[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaForward{n}N{k}.fits',
-                                                                                  tolerance=0.02)
+                                                        arm='theta',guess=thetaFW[self.visibleIdx, n, k],tolerance=0.02)
 
                 self.cobraInfo['position'][self.visibleIdx] = thetaFW[self.visibleIdx, n, k+1]
 
@@ -1540,7 +1540,9 @@ class CobraCoach():
 
             # reverse theta motor maps
             self.cam.resetStack(f'thetaReverseStack{n}.fits')
-            thetaRV[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'thetaEnd{n}.fits')
+            thetaRV[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'thetaEnd{n}.fits',arm='theta',
+                                                    guess=thetaFW[self.visibleIdx, n, -1],tolerance=0.02)
+
             self.cobraInfo['position'][self.visibleIdx] = thetaRV[self.visibleIdx, n, 0]
 
             notdoneMask = np.zeros(self.nCobras, 'bool')
@@ -1549,7 +1551,8 @@ class CobraCoach():
                 self.logger.info(f'{n+1}/{repeat} theta backward to {(k+1)*steps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], -steps, 0, thetaFast=False)
                 thetaRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaReverse{n}N{k}.fits',
-                                                                                  tolerance=0.02)
+                                                    arm='theta',guess=thetaRV[self.visibleIdx, n, k],tolerance=0.02)
+                
                 self.cobraInfo['position'][self.visibleIdx] = thetaRV[self.visibleIdx, n, k+1]
                 doneMask, lastAngles = self.thetaRVDone(thetaRV[:,n,:], k)
                 if doneMask is not None and not force:
