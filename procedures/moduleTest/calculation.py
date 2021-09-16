@@ -57,6 +57,10 @@ class Calculation():
             brokens = []
         if bads is None:
             bads = brokens
+        
+        
+        
+        
         visibles = [e for e in range(1, len(self.calibModel.centers)+1) if e not in brokens]
         usables = [e for e in range(1, len(self.calibModel.centers)+1) if e not in bads]
         self.badIdx = np.array(bads, dtype=int) - 1
@@ -166,9 +170,9 @@ class Calculation():
             arm_radii = self.calibModel.L2
         if arm is 'theta':
             arm_radii = self.calibModel.L1
-        
+
         if tolerance is not None:
-            radii = arm_radii * (1 + tolerance)
+            radii = (arm_radii * (1 + tolerance))[idx]
         else:
             radii = None
 
@@ -179,7 +183,10 @@ class Calculation():
 
         ext = sep.extract(data.astype(float), 200)
         pos = np.array(ext['x'] + ext['y']*(1j))
-        target = lazyIdentification(centers, pos, radii=radii)
+        
+        # When doing the matching, always looking for spots close to center.
+        #target = lazyIdentification(self.calibModel.centers[idx], pos, radii=radii)
+        target = lazyIdentification(centers[idx], pos, radii=radii)
 
         mpos = np.zeros(len(idx), dtype=complex)
         for n, k in enumerate(target):
