@@ -91,7 +91,7 @@ class Camera(object):
 
         self._cam = None
         self.dark = None
-        self.exptime = 0.5
+        self.exptime = 0.8
 
         if runManager is None:
             runManager = butler.RunTree()

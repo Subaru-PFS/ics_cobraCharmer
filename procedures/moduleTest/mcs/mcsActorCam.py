@@ -88,7 +88,7 @@ class McsActorCamera(camera.Camera):
     def trim(self, x, y):
         raise NotImplementedError("trimming would be done on the mcsActor side")
 
-    def expose(self, name=None, exptime=0.3, doCentroid=True, frameNum=None, cmd=None):
+    def expose(self, name=None, exptime=0.8, doCentroid=True, frameNum=None, cmd=None):
         """Take an exposure, usually measure centroids, and save the outputs.
 
         Args
