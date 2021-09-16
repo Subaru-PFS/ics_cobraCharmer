@@ -99,7 +99,7 @@ class PFIDesign():
         Loading dot position together with FF.  To calibrate
         """
         ffDotDF=pd.read_csv(butler.configPathForFFDot())
-        dotDF = pd.read_csv(butler.configPathForDot())
+        dotDF = pd.read_csv(butler.configPathForDot(version='mcs'))
         
         self.dotpos=dotDF['x_dot'].values+dotDF['y_dot'].values*1j
         self.dotradii = dotDF['r_dot'].values
@@ -311,7 +311,7 @@ class PFIDesign():
             self.negPhiSteps = np.hstack((zeros, np.cumsum(self.F2Nm, axis=1)))
         
         # In the end, load dot location
-        self._loadDotLocations()
+        #self._loadDotLocations()
 
 
     def findAllCobras(self):

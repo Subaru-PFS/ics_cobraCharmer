@@ -529,7 +529,7 @@ def convergenceTest(cIds, runs=8,
 
 def makeThetaMotorMaps(newXml, steps=500, totalSteps=10000, repeat=1, fast=False, thetaOnTime=None,
                        limitOnTime=0.08, limitSteps=10000, updateGeometry=False, phiRunDir=None,
-                       delta=np.deg2rad(5.0), force=True):
+                       delta=np.deg2rad(5.0), force=False):
     """
     generate theta motor maps, it accepts custom thetaOnTIme parameter.
     it assumes that theta arms already point to the outward direction and phi arms inwards,
