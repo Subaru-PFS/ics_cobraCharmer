@@ -1638,7 +1638,8 @@ def moveToSafePosition(cIds, tolerance=0.2, tries=10, homed=True, newDir=False, 
     thetas = thetas % (np.pi*2)
 
     cc.pfi.resetMotorScaling()
-    dataPath, thetas, phis, moves = moveThetaPhi(cIds, thetas, np.pi/3, False, False, tolerance, tries, homed, newDir, True, True, threshold, thetaMargin)
+    dataPath, thetas, phis, moves = moveThetaPhi(cIds, thetas, np.pi/3, 
+        False, False, tolerance, tries, homed, newDir, True, True, threshold, thetaMargin)
     
     # Define safe location to be phi = 80-degree outward
     #dataPath, thetas, phis, moves = moveThetaPhi(cIds, thetas, np.pi*(4/9), False, False, tolerance, tries, homed, newDir, True, True, threshold, thetaMargin)

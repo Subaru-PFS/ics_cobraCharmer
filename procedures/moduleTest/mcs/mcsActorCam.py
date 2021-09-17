@@ -29,7 +29,7 @@ class McsActorCamera(camera.Camera):
             return None
 
     def _camExpose(self, exptime=None, frameNum=None, _takeDark=False,
-                   doCentroid=True, cmd=None):
+                   doCentroid=True, doFibreID=True, cmd=None):
         """Actually arrange for an mcsActor exposure.
 
         Args:
@@ -53,9 +53,10 @@ class McsActorCamera(camera.Camera):
             frameArg = ""
         expType = "dark" if _takeDark else "object"
         doCentroidArg = "doCentroid" if doCentroid else ""
+        doFiberIDArg = "doFibreID" if doFibreID else ""
 
         t1=time.time()
-        cmdString = f"expose {expType} expTime={exptime:0.2f} {frameArg} {doCentroidArg}"
+        cmdString = f"expose {expType} expTime={exptime:0.2f} {frameArg} {doCentroidArg} {doFiberIDArg}"
         self.logger.info(f'calling mcs {cmdString} with cmd={cmd} from {threading.current_thread()}')
         cmdVar = self.actor.cmdr.call(actor='mcs', cmdStr=cmdString,
                                       forUserCmd=cmd, timeLim=exptime+30)

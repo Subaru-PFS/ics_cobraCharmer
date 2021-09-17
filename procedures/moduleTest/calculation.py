@@ -3,6 +3,8 @@ import sep
 from ics.cobraCharmer import pfiDesign
 import os
 import sys
+from ics.cobraCharmer import func
+
 
 binSize = np.deg2rad(3.6)
 regions = 112
@@ -52,21 +54,52 @@ class Calculation():
         self.camSplit = camSplit
 
     def setBrokenCobras(self, brokens=None, bads=None):
+        
+        cobras = []
+        for i in self.calibModel.findAllCobras():
+            c = func.Cobra(self.calibModel.moduleIds[i],
+                           self.calibModel.positionerIds[i])
+            cobras.append(c)
+        self.allCobras = np.array(cobras)
+        self.nCobras = len(self.allCobras)
+
+        brokens = [i+1 for i,c in enumerate(self.allCobras) if
+                   self.calibModel.fiberIsBroken(c.cobraNum, c.module)]
+        visibles = [e for e in range(1, self.nCobras+1) if e not in brokens]
+        
+        self.invisibleIdx = np.array(brokens, dtype='i4') - 1
+        self.visibleIdx = np.array(visibles, dtype='i4') - 1
+        self.invisibleCobras = self.allCobras[self.invisibleIdx]
+        self.visibleCobras = self.allCobras[self.visibleIdx]
+
+        goodNums = [i+1 for i,c in enumerate(self.allCobras) if
+                   self.calibModel.cobraIsGood(c.cobraNum, c.module)]
+        badNums = [e for e in range(1, self.nCobras+1) if e not in goodNums]
+        
+
+        self.goodIdx = np.array(goodNums, dtype='i4') - 1
+        self.badIdx = np.array(badNums, dtype='i4') - 1
+        self.goodCobras = self.allCobras[self.goodIdx]
+        self.badCobras = self.allCobras[self.badIdx]
+
+
+
+        
         # define the broken/visible cobras, good/bad means broken/visible here
-        if brokens is None:
-            brokens = []
-        if bads is None:
-            bads = brokens
+        # if brokens is None:
+        #     brokens = []
+        # if bads is None:
+        #     bads = brokens
         
         
         
         
-        visibles = [e for e in range(1, len(self.calibModel.centers)+1) if e not in brokens]
-        usables = [e for e in range(1, len(self.calibModel.centers)+1) if e not in bads]
-        self.badIdx = np.array(bads, dtype=int) - 1
-        self.goodIdx = np.array(usables, dtype=int) - 1
-        self.invisibleIdx = np.array(brokens, dtype=int) - 1
-        self.visibleIdx = np.array(visibles, dtype=int) - 1
+        # visibles = [e for e in range(1, len(self.calibModel.centers)+1) if e not in brokens]
+        # usables = [e for e in range(1, len(self.calibModel.centers)+1) if e not in bads]
+        # self.badIdx = np.array(bads, dtype=int) - 1
+        # self.goodIdx = np.array(usables, dtype=int) - 1
+        # self.invisibleIdx = np.array(brokens, dtype=int) - 1
+        # self.visibleIdx = np.array(visibles, dtype=int) - 1
 
     def extractPositions(self, data1, data2=None, guess=None, tolerance=None):
         if data2 is None:
@@ -179,20 +212,30 @@ class Calculation():
         if guess is None:
             centers = self.calibModel.centers[idx]
         else:
-            centers = guess[:len(idx)]
+            centers = guess
 
-        ext = sep.extract(data.astype(float), 200)
-        pos = np.array(ext['x'] + ext['y']*(1j))
         
+        bkg = sep.Background(data.astype(float), bw=64, bh=64, fw=3, fh=3)
+        bkg_image = bkg.back()
+
+        data_sub = data - bkg
+
+        #sigma = np.std(data_sub)
+        ext = sep.extract(data_sub.astype(float), 20 , err=bkg.globalrms, minarea=1)
+        
+        #ext = sep.extract(data.astype(float), 500)
+        
+        pos = np.array(ext['x'] + ext['y']*(1j))
+
         # When doing the matching, always looking for spots close to center.
         #target = lazyIdentification(self.calibModel.centers[idx], pos, radii=radii)
-        target = lazyIdentification(centers[idx], pos, radii=radii)
+        target = lazyIdentification(centers, pos, radii=radii)
 
         mpos = np.zeros(len(idx), dtype=complex)
         for n, k in enumerate(target):
             if k < 0:
                 # If the target failed to match, use last position (guess)
-                mpos[n] = centers[idx[n]]
+                mpos[n] = centers[n]
             else:
                 mpos[n] = pos[k]
 
@@ -275,6 +318,25 @@ class Calculation():
         thetaRadius = np.zeros(len(self.calibModel.centers), dtype=float)
         thetaAngFW = np.zeros(thetaFW.shape, dtype=float)
         thetaAngRV = np.zeros(thetaFW.shape, dtype=float)
+
+        # Clean data
+        for c in range(2394):
+            x, y, r = circle_fitting(thetaFW[c,0,:])
+            rpoint = np.abs(thetaFW[c,0,:]-(x+y*1j))
+            std=np.std(rpoint)
+            for i in range(len(thetaFW[c,0,:])):
+                if rpoint[i] < 0.5*r:
+                    thetaFW[c,0,i]=thetaFW[c,0,i-1]
+            for i in range(len(thetaFW[c,0,:])):
+                if rpoint[i] < 0.5*r:
+                    thetaFW[c,0,i]=thetaFW[c,0,i-1]
+            
+            for i in range(len(thetaRV[c,0,:])):
+                if rpoint[i] < 0.5*r:
+                    thetaRV[c,0,i]=thetaRV[c,0,i-1]
+            for i in range(len(thetaRV[c,0,:])):
+                if rpoint[i] < 0.5*r:
+                    thetaRV[c,0,i]=thetaRV[c,0,i-1]
 
         # measure centers
         for c in self.goodIdx:
