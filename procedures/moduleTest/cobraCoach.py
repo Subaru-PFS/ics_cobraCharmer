@@ -340,7 +340,8 @@ class CobraCoach():
 
         return cIds
 
-    def exposeAndExtractPositions(self, name=None, arm=None, guess=None, tolerance=None):
+    def exposeAndExtractPositions(self, name=None, arm=None, guess=None, tolerance=None,
+                                  exptime=None):
         """ Take an exposure, measure centroids, match to cobras, save info.
 
         Args
@@ -351,6 +352,8 @@ class CobraCoach():
            Where to center searches. By default uses the cobra center.
         tolerance : `float`
            Additional factor to scale search region by. 1 = cobra radius (phi+theta)
+        exptime : `float`
+           What exposure time to use.
 
         Returns
         -------
@@ -367,6 +370,7 @@ class CobraCoach():
         cmd = self.actor.visitor.cmd
         frameNum = self.actor.visitor.getNextFrameNum()
         centroids, filename, bkgd = self.cam.expose(name,
+                                                    exptime=exptime,
                                                     frameNum=frameNum,
                                                     cmd=cmd)
 
