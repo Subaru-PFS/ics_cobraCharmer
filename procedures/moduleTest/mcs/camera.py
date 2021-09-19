@@ -173,12 +173,14 @@ class Camera(object):
     def getPositionsForFrame(self, frameId):
         self.nv = najaVenator.NajaVenator()
         mcsData = self.nv.readCentroid(frameId)
+
+        df=mcsData.loc[mcsData['fiberId'] > 0]
         self.logger.info(f'mcs data {mcsData.shape[0]}')
         #centroids = {'x':mcsData['centroidx'].values.astype('float'),
         #             'y':mcsData['centroidy'].values.astype('float')}
         
-        centroids=np.rec.array([mcsData['centroidx'].values.astype('float'),
-                                mcsData['centroidy'].values.astype('float')],
+        centroids=np.rec.array([df['centroidx'].values.astype('float'),
+                                df['centroidy'].values.astype('float')],
                                formats='float,float',names='x,y')
         return centroids
 
