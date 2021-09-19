@@ -18,7 +18,7 @@ def lazyIdentification(centers, spots, radii=None):
         dist = np.absolute(spots - centers[i])
         j = np.argmin(dist)
         if radii is not None and np.absolute(centers[i] - spots[j]) > radii[i]:
-            ans[i] = -1
+            ans[i] = -2
         else:
             ans[i] = j
     return ans
