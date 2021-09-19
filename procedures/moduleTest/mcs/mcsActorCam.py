@@ -56,7 +56,7 @@ class McsActorCamera(camera.Camera):
         doFiberIDArg = "doFibreID" if doFibreID else ""
 
         t1=time.time()
-        cmdString = f"expose {expType} expTime={exptime:0.2f} {frameArg} {doCentroidArg} {doFiberIDArg}"
+        cmdString = f"expose {expType} expTime={exptime:0.2f} {frameArg} {doCentroidArg} {doFiberIDArg} flipImage"
         self.logger.info(f'calling mcs {cmdString} with cmd={cmd} from {threading.current_thread()}')
         cmdVar = self.actor.cmdr.call(actor='mcs', cmdStr=cmdString,
                                       forUserCmd=cmd, timeLim=exptime+30)
