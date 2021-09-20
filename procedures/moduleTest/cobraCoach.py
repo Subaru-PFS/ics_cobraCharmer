@@ -15,6 +15,8 @@ import ics.cobraCharmer.pfiDesign as pfiDesign
 from ics.cobraCharmer import func
 from ics.cobraCharmer.utils import butler
 
+from opdb import opdb
+
 class CobraCoach():
     nCobrasPerModule = 57
     nModules = 42
@@ -340,8 +342,8 @@ class CobraCoach():
 
         return cIds
 
-    def exposeAndExtractPositions(self, name=None, arm=None, guess=None, tolerance=None,
-                                  exptime=None):
+    def exposeAndExtractPositions(self, name=None, arm=None, guess=None, tolerance=None, 
+                                  exptime=None, dbMatch = True):
         """ Take an exposure, measure centroids, match to cobras, save info.
 
         Args
@@ -377,33 +379,50 @@ class CobraCoach():
         self.frameNum = frameNum
         self.logger.info(f'Exposure done and filename = {self.frameNum}')
 
-        idx = self.visibleIdx
 
-        if arm is None:
-            arm_radii = (self.calibModel.L1 + self.calibModel.L2)
-        if arm is 'phi':
-            arm_radii = self.calibModel.L2
-        if arm is 'theta':
-            arm_radii = self.calibModel.L1
+        if dbMatch is 'True':
+            '''
+                We extract matchin table from databse instead of calling matching sequence.
+            '''
+            db=opdb.OpDB(hostname='pfsa-db01', port=5432,
+                   dbname='opdb',
+                   username='pfs')
+            match = db.bulkSelect('cobra_match','select * from cobra_match where '
+                      'mcs_frame_id = {frameNum}')
+            
 
-        if tolerance is not None:
-            radii = (arm_radii * (1 + tolerance))[idx]
+            positions = match['pfi_center_x_mm'].values+match['pfi_center_x_mm'].values*(1j)
+            
+            self.logger.info(f'Returing result from matching table ncen={len(positions)} ')
+            
         else:
-            radii = None
+            idx = self.visibleIdx
 
-        if guess is None:
-            centers = self.calibModel.centers[idx]
-        elif len(guess) == self.nCobras:
-            centers = guess[idx]
-        elif len(guess) != len(idx):
-            raise RuntimeError('len(guess) should be equal to the visible cobras or total cobras')
-        else:
-            centers = guess
+            if arm is None:
+                arm_radii = (self.calibModel.L1 + self.calibModel.L2)
+            if arm is 'phi':
+                arm_radii = self.calibModel.L2
+            if arm is 'theta':
+                arm_radii = self.calibModel.L1
 
-        # Or fetch mcs-based match table here.
-        self.logger.info('Running object matching!')
-        positions, indexMap = calculus.matchPositions(centroids, guess=centers, dist=radii)
-        self.logger.info(f'ncen={len(centroids)} npos={len(positions)} nguess={len(centers)}')
+            if tolerance is not None:
+                radii = (arm_radii * (1 + tolerance))[idx]
+            else:
+                radii = None
+
+            if guess is None:
+                centers = self.calibModel.centers[idx]
+            elif len(guess) == self.nCobras:
+                centers = guess[idx]
+            elif len(guess) != len(idx):
+                raise RuntimeError('len(guess) should be equal to the visible cobras or total cobras')
+            else:
+                centers = guess
+
+            # Or fetch mcs-based match table here.
+            self.logger.info('Running object matching!')
+            positions, indexMap = calculus.matchPositions(centroids, guess=centers, dist=radii)
+            self.logger.info(f'ncen={len(centroids)} npos={len(positions)} nguess={len(centers)}')
 
         return positions
 
@@ -570,7 +589,7 @@ class CobraCoach():
             pos[self.visibleIdx] = targets[self.visibleIdx]
         else:
             pos[self.visibleIdx] = self.exposeAndExtractPositions(guess=targets[self.visibleIdx])
-
+            np.save('/tmp/cobraCharmer_pos',pos)
         # update status
         thetas, phis, flags = self.pfi.positionsToAngles(self.allCobras, pos)
         for c_i in range(len(cobras)):
