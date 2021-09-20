@@ -35,7 +35,7 @@ class VisDianosticPlot(object):
     def __init__(self, runDir, arm=None, datatype='MM'):
         
         
-        if arm is None:
+        if arm == None:
             raise Exception('Define the arm')
         self.arm = arm
         self.path = f'/data/MCS/{runDir}/'
@@ -84,10 +84,15 @@ class VisDianosticPlot(object):
         if arm is None:
             raise Exception('Define the arm')
 
-        fits= f'{path}{arm}ForwardStack0.fits'
+        fwdFitsFile= f'{path}{arm}ForwardStack0.fits'
+        revFitsFile= f'{path}{arm}ReverseStack0.fits'
 
-        f =pyfits.open(fits)
-        self.imgdata=f[1].data
+        fwdImage = pyfits.open(fwdFitsFile)
+        self.fwdStack=fwdImage[1].data
+
+        revImage = pyfits.open(revFitsFile)
+        self.revStack=revImage[1].data
+
 
         self.centers = np.load(path + f'{arm}Center.npy')
         self.radius = np.load(path + f'{arm}Radius.npy')
@@ -104,7 +109,6 @@ class VisDianosticPlot(object):
         #self.mf2 = np.load(path + 'phiMMFW2.npy')
         #self.mr2 = np.load(path + 'phiMMRV2.npy')
         #self.bad2 = np.load(path + 'bad2.npy')        
-
     def visCreateNewPlot(self,title, xLabel, yLabel, size=(8, 8), 
         aspectRatio="equal", **kwargs):
 
@@ -134,6 +138,26 @@ class VisDianosticPlot(object):
         ax.set_xlim(xLim)
         ax.set_ylim(yLim)
     
+    def visGeometryFromXML(self, newXml, radius=None):
+        des = pfiDesign.PFIDesign(newXml)
+        
+        ax = plt.gca()
+
+        ax.plot(des.centers.real, des.centers.imag,'r.')
+        for idx in range(10):
+            ax.text(des.centers[idx].real, des.centers[idx].imag,idx)
+
+        for idx in range(798,808):
+            ax.text(des.centers[idx].real, des.centers[idx].imag,idx)
+
+        for idx in range(1596,1606):
+            ax.text(des.centers[idx].real, des.centers[idx].imag,idx)
+
+        if radius is 'L1':
+            pass
+            
+
+
     def visPauseExecution(self):
         """Pauses the general program execution to allow figure inspection.
         
@@ -247,53 +271,19 @@ class VisDianosticPlot(object):
 
         plt.show()
     
-    def visStackedImage(self, arm = None, repeat=1):
-        try:
-            self.centers
-        except AttributeError:
-            self._loadCobraData(arm=arm)
-       
-        if arm is None:
-            raise Exception('Define the arm')
+    def visStackedImage(self, direction='fwd', flip=False):
+        if direction is 'fwd':
+            data = self.fwdStack
+        else:
+            data = self.fwdStack
 
-        for n in range(repeat):
-            cam1_list = glob.glob(self.path+f'/{arm}1*Stack{n}.fits.gz')
-            cam1_list.sort() 
-            cam2_list = glob.glob(self.path+f'/{arm}2*Stack{n}.fits.gz')
-            cam2_list.sort()
-
-            cam1_list.extend(cam2_list)
-            a = 1000.0
-            fig=plt.figure(figsize=(9, 7))
-            columns = 1
-            rows = len(cam1_list)
-            i=0
-            ax = []
-            
-            for f in cam1_list:
-                hdu = fits.open(f)
-                #xmax = np.max(self.centers[self.group1].real).astype('int')+200
-                #xmin = np.min(self.centers[self.group1].real).astype('int')-200
-                ymin = np.min(self.centers[self.group1].imag).astype('int')-150
-                ymax = np.max(self.centers[self.group1].imag).astype('int')+150
-
-                #print(xmax,xmin)
-                #plt.subplots_adjust(hspace = .3)
-                image = np.log10(a*hdu[0].data+1)/np.log10(a)
-                basename = os.path.basename(f)
-                ax.append( fig.add_subplot(rows, columns, i+1) )
-                
-                if i < len(cam1_list)-1:
-                    ax[-1].get_xaxis().set_ticks([])
-                
-                ax[-1].set_title(basename, fontsize = 10)
-                #ax[-1].set_ylim(0., 1.)
-                plt.imshow(image[ymin:ymax:,:],cmap='gray')
-                i=i+1
-            plt.tight_layout()    
-            plt.show()
-
-
+        if flip is True:
+            image=(np.flip(data).T).copy(order='C')
+        
+        m, s = np.mean(image), np.std(data)
+        ax = plt.gca()
+        im = ax.imshow(image, interpolation='nearest', 
+                    cmap='gray', vmin=m-s, vmax=m+3*s, origin='lower')
     
     def visCobraMotorMap(self, stepsize=50, figPath=None, arm=None, pdffile=None, debug=False):
         try:
@@ -311,7 +301,7 @@ class VisDianosticPlot(object):
 
 
         for fiber in self.goodIdx:
-            if arm is 'phi':
+            if arm == 'phi':
                 ymax = 0.15
                 ymin = -0.15
             else:
@@ -362,7 +352,7 @@ class VisDianosticPlot(object):
             #print(np.max(np.rad2deg(self.mf[c])),
             #np.max(np.rad2deg(self.mr[c])),ymax,ymin)
             ax.set_ylim([ymin,ymax])
-            if arm is 'phi':
+            if arm == 'phi':
                 ax.set_xlim([0,200])
             else:
                 ax.set_xlim([0,400])
@@ -505,7 +495,7 @@ class VisDianosticPlot(object):
 
     def visConverge(self, figPath = None, arm = 'phi', runs = 50, margin = 15, montage=None, pdffile=None):
         
-        if arm is 'phi':
+        if arm == 'phi':
             phiPath = self.path
             moveData = np.load(phiPath+'phiData.npy')
             angleLimit = 180
@@ -600,7 +590,7 @@ class VisDianosticPlot(object):
             #if np.max(snr_avg) < 0.95:
                 #print(f'Fiber {fiberIdx+1} SNR {np.max(snr_avg)}')
 
-            if arm is 'phi':
+            if arm == 'phi':
                 vax.set_ylim([-10,200])
                 hax.set_ylim([-10,200])
                 sax.set_ylim([0.5,1.20])
@@ -639,7 +629,7 @@ class VisDianosticPlot(object):
     def visModuleSNR(self, figPath = None, arm = 'phi', runs = 50, 
         margin = 15, pdffile=None):
 
-        if arm is 'phi':
+        if arm == 'phi':
             phiPath = self.path
             moveData = np.load(phiPath+'phiData.npy')
             angleLimit = 180
@@ -761,7 +751,7 @@ class VisDianosticPlot(object):
         #badIdx = np.array(brokens) - 1
         #goodIdx = np.array([e for e in range(57) if e not in badIdx])
         
-        if arm is 'phi':
+        if arm == 'phi':
             phiPath = self.path
             moveData = np.load(phiPath+'phiData.npy')
             angleLimit = 180
@@ -821,7 +811,7 @@ class VisDianosticPlot(object):
             for xml in xmlList:
                 model = pfiDesign.PFIDesign(pathlib.Path(xml))
 
-                if arm is 'phi':
+                if arm == 'phi':
                     slowFWmm = np.rad2deg(model.angularSteps[i]/model.S2Pm[i])
                     slowRVmm = np.rad2deg(model.angularSteps[i]/model.S2Nm[i])
                     fastFWmm = np.rad2deg(model.angularSteps[i]/model.F2Pm[i])
@@ -843,7 +833,7 @@ class VisDianosticPlot(object):
 
             ax.set_title(f'Fiber {arm} #{i+1}')
             ax.legend()
-            if arm is 'phi':
+            if arm == 'phi':
                 ax.set_xlim([0,200])
                 if fast is 'False':
                     ax.set_ylim([-0.15,0.15])
@@ -886,7 +876,7 @@ class VisDianosticPlot(object):
             ax2 = plt.subplot(2, 1, 2)
           
             m = 0
-            if arm is 'phi':
+            if arm == 'phi':
                 baseSlowFWmm = np.rad2deg(basemodel.angularSteps[i]/basemodel.S2Pm[i])
                 baseSlowRVmm = np.rad2deg(basemodel.angularSteps[i]/basemodel.S2Nm[i])
             else:
@@ -900,7 +890,7 @@ class VisDianosticPlot(object):
 
                 model = pfiDesign.PFIDesign(f)
 
-                if arm is 'phi':
+                if arm == 'phi':
                     slowFWmm = np.rad2deg(model.angularSteps[i]/model.S2Pm[i])
                     slowRVmm = np.rad2deg(model.angularSteps[i]/model.S2Nm[i])
                 else:
@@ -921,7 +911,7 @@ class VisDianosticPlot(object):
             ax1.legend()
             ax2.set_title(f'Fiber {arm} #{i+1} REV')
             ax2.legend()
-            if arm is 'phi':
+            if arm == 'phi':
                 ax1.set_xlim([0,200])
                 ax2.set_xlim([0,200])
             else:
@@ -958,7 +948,7 @@ class VisDianosticPlot(object):
             divfwd_array=[]
             divrev_array=[]
             for f in range(len(xmlList)):
-                if arm is 'phi':
+                if arm == 'phi':
                     # applying 5-sigma filter
                     data = var_fwd[i,f,0:42]
                     divfwd_avg=np.mean(data[abs(data - np.mean(data)) < 5 * np.std(data)])
