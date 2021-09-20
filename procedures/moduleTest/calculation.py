@@ -199,13 +199,14 @@ class Calculation():
         
         if arm is None:
             arm_radii = (self.calibModel.L1 + self.calibModel.L2)
-        if arm is 'phi':
+        if arm == 'phi':
             arm_radii = self.calibModel.L2
-        if arm is 'theta':
+        if arm == 'theta':
             arm_radii = self.calibModel.L1
 
+        # Changing tolerance as a scaling factor
         if tolerance is not None:
-            radii = (arm_radii * (1 + tolerance))[idx]
+            radii = (arm_radii * tolerance)[idx]
         else:
             radii = None
 
@@ -221,9 +222,9 @@ class Calculation():
         data_sub = data - bkg
 
         #sigma = np.std(data_sub)
-        ext = sep.extract(data_sub.astype(float), 20 , err=bkg.globalrms, minarea=1)
+        ext = sep.extract(data_sub.astype(float), 20 , err=bkg.globalrms,
+            filter_type='conv', minarea=9)
         
-        #ext = sep.extract(data.astype(float), 500)
         
         pos = np.array(ext['x'] + ext['y']*(1j))
 
@@ -325,17 +326,17 @@ class Calculation():
             rpoint = np.abs(thetaFW[c,0,:]-(x+y*1j))
             std=np.std(rpoint)
             for i in range(len(thetaFW[c,0,:])):
-                if rpoint[i] < 0.5*r:
+                if rpoint[i] < 0.8*r:
                     thetaFW[c,0,i]=thetaFW[c,0,i-1]
             for i in range(len(thetaFW[c,0,:])):
-                if rpoint[i] < 0.5*r:
+                if rpoint[i] < 0.8*r:
                     thetaFW[c,0,i]=thetaFW[c,0,i-1]
             
             for i in range(len(thetaRV[c,0,:])):
-                if rpoint[i] < 0.5*r:
+                if rpoint[i] < 0.8*r:
                     thetaRV[c,0,i]=thetaRV[c,0,i-1]
             for i in range(len(thetaRV[c,0,:])):
-                if rpoint[i] < 0.5*r:
+                if rpoint[i] < 0.8*r:
                     thetaRV[c,0,i]=thetaRV[c,0,i-1]
 
         # measure centers
@@ -344,6 +345,13 @@ class Calculation():
             x, y, r = circle_fitting(data)
             thetaCenter[c] = x + y*(1j)
             thetaRadius[c] = r
+
+            # Adding check
+            if np.abs(thetaCenter[c]-self.calibModel.centers[c]) > self.calibModel.L1[c]:
+                thetaCenter[c] = self.calibModel.centers[c]
+
+            if thetaRadius[c] > 3*self.calibModel.L1[c]:
+                thetaRadius[c] = self.calibModel.L1[c]
 
         # measure theta angles
         for c in self.goodIdx:
