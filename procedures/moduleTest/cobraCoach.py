@@ -384,7 +384,7 @@ class CobraCoach():
             '''
                 We extract matchin table from databse instead of calling matching sequence.
             '''
-            db=opdb.OpDB(hostname='pfsa-db01', port=5432,
+            db=opdb.OpDB(hostname='db-ics', port=5432,
                    dbname='opdb',
                    username='pfs')
             match = db.bulkSelect('cobra_match','select * from cobra_match where '
