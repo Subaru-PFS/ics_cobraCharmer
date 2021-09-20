@@ -167,7 +167,7 @@ def configPathForDot(version=None, rootDir=None):
         instDataRoot = _instDataDir()
         rootDir = instDataRoot / 'data' / 'pfi' / 'dot'
 
-    if version is 'mcs':
+    if version == 'mcs':
         fname = 'dot_subaru_20210710_el90_rot+00_ave.csv'
     else:
         fname = 'dot_design_asrd_20210422.txt'
