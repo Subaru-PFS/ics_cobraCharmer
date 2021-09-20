@@ -7,7 +7,7 @@ import pathlib
 from procedures.moduleTest.speedModel import SpeedModel
 from procedures.moduleTest.trajectory import Trajectories
 import cv2
-
+import os
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
@@ -83,6 +83,12 @@ def setConstantSpeedMaps(mmTheta, mmPhi, mmThetaSlow, mmPhiSlow):
     cc.mmPhi = mmPhi
     cc.mmThetaSlow = mmThetaSlow
     cc.mmPhiSlow = mmPhiSlow
+
+
+def extractThetaHardStopFromRun(runDir):
+    pass
+
+
 
 def moveThetaAngles(cIds, thetas, relative=False, local=True, tolerance=0.002, tries=6, fast=False, newDir=True):
     """
@@ -526,6 +532,91 @@ def convergenceTest(cIds, runs=8,
     np.save(dataPath / 'targets', targets)
     np.save(dataPath / 'moves', moves)
     return targets, moves
+
+def rebuildMototMapsFromRun(runDir,arm='theta',stepsize=250):
+
+    path = f'/data/MCS/{runID}/'
+    newXml = pathlib.Path(f'{findXML(path)[0]}')
+
+
+    reload(calculation)
+    if arm is theta:
+        totalSteps = 10000
+    else:
+        totalSteps = 6000
+    
+
+    steps = stepsize
+    repeat = 1
+
+    nCobras=2394
+    model = pfiDesign.PFIDesign(newXml)
+    cal = calculation.Calculation(model, [], None)
+    iteration = totalSteps // steps
+    thetaFW = np.zeros((2394, repeat, iteration+1), dtype=complex)
+    thetaRV = np.zeros((2394, repeat, iteration+1), dtype=complex)
+    goodIdx = cal.visibleIdx
+    
+    dataPath=f'{path}/data'
+    beginid=int(findFITS(dataPath)[0][-12:-7])*100
+
+    for n in range(repeat):
+        if n == 0:
+            cid = beginid
+        else:
+            cid += 1
+        print(f'thetaBegin = {cid:08d}')
+        data1 = pyfits.getdata(dataPath + f'/PFSC{cid:08d}.fits')
+        data1=(np.flip(data1).T).copy(order='C')
+        thetaFW[goodIdx, n, 0] = cal.extractPositionsFromImage(data1,arm='theta',tolerance=1.2*scale)
+
+        for k in range(iteration):
+            cid+=1
+            print(k,cid, end='\r')
+            data1 = pyfits.getdata(dataPath + f'/PFSC{cid:08d}.fits')
+            data1=(np.flip(data1).T).copy(order='C')
+            thetaFW[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1,arm='theta',guess=thetaFW[goodIdx, n, k],
+                                                                    tolerance=scale)
+                
+        cid+=1
+        print(f'thetaEnd = {cid}')
+        data1 = pyfits.getdata(dataPath + f'/PFSC{cid:08d}.fits')
+        data1=(np.flip(data1).T).copy(order='C')
+        thetaRV[goodIdx, n, 0] = cal.extractPositionsFromImage(data1,arm='theta',tolerance=1.2*scale)
+        
+        for k in range(iteration):
+            cid+=1
+            print(k,cid, end='\r')
+            data1 = pyfits.getdata(dataPath + f'/PFSC{cid:08d}.fits')
+            data1=(np.flip(data1).T).copy(order='C')
+            thetaRV[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1,arm='theta',guess=thetaRV[goodIdx, n, k],
+                                                                tolerance=scale)
+
+
+    thetaCenter, thetaRadius, thetaAngFW, thetaAngRV, badRange = cal.thetaCenterAngles(thetaFW, thetaFW)
+
+    np.save(f'{dataPath}/thetaFW_A', thetaFW)
+    np.save(f'{dataPath}/thetaRV_A', thetaRV)
+    np.save(f'{dataPath}/thetaCenter_A', thetaCenter)
+    np.save(f'{dataPath}/thetaRadius_A', thetaRadius)
+    np.save(f'{dataPath}/thetaAngFW_A', thetaAngFW)
+    np.save(f'{dataPath}/thetaAngRV_A', thetaAngRV)
+    np.save(f'{dataPath}/badRange_A', badRange)
+
+    delta = 0.1
+    # calculate average speeds
+    thetaSpeedFW, thetaSpeedRV = cal.speed(thetaAngFW, thetaAngRV, steps, delta)
+    np.save(f'{dataPath}/thetaSpeedFW_A', thetaSpeedFW)
+    np.save(f'{dataPath}/thetaSpeedRV_A', thetaSpeedRV)
+
+    # calculate motor maps in Johannes weighting
+    thetaMMFW, thetaMMRV, bad = cal.motorMaps(thetaAngFW, thetaAngRV, steps, delta)
+    bad[badRange] = True
+    np.save(f'{dataPath}/thetaMMFW_A', thetaMMFW)
+    np.save(f'{dataPath}/thetaMMRV_A', thetaMMRV)
+
+    np.save(f'{dataPath}/badMM_A', bad)
+
 
 def makeThetaMotorMaps(newXml, steps=500, totalSteps=10000, repeat=1, fast=False, thetaOnTime=None,
                        limitOnTime=0.08, limitSteps=10000, updateGeometry=False, phiRunDir=None,
