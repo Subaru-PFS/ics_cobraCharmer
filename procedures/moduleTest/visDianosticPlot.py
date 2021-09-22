@@ -38,7 +38,10 @@ class VisDianosticPlot(object):
         if arm == None:
             raise Exception('Define the arm')
         self.arm = arm
-        self.path = f'/data/MCS/{runDir}/'
+        if os.path.exists(f'/data/MCS/{runDir}/') is False:
+            self.path = f'/data/MCS_Subaru/{runDir}/'
+        else:
+            self.path = f'/data/MCS/{runDir}/'
         xml = pathlib.Path(f'{self._findXML(self.path)[0]}')
         des = pfiDesign.PFIDesign(xml)
         self.calibModel = des
@@ -58,7 +61,7 @@ class VisDianosticPlot(object):
         self.goodIdx = np.array(goodNums, dtype='i4') - 1
         self.badIdx = np.array(badNums, dtype='i4') - 1
 
-        if datatype is 'MM':
+        if datatype == 'MM':
             self._loadCobraMMData(arm=arm)
 
     def __del__(self):
@@ -153,7 +156,7 @@ class VisDianosticPlot(object):
         for idx in range(1596,1606):
             ax.text(des.centers[idx].real, des.centers[idx].imag,idx)
 
-        if radius is 'L1':
+        if radius == 'L1':
             pass
             
 
@@ -272,7 +275,7 @@ class VisDianosticPlot(object):
         plt.show()
     
     def visStackedImage(self, direction='fwd', flip=False):
-        if direction is 'fwd':
+        if direction == 'fwd':
             data = self.fwdStack
         else:
             data = self.fwdStack
@@ -613,7 +616,7 @@ class VisDianosticPlot(object):
             cmd=f"""montage {figPath}Con*_[0-9].png {figPath}Con*_[0-9]?.png \
                 -tile 4x -geometry +4+4 {montage}"""
             retcode = subprocess.call(cmd,shell=True)
-            if retcode is not 0:
+            if retcode != 0:
                 raise Exception
             #if figPath is not None:
             #    plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
@@ -835,7 +838,7 @@ class VisDianosticPlot(object):
             ax.legend()
             if arm == 'phi':
                 ax.set_xlim([0,200])
-                if fast is 'False':
+                if fast is False:
                     ax.set_ylim([-0.15,0.15])
                 else:
                     ax.set_ylim([-0.25,0.25])
