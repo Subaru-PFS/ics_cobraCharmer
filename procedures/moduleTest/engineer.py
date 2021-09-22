@@ -7,7 +7,14 @@ import pathlib
 from procedures.moduleTest.speedModel import SpeedModel
 from procedures.moduleTest.trajectory import Trajectories
 import cv2
-import os
+import os, fnmatch
+
+from ics.cobraCharmer import pfiDesign
+from procedures.moduleTest import calculation
+import astropy.io.fits as pyfits
+
+import time
+
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
@@ -40,6 +47,17 @@ def findXML(path):
             if fnmatch.fnmatch(name, '*.xml'):
                 result.append(os.path.join(root, name))
     return result
+
+def findFITS(path):
+    result = []
+    for root, dirs, files in os.walk(path):
+        for name in files:
+            if fnmatch.fnmatch(name, 'PFSC*.fits'):
+                result.append(os.path.join(root, name))
+    
+    
+    return result
+
 
 
 def setCobraCoach(cobraCoach):
@@ -533,14 +551,17 @@ def convergenceTest(cIds, runs=8,
     np.save(dataPath / 'moves', moves)
     return targets, moves
 
-def rebuildMototMapsFromRun(runDir,arm='theta',stepsize=250):
+def detectCorbaSpotsFromRun(runDir,xml, scale,arm='theta',stepsize=250, flip=False):
 
-    path = f'/data/MCS/{runID}/'
-    newXml = pathlib.Path(f'{findXML(path)[0]}')
+    path = f'/data/MCS/{runDir}/'
+    if os.path.exists(path) is not True:
+        path = f'/data/MCS_Subaru/{runDir}/'
+    #newXml = pathlib.Path(f'{findXML(path)[0]}')
 
+    t1 = time.time()
 
-    reload(calculation)
-    if arm is theta:
+    #reload(calculation)
+    if arm == 'theta':
         totalSteps = 10000
     else:
         totalSteps = 6000
@@ -550,7 +571,7 @@ def rebuildMototMapsFromRun(runDir,arm='theta',stepsize=250):
     repeat = 1
 
     nCobras=2394
-    model = pfiDesign.PFIDesign(newXml)
+    model = pfiDesign.PFIDesign(xml)
     cal = calculation.Calculation(model, [], None)
     iteration = totalSteps // steps
     thetaFW = np.zeros((2394, repeat, iteration+1), dtype=complex)
@@ -559,6 +580,12 @@ def rebuildMototMapsFromRun(runDir,arm='theta',stepsize=250):
     
     dataPath=f'{path}/data'
     beginid=int(findFITS(dataPath)[0][-12:-7])*100
+    
+    if os.path.exists(os.readlink(findFITS(dataPath)[0])) is False:
+        newPath = f'/data_raw/'+os.readlink(findFITS(dataPath)[0])[10:21]+'mcs'
+    else:
+        newPath = dataPath
+
 
     for n in range(repeat):
         if n == 0:
@@ -566,56 +593,61 @@ def rebuildMototMapsFromRun(runDir,arm='theta',stepsize=250):
         else:
             cid += 1
         print(f'thetaBegin = {cid:08d}')
-        data1 = pyfits.getdata(dataPath + f'/PFSC{cid:08d}.fits')
-        data1=(np.flip(data1).T).copy(order='C')
+        data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
+        if flip is True:
+            data1=(np.flip(data1).T).copy(order='C')
         thetaFW[goodIdx, n, 0] = cal.extractPositionsFromImage(data1,arm='theta',tolerance=1.2*scale)
 
         for k in range(iteration):
             cid+=1
             print(k,cid, end='\r')
-            data1 = pyfits.getdata(dataPath + f'/PFSC{cid:08d}.fits')
-            data1=(np.flip(data1).T).copy(order='C')
+            data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
+            if flip is True:
+                data1=(np.flip(data1).T).copy(order='C')
             thetaFW[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1,arm='theta',guess=thetaFW[goodIdx, n, k],
                                                                     tolerance=scale)
                 
         cid+=1
         print(f'thetaEnd = {cid}')
-        data1 = pyfits.getdata(dataPath + f'/PFSC{cid:08d}.fits')
-        data1=(np.flip(data1).T).copy(order='C')
+        data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
+        if flip is True:
+            data1=(np.flip(data1).T).copy(order='C')
         thetaRV[goodIdx, n, 0] = cal.extractPositionsFromImage(data1,arm='theta',tolerance=1.2*scale)
         
         for k in range(iteration):
             cid+=1
             print(k,cid, end='\r')
-            data1 = pyfits.getdata(dataPath + f'/PFSC{cid:08d}.fits')
-            data1=(np.flip(data1).T).copy(order='C')
+            data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
+            if flip is True:
+                data1=(np.flip(data1).T).copy(order='C')
             thetaRV[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1,arm='theta',guess=thetaRV[goodIdx, n, k],
                                                                 tolerance=scale)
+    t2 = time.time()
+    print(f'total time = {t2 - t1}')
+    return thetaFW, thetaRV, cal
+    #thetaCenter, thetaRadius, thetaAngFW, thetaAngRV, badRange = cal.thetaCenterAngles(thetaFW, thetaFW)
 
+    #np.save(f'{dataPath}/thetaFW_A', thetaFW)
+    #np.save(f'{dataPath}/thetaRV_A', thetaRV)
+    #np.save(f'{dataPath}/thetaCenter_A', thetaCenter)
+    #np.save(f'{dataPath}/thetaRadius_A', thetaRadius)
+    #np.save(f'{dataPath}/thetaAngFW_A', thetaAngFW)
+    #np.save(f'{dataPath}/thetaAngRV_A', thetaAngRV)
+    #np.save(f'{dataPath}/badRange_A', badRange)
 
-    thetaCenter, thetaRadius, thetaAngFW, thetaAngRV, badRange = cal.thetaCenterAngles(thetaFW, thetaFW)
-
-    np.save(f'{dataPath}/thetaFW_A', thetaFW)
-    np.save(f'{dataPath}/thetaRV_A', thetaRV)
-    np.save(f'{dataPath}/thetaCenter_A', thetaCenter)
-    np.save(f'{dataPath}/thetaRadius_A', thetaRadius)
-    np.save(f'{dataPath}/thetaAngFW_A', thetaAngFW)
-    np.save(f'{dataPath}/thetaAngRV_A', thetaAngRV)
-    np.save(f'{dataPath}/badRange_A', badRange)
-
-    delta = 0.1
+    #delta = 0.1
     # calculate average speeds
-    thetaSpeedFW, thetaSpeedRV = cal.speed(thetaAngFW, thetaAngRV, steps, delta)
-    np.save(f'{dataPath}/thetaSpeedFW_A', thetaSpeedFW)
-    np.save(f'{dataPath}/thetaSpeedRV_A', thetaSpeedRV)
+    #thetaSpeedFW, thetaSpeedRV = cal.speed(thetaAngFW, thetaAngRV, steps, delta)
+    #np.save(f'{dataPath}/thetaSpeedFW_A', thetaSpeedFW)
+    #np.save(f'{dataPath}/thetaSpeedRV_A', thetaSpeedRV)
 
     # calculate motor maps in Johannes weighting
-    thetaMMFW, thetaMMRV, bad = cal.motorMaps(thetaAngFW, thetaAngRV, steps, delta)
-    bad[badRange] = True
-    np.save(f'{dataPath}/thetaMMFW_A', thetaMMFW)
-    np.save(f'{dataPath}/thetaMMRV_A', thetaMMRV)
+    #thetaMMFW, thetaMMRV, bad = cal.motorMaps(thetaAngFW, thetaAngRV, steps, delta)
+    #bad[badRange] = True
+    #np.save(f'{dataPath}/thetaMMFW_A', thetaMMFW)
+    #np.save(f'{dataPath}/thetaMMRV_A', thetaMMRV)
 
-    np.save(f'{dataPath}/badMM_A', bad)
+    #np.save(f'{dataPath}/badMM_A', bad)
 
 
 def makeThetaMotorMaps(newXml, steps=500, totalSteps=10000, repeat=1, fast=False, thetaOnTime=None,
@@ -1720,7 +1752,9 @@ def convergenceTestX(cIds, runs=3, thetaMargin=np.deg2rad(15.0), phiMargin=np.de
     np.save(dataPath / 'moves', moves)
     return targets, moves
 
-def moveToSafePosition(cIds, tolerance=0.2, tries=10, homed=True, newDir=False, threshold=20.0, thetaMargin=np.deg2rad(15.0)):
+def moveToSafePosition(cIds, tolerance=0.2, tries=10, homed=True, newDir=False, threshold=20.0, 
+    thetaMargin=np.deg2rad(15.0)):
+    
     # move theta arms away from the bench center and phi arms to 60 degree
     ydir = np.angle(cc.calibModel.centers[1] - cc.calibModel.centers[55])
     thetas = np.full(len(cIds), ydir)
