@@ -56,7 +56,7 @@ class McsActorCamera(camera.Camera):
         doFiberIDArg = "doFibreID" if doFibreID else ""
 
         t1=time.time()
-        cmdString = f"expose {expType} expTime={exptime:0.2f} {frameArg} {doCentroidArg} {doFiberIDArg} flipImage"
+        cmdString = f"expose {expType} expTime={exptime:0.2f} {frameArg} {doCentroidArg} {doFiberIDArg}"
         self.logger.info(f'calling mcs {cmdString} with cmd={cmd} from {threading.current_thread()}')
         cmdVar = self.actor.cmdr.call(actor='mcs', cmdStr=cmdString,
                                       forUserCmd=cmd, timeLim=exptime+30)
@@ -132,7 +132,8 @@ class McsActorCamera(camera.Camera):
 
         t0 = time.time()
         if exptime is None:
-            raise NotImplementedError("sorry Craig, you need to set a default exptime")
+            #raise NotImplementedError("sorry Craig, you need to set a default exptime")
+            exptime = 0.8
 
         filename = self._camExpose(exptime, doCentroid=doCentroid, frameNum=frameNum,
                                    cmd=cmd)
