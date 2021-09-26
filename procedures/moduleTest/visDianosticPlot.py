@@ -29,37 +29,44 @@ from ics.cobraCharmer import pfiDesign
 from ics.cobraCharmer import func
 import fnmatch
 from ics.fpsActor import fpsFunction as fpstool
+import pandas as pd
+from opdb import opdb
+
 
 class VisDianosticPlot(object):
 
-    def __init__(self, runDir, arm=None, datatype='MM'):
+    def __init__(self, runDir=None, xml=None, arm=None, datatype=None):
         
         
-        if arm == None:
-            raise Exception('Define the arm')
-        self.arm = arm
-        if os.path.exists(f'/data/MCS/{runDir}/') is False:
-            self.path = f'/data/MCS_Subaru/{runDir}/'
-        else:
-            self.path = f'/data/MCS/{runDir}/'
-        xml = pathlib.Path(f'{self._findXML(self.path)[0]}')
-        des = pfiDesign.PFIDesign(xml)
-        self.calibModel = des
-        cobras = []
-        for i in des.findAllCobras():
-            c = func.Cobra(des.moduleIds[i],
-                        des.positionerIds[i])
-            cobras.append(c)
-        allCobras = np.array(cobras)
-        nCobras = len(allCobras)
-
-        goodNums = [i+1 for i,c in enumerate(allCobras) if
-                des.cobraIsGood(c.cobraNum, c.module)]
-        badNums = [e for e in range(1, nCobras+1) if e not in goodNums]
+        if arm != None:
+            self.arm = arm
 
 
-        self.goodIdx = np.array(goodNums, dtype='i4') - 1
-        self.badIdx = np.array(badNums, dtype='i4') - 1
+        if runDir != None:
+            if os.path.exists(f'/data/MCS/{runDir}/') is False:
+                self.path = f'/data/MCS_Subaru/{runDir}/'
+            else:
+                self.path = f'/data/MCS/{runDir}/'
+
+        if xml != None:
+            #xml = pathlib.Path(f'{self._findXML(self.path)[0]}')
+            des = pfiDesign.PFIDesign(xml)
+            self.calibModel = des
+            cobras = []
+            for i in des.findAllCobras():
+                c = func.Cobra(des.moduleIds[i],
+                            des.positionerIds[i])
+                cobras.append(c)
+            allCobras = np.array(cobras)
+            nCobras = len(allCobras)
+
+            goodNums = [i+1 for i,c in enumerate(allCobras) if
+                    des.cobraIsGood(c.cobraNum, c.module)]
+            badNums = [e for e in range(1, nCobras+1) if e not in goodNums]
+
+
+            self.goodIdx = np.array(goodNums, dtype='i4') - 1
+            self.badIdx = np.array(badNums, dtype='i4') - 1
 
         if datatype == 'MM':
             self._loadCobraMMData(arm=arm)
@@ -80,6 +87,16 @@ class VisDianosticPlot(object):
                     result.append(os.path.join(root, name))
         return result
 
+    def _findFITS(self):
+        path = self.path
+        result = []
+        for root, dirs, files in os.walk(path):
+            for name in files:
+                if fnmatch.fnmatch(name, 'PFSC*.fits'):
+                    result.append(os.path.join(root, name))
+    
+    
+        return result
 
     def _loadCobraMMData(self, arm=None) :
         path = self.path+'data/'
@@ -112,6 +129,17 @@ class VisDianosticPlot(object):
         #self.mf2 = np.load(path + 'phiMMFW2.npy')
         #self.mr2 = np.load(path + 'phiMMRV2.npy')
         #self.bad2 = np.load(path + 'bad2.npy')        
+    
+    def _addLine(self, centers, length, angle, **kwargs):
+        ax = plt.gca()
+        x = length*np.cos(angle)
+        y = length*np.sin(angle)
+        for idx in self.goodIdx:
+            ax.plot([centers.real[idx],  centers.real[idx]+x[idx]],
+                        [centers.imag[idx],centers.imag[idx]+y[idx]],**kwargs)
+        pass
+
+
     def visCreateNewPlot(self,title, xLabel, yLabel, size=(8, 8), 
         aspectRatio="equal", **kwargs):
 
@@ -141,24 +169,74 @@ class VisDianosticPlot(object):
         ax.set_xlim(xLim)
         ax.set_ylim(yLim)
     
-    def visGeometryFromXML(self, newXml, radius=None):
+
+
+    def visGeometryFromXML(self, newXml, thetaAngle=None, markCobra=False, patrol=False):
         des = pfiDesign.PFIDesign(newXml)
         
         ax = plt.gca()
 
-        ax.plot(des.centers.real, des.centers.imag,'r.')
-        for idx in range(10):
-            ax.text(des.centers[idx].real, des.centers[idx].imag,idx)
+        ax.scatter(des.centers.real, des.centers.imag,marker='o', color='white', s=20)
 
-        for idx in range(798,808):
-            ax.text(des.centers[idx].real, des.centers[idx].imag,idx)
 
-        for idx in range(1596,1606):
-            ax.text(des.centers[idx].real, des.centers[idx].imag,idx)
+        # Adding theta hard-stops
+        length=des.L1+des.L1 
 
-        if radius == 'L1':
-            pass
-            
+        self._addLine(des.centers,length,des.tht0,color='orange',
+                        linewidth=0.5,linestyle='--')
+
+        self._addLine(des.centers,length,des.tht1,color='black',
+                        linewidth=0.5,linestyle='-.')
+
+        if thetaAngle is not None:
+            self._addLine(des.centers,des.L1,thetaAngle,color='blue',
+                    linewidth=2,linestyle='-')
+
+
+        if markCobra is True:
+            for idx in range(10):
+                ax.text(des.centers[idx].real, des.centers[idx].imag,idx)
+
+            for idx in range(798,808):
+                ax.text(des.centers[idx].real, des.centers[idx].imag,idx)
+
+            for idx in range(1596,1606):
+                ax.text(des.centers[idx].real, des.centers[idx].imag,idx)
+
+        if patrol is True:
+            for i in self.goodIdx:
+                d = plt.Circle((des.centers[i].real, des.centers[i].imag), 
+                   des.L1[i]+des.L2[i], facecolor=('#D9DAFC'),edgecolor=None, 
+                   fill=True,alpha=0.7)
+                ax.add_artist(d)
+        
+
+    def visSubaruConvergence(self):
+        ax = plt.gca()
+
+        visitID = int(self._findFITS()[0][-12:-7])
+        subID = 11
+        frameid = visitID*100+subID
+
+        db=opdb.OpDB(hostname='pfsa-db01', port=5432,
+                   dbname='opdb',username='pfs')
+        
+        match = db.bulkSelect('cobra_match','select * from cobra_match where '
+                      f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
+
+        path=f'{self.path}/data/'
+
+        tarfile = path+'targets.npy'
+        targets=np.load(tarfile)
+
+        dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
+            (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
+
+        sc=ax.scatter(self.calibModel.centers.real[self.goodIdx],self.calibModel.centers.imag[self.goodIdx],
+            c=dist,marker='s', vmax=0.8)
+        
+        plt.colorbar(sc)
+
 
 
     def visPauseExecution(self):
@@ -213,23 +291,20 @@ class VisDianosticPlot(object):
         else:
             plt.show()
 
-    def visDotLocation(self, FF=False):
+    def visDotLocation(self):
         
         ax = plt.gca()
 
-        newDot, rDot, newFFpos =fpstool.alignDotOnImage(self.path,arm='theta')
+        dotFile = '/software/devel/pfs/pfs_instdata/data/pfi/dot/black_dots_mm.csv'
+        newDot=pd.read_csv(dotFile)
 
         # Plot DOT location
         for dotidx in range(len(newDot)):
-            e = plt.Circle((newDot[dotidx].real, newDot[dotidx].imag), rDot[dotidx], 
-                        color='red', fill=True, alpha=0.5)
+            e = plt.Circle((newDot['x'].values[dotidx], newDot['y'].values[dotidx]), newDot['r'].values[dotidx], 
+                        color='grey', fill=True, alpha=0.5)
             ax.add_artist(e)
 
-        if FF is True:
-            for i in range(len(newFFpos)):
-                c = plt.Circle((newFFpos[i].real, newFFpos[i].imag), 5, 
-                        color='red', fill=False, alpha=0.5)
-                ax.add_artist(c)
+
 
     def visPlotFiberSpots(self, cobraIdx=None):
 
@@ -749,7 +824,8 @@ class VisDianosticPlot(object):
         print(cmd)
         del(moveData)
 
-    def visConvergeHisto(self, figPath = None, filename = None, arm ='phi', brokens=None, runs = 16, margin = 15, title=None):
+    def visConvergeHisto(self, figPath = None, filename = None, arm ='phi', 
+        brokens=None, runs = 16, margin = 15, title=None):
         #brokens = []
         #badIdx = np.array(brokens) - 1
         #goodIdx = np.array([e for e in range(57) if e not in badIdx])
