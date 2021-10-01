@@ -89,7 +89,9 @@ class McsActorCamera(camera.Camera):
     def trim(self, x, y):
         raise NotImplementedError("trimming would be done on the mcsActor side")
 
-    def expose(self, name=None, exptime=0.8, doCentroid=True, frameNum=None, cmd=None):
+    def expose(self, name=None, exptime=0.8,
+               doCentroid=True, doFibreID=True,
+               frameNum=None, cmd=None):
         """Take an exposure, usually measure centroids, and save the outputs.
 
         Args
@@ -103,6 +105,9 @@ class McsActorCamera(camera.Camera):
 
         doCentroid: `bool`
           Whether to measure and save centroids.
+
+        doFibreId: `bool`
+          Whether to match spots and cobras.
 
         frameNum : `int`
           The visit+frame nmber for the file.
@@ -136,7 +141,7 @@ class McsActorCamera(camera.Camera):
             exptime = 0.8
 
         filename = self._camExpose(exptime, doCentroid=doCentroid, frameNum=frameNum,
-                                   cmd=cmd)
+                                   doFibreID=doFibreID, cmd=cmd)
         t1 = time.time()
         self.linkImage(filename, extraName=name)
         t2 = time.time()
