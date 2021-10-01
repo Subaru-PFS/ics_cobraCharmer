@@ -72,12 +72,13 @@ class VisDianosticPlot(object):
             self._loadCobraMMData(arm=arm)
 
     def __del__(self):
-        del(self.fw)
-        del(self.rv)
-        del(self.af)
-        del(self.ar)
-        del(self.sf)
-        del(self.sr)
+        if hasattr(self,'fw'):
+            del(self.fw)
+            del(self.rv)
+            del(self.af)
+            del(self.ar)
+            del(self.sf)
+            del(self.sr)
 
     def _findXML(self,path):
         result = []
@@ -99,6 +100,9 @@ class VisDianosticPlot(object):
         return result
 
     def _loadCobraMMData(self, arm=None) :
+        
+        self.alt=pyfits.open(self._findFITS()[0])[0].header['ALTITUDE']
+        
         path = self.path+'data/'
         
         if arm is None:
@@ -171,8 +175,13 @@ class VisDianosticPlot(object):
     
 
 
-    def visGeometryFromXML(self, newXml, thetaAngle=None, markCobra=False, patrol=False):
-        des = pfiDesign.PFIDesign(newXml)
+    def visGeometryFromXML(self, newXml=None, thetaAngle=None, phiAngle=None,
+        markCobra=False, patrol=False, visHardStops = True):
+        
+        if newXml is None:
+            des = self.calibModel
+        else:
+            des = pfiDesign.PFIDesign(newXml)
         
         ax = plt.gca()
 
@@ -180,17 +189,29 @@ class VisDianosticPlot(object):
 
 
         # Adding theta hard-stops
-        length=des.L1+des.L1 
+        if visHardStops is True:
+            length=des.L1+des.L1 
 
-        self._addLine(des.centers,length,des.tht0,color='orange',
-                        linewidth=0.5,linestyle='--')
+            self._addLine(des.centers,length,des.tht0,color='orange',
+                            linewidth=0.5,linestyle='--')
 
-        self._addLine(des.centers,length,des.tht1,color='black',
-                        linewidth=0.5,linestyle='-.')
+            self._addLine(des.centers,length,des.tht1,color='black',
+                            linewidth=0.5,linestyle='-.')
 
         if thetaAngle is not None:
-            self._addLine(des.centers,des.L1,thetaAngle,color='blue',
+            self._addLine(des.centers,des.L1,thetaAngle+des.tht0,color='blue',
                     linewidth=2,linestyle='-')
+
+        if phiAngle is not None:
+            # Calculate the end point first
+            x = des.L1*np.cos(thetaAngle)
+            y = des.L1*np.sin(thetaAngle)
+            newx = des.centers.real + x
+            newy = des.centers.imag + y
+            newPos = newx+newy*1j
+            phiOpenAngle = phiAngle+thetaAngle - np.pi
+            self._addLine(newPos,des.L2,phiOpenAngle,color='blue',
+                    linewidth=10,linestyle='-', solid_capstyle='round',alpha=0.5)
 
 
         if markCobra is True:
@@ -211,7 +232,7 @@ class VisDianosticPlot(object):
                 ax.add_artist(d)
         
 
-    def visSubaruConvergence(self):
+    def visSubaruConvergence(self,**kwargs):
         ax = plt.gca()
 
         visitID = int(self._findFITS()[0][-12:-7])
@@ -233,10 +254,23 @@ class VisDianosticPlot(object):
             (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
 
         sc=ax.scatter(self.calibModel.centers.real[self.goodIdx],self.calibModel.centers.imag[self.goodIdx],
-            c=dist,marker='s', vmax=0.8)
+            c=dist,marker='s',**kwargs)
         
         plt.colorbar(sc)
 
+    def visCobraCenter(self,**kwargs):
+        idx =np.sort(np.append(self.badIdx,self.badrange))
+        goodIdx = [i for i in range(2394) if i not in idx]
+
+        ax = plt.gca()
+
+        x=self.calibModel.centers.real[goodIdx]
+        y=self.calibModel.centers.imag[goodIdx]
+        dx=self.centers.real[goodIdx]-x
+        dy=self.centers.imag[goodIdx]-y
+
+        ax.quiver(x,y, 
+                dx, dy, color='red',units='xy',**kwargs)
 
 
     def visPauseExecution(self):
@@ -308,12 +342,12 @@ class VisDianosticPlot(object):
 
     def visPlotFiberSpots(self, cobraIdx=None):
 
-        data = self.imgdata
-        m, s = np.mean(data), np.std(data)
+        #data = self.imgdata
+        #m, s = np.mean(data), np.std(data)
         #fig, ax = plt.subplots(figsize=(10,10))
         ax = plt.gca()
-        im = ax.imshow(data, interpolation='nearest', 
-                    cmap='gray', vmin=m-s, vmax=m+3*s, origin='lower')
+        #im = ax.imshow(data, interpolation='nearest', 
+        #            cmap='gray', vmin=m-s, vmax=m+3*s, origin='lower')
         
         if cobraIdx is None:
             cobra = self.goodIdx
@@ -321,13 +355,16 @@ class VisDianosticPlot(object):
             cobra = cobraIdx
 
         for idx in cobra:
-            c = plt.Circle((self.calibModel.centers[idx].real, self.calibModel.centers[idx].imag), 5, color='g', fill=False)
+            c = plt.Circle((self.calibModel.centers[idx].real, 
+                self.calibModel.centers[idx].imag), 
+                self.calibModel.L1[idx]+self.calibModel.L2[idx], facecolor='g', edgecolor=None,alpha=0.5)
             ax.add_artist(c)
 
 
         for idx in cobra:
             d = plt.Circle((self.centers[idx].real, self.centers[idx].imag), self.radius[idx], color='red', fill=False)
             ax.add_artist(d)
+
   
         ax.scatter(self.centers[cobra].real,self.centers[cobra].imag,color='red')    
 
@@ -353,11 +390,12 @@ class VisDianosticPlot(object):
         if direction == 'fwd':
             data = self.fwdStack
         else:
-            data = self.fwdStack
+            data = self.revStack
 
         if flip is True:
             image=(np.flip(data).T).copy(order='C')
-        
+        else:
+            image=data
         m, s = np.mean(image), np.std(data)
         ax = plt.gca()
         im = ax.imshow(image, interpolation='nearest', 
