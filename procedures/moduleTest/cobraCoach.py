@@ -1,8 +1,8 @@
 from importlib import reload
 import logging
+from bokeh.transform import factor_cmap
 import numpy as np
 from astropy.io import fits
-import sep
 import pathlib
 import time
 
@@ -889,7 +889,6 @@ class CobraCoach():
             segments['phiSpeeds'] = phiSpeeds
             np.savez(dataPath / f'segments_{nowSecond}', idx=cIds, segs=segments)
 
-            # send move command
             self.moveSteps(cobras, thetaSteps, phiSteps, thetaFast, phiFast, thetaAngles, phiAngles, False, thetaOntimes, phiOntimes, nSegments, thetaSpeeds, phiSpeeds)
 
         return self.moveInfo['movedTheta'][cIds], self.moveInfo['movedPhi'][cIds]
