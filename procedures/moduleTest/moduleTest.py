@@ -255,7 +255,7 @@ class ModuleTest():
     def extractPositions(self, data1, data2=None, guess=None, tolerance=None):
         return self.cal.extractPositions(data1, data2, guess, tolerance)
 
-    def exposeAndExtractPositions(self, name=None, guess=None, tolerance=None):
+    def exposeAndExtractPositions(self, name=None, guess=None, tolerance=None, doFibreID=True):
         """ Take an exposure, measure centroids, match to cobras, save info.
 
         Args
@@ -266,6 +266,8 @@ class ModuleTest():
            Where to center searches. By default uses the cobra center.
         tolerance : `float`
            Additional factor to scale search region by. 1 = cobra radius (phi+theta)
+        doFibreID : `bool`
+          If set, do spot matching. Currently requires fiducial fibers.
 
         Returns
         -------
@@ -278,7 +280,7 @@ class ModuleTest():
         Not at all convinced that we should return anything if no matching spot found.
 
         """
-        centroids, filename, bkgd = self.cam.expose(name)
+        centroids, filename, bkgd = self.cam.expose(name, doFibreID=doFibreID)
         positions, indexMap = self.cal.matchPositions(centroids, guess=guess, tolerance=tolerance)
         self._saveMoveTable(filename.stem, positions, indexMap)
 
