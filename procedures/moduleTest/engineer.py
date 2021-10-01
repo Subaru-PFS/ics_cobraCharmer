@@ -350,7 +350,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
         phis = np.full(len(cIds), phis)
     elif len(phis) != len(cIds):
         raise RuntimeError('number of phi angles must match the number of cobras')
-    if not isinstance(thetaFast, bool) and len(cobras) != len(thetaFast):
+    if not isinstance(thetaFast, bool) and len(cIds) != len(thetaFast):
         raise RuntimeError("number of thetaFast must match number of cobras")
     else:
         _thetaFast = np.zeros(cc.nCobras, 'bool')
@@ -447,7 +447,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     
     badMoveIdx = np.where(notDoneMask)[0]
 
-    return dataPath, atThetas[cIds], atPhis[cIds], moves, badMoveIdx
+    return dataPath, atThetas[cIds], atPhis[cIds], moves
 
 def movePositions(cIds, targets, tolerance=0.1, tries=6, thetaMarginCCW=0.1, homed=False, newDir=True):
     """
@@ -1773,7 +1773,8 @@ def moveToSafePosition(cIds, tolerance=0.2, tries=10, homed=True, newDir=False, 
 
     
 
-def convergenceTest2(cIds, runs=8, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0), thetaOffset=0, phiAngle=(np.pi*5/6, np.pi/3, np.pi/4), tries=8, tolerance=0.2, threshold=20.0, newDir=False, twoSteps=False):
+def convergenceTest2(cIds, runs=8, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0), thetaOffset=0, 
+    phiAngle=(np.pi*5/6, np.pi/3, np.pi/4), tries=8, tolerance=0.2, threshold=20.0, newDir=False, twoSteps=False):
     """ convergence test, all theta arms in the same global direction. Three non-interfere groups use different phi angles  """
     cc.connect(False)
     targets = np.zeros((runs, len(cIds), 2))
@@ -1895,7 +1896,7 @@ def convergenceTestX2(cIds, runs=3, thetaMargin=np.deg2rad(15.0), phiMargin=np.d
                 moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries-2, False, False, False, True, threshold)
 
         else:
-            dataPath, atThetas, atPhis, moves[i,:,:] = \
+            dataPath, atThetas, atPhis, moves[i,:,:], badMoves = \
                 moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries, True, newDir, False, True, threshold)
 
     np.save(dataPath / 'positions', positions)
