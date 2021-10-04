@@ -32,7 +32,6 @@ from ics.fpsActor import fpsFunction as fpstool
 import pandas as pd
 from opdb import opdb
 
-
 class VisDianosticPlot(object):
 
     def __init__(self, runDir=None, xml=None, arm=None, datatype=None):
@@ -146,10 +145,12 @@ class VisDianosticPlot(object):
 
     def visCreateNewPlot(self,title, xLabel, yLabel, size=(8, 8), 
         aspectRatio="equal", **kwargs):
-
+        
 
         #plt.figure(figsize=size, facecolor="white", tight_layout=True, **kwargs)
-        fig, ax = plt.subplots(figsize=(10,10))
+        fig, ax = plt.subplots(figsize=size, facecolor="white", **kwargs)
+        fig.patch.set_alpha(1)
+        plt.clf()
         plt.title(title)
         plt.xlabel(xLabel)
         plt.ylabel(yLabel)
@@ -258,20 +259,67 @@ class VisDianosticPlot(object):
         
         plt.colorbar(sc)
 
-    def visCobraCenter(self,**kwargs):
-        idx =np.sort(np.append(self.badIdx,self.badrange))
-        goodIdx = [i for i in range(2394) if i not in idx]
-
+    def visCobraCenter(self, compareObj = 'xml', histo=False, unitLable=True, **kwargs):
+        
+        
         ax = plt.gca()
 
-        x=self.calibModel.centers.real[goodIdx]
-        y=self.calibModel.centers.imag[goodIdx]
+        if compareObj == 'xml':
+            idx =np.sort(np.append(self.badIdx,self.badrange))
+            goodIdx = [i for i in range(2394) if i not in idx]
+            
+            x=self.calibModel.centers.real[goodIdx]
+            y=self.calibModel.centers.imag[goodIdx]
+        else:
+            if os.path.exists(f'/data/MCS/{compareObj}') is False:
+                path = f'/data/MCS_Subaru/{compareObj}/data/'
+            else:
+                path = f'/data/MCS/{compareObj}/data/'
+            
+            comparCenters = np.load(path + f'{self.arm}Center.npy')
+            comparBadIdx = np.load(path + f'badRange.npy')
+
+            idx =np.sort(np.append(np.append(self.badIdx,self.badrange),comparBadIdx))
+            goodIdx = [i for i in range(2394) if i not in idx]
+
+
+            x=comparCenters.real[goodIdx]
+            y=comparCenters.imag[goodIdx]
+
+
         dx=self.centers.real[goodIdx]-x
         dy=self.centers.imag[goodIdx]-y
 
-        ax.quiver(x,y, 
-                dx, dy, color='red',units='xy',**kwargs)
+        diff = np.sqrt(dx**2+dy**2)
 
+        if histo is True:
+            n, bins, patches = plt.hist(diff,range=(0,0.1), bins=30, color='#0504aa',
+                alpha=0.7)
+
+        else:
+            q=ax.quiver(x,y, 
+                    dx, dy, color='red',units='xy',**kwargs)
+
+            if unitLable is True:
+                ax.quiverkey(q, X=0.2, Y=0.95, U=0.5,
+                    label='length = 0.5 mm', labelpos='E')
+
+
+
+    
+    def visSaveFigure(self, fileName, **kwargs):
+        """Saves an image of the current figure.
+        Parameters
+        ----------
+        fileName: object
+            The image file name path.
+        kwargs: figure.savefig properties
+            Any additional property that should be passed to the savefig method.
+        """
+
+        plt.gcf().savefig(fileName, **kwargs)
+
+        plt.close()
 
     def visPauseExecution(self):
         """Pauses the general program execution to allow figure inspection.
