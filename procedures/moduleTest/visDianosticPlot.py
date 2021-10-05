@@ -31,6 +31,19 @@ import fnmatch
 from ics.fpsActor import fpsFunction as fpstool
 import pandas as pd
 from opdb import opdb
+import logging
+
+from pfs.utils.butler import Butler
+from pfs.utils.coordinates.transform import PfiTransform
+
+
+
+
+logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
+                    datefmt="%Y-%m-%dT%H:%M:%S")
+logger = logging.getLogger('visDianosticPlot')
+logger.setLevel(logging.INFO)
+
 
 class VisDianosticPlot(object):
 
@@ -144,12 +157,12 @@ class VisDianosticPlot(object):
 
 
     def visCreateNewPlot(self,title, xLabel, yLabel, size=(8, 8), 
-        aspectRatio="equal", **kwargs):
+        aspectRatio="equal", patchAlpha=0, **kwargs):
         
 
         #plt.figure(figsize=size, facecolor="white", tight_layout=True, **kwargs)
         fig, ax = plt.subplots(figsize=size, facecolor="white", **kwargs)
-        fig.patch.set_alpha(1)
+        fig.patch.set_alpha(patchAlpha)
         plt.clf()
         plt.title(title)
         plt.xlabel(xLabel)
@@ -261,9 +274,12 @@ class VisDianosticPlot(object):
 
     def visCobraCenter(self, compareObj = 'xml', histo=False, unitLable=True, **kwargs):
         
+        '''
+            compareObj:  The target we compare with.  Typically, it is the data-compareObj
+        '''
         
         ax = plt.gca()
-
+        title = ax.get_title()
         if compareObj == 'xml':
             idx =np.sort(np.append(self.badIdx,self.badrange))
             goodIdx = [i for i in range(2394) if i not in idx]
@@ -293,17 +309,151 @@ class VisDianosticPlot(object):
         diff = np.sqrt(dx**2+dy**2)
 
         if histo is True:
-            n, bins, patches = plt.hist(diff,range=(0,0.1), bins=30, color='#0504aa',
+            
+            ax1 = plt.subplot(212)
+            n, bins, patches = ax1.hist(diff,range=(0,np.mean(diff)+3*np.std(diff)), bins=15, color='#0504aa',
                 alpha=0.7)
+            ax1.text(0.8, 0.8, f'Mean = {np.mean(diff):.2f}, $\sigma$={np.std(diff):.2f}', 
+                horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
+            ax1.set_title('2D')
+            ax1.set_xlabel('distance (mm)')
+            ax1.set_ylabel('Counts')
+            ax1.set_ylim(0,1.2*np.max(n))
+
+
+            ax2 = plt.subplot(221)
+            ax2.hist(dx,range=(np.mean(dx)-3*np.std(dx),np.mean(dx)+3*np.std(dx)), 
+                bins=30, color='#0504aa',alpha=0.7)
+            ax2.text(0.7, 0.8, f'Mean = {np.mean(dx):.2f}, $\sigma$={np.std(dx):.2f}', 
+                horizontalalignment='center', verticalalignment='center', transform=ax2.transAxes)
+            ax2.set_title('X direction')
+            ax2.set_xlabel('distance (mm)')
+            ax2.set_ylabel('Counts')
+            ax2.set_ylim(0,1.2*np.max(n))
+
+
+            ax3 = plt.subplot(222, sharey = ax2)
+            ax3.tick_params(axis='both',labelleft=False)
+
+
+            ax3.hist(dy,range=(np.mean(dy)-3*np.std(dx),np.mean(dy)+3*np.std(dx)), 
+                bins=30, color='#0504aa', alpha=0.7)
+            ax3.text(0.7, 0.8, f'Mean = {np.mean(dy):.2f}, $\sigma$={np.std(dy):.2f}', 
+                horizontalalignment='center', verticalalignment='center', transform=ax3.transAxes)
+
+            ax3.set_title('Y direction')
+            ax3.set_xlabel('distance (mm)')
+            plt.subplots_adjust(wspace=0,hspace=0.3)
+
+            plt.suptitle(title, fontsize=16)
+
 
         else:
-            q=ax.quiver(x,y, 
-                    dx, dy, color='red',units='xy',**kwargs)
+            
+            sigma = np.std(diff)
+            logger.info(f'Mean = {np.mean(diff):.2f}, Median = {np.median(diff):.2f} Std={np.std(diff):.2f}')
+            logger.info(f'CobraIdx for large center variant :{np.where(diff >= np.median(diff)+2.0*sigma)[0]}')
+
+            indx = np.where(diff < np.median(diff)+2.0*sigma)[0]
+            
+            q=ax.quiver(x[indx],y[indx], 
+                    dx[indx], dy[indx], color='red',units='xy',**kwargs)
 
             if unitLable is True:
-                ax.quiverkey(q, X=0.2, Y=0.95, U=0.5,
-                    label='length = 0.5 mm', labelpos='E')
+                ax.quiverkey(q, X=0.2, Y=0.95, U=0.05,
+                    label='length = 0.05 mm', labelpos='E')
 
+    def visFiducialResidual(self, visitID, subID):
+
+        butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
+        fids = butler.get('fiducials')
+
+        frameid=visitID*100+subID
+
+        try:
+            db=opdb.OpDB(hostname='db-ics', port=5432,dbname='opdb',
+                        username='pfs')
+            mcsData = db.bulkSelect('mcs_data','select * from mcs_data where '
+                            f'mcs_frame_id = {frameid}').sort_values(by=['spot_id']).reset_index()
+            teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
+                      f'mcs_frame_id = {frameid}')
+        except:
+            db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
+                        username='pfs')
+
+            mcsData = db.bulkSelect('mcs_data','select * from mcs_data where '
+                            f'mcs_frame_id = {frameid}').sort_values(by=['spot_id']).reset_index()
+            teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
+                      f'mcs_frame_id = {frameid}')
+
+        pt = PfiTransform(altitude=teleInfo['altitude'].values[0], 
+                insrot=teleInfo['insrot'].values[0])
+
+        pt.updateTransform(mcsData, fids)
+
+        matchid= np.where(pt.match_fid != -1)[0]
+        ff_mcs_x=mcsData['mcs_center_x_pix'].values[matchid]
+        ff_mcs_y=mcsData['mcs_center_y_pix'].values[matchid]
+
+        x_mm, y_mm = pt.mcsToPfi(ff_mcs_x,ff_mcs_y)
+
+        traPt = x_mm+y_mm*1j
+        oriPt = fids['x_mm'].values+fids['y_mm'].values*1j
+
+        ranPt = []
+        for i in oriPt:
+            d = np.abs(i-traPt)
+            if np.min(d) < 1:
+                ix = np.where(d == np.min(d))
+                ranPt.append(traPt[ix[0]][0])
+            else:
+                ranPt.append(i)
+        ranPt = np.array(ranPt)
+
+        dx=oriPt.real-ranPt.real
+        dy=oriPt.imag-ranPt.imag
+
+        diff = np.sqrt(dx**2+dy**2)
+
+        ax0 = plt.subplot(224)
+        ax0.plot(x_mm,y_mm,'r.')
+        ax0.plot(fids['x_mm'].values, fids['y_mm'].values,'b+')
+
+
+        ax1 = plt.subplot(223)
+        n, bins, patches = ax1.hist(diff,range=(0,np.mean(diff)+1*np.std(diff)), bins=10, color='#0504aa',
+            alpha=0.7)
+        ax1.text(0.8, 0.8, f'Mean = {np.mean(diff):.2f}, $\sigma$={np.std(diff):.2f}', 
+            horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
+        ax1.set_title('2D')
+        ax1.set_xlabel('distance (mm)')
+        ax1.set_ylabel('Counts')
+        ax1.set_ylim(0,1.2*np.max(n))
+
+
+        ax2 = plt.subplot(221)
+        ax2.hist(dx,range=(np.mean(dx)-2*np.std(dx),np.mean(dx)+2*np.std(dx)), 
+            bins=15, color='#0504aa',alpha=0.7)
+        ax2.text(0.7, 0.8, f'Mean = {np.mean(dx):.2f}, $\sigma$={np.std(dx):.2f}', 
+            horizontalalignment='center', verticalalignment='center', transform=ax2.transAxes)
+        ax2.set_title('X direction')
+        ax2.set_xlabel('distance (mm)')
+        ax2.set_ylabel('Counts')
+        ax2.set_ylim(0,1.2*np.max(n))
+
+
+        ax3 = plt.subplot(222, sharey = ax2)
+        ax3.tick_params(axis='both',labelleft=False)
+
+
+        ax3.hist(dy,range=(np.mean(dy)-2*np.std(dx),np.mean(dy)+2*np.std(dx)), 
+            bins=15, color='#0504aa', alpha=0.7)
+        ax3.text(0.7, 0.8, f'Mean = {np.mean(dy):.2f}, $\sigma$={np.std(dy):.2f}', 
+            horizontalalignment='center', verticalalignment='center', transform=ax3.transAxes)
+
+        ax3.set_title('Y direction')
+        ax3.set_xlabel('distance (mm)')
+        plt.subplots_adjust(wspace=0,hspace=0.3)
 
 
     
