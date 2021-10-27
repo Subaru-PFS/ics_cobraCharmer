@@ -4,10 +4,23 @@ from ics.cobraCharmer import pfiDesign
 import os
 import sys
 from ics.cobraCharmer import func
+import pandas as pd
+import logging 
 
+from pfs.utils.butler import Butler
+from pfs.utils.coordinates.transform import PfiTransform
+from opdb import opdb
 
 binSize = np.deg2rad(3.6)
 regions = 112
+
+
+logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
+                    datefmt="%Y-%m-%dT%H:%M:%S")
+logger = logging.getLogger('calculation')
+logger.setLevel(logging.INFO)
+
+
 
 def lazyIdentification(centers, spots, radii=None):
     n = len(centers)
@@ -24,7 +37,7 @@ def lazyIdentification(centers, spots, radii=None):
     return ans
 
 def circle_fitting(p):
-    # Remove nan in array
+    # Remove nan 
     p=p[~np.isnan(p)]
     x = np.real(p)
     y = np.imag(p)
@@ -32,6 +45,23 @@ def circle_fitting(p):
     n = np.array(x*x + y*y)
     a, b, c = np.linalg.lstsq(m, n, rcond=None)[0]
     return a/2, b/2, np.sqrt(c+(a*a+b*b)/4)
+
+def filtered_circle_fitting(fw, rv, threshold=1.0):
+    data = np.array([], complex)
+    for k in range(len(fw)):
+        valid = np.where(np.abs(fw[k] - fw[k,-1]) > threshold)[0]
+        if len(valid) > 0:
+            last = valid[-1]
+            data = np.append(data, fw[k,1:last+1])
+    for k in range(len(rv)):
+        valid = np.where(np.abs(rv[k] - rv[k,-1]) > threshold)[0]
+        if len(valid) > 0:
+            last = valid[-1]
+            data = np.append(data, rv[k,1:last+1])
+    if len(data) <= 3:
+        return 0, 0, 0
+    else:
+        return circle_fitting(data)
 
 def transform(origPoints, newPoints):
     """ return the tranformation parameters and a function that can convert origPoints to newPoints """
@@ -194,7 +224,7 @@ class Calculation():
 
         return pos, target
 
-    def extractPositionsFromImage(self, data, arm=None, guess=None, tolerance=None):
+    def extractPositionsFromImage(self, data, frameid, arm=None, guess=None, tolerance=None):
         idx = self.visibleIdx
         
         if arm is None:
@@ -222,21 +252,55 @@ class Calculation():
         data_sub = data - bkg
 
         #sigma = np.std(data_sub)
-        ext = sep.extract(data_sub.astype(float), 20 , err=bkg.globalrms,
+        ext = sep.extract(data_sub.astype(float), 10 , err=bkg.globalrms,
             filter_type='conv', minarea=9)
         
+        # using FF to transform pixel to mm
+        butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
+        fids = butler.get('fiducials')
         
-        pos = np.array(ext['x'] + ext['y']*(1j))
+        try:
+            db=opdb.OpDB(hostname='db-ics', port=5432,
+                    dbname='opdb',
+                    username='pfs')
+            teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
+                      f'mcs_frame_id = {frameid}')
+            mcsData = db.bulkSelect('mcs_data',f'select spot_id, mcs_center_x_pix, mcs_center_y_pix '
+                    f'from mcs_data where mcs_frame_id = {frameid}')
+
+        except:
+            db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
+                        username='pfs')
+            teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
+                      f'mcs_frame_id = {frameid}')
+            mcsData = db.bulkSelect('mcs_data',f'select spot_id, mcs_center_x_pix, mcs_center_y_pix '
+                    f'from mcs_data where mcs_frame_id = {frameid}')
+
+        pt = PfiTransform(altitude=teleInfo['altitude'].values[0], 
+                insrot=teleInfo['insrot'].values[0])
+        pt.updateTransform(mcsData, fids, matchRadius=2.0)
+
+        x_mm, y_mm = pt.mcsToPfi(ext['x'],ext['y'])
+        
+        pos=x_mm+y_mm*(1j)
+        
+        #pos = np.array(ext['x'] + ext['y']*(1j))
 
         # When doing the matching, always looking for spots close to center.
         #target = lazyIdentification(self.calibModel.centers[idx], pos, radii=radii)
         target = lazyIdentification(centers, pos, radii=radii)
 
+        # Read DOT location
+        dotFile = '/software/devel/pfs/pfs_instdata/data/pfi/dot/black_dots_mm.csv'
+        newDot=pd.read_csv(dotFile)
+
+
         mpos = np.zeros(len(idx), dtype=complex)
         for n, k in enumerate(target):
             if k < 0:
                 # If the target failed to match, use last position (guess)
-                mpos[n] = centers[n]
+                #mpos[n] = centers[n]
+                mpos[n] = newDot['x'][n]+newDot['y'][n]*1j
             else:
                 mpos[n] = pos[k]
 
