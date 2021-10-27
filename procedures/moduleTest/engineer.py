@@ -553,7 +553,7 @@ def convergenceTest(cIds, runs=8,
     np.save(dataPath / 'moves', moves)
     return targets, moves
 
-def detectCorbaSpotsFromRun(runDir,xml, scale,arm='theta',stepsize=250, flip=False):
+def detectCorbaSpotsFromRun(runDir,xml,arm='theta',stepsize=250, flip=False):
 
     path = f'/data/MCS/{runDir}/'
     if os.path.exists(path) is not True:
@@ -598,7 +598,7 @@ def detectCorbaSpotsFromRun(runDir,xml, scale,arm='theta',stepsize=250, flip=Fal
         data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
         if flip is True:
             data1=(np.flip(data1).T).copy(order='C')
-        thetaFW[goodIdx, n, 0] = cal.extractPositionsFromImage(data1,arm='theta',tolerance=1.2*scale)
+        thetaFW[goodIdx, n, 0] = cal.extractPositionsFromImage(data1, cid,tolerance=0.8)
 
         for k in range(iteration):
             cid+=1
@@ -606,15 +606,15 @@ def detectCorbaSpotsFromRun(runDir,xml, scale,arm='theta',stepsize=250, flip=Fal
             data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
             if flip is True:
                 data1=(np.flip(data1).T).copy(order='C')
-            thetaFW[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1,arm='theta',guess=thetaFW[goodIdx, n, k],
-                                                                    tolerance=scale)
+            thetaFW[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1, cid ,
+                                                                    tolerance=0.8)
                 
         cid+=1
         print(f'thetaEnd = {cid}')
         data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
         if flip is True:
             data1=(np.flip(data1).T).copy(order='C')
-        thetaRV[goodIdx, n, 0] = cal.extractPositionsFromImage(data1,arm='theta',tolerance=1.2*scale)
+        thetaRV[goodIdx, n, 0] = cal.extractPositionsFromImage(data1, cid,tolerance=0.8)
         
         for k in range(iteration):
             cid+=1
@@ -622,8 +622,8 @@ def detectCorbaSpotsFromRun(runDir,xml, scale,arm='theta',stepsize=250, flip=Fal
             data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
             if flip is True:
                 data1=(np.flip(data1).T).copy(order='C')
-            thetaRV[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1,arm='theta',guess=thetaRV[goodIdx, n, k],
-                                                                tolerance=scale)
+            thetaRV[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1, cid,
+                                                                tolerance=0.8)
     t2 = time.time()
     print(f'total time = {t2 - t1}')
     return thetaFW, thetaRV, cal
