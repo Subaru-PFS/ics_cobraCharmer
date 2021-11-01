@@ -364,36 +364,41 @@ class VisDianosticPlot(object):
                     label='length = 0.05 mm', labelpos='E')
     
     def visFiducialXYStage(self, temp=[0,0], compEL=[90,60]):
+        '''
+            This function plots the residuals of FF measuremet from XY stage.
+        
+        '''
+        
         try:
             db=opdb.OpDB(hostname='db-ics', port=5432,dbname='opdb',
                         username='pfs')
             fidDataOne = db.bulkSelect('fiducial_fiber_geometry','select * from fiducial_fiber_geometry where '
-                        f' ambient_temp = {temp[0]} and elevation = {compEL[0]} and fiducial_fiber_calib_id > 6')
+                        f' ambient_temp = {temp[0]} and elevation = {compEL[0]} and fiducial_fiber_calib_id > 6').set_index('fiducial_fiber_id')
             fidDataTwo = db.bulkSelect('fiducial_fiber_geometry','select * from fiducial_fiber_geometry where '
-                        f' ambient_temp = {temp[1]} and elevation = {compEL[1]} and fiducial_fiber_calib_id > 6')
+                        f' ambient_temp = {temp[1]} and elevation = {compEL[1]} and fiducial_fiber_calib_id > 6').set_index('fiducial_fiber_id')
         except:
             db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
                         username='pfs')
             fidDataOne = db.bulkSelect('fiducial_fiber_geometry','select * from fiducial_fiber_geometry where '
-                        f' ambient_temp = {temp[0]} and elevation = {compEL[0]} and fiducial_fiber_calib_id > 6')
+                        f' ambient_temp = {temp[0]} and elevation = {compEL[0]} and fiducial_fiber_calib_id > 6').set_index('fiducial_fiber_id')
             fidDataTwo = db.bulkSelect('fiducial_fiber_geometry','select * from fiducial_fiber_geometry where '
-                        f' ambient_temp = {temp[1]} and elevation = {compEL[1]} and fiducial_fiber_calib_id > 6')
+                        f' ambient_temp = {temp[1]} and elevation = {compEL[1]} and fiducial_fiber_calib_id > 6').set_index('fiducial_fiber_id')
 
         ax=plt.gca()
 
-        dx = -fidDataOne['ff_center_on_pfi_x_mm']-fidDataTwo['ff_center_on_pfi_x_mm']
-        dy = -fidDataOne['ff_center_on_pfi_y_mm']-fidDataTwo['ff_center_on_pfi_y_mm']
+        dx = -fidDataOne['ff_center_on_pfi_x_mm']+fidDataTwo['ff_center_on_pfi_x_mm']
+        dy = fidDataOne['ff_center_on_pfi_y_mm']-fidDataTwo['ff_center_on_pfi_y_mm']
         
-        ax.plot(fidDataOne['ff_center_on_pfi_x_mm'],fidDataOne['ff_center_on_pfi_y_mm'],'r.', label='EL90')
-        ax.plot(fidDataTwo['ff_center_on_pfi_x_mm'],fidDataTwo['ff_center_on_pfi_y_mm'],'b+',label='EL60')
-        q=ax.quiver(fidDataOne['ff_center_on_pfi_x_mm'],fidDataOne['ff_center_on_pfi_y_mm'],
+        ax.plot(-fidDataOne['ff_center_on_pfi_x_mm'],fidDataOne['ff_center_on_pfi_y_mm'],'r.', label='EL90')
+        ax.plot(-fidDataTwo['ff_center_on_pfi_x_mm'],fidDataTwo['ff_center_on_pfi_y_mm'],'b+',label='EL60')
+        q=ax.quiver(-fidDataOne['ff_center_on_pfi_x_mm'],fidDataOne['ff_center_on_pfi_y_mm'],
                 dx,dy,color='red',units='xy')
         ax.quiverkey(q, X=0.15, Y=0.95, U=0.05,
                                 label='length = 0.05 mm', labelpos='E')
         ax.legend()
 
     def visFiducialResidual(self, visitID, subID, temp=0, elevation=90, ffdata='opdb',
-        vectorOnly=False):
+        vectorOnly=False, vectorLength=0.05):
 
         butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
         fids = butler.get('fiducials')
@@ -408,7 +413,8 @@ class VisDianosticPlot(object):
             teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
                       f'mcs_frame_id = {frameid}')
             fidData = db.bulkSelect('fiducial_fiber_geometry','select * from fiducial_fiber_geometry where '
-                        f' ambient_temp = {temp} and elevation = {elevation} and fiducial_fiber_calib_id > 6')
+                        f' ambient_temp = {temp} and elevation = {elevation} '
+                        f'and fiducial_fiber_calib_id > 6').set_index('fiducial_fiber_id')
         except:
             db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
                         username='pfs')
@@ -418,12 +424,20 @@ class VisDianosticPlot(object):
             teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
                       f'mcs_frame_id = {frameid}')
             fidData = db.bulkSelect('fiducial_fiber_geometry','select * from fiducial_fiber_geometry where '
-                        f' ambient_temp = {temp} and elevation = {elevation} and fiducial_fiber_calib_id > 6')
+                        f' ambient_temp = {temp} and elevation = {elevation} '
+                        f'and fiducial_fiber_calib_id > 6').set_index('fiducial_fiber_id')
 
         pt = PfiTransform(altitude=teleInfo['altitude'].values[0], 
                 insrot=teleInfo['insrot'].values[0])
-
-        pt.updateTransform(mcsData, fids)
+        if ffdata is 'insdata':
+            pt.updateTransform(mcsData, fids)
+        else:
+            # massage the data from opdb first.
+            ffData =  { 'fiducialId': fidData.index, 
+                    'x_mm' :-fidData['ff_center_on_pfi_x_mm'].values,
+                     'y_mm' :fidData['ff_center_on_pfi_y_mm'].values
+            }
+            pt.updateTransform(mcsData, pd.DataFrame(ffData),matchRadius=3.2)
 
         matchid= np.where(pt.match_fid != -1)[0]
         ff_mcs_x=mcsData['mcs_center_x_pix'].values[matchid]
@@ -441,7 +455,7 @@ class VisDianosticPlot(object):
         ranPt = []
         for i in oriPt:
             d = np.abs(i-traPt)
-            if np.min(d) < 1:
+            if np.min(d) < 2:
                 ix = np.where(d == np.min(d))
                 ranPt.append(traPt[ix[0]][0])
             else:
@@ -456,10 +470,13 @@ class VisDianosticPlot(object):
         if vectorOnly is True:
             ax=plt.gca()
             ax.plot(x_mm,y_mm,'r.', label='MCS projection')
-            ax.plot(fids['x_mm'].values, fids['y_mm'].values,'b+',label='XY stage')
-            q=ax.quiver(x_mm,y_mm,dx,dy,color='red',units='xy')
-            ax.quiverkey(q, X=0.2, Y=0.95, U=0.05,
-                        label='length = 0.05 mm', labelpos='E')
+            if ffdata is 'insdata':
+                ax.plot(fids['x_mm'].values, fids['y_mm'].values,'b+',label='XY stage')
+            else:
+                ax.plot(oriPt.real, oriPt.imag,'b+',label='XY stage')
+            q=ax.quiver(oriPt.real, oriPt.imag,dx,dy,color='red',units='xy')
+            ax.quiverkey(q, X=0.2, Y=0.95, U=vectorLength,
+                        label=f'length = {vectorLength} mm', labelpos='E')
             ax.legend()
         else:
 
@@ -467,8 +484,8 @@ class VisDianosticPlot(object):
             ax0.plot(x_mm,y_mm,'r.', label='MCS projection')
             ax0.plot(fids['x_mm'].values, fids['y_mm'].values,'b+',label='XY stage')
             q=ax0.quiver(x_mm,y_mm,dx,dy,color='red',units='xy')
-            ax0.quiverkey(q, X=0.2, Y=0.95, U=0.05,
-                        label='length = 0.05 mm', labelpos='E')
+            ax0.quiverkey(q, X=0.2, Y=0.95, U=vectorLength,
+                        label=f'length = {vectorLength} mm', labelpos='E')
             ax0.legend()
 
             ax1 = plt.subplot(223)
