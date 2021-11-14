@@ -313,7 +313,7 @@ def phiConvergenceTest(cIds, margin=15.0, runs=50, tries=8, fast=False, toleranc
 def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
                  tolerance=0.1, tries=6, homed=False,
                  newDir=True, thetaFast=False, phiFast=False,
-                 threshold=10.0, thetaMargin=np.deg2rad(15.0)):
+                 threshold=10.0, thetaMargin=np.deg2rad(15.0), targetTab = None):
     """
     move cobras to the target angles
 
@@ -331,6 +331,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     phiFast: using fast if true else slow phi motor maps
     threshold: using slow motor maps if the distance to the target is below this value
     thetaMargin : the minimum theta angles to the theta hard stops
+    targetTab : the cobra target table object
 
     Returns
     ----
@@ -410,6 +411,11 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
         _phiFast = farAwayMask[notDoneMask] & phiFast[notDoneMask]
         cc.thetaScaling = np.logical_not(farAwayMask)
         cc.phiScaling = np.logical_not(farAwayMask)
+        
+        if targetTab is not None:
+            targetTab.makeTargetTable(targets, targetThetas, targetPhis)    
+            targetTab.writeTaegetTable()
+            
         atThetas[notDoneMask], atPhis[notDoneMask] = \
             cc.moveToAngles(cobras, targetThetas[notDoneMask], targetPhis[notDoneMask], _thetaFast, _phiFast, True)
 
