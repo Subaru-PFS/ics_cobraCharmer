@@ -1754,10 +1754,10 @@ def convergenceTestX(cIds, runs=3, thetaMargin=np.deg2rad(15.0), phiMargin=np.de
     np.save(dataPath / 'moves', moves)
     return targets, moves
 
-def moveToPhiAngleForDot(cIds, phiAngle, tolerance=0.2, tries=10, homed=True, newDir=False, threshold=20.0, 
-    thetaMargin=np.deg2rad(15.0)):
-    ''' Move to a location with specified phi angle'''
-    
+def moveToPhiAngleForDot(cIds, phiAngle, tolerance=0.2, tries=10, homed=True, newDir=False, 
+    threshold=20.0, thetaMargin=np.deg2rad(15.0)):
+    """ Move to a location with specified phi angle """
+
     phis = np.deg2rad(phiAngle)
 
     # move theta arms away from the bench center and phi arms to 60 degree

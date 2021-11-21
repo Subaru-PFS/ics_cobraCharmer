@@ -213,7 +213,7 @@ class VisDianosticPlot(object):
                             linewidth=0.5,linestyle='-.')
 
         if thetaAngle is not None:
-            self._addLine(des.centers,des.L1,thetaAngle+des.tht0,color='blue',
+            self._addLine(des.centers,des.L1,thetaAngle,color='blue',
                     linewidth=2,linestyle='-')
 
         if phiAngle is not None:
