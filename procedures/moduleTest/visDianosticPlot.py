@@ -34,7 +34,8 @@ from opdb import opdb
 import logging
 
 from pfs.utils.butler import Butler
-from pfs.utils.coordinates.transform import PfiTransform
+import pfs.utils.coordinates.transform as transformUtils
+
 
 
 
@@ -244,13 +245,78 @@ class VisDianosticPlot(object):
                    des.L1[i]+des.L2[i], facecolor=('#D9DAFC'),edgecolor=None, 
                    fill=True,alpha=0.7)
                 ax.add_artist(d)
-        
-
-    def visSubaruConvergence(self,**kwargs):
+    
+    def visVisitAllSpots(self, psfVisitID = None):
         ax = plt.gca()
 
-        visitID = int(self._findFITS()[0][-12:-7])
-        subID = 11
+        if psfVisitID is None:
+            visitID = int(self._findFITS()[0][-12:-7])
+        else:
+            visitID = psfVisitID
+
+        path=f'{self.path}/data/'
+
+        tarfile = path+'targets.npy'
+        targets=np.load(tarfile)
+
+        butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
+
+        # Read fiducial and spot geometry
+        fids = butler.get('fiducials')
+
+        
+        db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
+                                username='pfs')
+
+        for sub in range(12):
+            subid=sub
+
+            frameid = visitID*100+subid
+
+        
+
+            mcsData = db.bulkSelect('mcs_data','select * from mcs_data where '
+                    f'mcs_frame_id = {frameid}').sort_values(by=['spot_id']).reset_index()
+            teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
+                    f'mcs_frame_id = {frameid}')
+
+        
+            pt = transformUtils.fromCameraName('canon',altitude=teleInfo['altitude'].values[0], 
+                        insrot=teleInfo['insrot'].values[0])
+        
+        
+        
+            outerRing = np.zeros(len(fids), dtype=bool)
+            for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
+                outerRing[fids.fiducialId == i] = True
+            pt.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
+            
+            for i in range(2):
+                pt.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
+        
+            xx , yy = pt.mcsToPfi(mcsData['mcs_center_x_pix'],mcsData['mcs_center_y_pix'])
+            ax.plot(xx,yy,'.',label=f'{sub}')
+
+        
+        ax.plot(targets.real,targets.imag,'+')
+
+        ax.legend()
+
+
+
+    def visSubaruConvergence(self, psfVisitID=None, subVisit=11, 
+        histo=False, range=(0,0.08), bins=20, **kwargs):
+        
+        ax = plt.gca()
+
+        if psfVisitID is None:
+            visitID = int(self._findFITS()[0][-12:-7])
+        else:
+            visitID = psfVisitID
+        
+        if subVisit is not None:    
+            subID = subVisit
+
         frameid = visitID*100+subID
 
         db=opdb.OpDB(hostname='pfsa-db01', port=5432,
@@ -267,10 +333,32 @@ class VisDianosticPlot(object):
         dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
             (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
 
-        sc=ax.scatter(self.calibModel.centers.real[self.goodIdx],self.calibModel.centers.imag[self.goodIdx],
-            c=dist,marker='s',**kwargs)
+        if histo is True:
+            ax.set_aspect('auto')
+            for subID in np.arange(subVisit,12):
+                
+                frameid = visitID*100+subID
+
+                db=opdb.OpDB(hostname='pfsa-db01', port=5432,
+                        dbname='opdb',username='pfs')
+
+                match = db.bulkSelect('cobra_match','select * from cobra_match where '
+                            f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
         
-        plt.colorbar(sc)
+
+                dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
+                            (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
+                n, bins, patches = ax.hist(dist,range=range, bins=bins, alpha=0.7,
+                    label=f'{subID+1}-th Iteration')
+
+            plt.legend(loc='upper right')
+
+
+        else:
+            sc=ax.scatter(self.calibModel.centers.real[self.goodIdx],self.calibModel.centers.imag[self.goodIdx],
+                c=dist,marker='s',**kwargs)
+        
+            plt.colorbar(sc)
 
     def visCobraCenter(self, compareObj = 'xml', histo=False, unitLable=True, **kwargs):
         
