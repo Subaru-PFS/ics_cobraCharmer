@@ -246,7 +246,7 @@ class VisDianosticPlot(object):
                    fill=True,alpha=0.7)
                 ax.add_artist(d)
     
-    def visVisitAllSpots(self, psfVisitID = None):
+    def visVisitAllSpots(self, psfVisitID = None, subVisit = None):
         ax = plt.gca()
 
         if psfVisitID is None:
@@ -273,29 +273,32 @@ class VisDianosticPlot(object):
 
             frameid = visitID*100+subid
 
-        
+            match = db.bulkSelect('cobra_match','select * from cobra_match where '
+                      f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
 
             mcsData = db.bulkSelect('mcs_data','select * from mcs_data where '
                     f'mcs_frame_id = {frameid}').sort_values(by=['spot_id']).reset_index()
             teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
                     f'mcs_frame_id = {frameid}')
 
-        
-            pt = transformUtils.fromCameraName('canon',altitude=teleInfo['altitude'].values[0], 
+            if subid == 0:
+                logger.info(f'Using first frame for transformation')
+                pt = transformUtils.fromCameraName('canon',altitude=teleInfo['altitude'].values[0], 
                         insrot=teleInfo['insrot'].values[0])
         
         
         
-            outerRing = np.zeros(len(fids), dtype=bool)
-            for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
-                outerRing[fids.fiducialId == i] = True
-            pt.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
+                outerRing = np.zeros(len(fids), dtype=bool)
+                for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
+                    outerRing[fids.fiducialId == i] = True
+                pt.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
             
-            for i in range(2):
-                pt.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
+                for i in range(2):
+                    pt.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
         
             xx , yy = pt.mcsToPfi(mcsData['mcs_center_x_pix'],mcsData['mcs_center_y_pix'])
             ax.plot(xx,yy,'.',label=f'{sub}')
+            ax.plot(match['pfi_center_x_mm'],match['pfi_center_y_mm'],'x')
 
         
         ax.plot(targets.real,targets.imag,'+')
@@ -349,6 +352,7 @@ class VisDianosticPlot(object):
                 dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
                             (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
                 n, bins, patches = ax.hist(dist,range=range, bins=bins, alpha=0.7,
+                    histtype='step',linewidth=3,
                     label=f'{subID+1}-th Iteration')
 
             plt.legend(loc='upper right')
@@ -451,6 +455,14 @@ class VisDianosticPlot(object):
                 ax.quiverkey(q, X=0.2, Y=0.95, U=0.05,
                     label='length = 0.05 mm', labelpos='E')
     
+    def visFiducialFiber(self):
+        ax=plt.gca()
+        butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
+        fids = butler.get('fiducials')
+
+        ax.plot(fids['x_mm'].values,fids['y_mm'].values,'b+')
+
+
     def visFiducialXYStage(self, temp=[0,0], compEL=[90,60]):
         '''
             This function plots the residuals of FF measuremet from XY stage.
@@ -485,6 +497,80 @@ class VisDianosticPlot(object):
                                 label='length = 0.05 mm', labelpos='E')
         ax.legend()
 
+    def visAllFFSpots(self, psfVisitID=None, vector=True, vectorLength=0.05):
+
+        ax=plt.gca()
+
+        butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
+
+        # Read fiducial and spot geometry
+        fids = butler.get('fiducials')
+
+        db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
+                                username='pfs')
+
+        ffpos_array=[]
+        for sub in range(12):
+            subid=sub
+
+            frameid = psfVisitID*100+subid
+
+            
+
+            mcsData = db.bulkSelect('mcs_data','select * from mcs_data where '
+                    f'mcs_frame_id = {frameid}').sort_values(by=['spot_id']).reset_index()
+            teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
+                    f'mcs_frame_id = {frameid}')
+
+            if subid == 0:
+                logger.info(f'Using first frame for transformation')
+                pt = transformUtils.fromCameraName('canon',altitude=teleInfo['altitude'].values[0], 
+                        insrot=teleInfo['insrot'].values[0])
+        
+        
+        
+                outerRing = np.zeros(len(fids), dtype=bool)
+                for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
+                    outerRing[fids.fiducialId == i] = True
+                pt.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
+            
+                for i in range(2):
+                    pt.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
+            xx , yy = pt.mcsToPfi(mcsData['mcs_center_x_pix'],mcsData['mcs_center_y_pix'])
+            oriPt = fids['x_mm'].values+fids['y_mm'].values*1j
+            
+            traPt = xx+yy*1j
+            traPt = traPt[~np.isnan(traPt)]
+            ranPt = []
+            for i in oriPt:
+                d = np.abs(i-traPt)
+                if np.min(d) < 2:
+                    ix = np.where(d == np.min(d))
+                    ranPt.append(traPt[ix[0]][0])
+                else:
+                    ranPt.append(i)
+            ranPt = np.array(ranPt)
+
+            ffpos_array.append(ranPt)
+            ax.plot(ranPt.real,ranPt.imag,'.',label=f'{sub}')
+        
+        ffpos_array=np.array(ffpos_array)
+
+        ffpos = np.mean(ffpos_array,axis=0)
+        ffstd = np.abs(np.std(ffpos_array,axis=0))
+        ax.plot(fids['x_mm'].values, fids['y_mm'].values,'b+',label='FF')
+        ax.plot(ffpos.real, ffpos.imag,'r+',label='Avg')
+        if vector is True:
+            q=ax.quiver(oriPt.real, oriPt.imag,
+                    ffpos.real-oriPt.real, ffpos.imag-oriPt.imag,
+                    color='red',units='xy')
+        
+        
+            ax.quiverkey(q, X=0.2, Y=0.95, U=vectorLength,
+                        label=f'length = {vectorLength} mm', labelpos='E')
+        #ax.legend()
+
+
     def visFiducialResidual(self, visitID, subID, temp=0, elevation=90, ffdata='opdb',
         vectorOnly=False, vectorLength=0.05):
 
@@ -492,49 +578,65 @@ class VisDianosticPlot(object):
         fids = butler.get('fiducials')
 
         frameid=visitID*100+subID
-
+        firstFrame = visitID*100
+        logger.info(f'frameID = {frameid}, firstFrame={firstFrame}')
         try:
             db=opdb.OpDB(hostname='db-ics', port=5432,dbname='opdb',
                         username='pfs')
+
             mcsData = db.bulkSelect('mcs_data','select * from mcs_data where '
-                            f'mcs_frame_id = {frameid}').sort_values(by=['spot_id']).reset_index()
+                        f'mcs_frame_id = {frameid}').sort_values(by=['spot_id']).reset_index()
+            mcsDataFirstFrame = db.bulkSelect('mcs_data','select * from mcs_data where '
+                        f'mcs_frame_id = {firstFrame}').sort_values(by=['spot_id']).reset_index()
             teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
-                      f'mcs_frame_id = {frameid}')
+                    f'mcs_frame_id = {frameid}')
             fidData = db.bulkSelect('fiducial_fiber_geometry','select * from fiducial_fiber_geometry where '
-                        f' ambient_temp = {temp} and elevation = {elevation} '
-                        f'and fiducial_fiber_calib_id > 6').set_index('fiducial_fiber_id')
+                    f' ambient_temp = {temp} and elevation = {elevation} '
+                    f'and fiducial_fiber_calib_id > 6').set_index('fiducial_fiber_id')
+
         except:
             db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
                         username='pfs')
 
             mcsData = db.bulkSelect('mcs_data','select * from mcs_data where '
                             f'mcs_frame_id = {frameid}').sort_values(by=['spot_id']).reset_index()
+            mcsDataFirstFrame = db.bulkSelect('mcs_data','select * from mcs_data where '
+                            f'mcs_frame_id = {firstFrame}').sort_values(by=['spot_id']).reset_index()
             teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
-                      f'mcs_frame_id = {frameid}')
+                        f'mcs_frame_id = {frameid}')
             fidData = db.bulkSelect('fiducial_fiber_geometry','select * from fiducial_fiber_geometry where '
                         f' ambient_temp = {temp} and elevation = {elevation} '
                         f'and fiducial_fiber_calib_id > 6').set_index('fiducial_fiber_id')
+            
+        pfiTransform = transformUtils.fromCameraName('canon50M',
+            altitude=teleInfo['altitude'].values[0],
+            insrot=teleInfo['insrot'].values[0])
 
-        pt = PfiTransform(altitude=teleInfo['altitude'].values[0], 
-                insrot=teleInfo['insrot'].values[0])
+
         if ffdata is 'insdata':
-            pt.updateTransform(mcsData, fids)
+            outerRing = np.zeros(len(fids), dtype=bool)
+            for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
+                outerRing[fids.fiducialId == i] = True
+        
+            pfiTransform.updateTransform(mcsDataFirstFrame, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
+            
+            for i in range(2):
+                pfiTransform.updateTransform(mcsDataFirstFrame, fids, matchRadius=4.2,nMatchMin=0.1)
         else:
             # massage the data from opdb first.
             ffData =  { 'fiducialId': fidData.index, 
                     'x_mm' :-fidData['ff_center_on_pfi_x_mm'].values,
                      'y_mm' :fidData['ff_center_on_pfi_y_mm'].values
             }
-            pt.updateTransform(mcsData, pd.DataFrame(ffData),matchRadius=3.2)
+            pfiTransform.updateTransform(mcsData, pd.DataFrame(ffData),matchRadius=3.2)
 
-        matchid= np.where(pt.match_fid != -1)[0]
-        ff_mcs_x=mcsData['mcs_center_x_pix'].values[matchid]
-        ff_mcs_y=mcsData['mcs_center_y_pix'].values[matchid]
+        #matchid= np.where(pfiTransform.match_fid != -1)[0]
+        ff_mcs_x=mcsData['mcs_center_x_pix'].values
+        ff_mcs_y=mcsData['mcs_center_y_pix'].values
 
-        x_mm, y_mm = pt.mcsToPfi(ff_mcs_x,ff_mcs_y)
-
+        x_mm, y_mm = pfiTransform.mcsToPfi(ff_mcs_x,ff_mcs_y)
         traPt = x_mm+y_mm*1j
-        
+        traPt = traPt[~np.isnan(traPt)]
         if ffdata is 'insdata':
             oriPt = fids['x_mm'].values+fids['y_mm'].values*1j
         else:
@@ -543,23 +645,24 @@ class VisDianosticPlot(object):
         ranPt = []
         for i in oriPt:
             d = np.abs(i-traPt)
-            if np.min(d) < 2:
+            if np.min(d) < 8:
                 ix = np.where(d == np.min(d))
                 ranPt.append(traPt[ix[0]][0])
             else:
                 ranPt.append(i)
         ranPt = np.array(ranPt)
 
-        dx=oriPt.real-ranPt.real
-        dy=oriPt.imag-ranPt.imag
+        dx=ranPt.real-oriPt.real
+        dy=ranPt.imag-oriPt.imag
 
         diff = np.sqrt(dx**2+dy**2)
-
+        logger.info(f'Mean = {np.mean(diff):.5f} Std = {np.std(diff):.5f}')
         if vectorOnly is True:
             ax=plt.gca()
-            ax.plot(x_mm,y_mm,'r.', label='MCS projection')
+            ax.plot(ranPt.real,ranPt.imag,'r.', label='MCS projection')
             if ffdata is 'insdata':
                 ax.plot(fids['x_mm'].values, fids['y_mm'].values,'b+',label='XY stage')
+
             else:
                 ax.plot(oriPt.real, oriPt.imag,'b+',label='XY stage')
             q=ax.quiver(oriPt.real, oriPt.imag,dx,dy,color='red',units='xy')
