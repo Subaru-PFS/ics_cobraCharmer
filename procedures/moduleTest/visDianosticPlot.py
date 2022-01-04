@@ -628,7 +628,16 @@ class VisDianosticPlot(object):
                     'x_mm' :-fidData['ff_center_on_pfi_x_mm'].values,
                      'y_mm' :fidData['ff_center_on_pfi_y_mm'].values
             }
-            pfiTransform.updateTransform(mcsData, pd.DataFrame(ffData),matchRadius=3.2)
+            outerRing = np.zeros(len(ffData['fiducialId']), dtype=bool)
+            for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
+                outerRing[ffData['fiducialId'] == i] = True
+        
+            pfiTransform.updateTransform(mcsDataFirstFrame, pd.DataFrame(ffData)[outerRing], matchRadius=8.0, nMatchMin=0.1)
+            
+            for i in range(2):
+                pfiTransform.updateTransform(mcsDataFirstFrame, pd.DataFrame(ffData), matchRadius=4.2,nMatchMin=0.1)
+            
+            #pfiTransform.updateTransform(mcsData, pd.DataFrame(ffData),matchRadius=3.2)
 
         #matchid= np.where(pfiTransform.match_fid != -1)[0]
         ff_mcs_x=mcsData['mcs_center_x_pix'].values
@@ -654,7 +663,7 @@ class VisDianosticPlot(object):
 
         dx=ranPt.real-oriPt.real
         dy=ranPt.imag-oriPt.imag
-
+        logger.info(f'Number of total matched = {len(dx)}')
         diff = np.sqrt(dx**2+dy**2)
         logger.info(f'Mean = {np.mean(diff):.5f} Std = {np.std(diff):.5f}')
         if vectorOnly is True:
@@ -672,9 +681,13 @@ class VisDianosticPlot(object):
         else:
 
             ax0 = plt.subplot(224)
-            ax0.plot(x_mm,y_mm,'r.', label='MCS projection')
-            ax0.plot(fids['x_mm'].values, fids['y_mm'].values,'b+',label='XY stage')
-            q=ax0.quiver(x_mm,y_mm,dx,dy,color='red',units='xy')
+            ax0.plot(ranPt.real,ranPt.imag,'r.', label='MCS projection')
+            if ffdata is 'insdata':
+                ax0.plot(fids['x_mm'].values, fids['y_mm'].values,'b+',label='XY stage')
+                q=ax0.quiver(fids['x_mm'].values, fids['y_mm'].values,dx,dy,color='red',units='xy')
+            else:
+                ax0.plot(oriPt.real, oriPt.imag,'b+',label='XY stage')
+                q=ax0.quiver(oriPt.real, oriPt.imag, dx,dy,color='red',units='xy')
             ax0.quiverkey(q, X=0.2, Y=0.95, U=vectorLength,
                         label=f'length = {vectorLength} mm', labelpos='E')
             ax0.legend()
