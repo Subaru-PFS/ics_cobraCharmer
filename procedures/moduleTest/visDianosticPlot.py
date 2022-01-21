@@ -246,7 +246,11 @@ class VisDianosticPlot(object):
                    fill=True,alpha=0.7)
                 ax.add_artist(d)
     
-    def visVisitAllSpots(self, psfVisitID = None, subVisit = None):
+    def visVisitAllSpots(self, psfVisitID = None, subVisit = None, camera = None):
+        
+        if camera is not None:
+            cameraName = camera
+
         ax = plt.gca()
 
         if psfVisitID is None:
@@ -283,7 +287,7 @@ class VisDianosticPlot(object):
 
             if subid == 0:
                 logger.info(f'Using first frame for transformation')
-                pt = transformUtils.fromCameraName('canon',altitude=teleInfo['altitude'].values[0], 
+                pt = transformUtils.fromCameraName(cameraName,altitude=teleInfo['altitude'].values[0], 
                         insrot=teleInfo['insrot'].values[0])
         
         
