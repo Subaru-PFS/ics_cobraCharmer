@@ -335,10 +335,17 @@ class VisDianosticPlot(object):
         path=f'{self.path}/data/'
 
         tarfile = path+'targets.npy'
+        movfile = path+'moves.npy'
+
         targets=np.load(tarfile)
+        mov = np.load(movfile)
 
         dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
             (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
+
+        ind = np.where(np.abs(mov[0,:,11]['position']) > 0)
+        notDone = len(np.where(np.abs(mov[0,ind[0],11]['position']-targets[ind[0]]) > 0.01)[0])
+        logger.info(f'Number of not done cobra: {notDone}')
 
         if histo is True:
             ax.set_aspect('auto')
