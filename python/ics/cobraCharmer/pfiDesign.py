@@ -177,6 +177,8 @@ class PFIDesign():
         self.positionerIds = np.empty(self.nCobras, dtype="u2")
         self.serialIds = np.empty(self.nCobras, dtype="u2")
         self.centers = np.empty(self.nCobras, dtype="complex")
+        self.cobraCenters = np.empty(self.nCobras, dtype="complex")
+
         self.status = np.empty(self.nCobras, dtype="u2")
         self.tht0 = np.empty(self.nCobras)
         self.tht1 = np.empty(self.nCobras)
@@ -242,6 +244,15 @@ class PFIDesign():
             kinematics = dataContainers[i].find("KINEMATICS")
             self.centers[i] = float(kinematics.find("Global_base_pos_x").text) + \
                 float(kinematics.find("Global_base_pos_y").text) * 1j
+            
+            if (np.abs(self.center[i]) == 0) :
+                self.cobraCenters[i] = np.nan+na.nan* 1j
+
+            else:
+                self.cobraCenters[i] = self.centers[i]
+
+
+            
             self.tht0[i] = np.deg2rad(float(kinematics.find("CCW_Global_base_ori_z").text))
             self.tht1[i] = np.deg2rad(float(kinematics.find("CW_Global_base_ori_z").text))
             self.phiIn[i] = np.deg2rad(float(kinematics.find("Joint2_CCW_limit_angle").text)) - np.pi
