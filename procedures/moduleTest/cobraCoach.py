@@ -1373,7 +1373,7 @@ class CobraCoach():
             self.cam.resetStack(f'phiForwardStack{n}.fits')
 
             # forward phi motor maps
-            phiFW[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiBegin{n}.fits', arm='phi')
+            phiFW[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiBegin{n}.fits', arm='phi')[self.visibleIdx]
             self.cobraInfo['position'][self.visibleIdx] = phiFW[self.visibleIdx, n, 0]
 
             notdoneMask = np.zeros(len(phiFW), 'bool')
@@ -1382,7 +1382,7 @@ class CobraCoach():
                 self.logger.info(f'{n+1}/{repeat} phi forward to {(k+1)*steps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], 0, steps, phiFast=False)
                 phiFW[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'phiForward{n}N{k}.fits',
-                                                    arm='phi',guess=phiFW[self.visibleIdx, n, k],tolerance=0.1)
+                                                    arm='phi',guess=phiFW[self.visibleIdx, n, k],tolerance=0.1)[self.visibleIdx]
                 self.cobraInfo['position'][self.visibleIdx] = phiFW[self.visibleIdx, n, k+1]
                 doneMask, lastAngles = self.phiFWDone(phiFW[:,n,:], k)
                 if doneMask is not None:
@@ -1429,7 +1429,7 @@ class CobraCoach():
             # reverse phi motor maps
             self.cam.resetStack(f'phiReverseStack{n}.fits')
             phiRV[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiEnd{n}.fits', arm='phi',
-                                                        guess=centers[self.visibleIdx])
+                                                        guess=centers[self.visibleIdx])[self.visibleIdx]
             self.cobraInfo['position'][self.visibleIdx] = phiRV[self.visibleIdx, n, 0]
 
             notdoneMask = np.zeros(len(phiRV), 'bool')
@@ -1439,7 +1439,7 @@ class CobraCoach():
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], 0, -steps, phiFast=False)
                 # Use the last position for guess.
                 phiRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'phiReverse{n}N{k}.fits', arm='phi',
-                                                            guess=phiRV[self.visibleIdx, n, k],tolerance=0.1)
+                                                            guess=phiRV[self.visibleIdx, n, k],tolerance=0.1)[self.visibleIdx]
                 self.cobraInfo['position'][self.visibleIdx] = phiRV[self.visibleIdx, n, k+1]
                 doneMask, lastAngles = self.phiRVDone(phiRV[:,n,:], k)
                 if doneMask is not None:

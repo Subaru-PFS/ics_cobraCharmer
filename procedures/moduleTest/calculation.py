@@ -8,7 +8,8 @@ import pandas as pd
 import logging 
 
 from pfs.utils.butler import Butler
-from pfs.utils.coordinates.transform import PfiTransform
+import pfs.utils.coordinates.transform as transformUtils
+
 from opdb import opdb
 
 binSize = np.deg2rad(3.6)
@@ -224,7 +225,14 @@ class Calculation():
 
         return pos, target
 
-    def extractPositionsFromImage(self, data, frameid, arm=None, guess=None, tolerance=None):
+    def extractPositionsFromImage(self, data, frameid, cameraName, arm=None, guess=None, 
+        tolerance=None, dbData = False, debug=False):
+        
+        if debug is True:
+            logger.setLevel(logging.INFO)
+        else:
+            logger.setLevel(logging.DEBUG)
+
         idx = self.visibleIdx
         
         if arm is None:
@@ -236,12 +244,12 @@ class Calculation():
 
         # Changing tolerance as a scaling factor
         if tolerance is not None:
-            radii = (arm_radii * tolerance)[idx]
+            radii = (arm_radii * tolerance)
         else:
             radii = None
 
         if guess is None:
-            centers = self.calibModel.centers[idx]
+            centers = self.calibModel.centers
         else:
             centers = guess
 
@@ -252,9 +260,10 @@ class Calculation():
         data_sub = data - bkg
 
         #sigma = np.std(data_sub)
-        ext = sep.extract(data_sub.astype(float), 10 , err=bkg.globalrms,
-            filter_type='conv', minarea=9)
+        ext = sep.extract(data_sub.astype(float), 20 , err=bkg.globalrms,
+            filter_type='conv', minarea=10)
         
+        logger.info(f'Total detected spots = {len(ext)}')
         # using FF to transform pixel to mm
         butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
         fids = butler.get('fiducials')
@@ -275,13 +284,31 @@ class Calculation():
                       f'mcs_frame_id = {frameid}')
             mcsData = db.bulkSelect('mcs_data',f'select spot_id, mcs_center_x_pix, mcs_center_y_pix '
                     f'from mcs_data where mcs_frame_id = {frameid}')
-
-        pt = PfiTransform(altitude=teleInfo['altitude'].values[0], 
-                insrot=teleInfo['insrot'].values[0])
-        pt.updateTransform(mcsData, fids, matchRadius=2.0)
-
-        x_mm, y_mm = pt.mcsToPfi(ext['x'],ext['y'])
         
+        logger.info(f'Total spots from opDB= {len(mcsData)}')
+        df=mcsData.loc[mcsData['spot_id'] > 0]
+
+        pfiTransform = transformUtils.fromCameraName(cameraName, 
+            altitude=90.0, insrot=teleInfo['insrot'].values[0])
+        
+        outerRing = np.zeros(len(fids), dtype=bool)
+        for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
+            outerRing[fids.fiducialId == i] = True
+        
+        pfiTransform.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
+        
+        for i in range(2):
+            pfiTransform.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
+
+        #pfiTransform.updateTransform(mcsData, fids, matchRadius=2.0)
+
+        if dbData is True:
+            x_mm, y_mm = pfiTransform.mcsToPfi(df['mcs_center_x_pix'].values,df['mcs_center_y_pix'].values)
+        else:
+            x_mm, y_mm = pfiTransform.mcsToPfi(ext['x'],ext['y'])
+
+
+
         pos=x_mm+y_mm*(1j)
         
         #pos = np.array(ext['x'] + ext['y']*(1j))
@@ -294,8 +321,7 @@ class Calculation():
         dotFile = '/software/devel/pfs/pfs_instdata/data/pfi/dot/black_dots_mm.csv'
         newDot=pd.read_csv(dotFile)
 
-
-        mpos = np.zeros(len(idx), dtype=complex)
+        mpos = np.zeros(len(target), dtype=complex)
         for n, k in enumerate(target):
             if k < 0:
                 # If the target failed to match, use last position (guess)
@@ -303,8 +329,7 @@ class Calculation():
                 mpos[n] = newDot['x'][n]+newDot['y'][n]*1j
             else:
                 mpos[n] = pos[k]
-
-        return mpos
+        return mpos#, pfiTransform
 
     def phiCenterAngles(self, phiFW, phiRV):
         # variable declaration for phi angles

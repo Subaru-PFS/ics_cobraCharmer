@@ -802,8 +802,8 @@ def makePhiMotorMaps(newXml, steps=250, totalSteps=5000, repeat=1, fast=False, p
     np.save(dataPath / 'phiAngFW', angF)
     np.save(dataPath / 'phiAngRV', angR)
     np.save(dataPath / 'badRange', np.where(bad)[0])
-    np.save(dataPath / 'dotlocation',cc.calibModel.dotpos)
-    np.save(dataPath / 'dotradii',cc.calibModel.dotradii)
+    #np.save(dataPath / 'dotlocation',cc.calibModel.dotpos)
+    #np.save(dataPath / 'dotradii',cc.calibModel.dotradii)
 
     # update phi geometry
     cwHome = np.zeros(cc.nCobras)
