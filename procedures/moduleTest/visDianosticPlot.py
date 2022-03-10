@@ -114,8 +114,11 @@ class VisDianosticPlot(object):
 
     def _loadCobraMMData(self, arm=None) :
         
-        self.alt=pyfits.open(self._findFITS()[0])[0].header['ALTITUDE']
-        
+        try:
+            self.alt=pyfits.open(self._findFITS()[0])[0].header['ALTITUDE']
+        except:
+            self.alt=90
+
         path = self.path+'data/'
         
         if arm is None:
@@ -124,11 +127,11 @@ class VisDianosticPlot(object):
         fwdFitsFile= f'{path}{arm}ForwardStack0.fits'
         revFitsFile= f'{path}{arm}ReverseStack0.fits'
 
-        fwdImage = pyfits.open(fwdFitsFile)
-        self.fwdStack=fwdImage[1].data
+        #fwdImage = pyfits.open(fwdFitsFile)
+        #self.fwdStack=fwdImage[1].data
 
-        revImage = pyfits.open(revFitsFile)
-        self.revStack=revImage[1].data
+        #revImage = pyfits.open(revFitsFile)
+        #self.revStack=revImage[1].data
 
 
         self.centers = np.load(path + f'{arm}Center.npy')
@@ -141,7 +144,10 @@ class VisDianosticPlot(object):
         self.sr = np.load(path + f'{arm}SpeedRV.npy')
         self.mf = np.load(path + f'{arm}MMFW.npy')
         self.mr = np.load(path + f'{arm}MMRV.npy')
-        self.badMM = np.load(path + 'badMotorMap.npy')
+        try:
+            self.badMM = np.load(path + 'badMotorMap.npy')
+        except:
+            self.badMM = np.load(path + 'bad.npy')
         self.badrange = np.load(path + 'badRange.npy')
         #self.mf2 = np.load(path + 'phiMMFW2.npy')
         #self.mr2 = np.load(path + 'phiMMRV2.npy')
@@ -821,7 +827,7 @@ class VisDianosticPlot(object):
 
 
 
-    def visPlotFiberSpots(self, cobraIdx=None):
+    def visPlotFiberSpots(self, cobraIdx=None, moveData=None):
 
         #data = self.imgdata
         #m, s = np.mean(data), np.std(data)
@@ -841,30 +847,48 @@ class VisDianosticPlot(object):
                 self.calibModel.L1[idx]+self.calibModel.L2[idx], facecolor='g', edgecolor=None,alpha=0.5)
             ax.add_artist(c)
 
+        if moveData is None:
+            for idx in cobra:
+                d = plt.Circle((self.centers[idx].real, self.centers[idx].imag), self.radius[idx], color='red', fill=False)
+                ax.add_artist(d)
+    
+            ax.scatter(self.centers[cobra].real,self.centers[cobra].imag,color='red')    
 
-        for idx in cobra:
-            d = plt.Circle((self.centers[idx].real, self.centers[idx].imag), self.radius[idx], color='red', fill=False)
-            ax.add_artist(d)
-
-  
-        ax.scatter(self.centers[cobra].real,self.centers[cobra].imag,color='red')    
-
-        for n in range(1):
-            for k in cobra:
-                if k % 3 == 0:
-                    c = 'r'
-                    d = 'c'
-                elif k % 3 == 1:
-                    c = 'g'
-                    d = 'm'
-                else:
-                    c = 'b'
-                    d = 'y'
-                ax.plot(self.fw[k][n,0].real, self.fw[k][n,0].imag, c + 'o')
-                ax.plot(self.rv[k][n,0].real, self.rv[k][n,0].imag, d + 's')
-                ax.plot(self.fw[k][n,1:].real, self.fw[k][n,1:].imag, c + '.')
-                ax.plot(self.rv[k][n,1:].real, self.rv[k][n,1:].imag, d + '.')
-
+        if moveData is None:
+            for n in range(1):
+                for k in cobra:
+                    if k % 3 == 0:
+                        c = 'r'
+                        d = 'c'
+                    elif k % 3 == 1:
+                        c = 'g'
+                        d = 'm'
+                    else:
+                        c = 'b'
+                        d = 'y'
+                    ax.plot(self.fw[k][n,0].real, self.fw[k][n,0].imag, c + 'o')
+                    ax.plot(self.rv[k][n,0].real, self.rv[k][n,0].imag, d + 's')
+                    ax.plot(self.fw[k][n,1:].real, self.fw[k][n,1:].imag, c + '.')
+                    ax.plot(self.rv[k][n,1:].real, self.rv[k][n,1:].imag, d + '.')
+        else:
+            fw = moveData[0]
+            rv = moveData[1]
+            for n in range(1):
+                for k in cobra:
+                    if k % 3 == 0:
+                        c = 'r'
+                        d = 'c'
+                    elif k % 3 == 1:
+                        c = 'g'
+                        d = 'm'
+                    else:
+                        c = 'b'
+                        d = 'y'
+                    ax.plot(fw[k][n,0].real, fw[k][n,0].imag, c + 'o')
+                    ax.plot(rv[k][n,0].real, rv[k][n,0].imag, d + 's')
+                    ax.plot(fw[k][n,1:].real, fw[k][n,1:].imag, c + '.')
+                    ax.plot(rv[k][n,1:].real, rv[k][n,1:].imag, d + '.')
+    
         plt.show()
     
     def visStackedImage(self, direction='fwd', flip=False):
@@ -1028,15 +1052,17 @@ class VisDianosticPlot(object):
         #show(column(p1,p2,p3,p4))
         grid = gridplot([[p1, p2]])
         qgrid = gridplot([[q1, q2]])
-
-        options = webdriver.ChromeOptions()
-        options.add_argument('--headless')
-        driver = webdriver.Chrome(ChromeDriverManager().install(),options=options)
-
+        #show(grid)
+        
 
         if figPath is not None:
+            options = webdriver.ChromeOptions()
+            options.add_argument('--headless')
+            driver = webdriver.Chrome(ChromeDriverManager().install(),options=options)
+
             export_png(grid,filename=figPath+f"{arm}_motor_speed_histogram.png",webdriver=driver)
             export_png(qgrid,filename=figPath+f"{arm}_motor_speed_std.png",webdriver=driver)
+
 
     def visAngleMovement(self, figPath=None, arm = 'phi', pdffile=None):
         try:
@@ -1395,14 +1421,16 @@ class VisDianosticPlot(object):
         del(moveData)
 
 
-    def visMultiMotorMapfromXML(self, xmlList, figPath=None, arm='phi', pdffile=None, fast=False):
+    def visMultiMotorMapfromXML(self, xmlList, cobraIdx = None, figPath=None, arm='phi', pdffile=None, fast=False):
         binSize = 3.6
         x=np.arange(112)*3.6
         
+        if cobraIdx is None:
+            cobraIdx = self.goodIdx
         
-        for i in self.goodIdx:
+        for i in cobraIdx:
             plt.figure(figsize=(10, 8))
-            plt.clf()
+            #plt.clf()
 
             ax = plt.gca()
             
@@ -1448,9 +1476,9 @@ class VisDianosticPlot(object):
                 plt.ioff()
                 plt.tight_layout()
                 plt.savefig(f'{figPath}/motormap_{arm}_{i+1}.png')
-            else:
-                plt.show()
-            plt.close()
+            #else:
+            #    plt.show()
+            #plt.close()
 
 
         if pdffile is not None:

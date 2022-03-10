@@ -226,7 +226,7 @@ class Calculation():
         return pos, target
 
     def extractPositionsFromImage(self, data, frameid, cameraName, arm=None, guess=None, 
-        tolerance=None, dbData = False, debug=False):
+        tolerance=None, dbData = False, debug=False, noDetect = 'dot'):
         
         if debug is True:
             logger.setLevel(logging.INFO)
@@ -260,8 +260,8 @@ class Calculation():
         data_sub = data - bkg
 
         #sigma = np.std(data_sub)
-        ext = sep.extract(data_sub.astype(float), 20 , err=bkg.globalrms,
-            filter_type='conv', minarea=10)
+        ext = sep.extract(data_sub.astype(float), 10 , err=bkg.globalrms,
+            filter_type='conv', minarea=9)
         
         logger.info(f'Total detected spots = {len(ext)}')
         # using FF to transform pixel to mm
@@ -326,7 +326,12 @@ class Calculation():
             if k < 0:
                 # If the target failed to match, use last position (guess)
                 #mpos[n] = centers[n]
-                mpos[n] = newDot['x'][n]+newDot['y'][n]*1j
+                if noDetect == 'dot':
+                    mpos[n] = newDot['x'][n]+newDot['y'][n]*1j
+                if noDetect == 'nan':
+                    mpos[n] = np.nan+np.nan*1j
+                if noDetect == 'guess':
+                    mpos[n] = centers[n]
             else:
                 mpos[n] = pos[k]
         return mpos#, pfiTransform
