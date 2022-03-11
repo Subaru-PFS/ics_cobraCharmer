@@ -598,7 +598,7 @@ def extractPhiSpotsFromRun(runDir, xml, stepsize = 250, dbData = True):
 
         for k in range(iteration):
             cid+=1
-            print(k,cid, end='\r')
+            logger.info(f'Processing iteration {k}, visitID = {cid}')
             data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
             
             phiFW[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1, cid ,'rmod', guess=phiFW[:, n, k],
@@ -613,7 +613,7 @@ def extractPhiSpotsFromRun(runDir, xml, stepsize = 250, dbData = True):
 
         for k in range(iteration):
             cid+=1
-            print(k,cid, end='\r')
+            logger.info(f'Processing iteration {k}, visitID = {cid}')
             data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
             
             phiRV[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1, cid, 'rmod', guess=phiRV[:, n, k],
