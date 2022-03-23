@@ -407,7 +407,7 @@ class Calculation():
 
         return homeDiffs, atEnd
 
-    def thetaCenterAngles(self, thetaFW, thetaRV):
+    def thetaCenterAngles(self, thetaFW, thetaRV, noAngles = False):
         # variable declaration for theta angles
         thetaCenter = np.zeros(len(self.calibModel.centers), dtype=complex)
         thetaRadius = np.zeros(len(self.calibModel.centers), dtype=float)
@@ -446,7 +446,10 @@ class Calculation():
 
             if thetaRadius[c] > 3*self.calibModel.L1[c]:
                 thetaRadius[c] = self.calibModel.L1[c]
-
+        
+        if noAngles is True:
+            return thetaCenter, thetaRadius
+            
         # measure theta angles
         for c in self.goodIdx:
             for n in range(thetaFW.shape[1]):
