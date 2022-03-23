@@ -38,19 +38,18 @@ import pfs.utils.coordinates.transform as transformUtils
 
 
 
-
-
-logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
-                    datefmt="%Y-%m-%dT%H:%M:%S")
-logger = logging.getLogger('visDianosticPlot')
-logger.setLevel(logging.INFO)
-
-
 class VisDianosticPlot(object):
 
     def __init__(self, runDir=None, xml=None, arm=None, datatype=None):
         
         
+        # Initializing the logger
+        logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
+                    datefmt="%Y-%m-%dT%H:%M:%S")
+        self.logger = logging.getLogger('visDianosticPlot')
+        self.logger.setLevel(logging.INFO)
+
+
         if arm != None:
             self.arm = arm
 
@@ -299,7 +298,7 @@ class VisDianosticPlot(object):
                     f'mcs_frame_id = {frameid}')
 
             #if subid == 0:
-            logger.info(f'Using first frame for transformation')
+            self.logger.info(f'Using first frame for transformation')
             pt = transformUtils.fromCameraName(cameraName,altitude=teleInfo['altitude'].values[0], 
                         insrot=teleInfo['insrot'].values[0])
         
@@ -358,7 +357,7 @@ class VisDianosticPlot(object):
 
         ind = np.where(np.abs(mov[0,:,11]['position']) > 0)
         notDone = len(np.where(np.abs(mov[0,ind[0],11]['position']-targets[ind[0]]) > 0.01)[0])
-        logger.info(f'Number of not done cobra: {notDone}')
+        self.logger.info(f'Number of not done cobra: {notDone}')
 
         if histo is True:
             ax.set_aspect('auto')
@@ -476,8 +475,8 @@ class VisDianosticPlot(object):
         else:
             
             sigma = np.std(diff)
-            logger.info(f'Mean = {np.mean(diff):.2f}, Median = {np.median(diff):.2f} Std={np.std(diff):.2f}')
-            logger.info(f'CobraIdx for large center variant :{np.where(diff >= np.median(diff)+2.0*sigma)[0]}')
+            self.logger.info(f'Mean = {np.mean(diff):.2f}, Median = {np.median(diff):.2f} Std={np.std(diff):.2f}')
+            self.logger.info(f'CobraIdx for large center variant :{np.where(diff >= np.median(diff)+2.0*sigma)[0]}')
 
             #indx = np.where(diff < np.median(diff)+2.0*sigma)[0]
             
@@ -576,13 +575,8 @@ class VisDianosticPlot(object):
             
             rotation = teleInfo['insrot'].values[0]
             
-            logger.setLevel(logging.DEBUG)
-            logger.info(f'Using first frame for transformation')
-
             pt = transformUtils.fromCameraName(camera, altitude=altitude, 
                     insrot=rotation)
-    
-    
     
             outerRing = np.zeros(len(fids), dtype=bool)
             for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
@@ -674,6 +668,7 @@ class VisDianosticPlot(object):
             plt.subplots_adjust(wspace=0,hspace=0.3)
 
         if getAllFFPos is True:
+            self.logger.info(f'Returing all fiducial fiber positions.')
             return ffpos_array
 
 
@@ -709,7 +704,7 @@ class VisDianosticPlot(object):
 
         frameid=visitID*100+subID
         firstFrame = visitID*100
-        logger.info(f'frameID = {frameid}, firstFrame={firstFrame}')
+        self.logger.info(f'frameID = {frameid}, firstFrame={firstFrame}')
         try:
             db=opdb.OpDB(hostname='db-ics', port=5432,dbname='opdb',
                         username='pfs')
@@ -793,9 +788,10 @@ class VisDianosticPlot(object):
 
         dx=ranPt.real-oriPt.real
         dy=ranPt.imag-oriPt.imag
-        logger.info(f'Number of total matched = {len(dx)}')
+        self.logger.info(f'Number of total matched = {len(dx)}')
         diff = np.sqrt(dx**2+dy**2)
-        logger.info(f'Mean = {np.mean(diff):.5f} Std = {np.std(diff):.5f}')
+        self.logger.info(f'Mean = {np.mean(diff):.5f} Std = {np.std(diff):.5f}')
+
         if vectorOnly is True:
             ax=plt.gca()
             ax.plot(ranPt.real,ranPt.imag,'r.', label='MCS projection')
