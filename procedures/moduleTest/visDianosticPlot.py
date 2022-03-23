@@ -533,9 +533,7 @@ class VisDianosticPlot(object):
     def visAllFFSpots(self, psfVisitID=None, vector=True, vectorLength=0.05, camera = None, 
         dataRange=None, histo=False, getAllFFPos = False):
 
-
         '''
-            
             getAveragePos : If this flag is set to be True, returing the averaged position.
             refXYstage: Compare with insdata or averaged positions
         '''
@@ -677,6 +675,31 @@ class VisDianosticPlot(object):
 
         if getAllFFPos is True:
             return ffpos_array
+
+
+    def visAllFFOffset(self, posData, offsetThres = 0.006):
+        '''
+            This function plots the relative offsets for all FF.  It is very useful for 
+            identifing the unstable FF.
+
+            posData: FF positions transformed from MCS exposures. 
+
+        '''
+        ax = plt.gca()
+        avgPos = np.nanmean(posData,axis=0)
+        ffOffset = posData - avgPos
+
+        for i in range(ffOffset.shape[1]):
+            off = np.mean(np.abs(ffOffset[:,i]))
+            if off > offsetThres:
+                ax.plot(ffOffset[:,i].real,ffOffset[:,i].imag,'+', label=f'FF ID {i+1}')
+            else:
+                ax.plot(ffOffset[:,i].real,ffOffset[:,i].imag,'+')
+
+        ax.set_xlim(-0.2,0.2)
+        ax.set_ylim(-0.2,0.2)
+        ax.legend()
+            
 
     def visFiducialResidual(self, visitID, subID, temp=0, elevation=90, ffdata='opdb',
         vectorOnly=False, vectorLength=0.05):
