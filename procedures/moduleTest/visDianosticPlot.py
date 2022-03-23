@@ -252,7 +252,7 @@ class VisDianosticPlot(object):
                    fill=True,alpha=0.7)
                 ax.add_artist(d)
     
-    def visVisitAllSpots(self, psfVisitID = None, subVisit = None, camera = None):
+    def visVisitAllSpots(self, psfVisitID = None, subVisit = None, camera = None, dataRange=None):
         
         if camera is not None:
             cameraName = camera
@@ -265,20 +265,27 @@ class VisDianosticPlot(object):
             visitID = psfVisitID
 
         path=f'{self.path}/data/'
-
         tarfile = path+'targets.npy'
-        targets=np.load(tarfile)
+        
+        if os.path.exists(tarfile):
+            targets=np.load(tarfile)
 
         butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
 
         # Read fiducial and spot geometry
         fids = butler.get('fiducials')
-
         
-        db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
+        try:
+            db=opdb.OpDB(hostname='db-ics', port=5432,dbname='opdb',
+                        username='pfs')
+        except:     
+            db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
                                 username='pfs')
+        
+        if dataRange is None:
+            dataRange  = 12
 
-        for sub in range(12):
+        for sub in range(dataRange):
             subid=sub
 
             frameid = visitID*100+subid
@@ -291,27 +298,27 @@ class VisDianosticPlot(object):
             teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
                     f'mcs_frame_id = {frameid}')
 
-            if subid == 0:
-                logger.info(f'Using first frame for transformation')
-                pt = transformUtils.fromCameraName(cameraName,altitude=teleInfo['altitude'].values[0], 
+            #if subid == 0:
+            logger.info(f'Using first frame for transformation')
+            pt = transformUtils.fromCameraName(cameraName,altitude=teleInfo['altitude'].values[0], 
                         insrot=teleInfo['insrot'].values[0])
         
         
         
-                outerRing = np.zeros(len(fids), dtype=bool)
-                for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
+            outerRing = np.zeros(len(fids), dtype=bool)
+            for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
                     outerRing[fids.fiducialId == i] = True
-                pt.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
+            pt.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
             
-                for i in range(2):
+            for i in range(2):
                     pt.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
         
             xx , yy = pt.mcsToPfi(mcsData['mcs_center_x_pix'],mcsData['mcs_center_y_pix'])
             ax.plot(xx,yy,'.',label=f'{sub}')
             ax.plot(match['pfi_center_x_mm'],match['pfi_center_y_mm'],'x')
 
-        
-        ax.plot(targets.real,targets.imag,'+')
+        if os.path.exists(tarfile):
+            ax.plot(targets.real,targets.imag,'+')
 
         ax.legend()
 
@@ -381,46 +388,55 @@ class VisDianosticPlot(object):
         
             plt.colorbar(sc)
 
-    def visCobraCenter(self, compareObj = 'xml', histo=False, unitLable=True, **kwargs):
+    def visCobraCenter(self, baseData, targetData, histo=False, vectorLength=0.05, **kwargs):
         
         '''
+            baseData: The referenced center locations 
+            targetData: The target to be compared with.
             compareObj:  The target we compare with.  Typically, it is the data-compareObj
         '''
         
         ax = plt.gca()
         title = ax.get_title()
-        if compareObj == 'xml':
-            idx =np.sort(np.append(self.badIdx,self.badrange))
-            goodIdx = [i for i in range(2394) if i not in idx]
+
+        x = baseData.real
+        y = baseData.imag
+
+        dx = targetData.real - x
+        dy = targetData.imag - y
+
+        # if compareObj == 'xml':
+        #     idx =np.sort(np.append(self.badIdx,self.badrange))
+        #     goodIdx = [i for i in range(2394) if i not in idx]
             
-            x=self.calibModel.centers.real[goodIdx]
-            y=self.calibModel.centers.imag[goodIdx]
-        else:
-            if os.path.exists(f'/data/MCS/{compareObj}') is False:
-                path = f'/data/MCS_Subaru/{compareObj}/data/'
-            else:
-                path = f'/data/MCS/{compareObj}/data/'
+        #     x=self.calibModel.centers.real[goodIdx]
+        #     y=self.calibModel.centers.imag[goodIdx]
+        # else:
+        #     if os.path.exists(f'/data/MCS/{compareObj}') is False:
+        #         path = f'/data/MCS_Subaru/{compareObj}/data/'
+        #     else:
+        #         path = f'/data/MCS/{compareObj}/data/'
             
-            comparCenters = np.load(path + f'{self.arm}Center.npy')
-            comparBadIdx = np.load(path + f'badRange.npy')
+        #     comparCenters = np.load(path + f'{self.arm}Center.npy')
+        #     comparBadIdx = np.load(path + f'badRange.npy')
 
-            idx =np.sort(np.append(np.append(self.badIdx,self.badrange),comparBadIdx))
-            goodIdx = [i for i in range(2394) if i not in idx]
-
-
-            x=comparCenters.real[goodIdx]
-            y=comparCenters.imag[goodIdx]
+        #     idx =np.sort(np.append(np.append(self.badIdx,self.badrange),comparBadIdx))
+        #     goodIdx = [i for i in range(2394) if i not in idx]
 
 
-        dx=self.centers.real[goodIdx]-x
-        dy=self.centers.imag[goodIdx]-y
+        #     x=comparCenters.real[goodIdx]
+        #     y=comparCenters.imag[goodIdx]
+
+
+        #dx=self.centers.real[goodIdx]-x
+        #dy=self.centers.imag[goodIdx]-y
 
         diff = np.sqrt(dx**2+dy**2)
 
         if histo is True:
             
             ax1 = plt.subplot(212)
-            n, bins, patches = ax1.hist(diff,range=(0,np.mean(diff)+1*np.std(diff)), bins=15, color='#0504aa',
+            n, bins, patches = ax1.hist(diff,range=(0,np.mean(diff)+2*np.std(diff)), bins=15, color='#0504aa',
                 alpha=0.7)
             ax1.text(0.8, 0.8, f'Median = {np.median(diff):.2f}, $\sigma$={np.std(diff):.2f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
@@ -431,7 +447,7 @@ class VisDianosticPlot(object):
 
 
             ax2 = plt.subplot(221)
-            ax2.hist(dx,range=(np.mean(dx)-1*np.std(dx),np.mean(dx)+1*np.std(dx)), 
+            ax2.hist(dx,range=(np.mean(dx)-3*np.std(dx),np.mean(dx)+3*np.std(dx)), 
                 bins=30, color='#0504aa',alpha=0.7)
             ax2.text(0.7, 0.8, f'Median = {np.median(dx):.2f}, $\sigma$={np.std(dx):.2f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax2.transAxes)
@@ -445,7 +461,7 @@ class VisDianosticPlot(object):
             ax3.tick_params(axis='both',labelleft=False)
 
 
-            ax3.hist(dy,range=(np.mean(dy)-1*np.std(dx),np.mean(dy)+1*np.std(dx)), 
+            ax3.hist(dy,range=(np.mean(dy)-3*np.std(dx),np.mean(dy)+3*np.std(dx)), 
                 bins=30, color='#0504aa', alpha=0.7)
             ax3.text(0.7, 0.8, f'Median = {np.median(dy):.2f}, $\sigma$={np.std(dy):.2f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax3.transAxes)
@@ -463,14 +479,14 @@ class VisDianosticPlot(object):
             logger.info(f'Mean = {np.mean(diff):.2f}, Median = {np.median(diff):.2f} Std={np.std(diff):.2f}')
             logger.info(f'CobraIdx for large center variant :{np.where(diff >= np.median(diff)+2.0*sigma)[0]}')
 
-            indx = np.where(diff < np.median(diff)+2.0*sigma)[0]
+            #indx = np.where(diff < np.median(diff)+2.0*sigma)[0]
             
-            q=ax.quiver(x[indx],y[indx], 
-                    dx[indx], dy[indx], color='red',units='xy',**kwargs)
+            q=ax.quiver(x,y, 
+                    dx, dy, color='red',units='xy',**kwargs)
 
-            if unitLable is True:
-                ax.quiverkey(q, X=0.2, Y=0.95, U=0.05,
-                    label='length = 0.05 mm', labelpos='E')
+         
+            ax.quiverkey(q, X=0.2, Y=0.95, U=vectorLength,
+                    label=f'length = {vectorLength} mm', labelpos='E')
     
     def visFiducialFiber(self):
         ax=plt.gca()
@@ -514,8 +530,15 @@ class VisDianosticPlot(object):
                                 label='length = 0.05 mm', labelpos='E')
         ax.legend()
 
-    def visAllFFSpots(self, psfVisitID=None, vector=True, vectorLength=0.05):
+    def visAllFFSpots(self, psfVisitID=None, vector=True, vectorLength=0.05, camera = None, 
+        dataRange=None, histo=False, getAllFFPos = False):
 
+
+        '''
+            
+            getAveragePos : If this flag is set to be True, returing the averaged position.
+            refXYstage: Compare with insdata or averaged positions
+        '''
         ax=plt.gca()
 
         butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
@@ -523,11 +546,19 @@ class VisDianosticPlot(object):
         # Read fiducial and spot geometry
         fids = butler.get('fiducials')
 
-        db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
+        try:
+            db=opdb.OpDB(hostname='db-ics', port=5432,dbname='opdb',
+                        username='pfs')
+        except:     
+            db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
                                 username='pfs')
 
         ffpos_array=[]
-        for sub in range(12):
+        
+        if camera is None:
+            camera = 'canon'
+
+        for count, sub in enumerate(range(*dataRange)):
             subid=sub
 
             frameid = psfVisitID*100+subid
@@ -539,20 +570,30 @@ class VisDianosticPlot(object):
             teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
                     f'mcs_frame_id = {frameid}')
 
-            if subid == 0:
-                logger.info(f'Using first frame for transformation')
-                pt = transformUtils.fromCameraName('canon',altitude=teleInfo['altitude'].values[0], 
-                        insrot=teleInfo['insrot'].values[0])
-        
-        
-        
-                outerRing = np.zeros(len(fids), dtype=bool)
-                for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
-                    outerRing[fids.fiducialId == i] = True
-                pt.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
+            # Getting instrument information from DB
+            if camera == 'rmod':
+                altitude = 90
+            else:
+                altitude = teleInfo['altitude'].values[0]
             
-                for i in range(2):
-                    pt.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
+            rotation = teleInfo['insrot'].values[0]
+            
+            logger.setLevel(logging.DEBUG)
+            logger.info(f'Using first frame for transformation')
+
+            pt = transformUtils.fromCameraName(camera, altitude=altitude, 
+                    insrot=rotation)
+    
+    
+    
+            outerRing = np.zeros(len(fids), dtype=bool)
+            for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
+                outerRing[fids.fiducialId == i] = True
+            pt.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
+        
+            for i in range(2):
+                pt.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
+
             xx , yy = pt.mcsToPfi(mcsData['mcs_center_x_pix'],mcsData['mcs_center_y_pix'])
             oriPt = fids['x_mm'].values+fids['y_mm'].values*1j
             
@@ -561,22 +602,28 @@ class VisDianosticPlot(object):
             ranPt = []
             for i in oriPt:
                 d = np.abs(i-traPt)
-                if np.min(d) < 2:
+                if np.min(d) < 1:
                     ix = np.where(d == np.min(d))
                     ranPt.append(traPt[ix[0]][0])
                 else:
-                    ranPt.append(i)
+                    ranPt.append(np.nan)
             ranPt = np.array(ranPt)
 
             ffpos_array.append(ranPt)
-            ax.plot(ranPt.real,ranPt.imag,'.',label=f'{sub}')
-        
+            if count == 0:
+                ax.plot(ranPt.real,ranPt.imag,'g.',label='FF observed')
+            else:
+                ax.plot(ranPt.real,ranPt.imag,'g.')    
+
         ffpos_array=np.array(ffpos_array)
 
         ffpos = np.mean(ffpos_array,axis=0)
         ffstd = np.abs(np.std(ffpos_array,axis=0))
         ax.plot(fids['x_mm'].values, fids['y_mm'].values,'b+',label='FF')
         ax.plot(ffpos.real, ffpos.imag,'r+',label='Avg')
+        
+        ax.legend()
+        
         if vector is True:
             q=ax.quiver(oriPt.real, oriPt.imag,
                     ffpos.real-oriPt.real, ffpos.imag-oriPt.imag,
@@ -585,8 +632,51 @@ class VisDianosticPlot(object):
         
             ax.quiverkey(q, X=0.2, Y=0.95, U=vectorLength,
                         label=f'length = {vectorLength} mm', labelpos='E')
-        #ax.legend()
 
+        if histo is True:
+            
+            dx = ffpos.real - fids['x_mm'].values
+            dy = ffpos.imag - fids['y_mm'].values
+            
+            diff = np.sqrt(dx**2+dy**2)
+
+            ax1 = plt.subplot(212)
+            n, bins, patches = ax1.hist(diff,range=(0,np.mean(diff)+2*np.std(diff)), bins=7, color='#0504aa',
+                alpha=0.7)
+            ax1.text(0.8, 0.8, f'Median = {np.median(diff):.2f}, $\sigma$={np.std(diff):.2f}', 
+                horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
+            ax1.set_title('2D')
+            ax1.set_xlabel('distance (mm)')
+            ax1.set_ylabel('Counts')
+            ax1.set_ylim(0,1.2*np.max(n))
+
+
+            ax2 = plt.subplot(221)
+            ax2.hist(dx,range=(np.mean(dx)-3*np.std(dx),np.mean(dx)+3*np.std(dx)), 
+                bins=15, color='#0504aa',alpha=0.7)
+            ax2.text(0.7, 0.8, f'Median = {np.median(dx):.2f}, $\sigma$={np.std(dx):.2f}', 
+                horizontalalignment='center', verticalalignment='center', transform=ax2.transAxes)
+            ax2.set_title('X direction')
+            ax2.set_xlabel('distance (mm)')
+            ax2.set_ylabel('Counts')
+            ax2.set_ylim(0,1.2*np.max(n))
+
+
+            ax3 = plt.subplot(222, sharey = ax2)
+            ax3.tick_params(axis='both',labelleft=False)
+
+
+            ax3.hist(dy,range=(np.mean(dy)-3*np.std(dx),np.mean(dy)+3*np.std(dx)), 
+                bins=15, color='#0504aa', alpha=0.7)
+            ax3.text(0.7, 0.8, f'Median = {np.median(dy):.2f}, $\sigma$={np.std(dy):.2f}', 
+                horizontalalignment='center', verticalalignment='center', transform=ax3.transAxes)
+
+            ax3.set_title('Y direction')
+            ax3.set_xlabel('distance (mm)')
+            plt.subplots_adjust(wspace=0,hspace=0.3)
+
+        if getAllFFPos is True:
+            return ffpos_array
 
     def visFiducialResidual(self, visitID, subID, temp=0, elevation=90, ffdata='opdb',
         vectorOnly=False, vectorLength=0.05):
@@ -827,7 +917,7 @@ class VisDianosticPlot(object):
 
 
 
-    def visPlotFiberSpots(self, cobraIdx=None, moveData=None):
+    def visPlotFiberSpots(self, cobraIdx=None, moveData=None, color=None):
 
         #data = self.imgdata
         #m, s = np.mean(data), np.std(data)
@@ -884,6 +974,10 @@ class VisDianosticPlot(object):
                     else:
                         c = 'b'
                         d = 'y'
+                    if color is not None:
+                        c = color
+                        d = color
+
                     ax.plot(fw[k][n,0].real, fw[k][n,0].imag, c + 'o')
                     ax.plot(rv[k][n,0].real, rv[k][n,0].imag, d + 's')
                     ax.plot(fw[k][n,1:].real, fw[k][n,1:].imag, c + '.')

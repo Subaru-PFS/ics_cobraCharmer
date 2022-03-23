@@ -694,7 +694,6 @@ def extractThetaSpotsFromRun(runDir, xml, stepsize=250):
     return thetaFW, thetaRV
     
 
-
 def makeThetaMotorMaps(newXml, steps=500, totalSteps=10000, repeat=1, fast=False, thetaOnTime=None,
                        limitOnTime=0.08, limitSteps=10000, updateGeometry=False, phiRunDir=None,
                        delta=np.deg2rad(5.0), force=False):
