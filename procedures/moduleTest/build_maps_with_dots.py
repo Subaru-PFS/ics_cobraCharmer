@@ -17,6 +17,18 @@ def setCobraCoach(cobraCoach):
     global cc
     cc = cobraCoach
 
+def buildThetaMotorMaps(xml, steps=500, repeat=1, fast=False):
+    for group in range(3):
+        homed = True if group == 0 else False
+        prepareThetaMotorMaps(group=group, homed=homed)
+        runThetaMotorMaps(xml, group=group, steps=steps, repeat=repeat, fast=fast)
+
+def buildPhiMotorMaps(xml, steps=250, repeat=1, fast=False):
+    for group in range(3):
+        homed = True if group == 0 else False
+        preparePhiMotorMaps(group=group, homed=homed)
+        runPhiMotorMaps(xml, steps=steps, repeat=repeat, fast=fast)
+
 def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
                  tolerance=0.1, tries=6, homed=False,
                  newDir=True, thetaFast=False, phiFast=False,
@@ -156,7 +168,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
 
     return dataPath, atThetas[cIds], atPhis[cIds], moves
 
-def prepareForThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.1, tries=10, homed=True, threshold=1.0, elbow_radius=1.0, margin=0.1):
+def prepareThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.1, tries=10, homed=True, threshold=1.0, elbow_radius=1.0, margin=0.1):
     """ move cobras to safe positions for generating theta motor maps
         cobras are divided into three non-interfering groups
         groups = (0,1,2)
@@ -228,7 +240,7 @@ def prepareForThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.1, tries=
         False, True, tolerance, tries, homed, True, False, True, threshold)
     np.save(dataPath / 'moves', moves)
 
-def makeThetaMotorMaps(newXml, group=0, steps=500, totalSteps=10000, repeat=1, fast=False, thetaOnTime=None,
+def runThetaMotorMaps(newXml, group=0, steps=500, totalSteps=10000, repeat=1, fast=False, thetaOnTime=None,
                        limitOnTime=0.08, limitSteps=10000, updateGeometry=False, phiRunDir=None,
                        delta=np.deg2rad(5.0), force=False):
     """
@@ -353,7 +365,7 @@ def makeThetaMotorMaps(newXml, group=0, steps=500, totalSteps=10000, repeat=1, f
 
     return cc.runManager.runDir, np.where(np.logical_or(bad, mmBad))[0]
 
-def prepareForPhiMotorMaps(tolerance=0.1, tries=10, homed=True, threshold=1.0):
+def preparePhiMotorMaps(tolerance=0.1, tries=10, homed=True, threshold=1.0):
     """ move cobras to safe positions for generating phi motor maps
         that is, theta arms = 60 degree on PFI coordonate
         tolerace: target error tolerance(pixel)
@@ -381,7 +393,7 @@ def prepareForPhiMotorMaps(tolerance=0.1, tries=10, homed=True, threshold=1.0):
         False, True, tolerance, tries, homed, True, False, True, threshold)
     np.save(dataPath / 'moves', moves)
 
-def makePhiMotorMaps(newXml, steps=250, totalSteps=5000, repeat=1, fast=False, phiOnTime=None,
+def runPhiMotorMaps(newXml, steps=250, totalSteps=5000, repeat=1, fast=False, phiOnTime=None,
                      limitOnTime=0.05, limitSteps=5000, delta=np.deg2rad(5.0)):
     """ generate phi motor maps, it accepts custom phiOnTIme parameter.
 
