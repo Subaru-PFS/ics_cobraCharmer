@@ -17,17 +17,20 @@ def setCobraCoach(cobraCoach):
     global cc
     cc = cobraCoach
 
-def buildThetaMotorMaps(xml, steps=500, repeat=1, fast=False):
+def buildThetaMotorMaps(xml, steps=500, repeat=1, fast=False, tries=10, homed=True):
+    if homed:
+        logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
+        cc.moveToHome(cc.goodCobras, thetaEnable=True, phiEnable=True, thetaCCW=False)
     for group in range(3):
-        homed = True if group == 0 else False
-        prepareThetaMotorMaps(group=group, homed=homed)
+        prepareThetaMotorMaps(group=group, tries=tries, homed=False)
         runThetaMotorMaps(xml, group=group, steps=steps, repeat=repeat, fast=fast)
 
-def buildPhiMotorMaps(xml, steps=250, repeat=1, fast=False):
-    for group in range(3):
-        homed = True if group == 0 else False
-        preparePhiMotorMaps(group=group, homed=homed)
-        runPhiMotorMaps(xml, steps=steps, repeat=repeat, fast=fast)
+def buildPhiMotorMaps(xml, steps=250, repeat=1, fast=False, tries=10, homed=True):
+    if homed:
+        logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
+        cc.moveToHome(cc.goodCobras, thetaEnable=True, phiEnable=True, thetaCCW=False)
+    preparePhiMotorMaps(tries=tries, homed=False)
+    runPhiMotorMaps(xml, steps=steps, repeat=repeat, fast=fast)
 
 def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
                  tolerance=0.1, tries=6, homed=False,
