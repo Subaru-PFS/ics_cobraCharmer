@@ -23,6 +23,7 @@ def buildThetaMotorMaps(xml, steps=500, repeat=1, fast=False, tries=10, homed=Tr
         cc.moveToHome(cc.goodCobras, thetaEnable=True, phiEnable=True, thetaCCW=False)
     for group in range(3):
         prepareThetaMotorMaps(group=group, tries=tries, homed=False)
+        homePhiArms(group=group)
         runThetaMotorMaps(xml, group=group, steps=steps, repeat=repeat, fast=fast)
 
 def buildPhiMotorMaps(xml, steps=250, repeat=1, fast=False, tries=10, homed=True):
@@ -174,12 +175,13 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
 def prepareThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.1, tries=10, homed=True, threshold=1.0, elbow_radius=1.0, margin=0.1):
     """ move cobras to safe positions for generating theta motor maps
         cobras are divided into three non-interfering groups
-        groups = (0,1,2)
+        group = (0,1,2)
         phi_limit: the maximum phi angle
         tolerace: target error tolerance(pixel)
         tries: maximum number of movements
         homed: run go home if True
         threshold: threshold(pixel) to switch to slow motor maps
+        elbow_radius: the radius of elbows and tips
         margin: margin(pixel) to avoid collision
     """
     if cc.getMode() != 'normal':
@@ -191,7 +193,7 @@ def prepareThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.1, tries=10,
         raise RuntimeError("Check the cobra configuration file")
 
     # only for good cobras
-    goodIdx = np.where(cc.calibModel.tht0 != 0.0)[0]
+    goodIdx = cc.goodIdx
     centers = cc.calibModel.centers
     dots = cc.calibModel.dotpos
     dots_radii = cc.calibModel.dotradii
@@ -215,7 +217,9 @@ def prepareThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.1, tries=10,
 
     # calculate phi angles
     for n in range(len(centers)):
-        if not n in goodIdx:
+        gidx = (n + (n//57) + (n//(14*57))) % 3
+        if not n in goodIdx or gidx != group:
+            phiAngles[n] = np.pi/3
             continue
 
         elbows_dist = np.abs(elbows - centers[n]) - elbow_radius * 2
@@ -240,8 +244,18 @@ def prepareThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.1, tries=10,
 
     cc.pfi.resetMotorScaling()
     dataPath, thetas, phis, moves = moveThetaPhi(goodIdx, thetaAngles[goodIdx], phiAngles[goodIdx],
-        False, True, tolerance, tries, homed, True, False, True, threshold)
+        False, False, tolerance, tries, homed, True, False, True, threshold)
     np.save(dataPath / 'moves', moves)
+
+def homePhiArms(group=0):
+    """ home phi arms for the specified group """
+    groupIdx = np.zeros(cc.nCobras, 'bool')
+    for n in range(cc.nCobras):
+        gidx = (n + (n//57) + (n//(14*57))) % 3
+        if gidx != group and n in cc.goodIdx:
+            groupIdx[n] = True
+
+    cc.moveToHome(cc.allCobras[groupIdx], phiEnable=True)
 
 def runThetaMotorMaps(newXml, group=0, steps=500, totalSteps=10000, repeat=1, fast=False, thetaOnTime=None,
                        limitOnTime=0.08, limitSteps=10000, updateGeometry=False, phiRunDir=None,
