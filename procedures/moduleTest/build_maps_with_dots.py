@@ -368,9 +368,10 @@ def runThetaMotorMaps(newXml, group=0, steps=500, totalSteps=10000, repeat=1, fa
 
     return cc.runManager.runDir, np.where(np.logical_or(bad, mmBad))[0]
 
-def preparePhiMotorMaps(tolerance=0.1, tries=10, homed=True, threshold=1.0):
+def preparePhiMotorMaps(thetaAngle=np.pi/3, tolerance=0.1, tries=10, homed=True, threshold=1.0):
     """ move cobras to safe positions for generating phi motor maps
         that is, theta arms = 60 degree on PFI coordonate
+        thetaAngle: global theta arm direction
         tolerace: target error tolerance(pixel)
         tries: maximum number of movements
         homed: run go home if True
@@ -384,9 +385,8 @@ def preparePhiMotorMaps(tolerance=0.1, tries=10, homed=True, threshold=1.0):
     if np.abs(ydir - np.pi/2) > 0.1:
         raise RuntimeError("Check the cobra configuration file")
 
-    # move both theta and phi arms to 60 degree
+    # set phi arms to 60 degree
     phiAngle = np.pi/3
-    thetaAngle = np.pi/3
 
     # only for good cobras
     goodIdx = np.where(cc.calibModel.tht0 != 0.0)[0]
