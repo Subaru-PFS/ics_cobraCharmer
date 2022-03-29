@@ -554,7 +554,7 @@ def convergenceTest(cIds, runs=8,
     return targets, moves
 
 
-def extractPhiSpotsFromRun(runDir, xml, stepsize = 250, dbData = True):
+def extractPhiSpotsFromRun(runDir, xml, stepsize = 250, dbData = True, badFF = None):
     
     path = f'/data/MCS/{runDir}/'
     if os.path.exists(path) is not True:
@@ -594,7 +594,8 @@ def extractPhiSpotsFromRun(runDir, xml, stepsize = 250, dbData = True):
         logger.info(f'phiBegin = {cid:08d}')
         data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
         
-        phiFW[goodIdx, n, 0] = cal.extractPositionsFromImage(data1, cid, 'rmod', dbData=dbData,tolerance=1.0)[goodIdx]
+        phiFW[goodIdx, n, 0] = cal.extractPositionsFromImage(data1, cid, 'rmod', dbData=dbData,
+                                tolerance=1.0, badFF=badFF)[goodIdx]
 
         for k in range(iteration):
             cid+=1
@@ -602,14 +603,16 @@ def extractPhiSpotsFromRun(runDir, xml, stepsize = 250, dbData = True):
             data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
             
             phiFW[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1, cid ,'rmod', guess=phiFW[:, n, k],
-                                                                    tolerance=1.0, dbData=dbData, noDetect = 'guess')[goodIdx]
+                                                                    tolerance=1.0, dbData=dbData, 
+                                                                    noDetect = 'guess', badFF=badFF)[goodIdx]
 
         cid+=1
         logger.info(f'phiEnd = {cid}')
         data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
         
         phiRV[goodIdx, n, 0] = cal.extractPositionsFromImage(data1, cid, 'rmod', guess=phiFW[:, n, -1],
-                                                            tolerance=1.0, dbData=dbData, noDetect = 'guess')[goodIdx]
+                                                            tolerance=1.0, dbData=dbData, 
+                                                            noDetect = 'guess', badFF=badFF)[goodIdx]
 
         for k in range(iteration):
             cid+=1
@@ -617,13 +620,14 @@ def extractPhiSpotsFromRun(runDir, xml, stepsize = 250, dbData = True):
             data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
             
             phiRV[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1, cid, 'rmod', guess=phiRV[:, n, k],
-                                                                    tolerance=1.0, dbData=dbData, noDetect = 'guess')[goodIdx]
+                                                                    tolerance=1.0, dbData=dbData, 
+                                                                    noDetect = 'guess', badFF=badFF)[goodIdx]
 
     t2 = time.time()
     logger.info(f'total time = {t2 - t1}')
     return phiFW, phiRV
 
-def extractThetaSpotsFromRun(runDir, xml, stepsize=250):
+def extractThetaSpotsFromRun(runDir, xml, stepsize=250, badFF = None):
 
     path = f'/data/MCS/{runDir}/'
     if os.path.exists(path) is not True:
@@ -664,7 +668,7 @@ def extractThetaSpotsFromRun(runDir, xml, stepsize=250):
         data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
         
         thetaFW[goodIdx, n, 0] = cal.extractPositionsFromImage(data1, cid, 'rmod', 
-                            tolerance=0.8, dbData=True,noDetect='nan')[goodIdx]
+                            tolerance=0.8, dbData=True,noDetect='nan', badFF = badFF)[goodIdx]
         
         for k in range(iteration):
             cid+=1
@@ -672,14 +676,16 @@ def extractThetaSpotsFromRun(runDir, xml, stepsize=250):
             data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
             
             thetaFW[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1, cid ,'rmod',
-                                                                tolerance=0.8, dbData=True,noDetect='nan')[goodIdx]
+                                                                tolerance=0.8, dbData=True,
+                                                                noDetect='nan', badFF = badFF)[goodIdx]
                 
         cid+=1
         logger.info(f'thetaEnd = {cid}')
         data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
         
         thetaRV[goodIdx, n, 0] = cal.extractPositionsFromImage(data1, cid, 'rmod', 
-                                                         tolerance=0.8, dbData=True,noDetect='nan')[goodIdx]
+                                                         tolerance=0.8, dbData=True,
+                                                         noDetect='nan', badFF = badFF)[goodIdx]
         
         for k in range(iteration):
             cid+=1
@@ -687,7 +693,8 @@ def extractThetaSpotsFromRun(runDir, xml, stepsize=250):
             data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
             
             thetaRV[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1, cid, 'rmod',
-                                                                tolerance=0.8, dbData=True,noDetect='nan')[goodIdx]
+                                                                tolerance=0.8, dbData=True,
+                                                                noDetect='nan', badFF = badFF)[goodIdx]
     
     t2 = time.time()
     logger.info(f'total time = {t2 - t1}')

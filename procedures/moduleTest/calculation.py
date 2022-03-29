@@ -226,7 +226,8 @@ class Calculation():
         return pos, target
 
     def extractPositionsFromImage(self, data, frameid, cameraName, arm=None, guess=None, 
-        tolerance=None, dbData = False, debug=False, noDetect = 'dot'):
+        tolerance=None, dbData = False, noDetect = 'dot', 
+        badFF = None, debug=False):
         
         if debug is True:
             logger.setLevel(logging.INFO)
@@ -297,10 +298,17 @@ class Calculation():
         
         pfiTransform.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
         
-        for i in range(2):
-            pfiTransform.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
+        stableFF = np.zeros(len(fids), dtype=bool)
+        stableFF[:]=True 
 
-        #pfiTransform.updateTransform(mcsData, fids, matchRadius=2.0)
+        if badFF is not None:
+            for idx in fids['fiducialId']:
+                if idx in badFF:
+                    stableFF[fids.fiducialId == idx] = False
+            
+        for i in range(2):
+            pfiTransform.updateTransform(mcsData, fids[stableFF], matchRadius=4.2,nMatchMin=0.1)
+
 
         if dbData is True:
             x_mm, y_mm = pfiTransform.mcsToPfi(df['mcs_center_x_pix'].values,df['mcs_center_y_pix'].values)
