@@ -21,6 +21,8 @@ import bokeh.palettes
 from bokeh.layouts import column,gridplot
 from bokeh.models import HoverTool, ColumnDataSource, LinearColorMapper
 from bokeh.models.glyphs import Text
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 
 from bokeh.transform import linear_cmap
 from bokeh.palettes import Category20
@@ -178,7 +180,8 @@ class VisDianosticPlot(object):
         # Set the axes aspect ratio
         ax = plt.gca()
         ax.set_aspect(aspectRatio)
-    
+        self.fig = fig
+
     def visSetAxesLimits(self, xLim, yLim):
         """Sets the axes limits of an already initialized figure.
         
@@ -325,7 +328,13 @@ class VisDianosticPlot(object):
 
     def visSubaruConvergence(self, psfVisitID=None, subVisit=11, 
         histo=False, range=(0,0.08), bins=20, **kwargs):
-        
+        '''
+            Visulization of cobra convergence result at certain iteration.  
+            This fuction gets the locations of all fibers from database
+            and then calculate the distance to the final targets. 
+
+
+        '''
         ax = plt.gca()
 
         if psfVisitID is None:
@@ -390,9 +399,12 @@ class VisDianosticPlot(object):
     def visCobraCenter(self, baseData, targetData, histo=False, vectorLength=0.05, **kwargs):
         
         '''
-            baseData: The referenced center locations 
-            targetData: The target to be compared with.
-            compareObj:  The target we compare with.  Typically, it is the data-compareObj
+            This function is used to compare the center locations between two datasets. 
+            
+            Input:
+                baseData: The referenced center locations 
+                targetData: The target to be compared with.
+                compareObj:  The target we compare with.  Typically, it is the data-compareObj
         '''
         
         ax = plt.gca()
@@ -404,31 +416,6 @@ class VisDianosticPlot(object):
         dx = targetData.real - x
         dy = targetData.imag - y
 
-        # if compareObj == 'xml':
-        #     idx =np.sort(np.append(self.badIdx,self.badrange))
-        #     goodIdx = [i for i in range(2394) if i not in idx]
-            
-        #     x=self.calibModel.centers.real[goodIdx]
-        #     y=self.calibModel.centers.imag[goodIdx]
-        # else:
-        #     if os.path.exists(f'/data/MCS/{compareObj}') is False:
-        #         path = f'/data/MCS_Subaru/{compareObj}/data/'
-        #     else:
-        #         path = f'/data/MCS/{compareObj}/data/'
-            
-        #     comparCenters = np.load(path + f'{self.arm}Center.npy')
-        #     comparBadIdx = np.load(path + f'badRange.npy')
-
-        #     idx =np.sort(np.append(np.append(self.badIdx,self.badrange),comparBadIdx))
-        #     goodIdx = [i for i in range(2394) if i not in idx]
-
-
-        #     x=comparCenters.real[goodIdx]
-        #     y=comparCenters.imag[goodIdx]
-
-
-        #dx=self.centers.real[goodIdx]-x
-        #dy=self.centers.imag[goodIdx]-y
 
         diff = np.sqrt(dx**2+dy**2)
 
@@ -530,7 +517,7 @@ class VisDianosticPlot(object):
         ax.legend()
 
     def visAllFFSpots(self, psfVisitID=None, vector=True, vectorLength=0.05, camera = None, 
-        dataRange=None, histo=False, getAllFFPos = False):
+        dataRange=None, histo=False, getAllFFPos = False, badFF=None):
 
         '''
             getAveragePos : If this flag is set to be True, returing the averaged position.
@@ -582,9 +569,17 @@ class VisDianosticPlot(object):
             for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
                 outerRing[fids.fiducialId == i] = True
             pt.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
+
+            stableFF = np.zeros(len(fids), dtype=bool)
+            stableFF[:]=True 
+
+            if badFF is not None:
+                for idx in fids['fiducialId']:
+                    if idx in badFF:
+                        stableFF[fids.fiducialId == idx] = False
         
             for i in range(2):
-                pt.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
+                pt.updateTransform(mcsData, fids[stableFF], matchRadius=4.2,nMatchMin=0.1)
 
             xx , yy = pt.mcsToPfi(mcsData['mcs_center_x_pix'],mcsData['mcs_center_y_pix'])
             oriPt = fids['x_mm'].values+fids['y_mm'].values*1j
@@ -611,9 +606,17 @@ class VisDianosticPlot(object):
 
         ffpos = np.mean(ffpos_array,axis=0)
         ffstd = np.abs(np.std(ffpos_array,axis=0))
+        
+        
+        
         ax.plot(fids['x_mm'].values, fids['y_mm'].values,'b+',label='FF')
         ax.plot(ffpos.real, ffpos.imag,'r+',label='Avg')
         
+        # Mark the FF IDs
+        for i in range(len(fids)):
+            ax.text(fids.x_mm.values[i], fids.y_mm.values[i], 
+                    fids.fiducialId.values[i].astype('str'), fontsize=8)
+
         ax.legend()
         
         if vector is True:
@@ -672,7 +675,9 @@ class VisDianosticPlot(object):
             return ffpos_array
 
 
-    def visAllFFOffset(self, posData, offsetThres = 0.006):
+    def visAllFFOffset(self, posData, offsetThres = 0.006, offsetBox = 0.2, 
+        heatMap = False, badFF = None):
+        
         '''
             This function plots the relative offsets for all FF.  It is very useful for 
             identifing the unstable FF.
@@ -680,20 +685,58 @@ class VisDianosticPlot(object):
             posData: FF positions transformed from MCS exposures. 
 
         '''
+        butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
+        fids = butler.get('fiducials')
+
+
         ax = plt.gca()
-        avgPos = np.nanmean(posData,axis=0)
-        ffOffset = posData - avgPos
+        divider = make_axes_locatable(ax)
+        # below height and pad are in inches
+        ax_histx = divider.append_axes("top", 1.2, pad=0.3, sharex=ax)
+        ax_histy = divider.append_axes("right", 1.2, pad=0.3, sharey=ax)
 
-        for i in range(ffOffset.shape[1]):
-            off = np.mean(np.abs(ffOffset[:,i]))
-            if off > offsetThres:
-                ax.plot(ffOffset[:,i].real,ffOffset[:,i].imag,'+', label=f'FF ID {i+1}')
-            else:
-                ax.plot(ffOffset[:,i].real,ffOffset[:,i].imag,'+')
+        # make some labels invisible
+        ax_histx.xaxis.set_tick_params(labelbottom=False)
+        ax_histy.yaxis.set_tick_params(labelleft=False)
 
-        ax.set_xlim(-0.2,0.2)
-        ax.set_ylim(-0.2,0.2)
-        ax.legend()
+        stableFF = np.zeros(len(fids), dtype=bool)
+        stableFF[:]=True 
+
+        if badFF is not None:
+            for idx in fids['fiducialId']:
+                if idx in badFF:
+                    stableFF[fids.fiducialId == idx] = False
+
+        avgPos = np.nanmean(posData[:,stableFF],axis=0)
+        
+        # Mapping avePos to fids
+
+
+        ffOffset = posData[:,stableFF] - avgPos
+
+        if heatMap is True:
+            cax = divider.append_axes('right', size='5%', pad=0.5)
+
+            h, xedge, yedge, im = ax.hist2d(ffOffset.flatten().real,ffOffset.flatten().imag,
+              cmap='Blues',
+              bins=[40,40],range=[[-offsetBox,offsetBox],[-offsetBox,offsetBox]],cmin=0)
+
+            plt.colorbar(im, cax=cax)
+        else:
+
+            for i in range(ffOffset.shape[1]):
+                off = np.mean(np.abs(ffOffset[:,i]))
+                if off > offsetThres:
+                    ax.plot(ffOffset[:,i].real,ffOffset[:,i].imag,'+', label=f'FF ID {fids.fiducialId[i]}')
+                else:
+                    ax.plot(ffOffset[:,i].real,ffOffset[:,i].imag,'+')
+            ax.legend()
+
+        ax_histx.hist(ffOffset.flatten().real,bins=20,log=True)
+        ax_histy.hist(ffOffset.flatten().imag,bins=20,orientation='horizontal',log=True)        
+
+        ax.set_xlim(-offsetBox,offsetBox)
+        ax.set_ylim(-offsetBox,offsetBox)
             
 
     def visFiducialResidual(self, visitID, subID, temp=0, elevation=90, ffdata='opdb',
