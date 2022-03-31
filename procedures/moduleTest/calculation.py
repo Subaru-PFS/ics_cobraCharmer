@@ -226,7 +226,8 @@ class Calculation():
         return pos, target
 
     def extractPositionsFromImage(self, data, frameid, cameraName, arm=None, guess=None, 
-        tolerance=None, dbData = False, debug=False):
+        tolerance=None, dbData = False, noDetect = 'dot', 
+        badFF = None, debug=False):
         
         if debug is True:
             logger.setLevel(logging.INFO)
@@ -260,8 +261,8 @@ class Calculation():
         data_sub = data - bkg
 
         #sigma = np.std(data_sub)
-        ext = sep.extract(data_sub.astype(float), 20 , err=bkg.globalrms,
-            filter_type='conv', minarea=10)
+        ext = sep.extract(data_sub.astype(float), 10 , err=bkg.globalrms,
+            filter_type='conv', minarea=9)
         
         logger.info(f'Total detected spots = {len(ext)}')
         # using FF to transform pixel to mm
@@ -297,10 +298,17 @@ class Calculation():
         
         pfiTransform.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
         
-        for i in range(2):
-            pfiTransform.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
+        stableFF = np.zeros(len(fids), dtype=bool)
+        stableFF[:]=True 
 
-        #pfiTransform.updateTransform(mcsData, fids, matchRadius=2.0)
+        if badFF is not None:
+            for idx in fids['fiducialId']:
+                if idx in badFF:
+                    stableFF[fids.fiducialId == idx] = False
+            
+        for i in range(2):
+            pfiTransform.updateTransform(mcsData, fids[stableFF], matchRadius=4.2,nMatchMin=0.1)
+
 
         if dbData is True:
             x_mm, y_mm = pfiTransform.mcsToPfi(df['mcs_center_x_pix'].values,df['mcs_center_y_pix'].values)
@@ -326,7 +334,12 @@ class Calculation():
             if k < 0:
                 # If the target failed to match, use last position (guess)
                 #mpos[n] = centers[n]
-                mpos[n] = newDot['x'][n]+newDot['y'][n]*1j
+                if noDetect == 'dot':
+                    mpos[n] = newDot['x'][n]+newDot['y'][n]*1j
+                if noDetect == 'nan':
+                    mpos[n] = np.nan+np.nan*1j
+                if noDetect == 'guess':
+                    mpos[n] = centers[n]
             else:
                 mpos[n] = pos[k]
         return mpos#, pfiTransform
@@ -402,7 +415,7 @@ class Calculation():
 
         return homeDiffs, atEnd
 
-    def thetaCenterAngles(self, thetaFW, thetaRV):
+    def thetaCenterAngles(self, thetaFW, thetaRV, noAngles = False):
         # variable declaration for theta angles
         thetaCenter = np.zeros(len(self.calibModel.centers), dtype=complex)
         thetaRadius = np.zeros(len(self.calibModel.centers), dtype=float)
@@ -441,7 +454,10 @@ class Calculation():
 
             if thetaRadius[c] > 3*self.calibModel.L1[c]:
                 thetaRadius[c] = self.calibModel.L1[c]
-
+        
+        if noAngles is True:
+            return thetaCenter, thetaRadius
+            
         # measure theta angles
         for c in self.goodIdx:
             for n in range(thetaFW.shape[1]):
