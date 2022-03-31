@@ -542,6 +542,16 @@ class VisDianosticPlot(object):
         if camera is None:
             camera = 'canon'
 
+        # Building stable FF list
+        stableFF = np.zeros(len(fids), dtype=bool)
+        stableFF[:]=True 
+
+        if badFF is not None:
+            
+            for idx in fids['fiducialId']:
+                if idx in badFF:
+                    stableFF[fids.fiducialId == idx] = False
+
         for count, sub in enumerate(range(*dataRange)):
             subid=sub
 
@@ -570,14 +580,7 @@ class VisDianosticPlot(object):
                 outerRing[fids.fiducialId == i] = True
             pt.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
 
-            stableFF = np.zeros(len(fids), dtype=bool)
-            stableFF[:]=True 
-
-            if badFF is not None:
-                for idx in fids['fiducialId']:
-                    if idx in badFF:
-                        stableFF[fids.fiducialId == idx] = False
-        
+            
             for i in range(2):
                 pt.updateTransform(mcsData, fids[stableFF], matchRadius=4.2,nMatchMin=0.1)
 
@@ -598,9 +601,9 @@ class VisDianosticPlot(object):
 
             ffpos_array.append(ranPt)
             if count == 0:
-                ax.plot(ranPt.real,ranPt.imag,'g.',label='FF observed')
+                ax.plot(ranPt[stableFF].real,ranPt[stableFF].imag,'g.',label='FF observed')
             else:
-                ax.plot(ranPt.real,ranPt.imag,'g.')    
+                ax.plot(ranPt[stableFF].real,ranPt[stableFF].imag,'g.')    
 
         ffpos_array=np.array(ffpos_array)
 
@@ -610,7 +613,7 @@ class VisDianosticPlot(object):
         
         
         ax.plot(fids['x_mm'].values, fids['y_mm'].values,'b+',label='FF')
-        ax.plot(ffpos.real, ffpos.imag,'r+',label='Avg')
+        ax.plot(ffpos.real[stableFF], ffpos.imag[stableFF],'r+',label='Avg')
         
         # Mark the FF IDs
         for i in range(len(fids)):
@@ -620,8 +623,8 @@ class VisDianosticPlot(object):
         ax.legend()
         
         if vector is True:
-            q=ax.quiver(oriPt.real, oriPt.imag,
-                    ffpos.real-oriPt.real, ffpos.imag-oriPt.imag,
+            q=ax.quiver(oriPt[stableFF].real, oriPt[stableFF].imag,
+                    ffpos.real[stableFF]-oriPt[stableFF].real, ffpos[stableFF].imag-oriPt[stableFF].imag,
                     color='red',units='xy')
         
         
@@ -636,7 +639,7 @@ class VisDianosticPlot(object):
             diff = np.sqrt(dx**2+dy**2)
 
             ax1 = plt.subplot(212)
-            n, bins, patches = ax1.hist(diff,range=(0,np.mean(diff)+2*np.std(diff)), bins=7, color='#0504aa',
+            n, bins, patches = ax1.hist(diff[stableFF],range=(0,np.mean(diff)+2*np.std(diff)), bins=7, color='#0504aa',
                 alpha=0.7)
             ax1.text(0.8, 0.8, f'Median = {np.median(diff):.2f}, $\sigma$={np.std(diff):.2f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
@@ -647,7 +650,7 @@ class VisDianosticPlot(object):
 
 
             ax2 = plt.subplot(221)
-            ax2.hist(dx,range=(np.mean(dx)-3*np.std(dx),np.mean(dx)+3*np.std(dx)), 
+            ax2.hist(dx,range=(np.mean(dx[stableFF])-3*np.std(dx[stableFF]),np.mean(dx[stableFF])+3*np.std(dx[stableFF])), 
                 bins=15, color='#0504aa',alpha=0.7)
             ax2.text(0.7, 0.8, f'Median = {np.median(dx):.2f}, $\sigma$={np.std(dx):.2f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax2.transAxes)
@@ -661,7 +664,7 @@ class VisDianosticPlot(object):
             ax3.tick_params(axis='both',labelleft=False)
 
 
-            ax3.hist(dy,range=(np.mean(dy)-3*np.std(dx),np.mean(dy)+3*np.std(dx)), 
+            ax3.hist(dy,range=(np.mean(dy[stableFF])-3*np.std(dy[stableFF]),np.mean(dy[stableFF])+3*np.std(dy[stableFF])), 
                 bins=15, color='#0504aa', alpha=0.7)
             ax3.text(0.7, 0.8, f'Median = {np.median(dy):.2f}, $\sigma$={np.std(dy):.2f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax3.transAxes)
@@ -707,12 +710,10 @@ class VisDianosticPlot(object):
                 if idx in badFF:
                     stableFF[fids.fiducialId == idx] = False
 
-        avgPos = np.nanmean(posData[:,stableFF],axis=0)
+        avgPos = np.nanmean(posData,axis=0)
         
-        # Mapping avePos to fids
 
-
-        ffOffset = posData[:,stableFF] - avgPos
+        ffOffset = posData - avgPos
 
         if heatMap is True:
             cax = divider.append_axes('right', size='5%', pad=0.5)
@@ -725,15 +726,18 @@ class VisDianosticPlot(object):
         else:
 
             for i in range(ffOffset.shape[1]):
-                off = np.mean(np.abs(ffOffset[:,i]))
-                if off > offsetThres:
-                    ax.plot(ffOffset[:,i].real,ffOffset[:,i].imag,'+', label=f'FF ID {fids.fiducialId[i]}')
-                else:
-                    ax.plot(ffOffset[:,i].real,ffOffset[:,i].imag,'+')
+                # Check if this one is in unstable FF id
+                if (stableFF[i]):
+
+                    off = np.mean(np.abs(ffOffset[:,i]))
+                    if off > offsetThres:
+                        ax.plot(ffOffset[:,i].real,ffOffset[:,i].imag,'+', label=f'FF ID {fids.fiducialId[i]}')
+                    else:
+                        ax.plot(ffOffset[:,i].real,ffOffset[:,i].imag,'+')
             ax.legend()
 
-        ax_histx.hist(ffOffset.flatten().real,bins=20,log=True)
-        ax_histy.hist(ffOffset.flatten().imag,bins=20,orientation='horizontal',log=True)        
+        ax_histx.hist(ffOffset[:,stableFF].flatten().real,bins=20,log=True)
+        ax_histy.hist(ffOffset[:,stableFF].flatten().imag,bins=20,orientation='horizontal',log=True)        
 
         ax.set_xlim(-offsetBox,offsetBox)
         ax.set_ylim(-offsetBox,offsetBox)
@@ -981,12 +985,9 @@ class VisDianosticPlot(object):
 
     def visPlotFiberSpots(self, cobraIdx=None, moveData=None, color=None):
 
-        #data = self.imgdata
-        #m, s = np.mean(data), np.std(data)
-        #fig, ax = plt.subplots(figsize=(10,10))
+
         ax = plt.gca()
-        #im = ax.imshow(data, interpolation='nearest', 
-        #            cmap='gray', vmin=m-s, vmax=m+3*s, origin='lower')
+        
         
         if cobraIdx is None:
             cobra = self.goodIdx
