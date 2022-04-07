@@ -226,7 +226,7 @@ class Calculation():
         return pos, target
 
     def extractPositionsFromImage(self, data, frameid, cameraName, arm=None, guess=None, 
-        tolerance=None, dbData = False, noDetect = 'dot', 
+        tolerance=None, dbData = False, noDetect = 'dot', ffFile = None,
         badFF = None, debug=False):
         
         if debug is True:
@@ -265,10 +265,15 @@ class Calculation():
             filter_type='conv', minarea=9)
         
         logger.info(f'Total detected spots = {len(ext)}')
-        # using FF to transform pixel to mm
-        butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
-        fids = butler.get('fiducials')
         
+        if ffFile is None:
+            # using FF to transform pixel to mm
+            butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
+            fids = butler.get('fiducials')
+        else:
+            logger.info(f'Loading FF from file = {ffFile}')
+            fids = pd.read_csv(ffFile)
+            
         try:
             db=opdb.OpDB(hostname='db-ics', port=5432,
                     dbname='opdb',
@@ -305,7 +310,8 @@ class Calculation():
             for idx in fids['fiducialId']:
                 if idx in badFF:
                     stableFF[fids.fiducialId == idx] = False
-            
+        
+        logger.info(f'Stable FF = {stableFF}')           
         for i in range(2):
             pfiTransform.updateTransform(mcsData, fids[stableFF], matchRadius=4.2,nMatchMin=0.1)
 
