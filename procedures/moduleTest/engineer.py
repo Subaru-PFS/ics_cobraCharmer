@@ -627,7 +627,7 @@ def extractPhiSpotsFromRun(runDir, xml, stepsize = 250, dbData = True, badFF = N
     logger.info(f'total time = {t2 - t1}')
     return phiFW, phiRV
 
-def extractThetaSpotsFromRun(runDir, xml, stepsize=250, badFF = None):
+def extractThetaSpotsFromRun(runDir, xml, stepsize=250, badFF = None, ffFile = None):
 
     path = f'/data/MCS/{runDir}/'
     if os.path.exists(path) is not True:
@@ -668,7 +668,7 @@ def extractThetaSpotsFromRun(runDir, xml, stepsize=250, badFF = None):
         data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
         
         thetaFW[goodIdx, n, 0] = cal.extractPositionsFromImage(data1, cid, 'rmod', 
-                            tolerance=0.8, dbData=True,noDetect='nan', badFF = badFF)[goodIdx]
+                            tolerance=0.8, dbData=True,noDetect='nan', badFF = badFF, ffFile = ffFile)[goodIdx]
         
         for k in range(iteration):
             cid+=1
@@ -677,7 +677,7 @@ def extractThetaSpotsFromRun(runDir, xml, stepsize=250, badFF = None):
             
             thetaFW[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1, cid ,'rmod',
                                                                 tolerance=0.8, dbData=True,
-                                                                noDetect='nan', badFF = badFF)[goodIdx]
+                                                                noDetect='nan', badFF = badFF, ffFile = ffFile)[goodIdx]
                 
         cid+=1
         logger.info(f'thetaEnd = {cid}')
@@ -685,7 +685,7 @@ def extractThetaSpotsFromRun(runDir, xml, stepsize=250, badFF = None):
         
         thetaRV[goodIdx, n, 0] = cal.extractPositionsFromImage(data1, cid, 'rmod', 
                                                          tolerance=0.8, dbData=True,
-                                                         noDetect='nan', badFF = badFF)[goodIdx]
+                                                         noDetect='nan', badFF = badFF, ffFile = ffFile)[goodIdx]
         
         for k in range(iteration):
             cid+=1
@@ -694,7 +694,7 @@ def extractThetaSpotsFromRun(runDir, xml, stepsize=250, badFF = None):
             
             thetaRV[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1, cid, 'rmod',
                                                                 tolerance=0.8, dbData=True,
-                                                                noDetect='nan', badFF = badFF)[goodIdx]
+                                                                noDetect='nan', badFF = badFF, ffFile = ffFile)[goodIdx]
     
     t2 = time.time()
     logger.info(f'total time = {t2 - t1}')
