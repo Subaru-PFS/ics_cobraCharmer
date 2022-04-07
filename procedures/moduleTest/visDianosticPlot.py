@@ -547,11 +547,10 @@ class VisDianosticPlot(object):
         stableFF[:]=True 
 
         if badFF is not None:
-            
             for idx in fids['fiducialId']:
                 if idx in badFF:
                     stableFF[fids.fiducialId == idx] = False
-
+        self.logger.info(f'Stable FF = {stableFF}')
         for count, sub in enumerate(range(*dataRange)):
             subid=sub
 
