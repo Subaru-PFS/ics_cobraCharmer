@@ -195,8 +195,17 @@ def prepareThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.1, tries=10,
     # only for good cobras
     goodIdx = cc.goodIdx
     centers = cc.calibModel.centers
-    dots = cc.calibModel.dotpos
-    dots_radii = cc.calibModel.dotradii
+    
+    
+    # Loading dot locations
+    dotFile = '/software/devel/pfs/pfs_instdata/data/pfi/dot/black_dots_mm.csv'
+    dotDF=pd.read_csv(dotFile)
+    
+    dots = (dotDF['x'].values)+(dotDF['y'].values)*1j
+    dots_radii = dotDF['r'].values
+    
+    #dots = cc.calibModel.dotpos
+    #dots_radii = cc.calibModel.dotradii
     elbows = np.zeros(len(centers), 'complex')
     thetaAngles = np.zeros(len(centers))
     phiAngles = np.zeros(len(centers))
