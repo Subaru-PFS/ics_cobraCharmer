@@ -1,5 +1,6 @@
 from procedures.moduleTest import calculus as cal
 import numpy as np
+import pandas as pd
 import logging
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
@@ -48,6 +49,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     relative : angles are offsets from current positions or not
     local : the angles are from the CCW hard stops or not
     tolerance : tolerance for target positions in pixels
+    tries : number of iterations
     homed : go home first or not, if true, move in the safe way
     newDir : create a new directory for data or not
     thetaFast: using fast if true else slow theta motor maps
@@ -172,6 +174,86 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
 
     return dataPath, atThetas[cIds], atPhis[cIds], moves
 
+def moveThetaPhi2Steps(cIds, thetas, phis, relative=False, local=True,
+                       tolerance=0.1, tries=8, homed=True, newDir=True,
+                       threshold=10.0, thetaMargin=np.deg2rad(15.0),
+                       phiMargin=np.deg2rad(5.0)):
+    """
+    move cobras to the target angles in the radial direction
+
+    Parameters
+    ----
+    cIds : index for the active cobras
+    thetas : angles to move for theta arms
+    phis : angles to move for phi arms
+    relative : angles are offsets from current positions or not
+    local : the angles are from the CCW hard stops or not
+    tolerance : tolerance for target positions in pixels
+    tries : number of iterations
+    homed : go home first or not, if true, move in the safe way
+    newDir : create a new directory for data or not
+    threshold: using slow motor maps if the distance to the target is below this value
+    thetaMargin : the minimum theta angles to the theta hard stops
+    phiMargin : the minimum theta angles to the phi hard stops
+
+    Returns
+    ----
+    A tuple with three elements:
+    - dataPath
+    - errors for theta angles
+    - errors for phi angles
+    - a numpy array for the moving history
+    """
+    if cc.getMode() != 'normal':
+        raise RuntimeError('Switch to normal mode first!!!')
+    if np.isscalar(thetas):
+        thetas = np.full(len(cIds), thetas)
+    elif len(thetas) != len(cIds):
+        raise RuntimeError('number of theta angles must match the number of cobras')
+    if np.isscalar(phis):
+        phis = np.full(len(cIds), phis)
+    elif len(phis) != len(cIds):
+        raise RuntimeError('number of phi angles must match the number of cobras')
+
+    # convert to local coordinate
+    if relative:
+        thetas += cc.thetaInfo[cIds]['angle']
+        phis += cc.phiInfo[cIds]['angle']
+    elif not local:
+        thetas = (thetas - cc.calibModel.tht0[cIds]) % (np.pi*2)
+        thetas[thetas < thetaMargin] += np.pi*2
+        thetaRange = ((cc.calibModel.tht1 - cc.calibModel.tht0 + np.pi) % (np.pi*2) + np.pi)[cIds]
+        tooBig = thetas > thetaRange - thetaMargin
+        thetas[tooBig] = thetaRange[tooBig] - thetaMargin
+        phis -= cc.calibModel.phiIn[cIds] + np.pi
+        phis[phis < 0] = 0
+        phiRange = ((cc.calibModel.phiOut - cc.calibModel.phiIn) % (np.pi*2))[cIds]
+        tooBig = phis > phiRange - phiMargin
+        phis[tooBig] = phiRange[tooBig] - phiMargin
+
+    # limit phi angle for first two tries
+    limitPhi = np.pi/3 - cc.calibModel.phiIn[cIds] - np.pi
+    thetasVia = np.copy(thetas)
+    phisVia = np.copy(phis)
+    for c in range(len(cIds)):
+        if phis[c] > limitPhi[c]:
+            phisVia[c] = limitPhi[c]
+            thetasVia[c] = thetas[c] + (phis[c] - limitPhi[c])/2
+            if thetasVia[c] > thetaRange[c]:
+                thetasVia[c] = thetaRange[c]
+
+    moves = np.zeros((len(cIds), tries), dtype=moveDtype)
+    _useScaling, _maxSegments, _maxTotalSteps = cc.useScaling, cc.maxSegments, cc.maxTotalSteps
+    cc.useScaling, cc.maxSegments, cc.maxTotalSteps = False, _maxSegments * 2, _maxTotalSteps * 2
+    dataPath, atThetas, atPhis, moves[:,:2] = \
+        moveThetaPhi(cIds, thetasVia, phisVia, False, True, tolerance, 2, homed, newDir, True, True, threshold)
+
+    cc.useScaling, cc.maxSegments, cc.maxTotalSteps = _useScaling, _maxSegments, _maxTotalSteps
+    dataPath, atThetas, atPhis, moves[:,2:] = \
+        moveThetaPhi(cIds, thetas, phis, False, True, tolerance, tries-2, False, False, False, True, threshold)
+
+    return dataPath, atThetas, atPhis, moves
+
 def prepareThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.1, tries=10, homed=True, threshold=1.0, elbow_radius=1.0, margin=0.1):
     """ move cobras to safe positions for generating theta motor maps
         cobras are divided into three non-interfering groups
@@ -195,8 +277,7 @@ def prepareThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.1, tries=10,
     # only for good cobras
     goodIdx = cc.goodIdx
     centers = cc.calibModel.centers
-    
-    
+
     # Loading dot locations
     dotFile = '/software/devel/pfs/pfs_instdata/data/pfi/dot/black_dots_mm.csv'
     dotDF=pd.read_csv(dotFile)
@@ -252,8 +333,8 @@ def prepareThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.1, tries=10,
         phiAngles[n] = phi_angles[0,0] + cc.calibModel.phiIn[n] + np.pi
 
     cc.pfi.resetMotorScaling()
-    dataPath, thetas, phis, moves = moveThetaPhi(goodIdx, thetaAngles[goodIdx], phiAngles[goodIdx],
-        False, False, tolerance, tries, homed, True, False, True, threshold)
+    dataPath, thetas, phis, moves = moveThetaPhi2Steps(goodIdx, thetaAngles[goodIdx], phiAngles[goodIdx],
+        False, False, tolerance, tries, homed, True, threshold)
     np.save(dataPath / 'moves', moves)
 
 def homePhiArms(group=0):
@@ -415,8 +496,8 @@ def preparePhiMotorMaps(thetaAngle=np.pi/3, tolerance=0.1, tries=10, homed=True,
     goodIdx = np.where(cc.calibModel.tht0 != 0.0)[0]
 
     cc.pfi.resetMotorScaling()
-    dataPath, thetas, phis, moves = moveThetaPhi(goodIdx, thetaAngle, phiAngle,
-        False, True, tolerance, tries, homed, True, False, True, threshold)
+    dataPath, thetas, phis, moves = moveThetaPhi2Steps(goodIdx, thetaAngle, phiAngle,
+        False, False, tolerance, tries, homed, True, threshold)
     np.save(dataPath / 'moves', moves)
 
 def runPhiMotorMaps(newXml, steps=250, totalSteps=5000, repeat=1, fast=False, phiOnTime=None,
