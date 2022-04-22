@@ -13,7 +13,9 @@ from procedures.moduleTest.mcs import camera
 from ics.cobraCharmer import pfi as pfiControl
 import ics.cobraCharmer.pfiDesign as pfiDesign
 from ics.cobraCharmer import func
-from ics.cobraCharmer.utils import butler
+from ics.cobraCharmer.utils import butler as cbutler
+from pfs.utils import butler 
+import pfs.utils.coordinates.transform as transformUtils
 
 from opdb import opdb
 
@@ -66,7 +68,7 @@ class CobraCoach():
         self.logger = logging.getLogger('cobraCoach')
         self.logger.setLevel(logLevel)
 
-        self.runManager = butler.RunTree(doCreate=False, rootDir=rootDir)
+        self.runManager = cbutler.RunTree(doCreate=False, rootDir=rootDir)
         self.pfi = None
         self.cam = None
         self.fpgaHost = fpgaHost
@@ -342,7 +344,7 @@ class CobraCoach():
 
         return cIds
 
-    def exposeAndExtractPositions(self, name=None, arm=None, guess=None, tolerance=None, 
+    def exposeAndExtractPositions(self, name=None, guess=None, tolerance=None, 
                                   exptime=None, dbMatch = True):
         """ Take an exposure, measure centroids, match to cobras, save info.
 
@@ -396,16 +398,47 @@ class CobraCoach():
             self.logger.info(f'Returing result from matching table ncen={len(positions)} ')
             
         else:
-            #idx = self.visibleIdx
+            self.logger.info(f'dbMatching is turned off! THIS HAS TO BE MOTOR MAP RUN!')
 
-            if arm is None:
-                arm_radii = (self.calibModel.L1 + self.calibModel.L2)
-            if arm is 'phi':
-                arm_radii = self.calibModel.L2
-            if arm is 'theta':
-                arm_radii = self.calibModel.L1
+            self.cameraName = 'rmod'
+            self.logger.info(f'Current camera name is {self.cameraName}')
+            
+            #idx = self.visibleIdx
+            # Here we start to process the centroid.  Converting them from pixel to mm
+            fids = butler.Butler().get('fiducials')
+            db=opdb.OpDB(hostname='db-ics', port=5432,
+                   dbname='opdb',
+                   username='pfs')
+            mcsData = db.bulkSelect('mcs_data','select * from mcs_data where '
+                        f'mcs_frame_id = {frameNum}').sort_values(by=['spot_id']).reset_index()
+            teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
+                        f'mcs_frame_id = {frameNum}')
+
+
+            if 'rmod' in self.cameraName.lower():
+                altitude = 90.0
+            else: 
+                altitude = teleInfo['altitude'].values[0]
+
+            pt = transformUtils.fromCameraName(self.cameraName,altitude=altitude, 
+                        insrot=teleInfo['insrot'].values[0])
+        
+        
+            outerRing = np.zeros(len(fids), dtype=bool)
+            for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
+                    outerRing[fids.fiducialId == i] = True
+            pt.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
+            
+            for i in range(2):
+                    pt.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
+        
+            xx , yy = pt.mcsToPfi(mcsData['mcs_center_x_pix'],mcsData['mcs_center_y_pix'])
+            centroids=np.rec.array([xx,yy],formats='float,float',names='x,y')
+            # Remove NaNs 
+            centroids=centroids[~np.isnan(centroids['x'])]
 
             if tolerance is not None:
+                arm_radii = ((self.calibModel.L1 + self.calibModel.L2)
                 radii = (arm_radii * (1 + tolerance))
             else:
                 radii = None
@@ -414,8 +447,8 @@ class CobraCoach():
                 centers = self.calibModel.centers
             elif len(guess) == self.nCobras:
                 centers = guess
-            #elif len(guess) != len(idx):
-            #    raise RuntimeError('len(guess) should be equal to the visible cobras or total cobras')
+            elif len(guess) != len(idx):
+                raise RuntimeError('len(guess) should be equal to the visible cobras or total cobras')
             else:
                 centers = guess
 
@@ -423,7 +456,7 @@ class CobraCoach():
             self.logger.info('Running object matching!')
             positions, indexMap = calculus.matchPositions(centroids, guess=centers, dist=radii)
             self.logger.info(f'ncen={len(centroids)} npos={len(positions)} nguess={len(centers)}')
-
+            self.logger.info(f'Postion for cobra ID2 = {position[2]}')
         return positions
 
     def getCurrentPositionsUNUSED(self):
@@ -1373,7 +1406,9 @@ class CobraCoach():
             self.cam.resetStack(f'phiForwardStack{n}.fits')
 
             # forward phi motor maps
-            phiFW[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiBegin{n}.fits', arm='phi')[self.visibleIdx]
+            phiFW[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiBegin{n}.fits', 
+                                            tolerance= 1.0)[self.visibleIdx]
+
             self.cobraInfo['position'][self.visibleIdx] = phiFW[self.visibleIdx, n, 0]
 
             notdoneMask = np.zeros(len(phiFW), 'bool')
@@ -1383,8 +1418,9 @@ class CobraCoach():
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], 0, steps, phiFast=False)
                 # Here we turn-off dbMatch because we need good matching 
                 phiFW[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'phiForward{n}N{k}.fits',
-                                                    arm='phi',guess=phiFW[:, n, k],
-                                                    tolerance=0.1,dbMatch = False)[self.visibleIdx]
+                                                    guess=phiFW[:, n, k],
+                                                    tolerance=1.0,dbMatch = False)[self.visibleIdx]
+
                 self.cobraInfo['position'][self.visibleIdx] = phiFW[self.visibleIdx, n, k+1]
                 doneMask, lastAngles = self.phiFWDone(phiFW[:,n,:], k)
                 if doneMask is not None:
@@ -1430,8 +1466,8 @@ class CobraCoach():
 
             # reverse phi motor maps
             self.cam.resetStack(f'phiReverseStack{n}.fits')
-            phiRV[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiEnd{n}.fits', arm='phi',
-                                                        guess=phiFW[:, n -1], dbMatch=False)[self.visibleIdx]
+            phiRV[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiEnd{n}.fits', tolerance=1.0,
+                                                        guess=centers, dbMatch=False)[self.visibleIdx]
             self.cobraInfo['position'][self.visibleIdx] = phiRV[self.visibleIdx, n, 0]
 
             notdoneMask = np.zeros(len(phiRV), 'bool')
@@ -1440,9 +1476,9 @@ class CobraCoach():
                 self.logger.info(f'{n+1}/{repeat} phi backward to {(k+1)*steps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], 0, -steps, phiFast=False)
                 # Use the last position for guess.
-                phiRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'phiReverse{n}N{k}.fits', arm='phi',
+                phiRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'phiReverse{n}N{k}.fits',
                                                             guess=phiRV[:, n, k],
-                                                            tolerance=0.1, dbMatch = False)[self.visibleIdx]
+                                                            tolerance=1.0, dbMatch = False)[self.visibleIdx]
                 self.cobraInfo['position'][self.visibleIdx] = phiRV[self.visibleIdx, n, k+1]
                 doneMask, lastAngles = self.phiRVDone(phiRV[:,n,:], k)
                 if doneMask is not None:
