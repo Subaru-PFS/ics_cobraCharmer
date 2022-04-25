@@ -1026,7 +1026,7 @@ class VisDianosticPlot(object):
 
 
 
-    def visPlotFiberSpots(self, cobraIdx=None, moveData=None, color=None):
+    def visPlotFiberSpots(self, cobraIdx=None, moveData=None, color=None, markCobra=False):
         '''
             This function is mainly used to plot round trip data, for example, motor map or geometry
 
@@ -1050,6 +1050,10 @@ class VisDianosticPlot(object):
                 self.calibModel.centers[idx].imag), 
                 self.calibModel.L1[idx]+self.calibModel.L2[idx], facecolor='g', edgecolor=None,alpha=0.5)
             ax.add_artist(c)
+
+            if markCobra is True:
+                ax.text(self.calibModel.centers[idx].real, self.calibModel.centers[idx].imag,idx, fontsize=8)
+
 
         if moveData is None:
             for idx in cobra:
