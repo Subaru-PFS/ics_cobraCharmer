@@ -255,7 +255,11 @@ class VisDianosticPlot(object):
                 ax.add_artist(d)
     
     def visVisitAllSpots(self, psfVisitID = None, subVisit = None, camera = None, dataRange=None):
-        
+        '''
+            This function plots data points of all spots of a given visitID, especailly for convergence and MM run. 
+        '''
+
+
         if camera is not None:
             cameraName = camera
 
@@ -284,8 +288,15 @@ class VisDianosticPlot(object):
             db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
                                 username='pfs')
         
-        if dataRange is None:
-            dataRange  = 12
+        dataRange = None
+        subVisit = 1
+
+        if subVisit is None:
+            if dataRange is None:
+                dataRange  = [0,12]
+        else:
+            dataRange = [subVisit, subVisit+1]
+
 
         for count, sub in enumerate(range(*dataRange)):
             subid=sub
@@ -339,7 +350,7 @@ class VisDianosticPlot(object):
                 ax.plot(match['pfi_center_x_mm'],match['pfi_center_y_mm'],'x')
 
         if os.path.exists(tarfile):
-            ax.plot(targets.real,targets.imag,'+')
+            ax.plot(targets.real,targets.imag,'+', label='Final Target')
 
         ax.legend()
 
