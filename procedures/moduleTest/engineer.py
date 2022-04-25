@@ -1,5 +1,6 @@
 #from procedures.moduleTest.cobraCoach import CobraCoach as cc
 from procedures.moduleTest import calculus as cal
+from procedures.moduleTest import build_maps_with_dots as bmds
 import numpy as np
 import logging
 from copy import deepcopy
@@ -101,10 +102,6 @@ def setConstantSpeedMaps(mmTheta, mmPhi, mmThetaSlow, mmPhiSlow):
     cc.mmPhi = mmPhi
     cc.mmThetaSlow = mmThetaSlow
     cc.mmPhiSlow = mmPhiSlow
-
-
-def extractThetaHardStopFromRun(runDir):
-    pass
 
 
 
@@ -2031,6 +2028,27 @@ def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0
     if toggleFlag:
         cc.trajectoryMode = False
     return cc.trajectory, moves
+
+def buildThetaMotorMaps(xml, steps=500, repeat=1, fast=False, tries=10, homed=True):
+    bmds.setCobraCoach(cc)
+    if homed:
+        logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
+        cc.moveToHome(cc.goodCobras, thetaEnable=True, phiEnable=True, thetaCCW=False)
+    for group in range(3):
+        bmds.prepareThetaMotorMaps(group=group, tries=tries, homed=False)
+        bmds.homePhiArms(group=group)
+        bmds.runThetaMotorMaps(xml, group=group, steps=steps, repeat=repeat, fast=fast)
+
+
+def buildPhiMotorMaps(xml, steps=250, repeat=1, fast=False, tries=10, homed=True):
+    bmds.setCobraCoach(cc)
+    if homed:
+        logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
+        cc.moveToHome(cc.goodCobras, thetaEnable=True, phiEnable=True, thetaCCW=False)
+    bmds.preparePhiMotorMaps(tries=tries, homed=False)
+    bmds.runPhiMotorMaps(xml, steps=steps, repeat=repeat, fast=fast)
+
+
 
 
 def buildMotorMapFromRunId(arm=None, runDir=None):
