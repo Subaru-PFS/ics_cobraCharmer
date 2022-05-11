@@ -60,14 +60,19 @@ class PFIDesign():
         #self.moduleIds[:] = 1
 
     @classmethod
-    def loadModule(cls, moduleName, version=None):
+    def loadModule(cls, moduleName, version=''):
         """ """
         modulePath = butler.mapPathForModule(moduleName, version=version)
 
         return cls(modulePath)
 
     @classmethod
-    def loadPfi(cls, version=None, moduleVersion=None):
+    def loadPfi(cls, version=None):
+        """Load entire PFI configuration. """
+        return cls.loadModule('ALL', version=version)
+
+    @classmethod
+    def loadPfiFromModules(cls, version=None, moduleVersion=''):
         """ """
         moduleNames = butler.modulesForPfi(version=version)
 
@@ -881,3 +886,6 @@ class PFIDesign():
                 self.logger.warn(f'theta limits bad: mod={self.moduleIds[cidx]} pos={self.positionerIds[cidx]} '
                                  f'range={np.rad2deg(thetaRange[cidx])}')
         return ~duds
+
+def load(path):
+    return PFIDesign(path)
