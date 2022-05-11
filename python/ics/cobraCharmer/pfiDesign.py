@@ -886,3 +886,6 @@ class PFIDesign():
                 self.logger.warn(f'theta limits bad: mod={self.moduleIds[cidx]} pos={self.positionerIds[cidx]} '
                                  f'range={np.rad2deg(thetaRange[cidx])}')
         return ~duds
+
+def load(path):
+    return PFIDesign(path)
