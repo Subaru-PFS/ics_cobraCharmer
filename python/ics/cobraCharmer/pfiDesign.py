@@ -67,12 +67,7 @@ class PFIDesign():
         return cls(modulePath)
 
     @classmethod
-    def loadPfi(cls, version=None):
-        """Load entire PFI configuration. """
-        return cls.loadModule('ALL', version=version)
-
-    @classmethod
-    def loadPfiFromModules(cls, version=None, moduleVersion=''):
+    def loadPfi(cls, version='ALL', moduleVersion=''):
         """ """
         moduleNames = butler.modulesForPfi(version=version)
 
