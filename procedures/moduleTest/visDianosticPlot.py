@@ -208,7 +208,7 @@ class VisDianosticPlot(object):
         
         ax = plt.gca()
 
-        ax.scatter(des.centers.real, des.centers.imag,marker='o', color='white', s=20)
+        ax.scatter(des.centers.real, des.centers.imag,marker='o', color='red', s=20)
 
 
         # Adding theta hard-stops
@@ -1026,7 +1026,9 @@ class VisDianosticPlot(object):
 
 
 
-    def visPlotFiberSpots(self, cobraIdx=None, moveData=None, color=None, markCobra=False):
+    def visPlotFiberSpots(self, cobraIdx=None, moveData=None, color=None, 
+        markCobra=False, markGeometry=True):
+        
         '''
             This function is mainly used to plot round trip data, for example, motor map or geometry
 
@@ -1055,12 +1057,13 @@ class VisDianosticPlot(object):
                 ax.text(self.calibModel.centers[idx].real, self.calibModel.centers[idx].imag,idx, fontsize=8)
 
 
-        if moveData is None:
-            for idx in cobra:
-                d = plt.Circle((self.centers[idx].real, self.centers[idx].imag), self.radius[idx], color='red', fill=False)
-                ax.add_artist(d)
-    
-            ax.scatter(self.centers[cobra].real,self.centers[cobra].imag,color='red')    
+        if markGeometry is True:
+            if moveData is None:
+                for idx in cobra:
+                    d = plt.Circle((self.centers[idx].real, self.centers[idx].imag), self.radius[idx], color='red', fill=False)
+                    ax.add_artist(d)
+        
+                ax.scatter(self.centers[cobra].real,self.centers[cobra].imag,color='red')    
 
         if moveData is None:
             for n in range(1):
