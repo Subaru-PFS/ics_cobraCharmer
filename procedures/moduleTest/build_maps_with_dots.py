@@ -1,6 +1,7 @@
 from procedures.moduleTest import calculus as cal
 import numpy as np
 import logging
+import pandas as pd
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
@@ -234,7 +235,7 @@ def prepareThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.01, tries=10
             continue
 
         elbows_dist = np.abs(elbows - centers[n]) - elbow_radius * 2
-        dots_dist = np.abs(dots - centers[n]) - cc.calibModel.dotradii[n]
+        dots_dist = np.abs(dots - centers[n]) - dots_radii[n]
         dots_dist[n] = np.nan
         radius_max = np.nanmin((elbows_dist, dots_dist)) - margin
         radius_do = np.abs(dots[n] - centers[n]) + dots_radii[n] + margin

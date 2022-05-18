@@ -623,9 +623,9 @@ class CobraCoach():
             pos[self.visibleIdx] = targets[self.visibleIdx]
         else:
             #pos[self.visibleIdx] = self.exposeAndExtractPositions(guess=targets[self.visibleIdx])
-            pos[self.visibleIdx] = self.exposeAndExtractPositions()[self.visibleIdx]
+            pos[self.visibleIdx] = self.exposeAndExtractPositions(dbMatch=False)[self.visibleIdx]
 
-            np.save('/tmp/cobraCharmer_pos',pos)
+            #np.save('/tmp/cobraCharmer_pos',pos)
         # update status
         thetas, phis, flags = self.pfi.positionsToAngles(self.allCobras, pos)
         for c_i in range(len(cobras)):
@@ -1073,7 +1073,7 @@ class CobraCoach():
             # update current positions
             # Here we need to think about how to deal with it. 
             # There are dots, so we may wanto to skip this
-            self.cobraInfo['position'][self.visibleIdx] = self.exposeAndExtractPositions()[self.visibleIdx]
+            self.cobraInfo['position'][self.visibleIdx] = self.exposeAndExtractPositions(dbMatch = False)[self.visibleIdx]
 
         diff = None
 
@@ -1569,7 +1569,7 @@ class CobraCoach():
             self.cam.resetStack(f'thetaForwardStack{n}.fits')
 
             # forward theta motor maps
-            thetaFW[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'thetaBegin{n}.fits')[self.visibleIdx]
+            thetaFW[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'thetaBegin{n}.fits',dbMatch=False)[self.visibleIdx]
 
             self.cobraInfo['position'][self.visibleIdx] = thetaFW[self.visibleIdx, n, 0]
 
@@ -1580,7 +1580,7 @@ class CobraCoach():
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], steps, 0, thetaFast=False)
                 #thetaFW[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaForward{n}N{k}.fits',
                 #                                        arm='theta',guess=thetaFW[self.visibleIdx, n, k],tolerance=0.02)
-                thetaFW[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaForward{n}N{k}.fits')[self.visibleIdx]
+                thetaFW[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaForward{n}N{k}.fits',dbMatch=False)[self.visibleIdx]
 
 
                 self.cobraInfo['position'][self.visibleIdx] = thetaFW[self.visibleIdx, n, k+1]
@@ -1610,7 +1610,7 @@ class CobraCoach():
             self.cam.resetStack(f'thetaReverseStack{n}.fits')
             #thetaRV[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'thetaEnd{n}.fits',arm='theta',
             #                                        guess=thetaFW[self.visibleIdx, n, -1],tolerance=0.02)
-            thetaRV[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'thetaEnd{n}.fits')[self.visibleIdx]
+            thetaRV[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'thetaEnd{n}.fits',dbMatch=False)[self.visibleIdx]
 
 
             self.cobraInfo['position'][self.visibleIdx] = thetaRV[self.visibleIdx, n, 0]
@@ -1622,7 +1622,7 @@ class CobraCoach():
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], -steps, 0, thetaFast=False)
                 #thetaRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaReverse{n}N{k}.fits',
                 #                                    arm='theta',guess=thetaRV[self.visibleIdx, n, k],tolerance=0.02)
-                thetaRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaReverse{n}N{k}.fits')[self.visibleIdx]
+                thetaRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaReverse{n}N{k}.fits',dbMatch=False)[self.visibleIdx]
 
 
                 self.cobraInfo['position'][self.visibleIdx] = thetaRV[self.visibleIdx, n, k+1]

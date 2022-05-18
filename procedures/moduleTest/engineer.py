@@ -2029,13 +2029,15 @@ def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0
         cc.trajectoryMode = False
     return cc.trajectory, moves
 
-def buildThetaMotorMaps(xml, steps=500, group=1, repeat=1, fast=False, tries=10, homed=True):
+def buildThetaMotorMaps(xml, steps=500, group=1, repeat=1, fast=False, tries=10, homed=True, cmd=None):
     bmds.setCobraCoach(cc)
     if homed:
         logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
         cc.moveToHome(cc.goodCobras, thetaEnable=True, phiEnable=True, thetaCCW=False)
     
     logger.info(f'Move theta group = {group}')
+    
+    #if group is None:
 
     #for group in range(3):
     bmds.prepareThetaMotorMaps(group=group, tries=tries, homed=False)
