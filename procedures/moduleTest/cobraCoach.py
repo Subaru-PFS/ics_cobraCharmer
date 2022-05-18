@@ -400,7 +400,7 @@ class CobraCoach():
         else:
             self.logger.info(f'dbMatching is turned off! THIS HAS TO BE MOTOR MAP RUN!')
 
-            self.cameraName = 'rmod'
+            self.cameraName = 'canon'
             self.logger.info(f'Current camera name is {self.cameraName}')
             
             #idx = self.visibleIdx
@@ -422,19 +422,22 @@ class CobraCoach():
                 altitude = teleInfo['altitude'].values[0]
                 insrot = teleInfo['insrot'].values[0]
 
-            pt = transformUtils.fromCameraName(self.cameraName,altitude=altitude, 
-                        insrot=insrot)
+            pfiTransform = transformUtils.fromCameraName(self.actor.cameraName, 
+            altitude=altitude, insrot=insrot,nsigma=0, alphaRot=1)
         
-        
-            outerRing = np.zeros(len(fids), dtype=bool)
-            for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
-                    outerRing[fids.fiducialId == i] = True
-            pt.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
-            
+            outerRingIds = [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]
+            fidsOuterRing = fids[fids.fiducialId.isin(outerRingIds)]
+
+            pfiTransform.updateTransform(mcsData, fidsOuterRing, matchRadius=8.0, nMatchMin=0.1)
+
+            nsigma = 0
+            pfiTransform.nsigma = nsigma
+            pfiTransform.alphaRot = 0
+
             for i in range(2):
-                pt.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
-        
-            xx , yy = pt.mcsToPfi(mcsData['mcs_center_x_pix'],mcsData['mcs_center_y_pix'])
+                ffid, dist = pfiTransform.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
+
+            xx , yy = pfiTransform.mcsToPfi(mcsData['mcs_center_x_pix'],mcsData['mcs_center_y_pix'])
             centroids=np.rec.array([xx,yy],formats='float,float',names='x,y')
             
             if tolerance is not None:
