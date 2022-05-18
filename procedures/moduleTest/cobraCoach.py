@@ -422,7 +422,7 @@ class CobraCoach():
                 altitude = teleInfo['altitude'].values[0]
                 insrot = teleInfo['insrot'].values[0]
 
-            pfiTransform = transformUtils.fromCameraName(self.actor.cameraName, 
+            pfiTransform = transformUtils.fromCameraName(self.cameraName, 
             altitude=altitude, insrot=insrot,nsigma=0, alphaRot=1)
         
             outerRingIds = [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]
