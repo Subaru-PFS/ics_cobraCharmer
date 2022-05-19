@@ -208,7 +208,7 @@ class VisDianosticPlot(object):
         
         ax = plt.gca()
 
-        ax.scatter(des.centers.real, des.centers.imag,marker='o', color='white', s=20)
+        ax.scatter(des.centers.real, des.centers.imag,marker='o', color='red', s=20)
 
 
         # Adding theta hard-stops
@@ -255,7 +255,11 @@ class VisDianosticPlot(object):
                 ax.add_artist(d)
     
     def visVisitAllSpots(self, psfVisitID = None, subVisit = None, camera = None, dataRange=None):
-        
+        '''
+            This function plots data points of all spots of a given visitID, especailly for convergence and MM run. 
+        '''
+
+
         if camera is not None:
             cameraName = camera
 
@@ -284,27 +288,48 @@ class VisDianosticPlot(object):
             db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
                                 username='pfs')
         
-        if dataRange is None:
-            dataRange  = 12
+        dataRange = None
+        subVisit = 1
 
-        for sub in range(dataRange):
+        if subVisit is None:
+            if dataRange is None:
+                dataRange  = [0,12]
+        else:
+            dataRange = [subVisit, subVisit+1]
+
+
+        for count, sub in enumerate(range(*dataRange)):
             subid=sub
 
             frameid = visitID*100+subid
+            try:
+                db=opdb.OpDB(hostname='db-ics', port=5432,dbname='opdb',
+                        username='pfs')
 
-            match = db.bulkSelect('cobra_match','select * from cobra_match where '
+                match = db.bulkSelect('cobra_match','select * from cobra_match where '
                       f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
 
-            mcsData = db.bulkSelect('mcs_data','select * from mcs_data where '
-                    f'mcs_frame_id = {frameid}').sort_values(by=['spot_id']).reset_index()
-            teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
-                    f'mcs_frame_id = {frameid}')
+                mcsData = db.bulkSelect('mcs_data','select * from mcs_data where '
+                        f'mcs_frame_id = {frameid}').sort_values(by=['spot_id']).reset_index()
+                teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
+                        f'mcs_frame_id = {frameid}')
+            except:
+
+                db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
+                                    username='pfs')
+
+                match = db.bulkSelect('cobra_match','select * from cobra_match where '
+                        f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
+
+                mcsData = db.bulkSelect('mcs_data','select * from mcs_data where '
+                        f'mcs_frame_id = {frameid}').sort_values(by=['spot_id']).reset_index()
+                teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
+                        f'mcs_frame_id = {frameid}')
 
             #if subid == 0:
-            self.logger.info(f'Using first frame for transformation')
+            #self.logger.info(f'Using first frame for transformation')
             pt = transformUtils.fromCameraName(cameraName,altitude=teleInfo['altitude'].values[0], 
                         insrot=teleInfo['insrot'].values[0])
-        
         
         
             outerRing = np.zeros(len(fids), dtype=bool)
@@ -316,11 +341,16 @@ class VisDianosticPlot(object):
                     pt.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
         
             xx , yy = pt.mcsToPfi(mcsData['mcs_center_x_pix'],mcsData['mcs_center_y_pix'])
-            ax.plot(xx,yy,'.',label=f'{sub}')
-            ax.plot(match['pfi_center_x_mm'],match['pfi_center_y_mm'],'x')
+            
+            if count == 0:
+                ax.plot(xx,yy,'.',label='Spots from transformaion')
+                ax.plot(match['pfi_center_x_mm'],match['pfi_center_y_mm'],'x',label='Spots from match table')
+            else:
+                ax.plot(xx,yy,'.')
+                ax.plot(match['pfi_center_x_mm'],match['pfi_center_y_mm'],'x')
 
         if os.path.exists(tarfile):
-            ax.plot(targets.real,targets.imag,'+')
+            ax.plot(targets.real,targets.imag,'+', label='Final Target')
 
         ax.legend()
 
@@ -475,6 +505,11 @@ class VisDianosticPlot(object):
                     label=f'length = {vectorLength} mm', labelpos='E')
     
     def visFiducialFiber(self):
+        '''
+            This function plots the location of FFs used in data model.
+        '''
+
+
         ax=plt.gca()
         butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
         fids = butler.get('fiducials')
@@ -520,6 +555,10 @@ class VisDianosticPlot(object):
         dataRange=None, histo=False, getAllFFPos = False, badFF=None):
 
         '''
+            
+            Args
+            ----
+            psfVisitID:  The psfVisitID 
             getAveragePos : If this flag is set to be True, returing the averaged position.
             refXYstage: Compare with insdata or averaged positions
         '''
@@ -967,23 +1006,38 @@ class VisDianosticPlot(object):
         else:
             plt.show()
 
-    def visDotLocation(self):
+    def visDotLocation(self, dotDF=None, dotColor = None):
         
         ax = plt.gca()
 
-        dotFile = '/software/devel/pfs/pfs_instdata/data/pfi/dot/black_dots_mm.csv'
-        newDot=pd.read_csv(dotFile)
+        if dotDF is None:
+            dotFile = '/software/devel/pfs/pfs_instdata/data/pfi/dot/black_dots_mm.csv'
+            newDot = pd.read_csv(dotFile)
+        else:
+            neeDot = dotDF
 
+        if dotColor is None:
+            dotColor = 'grey'
         # Plot DOT location
         for dotidx in range(len(newDot)):
             e = plt.Circle((newDot['x'].values[dotidx], newDot['y'].values[dotidx]), newDot['r'].values[dotidx], 
-                        color='grey', fill=True, alpha=0.5)
+                        color=dotColor, fill=True, alpha=0.5)
             ax.add_artist(e)
 
 
 
-    def visPlotFiberSpots(self, cobraIdx=None, moveData=None, color=None):
+    def visPlotFiberSpots(self, cobraIdx=None, moveData=None, color=None, 
+        markCobra=False, markGeometry=True):
+        
+        '''
+            This function is mainly used to plot round trip data, for example, motor map or geometry
 
+            Args
+            -------
+            cobraIdx: cobra index to show
+            moveData: input of FW and RV data 
+        
+        '''
 
         ax = plt.gca()
         
@@ -999,12 +1053,17 @@ class VisDianosticPlot(object):
                 self.calibModel.L1[idx]+self.calibModel.L2[idx], facecolor='g', edgecolor=None,alpha=0.5)
             ax.add_artist(c)
 
-        if moveData is None:
-            for idx in cobra:
-                d = plt.Circle((self.centers[idx].real, self.centers[idx].imag), self.radius[idx], color='red', fill=False)
-                ax.add_artist(d)
-    
-            ax.scatter(self.centers[cobra].real,self.centers[cobra].imag,color='red')    
+            if markCobra is True:
+                ax.text(self.calibModel.centers[idx].real, self.calibModel.centers[idx].imag,idx, fontsize=8)
+
+
+        if markGeometry is True:
+            if moveData is None:
+                for idx in cobra:
+                    d = plt.Circle((self.centers[idx].real, self.centers[idx].imag), self.radius[idx], color='red', fill=False)
+                    ax.add_artist(d)
+        
+                ax.scatter(self.centers[cobra].real,self.centers[cobra].imag,color='red')    
 
         if moveData is None:
             for n in range(1):
@@ -1018,6 +1077,9 @@ class VisDianosticPlot(object):
                     else:
                         c = 'b'
                         d = 'y'
+                    if k == 0:
+                        ax.plot(self.fw[k][n,0].real, self.fw[k][n,0].imag, c + 'o',label='FW0')
+                        ax.plot(self.rv[k][n,0].real, self.rv[k][n,0].imag, d + 's',label='RV0')
                     ax.plot(self.fw[k][n,0].real, self.fw[k][n,0].imag, c + 'o')
                     ax.plot(self.rv[k][n,0].real, self.rv[k][n,0].imag, d + 's')
                     ax.plot(self.fw[k][n,1:].real, self.fw[k][n,1:].imag, c + '.')
@@ -1039,13 +1101,17 @@ class VisDianosticPlot(object):
                     if color is not None:
                         c = color
                         d = color
-
+                    if k == 0:
+                        ax.plot(self.fw[k][n,0].real, self.fw[k][n,0].imag, c + 'o',label='FW0')
+                        ax.plot(self.rv[k][n,0].real, self.rv[k][n,0].imag, d + 's',label='RV0')
                     ax.plot(fw[k][n,0].real, fw[k][n,0].imag, c + 'o')
                     ax.plot(rv[k][n,0].real, rv[k][n,0].imag, d + 's')
                     ax.plot(fw[k][n,1:].real, fw[k][n,1:].imag, c + '.')
                     ax.plot(rv[k][n,1:].real, rv[k][n,1:].imag, d + '.')
-    
-        plt.show()
+
+        ax.legend()
+
+        #plt.show()
     
     def visStackedImage(self, direction='fwd', flip=False):
         if direction == 'fwd':

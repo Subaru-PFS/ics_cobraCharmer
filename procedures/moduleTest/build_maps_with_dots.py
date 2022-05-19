@@ -2,6 +2,7 @@ from procedures.moduleTest import calculus as cal
 import numpy as np
 import pandas as pd
 import logging
+import pandas as pd
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
@@ -18,21 +19,21 @@ def setCobraCoach(cobraCoach):
     global cc
     cc = cobraCoach
 
-def buildThetaMotorMaps(xml, steps=500, repeat=1, fast=False, tries=10, homed=True):
-    if homed:
-        logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
-        cc.moveToHome(cc.goodCobras, thetaEnable=True, phiEnable=True, thetaCCW=False)
-    for group in range(3):
-        prepareThetaMotorMaps(group=group, tries=tries, homed=False)
-        homePhiArms(group=group)
-        runThetaMotorMaps(xml, group=group, steps=steps, repeat=repeat, fast=fast)
+#def buildThetaMotorMaps(xml, steps=500, repeat=1, fast=False, tries=10, homed=True):
+#    if homed:
+#        logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
+#        cc.moveToHome(cc.goodCobras, thetaEnable=True, phiEnable=True, thetaCCW=False)
+#    for group in range(3):
+#        prepareThetaMotorMaps(group=group, tries=tries, homed=False)
+#        homePhiArms(group=group)
+#        runThetaMotorMaps(xml, group=group, steps=steps, repeat=repeat, fast=fast)
 
-def buildPhiMotorMaps(xml, steps=250, repeat=1, fast=False, tries=10, homed=True):
-    if homed:
-        logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
-        cc.moveToHome(cc.goodCobras, thetaEnable=True, phiEnable=True, thetaCCW=False)
-    preparePhiMotorMaps(tries=tries, homed=False)
-    runPhiMotorMaps(xml, steps=steps, repeat=repeat, fast=fast)
+#def buildPhiMotorMaps(xml, steps=250, repeat=1, fast=False, tries=10, homed=True):
+#    if homed:
+#        logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
+#        cc.moveToHome(cc.goodCobras, thetaEnable=True, phiEnable=True, thetaCCW=False)
+#    preparePhiMotorMaps(tries=tries, homed=False)
+#    runPhiMotorMaps(xml, steps=steps, repeat=repeat, fast=fast)
 
 def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
                  tolerance=0.1, tries=6, homed=False,
@@ -174,6 +175,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
 
     return dataPath, atThetas[cIds], atPhis[cIds], moves
 
+
 def moveThetaPhi2Steps(cIds, thetas, phis, relative=False, local=True,
                        tolerance=0.1, tries=8, homed=True, newDir=True,
                        threshold=10.0, thetaMargin=np.deg2rad(15.0),
@@ -255,6 +257,7 @@ def moveThetaPhi2Steps(cIds, thetas, phis, relative=False, local=True,
     return dataPath, atThetas, atPhis, moves
 
 def prepareThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.1, tries=10, homed=True, threshold=1.0, elbow_radius=1.0, margin=0.1):
+
     """ move cobras to safe positions for generating theta motor maps
         cobras are divided into three non-interfering groups
         group = (0,1,2)
@@ -313,7 +316,7 @@ def prepareThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.1, tries=10,
             continue
 
         elbows_dist = np.abs(elbows - centers[n]) - elbow_radius * 2
-        dots_dist = np.abs(dots - centers[n]) - cc.calibModel.dotradii[n]
+        dots_dist = np.abs(dots - centers[n]) - dots_radii[n]
         dots_dist[n] = np.nan
         radius_max = np.nanmin((elbows_dist, dots_dist)) - margin
         radius_do = np.abs(dots[n] - centers[n]) + dots_radii[n] + margin
@@ -478,7 +481,7 @@ def runThetaMotorMaps(newXml, group=0, steps=500, totalSteps=10000, repeat=1, fa
 
     return cc.runManager.runDir, np.where(np.logical_or(bad, mmBad))[0]
 
-def preparePhiMotorMaps(thetaAngle=np.pi/3, tolerance=0.1, tries=10, homed=True, threshold=1.0):
+def preparePhiMotorMaps(thetaAngle=np.pi/3, tolerance=0.01, tries=12, homed=True, threshold=2.0):
     """ move cobras to safe positions for generating phi motor maps
         that is, theta arms = 60 degree on PFI coordonate
         thetaAngle: global theta arm direction
