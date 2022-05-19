@@ -365,8 +365,14 @@ def runThetaMotorMaps(newXml, group=0, steps=500, totalSteps=10000, repeat=1, fa
         cc.setMode('theta')
 
     # select only the specified group
+    groupIdx = np.zeros(cc.nCobras, 'bool')
+    for n in range(cc.nCobras):
+        gidx = (n + (n//57) + (n//(14*57))) % 3
+        if gidx == group and n in cc.goodIdx:
+            groupIdx[n] = True
+
     defaultGoodIdx = cc.goodIdx
-    cc.goodIdx = np.arange(group, cc.nCobras, 3)
+    cc.goodIdx = np.where(groupIdx)[0]
     cc.goodCobras = cc.allCobras[cc.goodIdx]
 
     # aquire data for motor maps
