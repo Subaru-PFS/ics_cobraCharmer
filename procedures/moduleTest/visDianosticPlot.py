@@ -376,8 +376,11 @@ class VisDianosticPlot(object):
             subID = subVisit
 
         frameid = visitID*100+subID
-
-        db=opdb.OpDB(hostname='pfsa-db01', port=5432,
+        try:
+            db=opdb.OpDB(hostname='db-ics', port=5432,
+                   dbname='opdb',username='pfs')
+        except:
+            db=opdb.OpDB(hostname='pfsa-db01', port=5432,
                    dbname='opdb',username='pfs')
         
         match = db.bulkSelect('cobra_match','select * from cobra_match where '
@@ -404,7 +407,11 @@ class VisDianosticPlot(object):
                 
                 frameid = visitID*100+subID
 
-                db=opdb.OpDB(hostname='pfsa-db01', port=5432,
+                try:
+                    db=opdb.OpDB(hostname='db-ics', port=5432,
+                        dbname='opdb',username='pfs')
+                except:
+                    db=opdb.OpDB(hostname='pfsa-db01', port=5432,
                         dbname='opdb',username='pfs')
 
                 match = db.bulkSelect('cobra_match','select * from cobra_match where '
