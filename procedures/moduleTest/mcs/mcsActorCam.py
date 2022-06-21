@@ -59,7 +59,7 @@ class McsActorCamera(camera.Camera):
         cmdString = f"expose {expType} expTime={exptime:0.2f} {frameArg} {doCentroidArg} {doFiberIDArg}"
         self.logger.info(f'calling mcs {cmdString} with cmd={cmd} from {threading.current_thread()}')
         cmdVar = self.actor.cmdr.call(actor='mcs', cmdStr=cmdString,
-                                      forUserCmd=cmd, timeLim=exptime+30)
+                                      forUserCmd=cmd, timeLim=exptime+60)
         if cmdVar.didFail:
             msg = 'Failed to expose with %s: %s' % (cmdString, cmdVar)
             self.cmd.warn(f'text="{msg}"')
@@ -89,7 +89,7 @@ class McsActorCamera(camera.Camera):
     def trim(self, x, y):
         raise NotImplementedError("trimming would be done on the mcsActor side")
 
-    def expose(self, name=None, exptime=0.8,
+    def expose(self, name=None, exptime=None,
                doCentroid=True, doFibreID=True,
                frameNum=None, cmd=None):
         """Take an exposure, usually measure centroids, and save the outputs.
