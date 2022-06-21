@@ -100,7 +100,7 @@ class CobraCoach():
         self.cmd = cmd
 
         self.frameNum = None
-        self.expTime
+        self.expTime = None
 
     def loadModel(self, file=None, version=None, moduleVersion=None, camSplit=28):
         if file is not None:
@@ -374,7 +374,7 @@ class CobraCoach():
         cmd = self.actor.visitor.cmd
         frameNum = self.actor.visitor.getNextFrameNum()
         centroids, filename, bkgd = self.cam.expose(name,
-                                                    exptime=self.exptime,
+                                                    exptime=self.expTime,
                                                     frameNum=frameNum,
                                                     cmd=cmd)
 
