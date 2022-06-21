@@ -100,7 +100,7 @@ class CobraCoach():
         self.cmd = cmd
 
         self.frameNum = None
-
+        self.expTime
 
     def loadModel(self, file=None, version=None, moduleVersion=None, camSplit=28):
         if file is not None:
@@ -374,7 +374,7 @@ class CobraCoach():
         cmd = self.actor.visitor.cmd
         frameNum = self.actor.visitor.getNextFrameNum()
         centroids, filename, bkgd = self.cam.expose(name,
-                                                    exptime=exptime,
+                                                    exptime=self.exptime,
                                                     frameNum=frameNum,
                                                     cmd=cmd)
 
@@ -623,7 +623,7 @@ class CobraCoach():
             pos[self.visibleIdx] = targets[self.visibleIdx]
         else:
             #pos[self.visibleIdx] = self.exposeAndExtractPositions(guess=targets[self.visibleIdx])
-            pos[self.visibleIdx] = self.exposeAndExtractPositions(dbMatch=False)[self.visibleIdx]
+            pos[self.visibleIdx] = self.exposeAndExtractPositions(dbMatch=True)[self.visibleIdx]
 
             #np.save('/tmp/cobraCharmer_pos',pos)
         # update status
