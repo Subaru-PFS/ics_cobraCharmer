@@ -12,6 +12,10 @@ import math
 import pathlib
 from scipy import optimize
 from scipy.optimize import curve_fit
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+
+
 
 from bokeh.io import output_notebook, show, export_png,export_svgs
 from selenium import webdriver
@@ -376,6 +380,44 @@ class VisDianosticPlot(object):
             ax.plot(targets.real,targets.imag,'+', label='Final Target')
 
         ax.legend()
+
+    
+    def visArmlengthComp(self, diff, arm='theta', gauFit = True, extraLable=None):
+        
+        if arm is 'phi':
+            arm = 'L2'
+        else: arm = 'L1'
+        
+        fig, ax = plt.subplots(1,2, figsize=(16,8), facecolor="white")
+
+        ax[0].set_aspect("equal")
+        sc=ax[0].scatter(self.calibModel.centers.real[self.goodIdx], self.calibModel.centers.imag[self.goodIdx],
+            c=diff[self.goodIdx], vmin=-0.15, vmax=-0.025)
+        divider = make_axes_locatable(ax[0])
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        colorbar = fig.colorbar(sc,cax=cax)
+
+
+        ax[0].set_xlabel('X (mm)')
+        ax[0].set_ylabel('y (mm)')
+
+        n, bins, patches = ax[1].hist(diff[self.goodIdx],range=(-0.15,0.025),bins=30)
+
+        popt = gaussianFit(n, bins)
+        sigma=np.abs(popt[2])
+
+        ax[1].plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
+
+        ax[1].text(0.7, 0.8, f'Median = {np.median(diff[self.goodIdx]):.4f}, $\sigma$={sigma:.4f}', 
+                        horizontalalignment='center', verticalalignment='center', transform=ax[1].transAxes)
+        ax[1].set_xlabel('Difference (mm)')
+        ax[1].set_ylabel('Counts')
+
+        if extraLable is None:
+            plt.suptitle(f'{arm} Arm Length Comparison')
+        else:
+            plt.suptitle(f'{arm} Arm Length Comparison {extraLable}')
+
 
 
 
