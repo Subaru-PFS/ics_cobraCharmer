@@ -10,6 +10,8 @@ import subprocess
 import sys
 import math
 import pathlib
+from scipy import optimize
+from scipy.optimize import curve_fit
 
 from bokeh.io import output_notebook, show, export_png,export_svgs
 from selenium import webdriver
@@ -39,6 +41,27 @@ from pfs.utils.butler import Butler
 import pfs.utils.coordinates.transform as transformUtils
 
 
+def findVisit(runDir):
+    return int(pathlib.Path(glob.glob(f'/data/MCS/{runDir}/data/*.fits')[0]).name[4:-7])
+
+def gaus(x,a,x0,sigma):
+    return a*np.exp(-(x-x0)**2/(2*sigma**2))
+
+def gaussianFit(n, bins, initGuess = None):
+    shift = np.abs((bins[0]-bins[1])/2)
+    histy = n
+    histx = bins[:-1]+shift
+
+    if initGuess is None:
+        popt,pcov = curve_fit(gaus,histx,histy,p0=[1,np.sum(histx*histy)/np.sum(histy),0.01])
+    else:
+        mean, sigma = initGuess[0], initGuess[1]
+        
+        popt,pcov = curve_fit(gaus,histx,histy,p0=[1,mean, sigma])
+    
+    sigma=np.abs(popt[2])
+
+    return popt
 
 class VisDianosticPlot(object):
 
@@ -357,7 +380,7 @@ class VisDianosticPlot(object):
 
 
     def visSubaruConvergence(self, psfVisitID=None, subVisit=11, 
-        histo=False, range=(0,0.08), bins=20, **kwargs):
+        histo=False, range=(0,0.08), bins=20, tolerance=0.01, **kwargs):
         '''
             Visulization of cobra convergence result at certain iteration.  
             This fuction gets the locations of all fibers from database
@@ -377,13 +400,15 @@ class VisDianosticPlot(object):
 
         frameid = visitID*100+subID
         try:
-            db=opdb.OpDB(hostname='db-ics', port=5432,
-                   dbname='opdb',username='pfs')
-        except:
             db=opdb.OpDB(hostname='pfsa-db01', port=5432,
                    dbname='opdb',username='pfs')
+            match = db.bulkSelect('cobra_match','select * from cobra_match where '
+                      f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
+        except:
+            db=opdb.OpDB(hostname='db-ics', port=5432,
+                   dbname='opdb',username='pfs')
         
-        match = db.bulkSelect('cobra_match','select * from cobra_match where '
+            match = db.bulkSelect('cobra_match','select * from cobra_match where '
                       f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
 
         path=f'{self.path}/data/'
@@ -394,16 +419,18 @@ class VisDianosticPlot(object):
         targets=np.load(tarfile)
         mov = np.load(movfile)
 
+        try:
+            maxIteration = mov.shape[2]
+        except:
+            mov = np.array([mov])
+            maxIteration = mov.shape[2]
+
         dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
             (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
 
-        ind = np.where(np.abs(mov[0,:,11]['position']) > 0)
-        notDone = len(np.where(np.abs(mov[0,ind[0],11]['position']-targets[ind[0]]) > 0.01)[0])
-        self.logger.info(f'Number of not done cobra: {notDone}')
-
         if histo is True:
             ax.set_aspect('auto')
-            for subID in np.arange(subVisit,12):
+            for subID in np.arange(subVisit,maxIteration):
                 
                 frameid = visitID*100+subID
 
@@ -428,12 +455,21 @@ class VisDianosticPlot(object):
 
 
         else:
+            
             sc=ax.scatter(self.calibModel.centers.real[self.goodIdx],self.calibModel.centers.imag[self.goodIdx],
                 c=dist,marker='s',**kwargs)
         
             plt.colorbar(sc)
 
-    def visCobraCenter(self, baseData, targetData, histo=False, vectorLength=0.05, **kwargs):
+        ind = np.where(np.abs(mov[0,:,maxIteration-1]['position']) > 0)
+        notDone = len(np.where(np.abs(mov[0,ind[0],maxIteration-1]['position']-targets[ind[0]]) > tolerance)[0])
+        self.logger.info(f'Number of still moving cobra: {(len(ind[0]))}')
+
+        self.logger.info(f'Number of not done cobra: {notDone}')
+
+        return notDone
+
+    def visCobraCenter(self, baseData, targetData, histo=False, gauFit = True, vectorLength=0.05, **kwargs):
         
         '''
             This function is used to compare the center locations between two datasets. 
@@ -461,7 +497,14 @@ class VisDianosticPlot(object):
             ax1 = plt.subplot(212)
             n, bins, patches = ax1.hist(diff,range=(0,np.mean(diff)+2*np.std(diff)), bins=15, color='#0504aa',
                 alpha=0.7)
-            ax1.text(0.8, 0.8, f'Median = {np.median(diff):.2f}, $\sigma$={np.std(diff):.2f}', 
+
+            popt = gaussianFit(n, bins)
+            sigma = popt[2]
+            if gauFit is True:
+                ax1.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
+
+
+            ax1.text(0.8, 0.8, f'Median = {np.median(diff):.4f}, $\sigma$={sigma:.4f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
             ax1.set_title('2D')
             ax1.set_xlabel('distance (mm)')
@@ -470,9 +513,15 @@ class VisDianosticPlot(object):
 
 
             ax2 = plt.subplot(221)
-            ax2.hist(dx,range=(np.mean(dx)-3*np.std(dx),np.mean(dx)+3*np.std(dx)), 
+            n, bins, patches = ax2.hist(dx,range=(np.mean(dx)-3*np.std(dx),np.mean(dx)+3*np.std(dx)), 
                 bins=30, color='#0504aa',alpha=0.7)
-            ax2.text(0.7, 0.8, f'Median = {np.median(dx):.2f}, $\sigma$={np.std(dx):.2f}', 
+            
+            popt = gaussianFit(n, bins)
+            sigma = popt[2]
+            if gauFit is True:
+                ax2.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
+            
+            ax2.text(0.7, 0.85, f'Median = {np.median(dx):.4f}, $\sigma$={sigma:.4f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax2.transAxes)
             ax2.set_title('X direction')
             ax2.set_xlabel('distance (mm)')
@@ -484,9 +533,14 @@ class VisDianosticPlot(object):
             ax3.tick_params(axis='both',labelleft=False)
 
 
-            ax3.hist(dy,range=(np.mean(dy)-3*np.std(dx),np.mean(dy)+3*np.std(dx)), 
+            n, bins, patches = ax3.hist(dy,range=(np.mean(dy)-3*np.std(dx),np.mean(dy)+3*np.std(dx)), 
                 bins=30, color='#0504aa', alpha=0.7)
-            ax3.text(0.7, 0.8, f'Median = {np.median(dy):.2f}, $\sigma$={np.std(dy):.2f}', 
+            popt = gaussianFit(n, bins)
+            sigma = popt[2]
+            if gauFit is True:
+                ax3.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
+            
+            ax3.text(0.7, 0.85, f'Median = {np.median(dy):.4f}, $\sigma$={sigma:.4f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax3.transAxes)
 
             ax3.set_title('Y direction')
@@ -499,7 +553,7 @@ class VisDianosticPlot(object):
         else:
             
             sigma = np.std(diff)
-            self.logger.info(f'Mean = {np.mean(diff):.2f}, Median = {np.median(diff):.2f} Std={np.std(diff):.2f}')
+            self.logger.info(f'Mean = {np.mean(diff):.3f}, Median = {np.median(diff):.3f} Std={np.std(diff):.3f}')
             self.logger.info(f'CobraIdx for large center variant :{np.where(diff >= np.median(diff)+2.0*sigma)[0]}')
 
             #indx = np.where(diff < np.median(diff)+2.0*sigma)[0]
@@ -559,7 +613,7 @@ class VisDianosticPlot(object):
         ax.legend()
 
     def visAllFFSpots(self, psfVisitID=None, vector=True, vectorLength=0.05, camera = None, 
-        dataRange=None, histo=False, getAllFFPos = False, badFF=None):
+        dataRange=None, histo=False, getAllFFPos = False, badFF=None, binNum=7):
 
         '''
             
@@ -677,16 +731,19 @@ class VisDianosticPlot(object):
                         label=f'length = {vectorLength} mm', labelpos='E')
 
         if histo is True:
-            
+        
+
             dx = ffpos.real - fids['x_mm'].values
             dy = ffpos.imag - fids['y_mm'].values
             
             diff = np.sqrt(dx**2+dy**2)
+            #import pdb; pdb.set_trace()
 
             ax1 = plt.subplot(212)
-            n, bins, patches = ax1.hist(diff[stableFF],range=(0,np.mean(diff)+2*np.std(diff)), bins=7, color='#0504aa',
-                alpha=0.7)
-            ax1.text(0.8, 0.8, f'Median = {np.median(diff):.2f}, $\sigma$={np.std(diff):.2f}', 
+            n, bins, patches = ax1.hist(diff[stableFF],range=(0,np.nanmean(diff[stableFF])+2*np.nanstd(diff[stableFF])),
+                bins=binNum, color='#0504aa',alpha=0.7)
+
+            ax1.text(0.8, 0.8, f'Median = {np.nanmedian(diff[stableFF]):.2f}, $\sigma$={np.nanstd(diff[stableFF]):.2f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
             ax1.set_title('2D')
             ax1.set_xlabel('distance (mm)')
@@ -695,9 +752,9 @@ class VisDianosticPlot(object):
 
 
             ax2 = plt.subplot(221)
-            ax2.hist(dx,range=(np.mean(dx[stableFF])-3*np.std(dx[stableFF]),np.mean(dx[stableFF])+3*np.std(dx[stableFF])), 
-                bins=15, color='#0504aa',alpha=0.7)
-            ax2.text(0.7, 0.8, f'Median = {np.median(dx):.2f}, $\sigma$={np.std(dx):.2f}', 
+            ax2.hist(dx,range=(np.nanmean(dx[stableFF])-3*np.nanstd(dx[stableFF]),np.nanmean(dx[stableFF])+3*np.nanstd(dx[stableFF])), 
+                bins=(2*binNum)+1, color='#0504aa',alpha=0.7)
+            ax2.text(0.7, 0.8, f'Median = {np.nanmedian(dx):.2f}, $\sigma$={np.nanstd(dx):.2f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax2.transAxes)
             ax2.set_title('X direction')
             ax2.set_xlabel('distance (mm)')
@@ -709,9 +766,9 @@ class VisDianosticPlot(object):
             ax3.tick_params(axis='both',labelleft=False)
 
 
-            ax3.hist(dy,range=(np.mean(dy[stableFF])-3*np.std(dy[stableFF]),np.mean(dy[stableFF])+3*np.std(dy[stableFF])), 
-                bins=15, color='#0504aa', alpha=0.7)
-            ax3.text(0.7, 0.8, f'Median = {np.median(dy):.2f}, $\sigma$={np.std(dy):.2f}', 
+            ax3.hist(dy,range=(np.nanmean(dy[stableFF])-3*np.nanstd(dy[stableFF]),np.nanmean(dy[stableFF])+3*np.nanstd(dy[stableFF])), 
+                bins=(2*binNum)+1, color='#0504aa', alpha=0.7)
+            ax3.text(0.7, 0.8, f'Median = {np.nanmedian(dy):.2f}, $\sigma$={np.nanstd(dy):.2f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax3.transAxes)
 
             ax3.set_title('Y direction')
@@ -945,16 +1002,127 @@ class VisDianosticPlot(object):
             ax3.set_xlabel('distance (mm)')
             plt.subplots_adjust(wspace=0,hspace=0.3)
 
+    
+    def visRemeasurePhiCenter(self, data):
+
+        """
+        Remeasuring the phi center and radius of from fiber spots.
+        
+        Parameters
+        ----------
+        data: compelex array
+            fiber spots of forward movement
+
+        rv: compelex array
+            fiber spots of reverse movement
+        
+        """
+        def calc_R(xc, yc):
+            """ calculate the distance of each 2D points from the center (xc, yc) """
+            return np.sqrt((x-xc)**2 + (y-yc)**2)
+
+        def f_2(c):
+            """ calculate the algebraic distance between the data points and the mean circle centered at c=(xc, yc) """
+            Ri = calc_R(*c)
+            return Ri - Ri.mean()
+
+        
+        
+        medianR = np.median(np.abs((data-np.mean(data))))
+        x = data.real
+        y = data.imag
+
+        center_estimate = np.mean(x), np.mean(y)
+        center_2, ier = optimize.leastsq(f_2, center_estimate)
+
+        xc_2, yc_2 = center_2
+        Ri_2       = calc_R(*center_2)
+        R_2        = Ri_2.mean()
+        residu_2   = sum((Ri_2 - R_2)**2)
+
+        ax=plt.gca()
+        ax.plot(data.real,data.imag,'.',label='data spot')
+        
+        ax.plot(xc_2,yc_2,'+',label='New center')
+
+        d = plt.Circle((xc_2, yc_2), R_2, color='blue', fill=False)
+        ax.add_artist(d)
+
+        ax.text(xc_2,yc_2,f'{xc_2:.3f}+{yc_2:.3f}j')
+
+        ax.legend()
+                
+        self.logger.info(f'The center is at (x ,y) = {xc_2+yc_2*1j} R = {R_2:.4f}')
+
+        return xc_2+yc_2*1j, R_2
+        
+
+
+    def visRemeasureThetaCenter(self, fw, rv):
+
+        """
+        Remeasuring the theta center and radius of from fiber spots.
+        
+        Parameters
+        ----------
+        fw: compelex array
+            fiber spots of forward movement
+
+        rv: compelex array
+            fiber spots of reverse movement
+        
+        """
+        def calc_R(xc, yc):
+            """ calculate the distance of each 2D points from the center (xc, yc) """
+            return np.sqrt((x-xc)**2 + (y-yc)**2)
+
+        def f_2(c):
+            """ calculate the algebraic distance between the data points and the mean circle centered at c=(xc, yc) """
+            Ri = calc_R(*c)
+            return Ri - Ri.mean()
+
+        data = np.append(fw,rv)
+        medianR = np.median(np.abs((data-np.mean(data))))
+        indx = np.where(np.abs((data-np.mean(data))) < medianR+1.5)
+
+        data=data[indx]
+
+        x = data.real
+        y = data.imag
+
+        center_estimate = np.mean(x), np.mean(y)
+        center_2, ier = optimize.leastsq(f_2, center_estimate)
+
+        xc_2, yc_2 = center_2
+        Ri_2       = calc_R(*center_2)
+        R_2        = Ri_2.mean()
+        residu_2   = sum((Ri_2 - R_2)**2)
+
+        ax=plt.gca()
+        ax.plot(fw.real,fw.imag,'.',label='FW')
+        ax.plot(rv.real,rv.imag,'.',label='RV')
+        
+        d = plt.Circle((xc_2, yc_2), R_2, color='blue', fill=False)
+        ax.add_artist(d)
+
+        ax.text(xc_2,yc_2,f'{xc_2:.3f}+{yc_2:.3f}j')
+
+        ax.legend()
+                
+        self.logger.info(f'The center is at (x ,y) = {xc_2+yc_2*1j} R = {R_2:.4f}')
 
     
     def visSaveFigure(self, fileName, **kwargs):
-        """Saves an image of the current figure.
+        """
+        Saves an image of the current figure.
+        
         Parameters
         ----------
         fileName: object
             The image file name path.
         kwargs: figure.savefig properties
             Any additional property that should be passed to the savefig method.
+        
         """
 
         plt.gcf().savefig(fileName, **kwargs)
@@ -1053,6 +1221,9 @@ class VisDianosticPlot(object):
             cobra = self.goodIdx
         else:
             cobra = cobraIdx
+
+        # By default, we do not want to see cobra marked as bad
+        
 
         for idx in cobra:
             c = plt.Circle((self.calibModel.centers[idx].real, 
