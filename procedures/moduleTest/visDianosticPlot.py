@@ -46,7 +46,7 @@ import pfs.utils.coordinates.transform as transformUtils
 
 
 def findVisit(runDir):
-    return int(pathlib.Path(glob.glob(f'/data/MCS/{runDir}/data/*.fits')[0]).name[4:-7])
+    return int(pathlib.Path(sorted(glob.glob(f'/data/MCS/{runDir}/data/PFSC*.fits'))[0]).name[4:-7])
 
 def gaus(x,a,x0,sigma):
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
@@ -191,22 +191,34 @@ class VisDianosticPlot(object):
         pass
 
 
-    def visCreateNewPlot(self,title, xLabel, yLabel, size=(8, 8), 
-        aspectRatio="equal", patchAlpha=0, **kwargs):
+    def visCreateNewPlot(self,title, xLabel, yLabel, size=(8, 8), nRows = 1, nCols = 1, 
+        aspectRatio="equal", patchAlpha=0, supTitle=True, **kwargs):
         
 
         #plt.figure(figsize=size, facecolor="white", tight_layout=True, **kwargs)
-        fig, ax = plt.subplots(figsize=size, facecolor="white", **kwargs)
+        fig, ax = plt.subplots(nRows, nCols,figsize=size, facecolor="white", **kwargs)
         fig.patch.set_alpha(patchAlpha)
-        plt.clf()
-        plt.title(title)
-        plt.xlabel(xLabel)
-        plt.ylabel(yLabel)
-        plt.show(block=False)
+        
+        if nRows*nCols == 1:
+        
+            plt.clf()
+            if supTitle is True:
+                plt.suptitle(title)
+            else:
+                plt.title(title)
+            plt.xlabel(xLabel)
+            plt.ylabel(yLabel)
+            plt.show(block=False)
 
-        # Set the axes aspect ratio
-        ax = plt.gca()
-        ax.set_aspect(aspectRatio)
+            # Set the axes aspect ratio
+            ax = plt.gca()
+            ax.set_aspect(aspectRatio)
+        else:
+            plt.suptitle(title)
+            plt.subplots_adjust(wspace=0.25,hspace=0.3)
+
+        
+
         self.fig = fig
 
     def visSetAxesLimits(self, xLim, yLim):
@@ -281,7 +293,7 @@ class VisDianosticPlot(object):
                    fill=True,alpha=0.7)
                 ax.add_artist(d)
     
-    def visVisitAllSpots(self, psfVisitID = None, subVisit = None, camera = None, dataRange=None):
+    def visVisitAllSpots(self, pfsVisitID = None, subVisit = None, camera = None, dataRange=None):
         '''
             This function plots data points of all spots of a given visitID, especailly for convergence and MM run. 
         '''
@@ -292,10 +304,10 @@ class VisDianosticPlot(object):
 
         ax = plt.gca()
 
-        if psfVisitID is None:
+        if pfsVisitID is None:
             visitID = int(self._findFITS()[0][-12:-7])
         else:
-            visitID = psfVisitID
+            visitID = pfsVisitID
 
         path=f'{self.path}/data/'
         tarfile = path+'targets.npy'
@@ -365,8 +377,9 @@ class VisDianosticPlot(object):
             pt.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
             
             for i in range(2):
-                    pt.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
-        
+                    rfid, rdmin = pt.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
+
+
             xx , yy = pt.mcsToPfi(mcsData['mcs_center_x_pix'],mcsData['mcs_center_y_pix'])
             
             if count == 0:
@@ -418,10 +431,76 @@ class VisDianosticPlot(object):
         else:
             plt.suptitle(f'{arm} Arm Length Comparison {extraLable}')
 
+    def visStoppedCobra(self, pfsVisitID, tolerance = 0.01):
+        '''
+            Visulization of stopped cobra in each iteration for a certain visitID
+        '''
+        ax = plt.gca()
+
+        path=f'{self.path}/data/'
+        tarfile = path+'targets.npy'
+        movfile = path+'moves.npy'
+
+        targets=np.load(tarfile)
+        mov = np.load(movfile)
+
+        mcs_finised = []
+        
+        maxIteration = mov.shape[2]
 
 
+        for subID in range(maxIteration+1):
+            frameid = pfsVisitID*100+subID
+            db=opdb.OpDB(hostname='db-ics', port=5432,
+                        dbname='opdb',username='pfs')
+                
+            match = db.bulkSelect('cobra_match','select * from cobra_match where '
+                f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
+            
+            if len(match['pfi_center_x_mm']) != 0:
+                dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
+                    (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
+            
+                inx = np.where(dist < tolerance)
+                mcs_finised.append(len(inx[0]))
+        if len(mcs_finised) > maxIteration:
+            mcs_finised = np.array(mcs_finised[1:])
+        else:
+             mcs_finised = np.array(mcs_finised)
 
-    def visSubaruConvergence(self, psfVisitID=None, subVisit=11, 
+        
+
+        fpga_notDone = []
+        for iteration in range(maxIteration):
+            ind = np.where(np.abs(mov[0,:,iteration]['position']) > 0)
+            notDone = len(np.where(np.abs(mov[0,ind[0],iteration]['position']-targets[ind[0]]) > tolerance)[0])
+            fpga_notDone.append(notDone)
+
+
+        fpga_notDone = np.array(fpga_notDone)   
+        fpga_finished = len(self.goodIdx) - fpga_notDone
+
+        ax.set_aspect('auto')
+
+        ax.plot(fpga_finished, linestyle ='-', marker='x', label='FPS')
+        ax.plot(mcs_finised, linestyle ='-',marker='.',label='MCS')
+        ax.plot(fpga_finished - mcs_finised, label = 'FPS - MCS')
+        ax.plot(np.zeros(12)+len(self.goodIdx)*0.95,linestyle ='dotted', label = '95% Threshold')
+        ax.legend()
+
+
+        pass
+
+    def visTargetConvergence(self, pfsVisitID, maxIteration = 11, tolerance = 0.01):
+        vmax = 4*tolerance
+        ax = plt.gcf().get_axes()[0]
+        self.visSubaruConvergence(Axes=ax, pfsVisitID = pfsVisitID,subVisit=maxIteration-1,vmax=vmax)
+        ax = plt.gcf().get_axes()[1]
+        self.visSubaruConvergence(Axes=ax,pfsVisitID = pfsVisitID,subVisit=3,tolerance=tolerance, histo=True, bins=20,range=(0,vmax))
+       
+
+
+    def visSubaruConvergence(self, Axes = None, pfsVisitID=None, subVisit=11, 
         histo=False, range=(0,0.08), bins=20, tolerance=0.01, **kwargs):
         '''
             Visulization of cobra convergence result at certain iteration.  
@@ -430,12 +509,15 @@ class VisDianosticPlot(object):
 
 
         '''
-        ax = plt.gca()
+        if Axes is None:
+            ax = plt.gca()
+        else:
+            ax = Axes
 
-        if psfVisitID is None:
+        if pfsVisitID is None:
             visitID = int(self._findFITS()[0][-12:-7])
         else:
-            visitID = psfVisitID
+            visitID = pfsVisitID
         
         if subVisit is not None:    
             subID = subVisit
@@ -469,7 +551,12 @@ class VisDianosticPlot(object):
 
         dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
             (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
+        
+        self.logger.info(f'Tolerance: {tolerance}')
 
+        ind = np.where(np.abs(mov[0,:,maxIteration-1]['position']) > 0)
+        notDone = len(np.where(np.abs(mov[0,ind[0],maxIteration-1]['position']-targets[ind[0]]) > tolerance)[0])
+        
         if histo is True:
             ax.set_aspect('auto')
             for subID in np.arange(subVisit,maxIteration):
@@ -492,24 +579,35 @@ class VisDianosticPlot(object):
                 n, bins, patches = ax.hist(dist,range=range, bins=bins, alpha=0.7,
                     histtype='step',linewidth=3,
                     label=f'{subID+1}-th Iteration')
-
-            plt.legend(loc='upper right')
-
-
-        else:
             
+            outIdx = np.where(bins > tolerance)
+            #print(np.sum(n[outIdx[0][0]:]))
+            #print(np.sum(n[np.where(bins > 0.01)[0]]))
+            outRegion =  np.sum(n[outIdx[0][0]-1:])
+            ax.text(0.7, 0.45, f'N. of non-converged (MCS) = {outRegion}', 
+                        horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
+            ax.text(0.7, 0.4, f'N. of non-converged (FPS) = {notDone}', 
+                        horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
+            ax.legend(loc='upper right')
+            ax.set_xlabel('Distance (mm)')
+            ax.set_ylabel('Counts')
+            self.logger.info(f'Number of not done cobra (MCS): {outRegion}')
+        else:
+            ax.set_aspect('equal')
             sc=ax.scatter(self.calibModel.centers.real[self.goodIdx],self.calibModel.centers.imag[self.goodIdx],
                 c=dist,marker='s',**kwargs)
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            colorbar = self.fig.colorbar(sc,cax=cax)
+            ax.set_xlabel('X (mm)')
+            ax.set_ylabel('Y (mm)')
+            #plt.colorbar(sc)
+
+        #ind = np.where(np.abs(mov[0,:,maxIteration-1]['position']) > 0)
+        #notDone = len(np.where(np.abs(mov[0,ind[0],maxIteration-1]['position']-targets[ind[0]]) > tolerance)[0])
         
-            plt.colorbar(sc)
-
-        ind = np.where(np.abs(mov[0,:,maxIteration-1]['position']) > 0)
-        notDone = len(np.where(np.abs(mov[0,ind[0],maxIteration-1]['position']-targets[ind[0]]) > tolerance)[0])
         self.logger.info(f'Number of still moving cobra: {(len(ind[0]))}')
-
-        self.logger.info(f'Number of not done cobra: {notDone}')
-
-        return notDone
+        self.logger.info(f'Number of not done cobra (FPS): {notDone}')
 
     def visCobraCenter(self, baseData, targetData, histo=False, gauFit = True, vectorLength=0.05, **kwargs):
         
@@ -578,7 +676,8 @@ class VisDianosticPlot(object):
             n, bins, patches = ax3.hist(dy,range=(np.mean(dy)-3*np.std(dx),np.mean(dy)+3*np.std(dx)), 
                 bins=30, color='#0504aa', alpha=0.7)
             popt = gaussianFit(n, bins)
-            sigma = popt[2]
+            sigma = np.abs(popt[2])
+            
             if gauFit is True:
                 ax3.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
             
@@ -654,18 +753,20 @@ class VisDianosticPlot(object):
                                 label='length = 0.05 mm', labelpos='E')
         ax.legend()
 
-    def visAllFFSpots(self, psfVisitID=None, vector=True, vectorLength=0.05, camera = None, 
-        dataRange=None, histo=False, getAllFFPos = False, badFF=None, binNum=7):
+    def visAllFFSpots(self, pfsVisitID=None, vector=True, vectorLength=0.05, camera = None, 
+        dataRange=None, histo=False, getAllFFPos = False, badFF=None, binNum=7, dataOnly=False):
 
         '''
             
             Args
             ----
-            psfVisitID:  The psfVisitID 
-            getAveragePos : If this flag is set to be True, returing the averaged position.
+            pfsVisitID:  The pfsVisitID 
+            getAllFFPos : If this flag is set to be True, returing the averaged position.
             refXYstage: Compare with insdata or averaged positions
         '''
-        ax=plt.gca()
+        
+        if dataOnly is False:
+            ax=plt.gca()
 
         butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
 
@@ -693,10 +794,12 @@ class VisDianosticPlot(object):
                 if idx in badFF:
                     stableFF[fids.fiducialId == idx] = False
         self.logger.info(f'Stable FF = {stableFF}')
+        
+
         for count, sub in enumerate(range(*dataRange)):
             subid=sub
 
-            frameid = psfVisitID*100+subid
+            frameid = pfsVisitID*100+subid
 
             
 
@@ -720,10 +823,12 @@ class VisDianosticPlot(object):
             for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
                 outerRing[fids.fiducialId == i] = True
             pt.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
-
             
             for i in range(2):
-                pt.updateTransform(mcsData, fids[stableFF], matchRadius=4.2,nMatchMin=0.1)
+                rfid, rdmin = pt.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
+            nMatch = sum(rfid > 0)
+            self.logger.info(f'Total matched = {nMatch}')   
+
 
             xx , yy = pt.mcsToPfi(mcsData['mcs_center_x_pix'],mcsData['mcs_center_y_pix'])
             oriPt = fids['x_mm'].values+fids['y_mm'].values*1j
@@ -741,10 +846,11 @@ class VisDianosticPlot(object):
             ranPt = np.array(ranPt)
 
             ffpos_array.append(ranPt)
-            if count == 0:
-                ax.plot(ranPt[stableFF].real,ranPt[stableFF].imag,'g.',label='FF observed')
-            else:
-                ax.plot(ranPt[stableFF].real,ranPt[stableFF].imag,'g.')    
+            if dataOnly is False:
+                if count == 0:
+                    ax.plot(ranPt[stableFF].real,ranPt[stableFF].imag,'g.',label='FF observed')
+                else:
+                    ax.plot(ranPt[stableFF].real,ranPt[stableFF].imag,'g.')    
 
         ffpos_array=np.array(ffpos_array)
 
@@ -752,78 +858,204 @@ class VisDianosticPlot(object):
         ffstd = np.abs(np.std(ffpos_array,axis=0))
         
         
+        if dataOnly is False:
         
-        ax.plot(fids['x_mm'].values, fids['y_mm'].values,'b+',label='FF')
-        ax.plot(ffpos.real[stableFF], ffpos.imag[stableFF],'r+',label='Avg')
-        
-        # Mark the FF IDs
-        for i in range(len(fids)):
-            ax.text(fids.x_mm.values[i], fids.y_mm.values[i], 
-                    fids.fiducialId.values[i].astype('str'), fontsize=8)
-
-        ax.legend()
-        
-        if vector is True:
-            q=ax.quiver(oriPt[stableFF].real, oriPt[stableFF].imag,
-                    ffpos.real[stableFF]-oriPt[stableFF].real, ffpos[stableFF].imag-oriPt[stableFF].imag,
-                    color='red',units='xy')
-        
-        
-            ax.quiverkey(q, X=0.2, Y=0.95, U=vectorLength,
-                        label=f'length = {vectorLength} mm', labelpos='E')
-
-        if histo is True:
-        
-
-            dx = ffpos.real - fids['x_mm'].values
-            dy = ffpos.imag - fids['y_mm'].values
+            ax.plot(fids['x_mm'].values, fids['y_mm'].values,'b+',label='FF')
+            ax.plot(ffpos.real[stableFF], ffpos.imag[stableFF],'r+',label='Avg')
             
-            diff = np.sqrt(dx**2+dy**2)
-            #import pdb; pdb.set_trace()
+            # Mark the FF IDs
+            for i in range(len(fids)):
+                ax.text(fids.x_mm.values[i], fids.y_mm.values[i], 
+                        fids.fiducialId.values[i].astype('str'), fontsize=8)
 
-            ax1 = plt.subplot(212)
-            n, bins, patches = ax1.hist(diff[stableFF],range=(0,np.nanmean(diff[stableFF])+2*np.nanstd(diff[stableFF])),
-                bins=binNum, color='#0504aa',alpha=0.7)
+            ax.legend()
+            
+            if vector is True:
+                q=ax.quiver(oriPt[stableFF].real, oriPt[stableFF].imag,
+                        ffpos.real[stableFF]-oriPt[stableFF].real, ffpos[stableFF].imag-oriPt[stableFF].imag,
+                        color='red',units='xy')
+            
+            
+                ax.quiverkey(q, X=0.2, Y=0.95, U=vectorLength,
+                            label=f'length = {vectorLength} mm', labelpos='E')
 
-            ax1.text(0.8, 0.8, f'Median = {np.nanmedian(diff[stableFF]):.2f}, $\sigma$={np.nanstd(diff[stableFF]):.2f}', 
-                horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
-            ax1.set_title('2D')
-            ax1.set_xlabel('distance (mm)')
-            ax1.set_ylabel('Counts')
-            ax1.set_ylim(0,1.2*np.max(n))
+            if histo is True:
+            
+
+                dx = ffpos.real - fids['x_mm'].values
+                dy = ffpos.imag - fids['y_mm'].values
+                
+                diff = np.sqrt(dx**2+dy**2)
+                #import pdb; pdb.set_trace()
+
+                ax1 = plt.subplot(212)
+                n, bins, patches = ax1.hist(diff[stableFF],range=(0,0.15),
+                    bins=binNum, color='#0504aa',alpha=0.7)
+
+                popt = gaussianFit(n, bins)
+                sigma = popt[2]
+                xPeak = popt[1]
+
+                ax1.plot(bins[:-1],gaus(bins[:-1],*popt),'r:',label='fit')
+                
+                #ax1.text(0.8, 0.8, f'Median = {np.nanmedian(diff[stableFF]):.2f}, $\sigma$={sigma:.2f}', 
+                ax1.text(0.8, 0.8, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}', 
+                    horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
+                ax1.set_title('2D')
+                ax1.set_xlabel('distance (mm)')
+                ax1.set_ylabel('Counts')
+                ax1.set_ylim(0,1.2*np.max(n))
 
 
-            ax2 = plt.subplot(221)
-            ax2.hist(dx,range=(np.nanmean(dx[stableFF])-3*np.nanstd(dx[stableFF]),np.nanmean(dx[stableFF])+3*np.nanstd(dx[stableFF])), 
-                bins=(2*binNum)+1, color='#0504aa',alpha=0.7)
-            ax2.text(0.7, 0.8, f'Median = {np.nanmedian(dx):.2f}, $\sigma$={np.nanstd(dx):.2f}', 
-                horizontalalignment='center', verticalalignment='center', transform=ax2.transAxes)
-            ax2.set_title('X direction')
-            ax2.set_xlabel('distance (mm)')
-            ax2.set_ylabel('Counts')
-            ax2.set_ylim(0,1.2*np.max(n))
+                ax2 = plt.subplot(221)
+                n, bins, patches = ax2.hist(dx,range=(np.nanmean(dx[stableFF])-3*np.nanstd(dx[stableFF]),np.nanmean(dx[stableFF])+3*np.nanstd(dx[stableFF])), 
+                    bins=(2*binNum)+1, color='#0504aa',alpha=0.7)
+                popt = gaussianFit(n, bins)
+                sigma = popt[2]
+                xPeak = popt[1]
+
+                ax2.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
+                ax2.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}', 
+                    horizontalalignment='center', verticalalignment='center', transform=ax2.transAxes)
+                ax2.set_title('X direction')
+                ax2.set_xlabel('distance (mm)')
+                ax2.set_ylabel('Counts')
+                ax2.set_ylim(0,1.2*np.max(n))
 
 
-            ax3 = plt.subplot(222, sharey = ax2)
-            ax3.tick_params(axis='both',labelleft=False)
+                ax3 = plt.subplot(222, sharey = ax2)
+                ax3.tick_params(axis='both',labelleft=False)
 
 
-            ax3.hist(dy,range=(np.nanmean(dy[stableFF])-3*np.nanstd(dy[stableFF]),np.nanmean(dy[stableFF])+3*np.nanstd(dy[stableFF])), 
-                bins=(2*binNum)+1, color='#0504aa', alpha=0.7)
-            ax3.text(0.7, 0.8, f'Median = {np.nanmedian(dy):.2f}, $\sigma$={np.nanstd(dy):.2f}', 
-                horizontalalignment='center', verticalalignment='center', transform=ax3.transAxes)
+                n, bins, patches = ax3.hist(dy,range=(np.nanmean(dy[stableFF])-3*np.nanstd(dy[stableFF]),np.nanmean(dy[stableFF])+3*np.nanstd(dy[stableFF])), 
+                    bins=(2*binNum)+1, color='#0504aa', alpha=0.7)
+                
+                popt = gaussianFit(n, bins)
+                sigma = np.abs(popt[2])
+                xPeak = popt[1]
+                ax3.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
+                
+                #ax3.text(0.7, 0.8, f'Median = {np.nanmedian(dy):.2f}, $\sigma$={sigma:.2f}', 
+                ax3.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}', 
+                    horizontalalignment='center', verticalalignment='center', transform=ax3.transAxes)
 
-            ax3.set_title('Y direction')
-            ax3.set_xlabel('distance (mm)')
-            plt.subplots_adjust(wspace=0,hspace=0.3)
+                ax3.set_title('Y direction')
+                ax3.set_xlabel('distance (mm)')
+                plt.subplots_adjust(wspace=0,hspace=0.3)
 
         if getAllFFPos is True:
             self.logger.info(f'Returing all fiducial fiber positions.')
             return ffpos_array
 
+    def visIterationFFOffset(self, posData, Axes=None, iteration = 0, offsetThres = 0.006, offsetBox = 0.2, 
+        heatMap = False, badFF = None, binNum=40):
 
-    def visAllFFOffset(self, posData, offsetThres = 0.006, offsetBox = 0.2, 
-        heatMap = False, badFF = None):
+        '''
+            This function plots the relative offsets for all FF.  It is very useful for 
+            identifing the unstable FF.
+
+            posData: FF positions transformed from MCS exposures. 
+
+        '''
+        butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
+        fids = butler.get('fiducials')
+
+        
+        if Axes is None:
+            ax = plt.gca()
+        else:
+            ax = Axes
+
+        divider = make_axes_locatable(ax)
+        # below height and pad are in inches
+        ax_histx = divider.append_axes("top", 1.2, pad=0.3, sharex=ax)
+        ax_histy = divider.append_axes("right", 1.2, pad=0.3, sharey=ax)
+
+        # make some labels invisible
+        ax_histx.xaxis.set_tick_params(labelbottom=False)
+        ax_histy.yaxis.set_tick_params(labelleft=False)
+
+        stableFF = np.zeros(len(fids), dtype=bool)
+        stableFF[:]=True 
+
+        if badFF is not None:
+            for idx in fids['fiducialId']:
+                if idx in badFF:
+                    stableFF[fids.fiducialId == idx] = False
+
+        avgPos = np.nanmean(posData,axis=0)
+        
+
+        ffOffset = posData[iteration,:] - avgPos
+
+        if heatMap is True:
+            cax = divider.append_axes('right', size='5%', pad=0.5)
+
+            h, xedge, yedge, im = ax.hist2d(ffOffset.flatten().real,ffOffset.flatten().imag,
+              cmap='Blues',
+              bins=[40,40],range=[[-offsetBox,offsetBox],[-offsetBox,offsetBox]],cmin=0)
+
+            plt.colorbar(im, cax=cax)
+        else:
+
+            #for i in range(ffOffset.shape[1]):
+                # Check if this one is in unstable FF id
+            #if (stableFF[i]):
+
+                #off = np.mean(np.abs(ffOffset[:,i]))
+                #if off > offsetThres:
+                #    ax.plot(ffOffset[:,i].real,ffOffset[:,i].imag,'+', label=f'FF ID {fids.fiducialId[i]}')
+                #else:
+            ax.plot(ffOffset.real,ffOffset.imag,'+')
+            ax.legend()
+
+        n, bins, patches = ax_histx.hist(ffOffset[stableFF].flatten().real,bins=binNum,range=(-offsetBox,offsetBox))
+        popt = gaussianFit(n, bins)
+        sigma = np.abs(popt[2])
+        xPeak = popt[1]
+        ax_histx.plot(bins[:-1],gaus(bins[:-1],*popt),'r:',label='fit')
+        ax_histx.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}', 
+                    horizontalalignment='center', verticalalignment='center', transform=ax_histx.transAxes)
+
+        n, bins, patches = ax_histy.hist(ffOffset[stableFF].flatten().imag,bins=binNum,range=(-offsetBox,offsetBox),orientation='horizontal')        
+        popt = gaussianFit(n, bins)
+        sigma = np.abs(popt[2])
+        xPeak = popt[1]
+        ax_histy.plot(gaus(bins[:-1],*popt),bins[:-1],'r:',label='fit')
+        ax_histy.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}', 
+                    horizontalalignment='center', verticalalignment='center', transform=ax_histy.transAxes)
+
+        ax.set_xlim(-offsetBox,offsetBox)
+        ax.set_ylim(-offsetBox,offsetBox)
+
+    def visAllFFOffsetHisto(self, posData, Iteration = None, Axes = None, binNum = 80, offsetBox = 0.05):
+        
+        if Axes is None:
+            ax = plt.gca()
+        else:
+            ax = Axes
+
+        avgPos = np.nanmean(posData,axis=0)
+        if Iteration is not None:
+            ffOffset = np.abs(posData[Iteration, :] - avgPos)
+            n, bins, patches = ax.hist(ffOffset,bins=binNum,range=(0,offsetBox))
+        else:
+            ffOffset = np.abs(posData - avgPos)
+            n, bins, patches = ax.hist(ffOffset.flatten(),bins=binNum,range=(-0.005,offsetBox))
+        
+        popt = gaussianFit(n, bins)
+        sigma = np.abs(popt[2])
+        xPeak = popt[1]
+        ax.plot(bins[:-1],gaus(bins[:-1],*popt),'r:',label='fit')
+        ax.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}', 
+            horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
+
+        
+        pass
+
+
+    def visAllFFOffset(self, posData, Axes=None, offsetThres = 0.006, offsetBox = 0.2, 
+        heatMap = False, badFF = None, binNum=40):
         
         '''
             This function plots the relative offsets for all FF.  It is very useful for 
@@ -835,8 +1067,12 @@ class VisDianosticPlot(object):
         butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
         fids = butler.get('fiducials')
 
+        
+        if Axes is None:
+            ax = plt.gca()
+        else:
+            ax = Axes
 
-        ax = plt.gca()
         divider = make_axes_locatable(ax)
         # below height and pad are in inches
         ax_histx = divider.append_axes("top", 1.2, pad=0.3, sharex=ax)
@@ -880,8 +1116,21 @@ class VisDianosticPlot(object):
                         ax.plot(ffOffset[:,i].real,ffOffset[:,i].imag,'+')
             ax.legend()
 
-        ax_histx.hist(ffOffset[:,stableFF].flatten().real,bins=20,log=True)
-        ax_histy.hist(ffOffset[:,stableFF].flatten().imag,bins=20,orientation='horizontal',log=True)        
+        n, bins, patches = ax_histx.hist(ffOffset[:,stableFF].flatten().real,bins=binNum,range=(-offsetBox,offsetBox))
+        popt = gaussianFit(n, bins)
+        sigma = np.abs(popt[2])
+        xPeak = popt[1]
+        ax_histx.plot(bins[:-1],gaus(bins[:-1],*popt),'r:',label='fit')
+        ax_histx.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}', 
+                    horizontalalignment='center', verticalalignment='center', transform=ax_histx.transAxes)
+
+        n, bins, patches = ax_histy.hist(ffOffset[:,stableFF].flatten().imag,bins=binNum,range=(-offsetBox,offsetBox),orientation='horizontal')        
+        popt = gaussianFit(n, bins)
+        sigma = np.abs(popt[2])
+        xPeak = popt[1]
+        ax_histy.plot(gaus(bins[:-1],*popt),bins[:-1],'r:',label='fit')
+        ax_histy.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}', 
+                    horizontalalignment='center', verticalalignment='center', transform=ax_histy.transAxes)
 
         ax.set_xlim(-offsetBox,offsetBox)
         ax.set_ylim(-offsetBox,offsetBox)
