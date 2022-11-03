@@ -27,6 +27,12 @@ class PFIDesign():
 
     COBRA_BROKEN_MOTOR_MASK = COBRA_BROKEN_THETA_MASK | COBRA_BROKEN_PHI_MASK
 
+    FIBER_A_BROKEN = 0x0010  # 5th bit is 1 if cable A is broken
+    FIBER_B_BROKEN = 0x0020  # 6th bit is 1 if cable B is broken
+    FIBER_C_BROKEN = 0x0040  # 7th bit is 1 if cable C is broken
+
+    FIBER_BROKEN_MASK = FIBER_A_BROKEN | FIBER_B_BROKEN | FIBER_C_BROKEN
+
     def __init__(self, fileName=None):
         """
         Constructs a new cobras calibration product using the information
