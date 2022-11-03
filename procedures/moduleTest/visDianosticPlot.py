@@ -395,17 +395,18 @@ class VisDianosticPlot(object):
         ax.legend()
 
     
-    def visArmlengthComp(self, diff, arm='theta', gauFit = True, extraLable=None):
+    def visArmlengthComp(self, diff, arm='theta', crange=[-0.025, 0.025], hrange=[-0.05,0.05],
+        gauFit = True, extraLable=None):
         
         if arm is 'phi':
             arm = 'L2'
         else: arm = 'L1'
         
-        fig, ax = plt.subplots(1,2, figsize=(16,8), facecolor="white")
+        fig, ax = plt.subplots(1,2, figsize=(14,6), facecolor="white")
 
         ax[0].set_aspect("equal")
         sc=ax[0].scatter(self.calibModel.centers.real[self.goodIdx], self.calibModel.centers.imag[self.goodIdx],
-            c=diff[self.goodIdx], vmin=-0.15, vmax=-0.025)
+            c=diff[self.goodIdx], vmin=crange[0], vmax=crange[1])
         divider = make_axes_locatable(ax[0])
         cax = divider.append_axes("right", size="5%", pad=0.05)
         colorbar = fig.colorbar(sc,cax=cax)
@@ -414,7 +415,7 @@ class VisDianosticPlot(object):
         ax[0].set_xlabel('X (mm)')
         ax[0].set_ylabel('y (mm)')
 
-        n, bins, patches = ax[1].hist(diff[self.goodIdx],range=(-0.15,0.025),bins=30)
+        n, bins, patches = ax[1].hist(diff[self.goodIdx],range=(hrange[0],hrange[1]),bins=30)
 
         popt = gaussianFit(n, bins)
         sigma=np.abs(popt[2])
@@ -431,7 +432,7 @@ class VisDianosticPlot(object):
         else:
             plt.suptitle(f'{arm} Arm Length Comparison {extraLable}')
 
-    def visStoppedCobra(self, pfsVisitID, tolerance = 0.01):
+    def visStoppedCobra(self, pfsVisitID, tolerance = 0.01, getStoppedNum=False):
         '''
             Visulization of stopped cobra in each iteration for a certain visitID
         '''
@@ -488,8 +489,8 @@ class VisDianosticPlot(object):
         ax.plot(np.zeros(12)+len(self.goodIdx)*0.95,linestyle ='dotted', label = '95% Threshold')
         ax.legend()
 
-
-        pass
+        if getStoppedNum:
+            return fpga_finished[-1], mcs_finised[-1]
 
     def visTargetConvergence(self, pfsVisitID, maxIteration = 11, tolerance = 0.01):
         vmax = 4*tolerance
@@ -501,7 +502,7 @@ class VisDianosticPlot(object):
 
 
     def visSubaruConvergence(self, Axes = None, pfsVisitID=None, subVisit=11, 
-        histo=False, range=(0,0.08), bins=20, tolerance=0.01, **kwargs):
+        histo=False, heatmap=True, vectormap=False, range=(0,0.08), bins=20, tolerance=0.01, **kwargs):
         '''
             Visulization of cobra convergence result at certain iteration.  
             This fuction gets the locations of all fibers from database
@@ -558,6 +559,8 @@ class VisDianosticPlot(object):
         notDone = len(np.where(np.abs(mov[0,ind[0],maxIteration-1]['position']-targets[ind[0]]) > tolerance)[0])
         
         if histo is True:
+            heatmap, vectormap = False, False
+
             ax.set_aspect('auto')
             for subID in np.arange(subVisit,maxIteration):
                 
@@ -592,10 +595,29 @@ class VisDianosticPlot(object):
             ax.set_xlabel('Distance (mm)')
             ax.set_ylabel('Counts')
             self.logger.info(f'Number of not done cobra (MCS): {outRegion}')
-        else:
+        
+        if vectormap:
+            heatmap, histo = False, False
+            ind = np.where(dist < 0.02)
+
+            ax.set_aspect('auto')
+            x = self.calibModel.centers.real[self.goodIdx][ind]
+            y = self.calibModel.centers.imag[self.goodIdx][ind]
+            dx = (match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)[ind]
+            dy = (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)[ind]
+            vectorLength = 0.01
+            q=ax.quiver(x,y, 
+                    dx, dy, color='red',units='xy',**kwargs)
+
+         
+            ax.quiverkey(q, X=0.2, Y=0.95, U=vectorLength,
+                    label=f'length = {vectorLength} mm', labelpos='E')
+
+        
+        if heatmap:
             ax.set_aspect('equal')
             sc=ax.scatter(self.calibModel.centers.real[self.goodIdx],self.calibModel.centers.imag[self.goodIdx],
-                c=dist,marker='s',**kwargs)
+                c=dist,marker='s', **kwargs)
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="5%", pad=0.05)
             colorbar = self.fig.colorbar(sc,cax=cax)
@@ -1041,7 +1063,7 @@ class VisDianosticPlot(object):
             n, bins, patches = ax.hist(ffOffset,bins=binNum,range=(0,offsetBox))
         else:
             ffOffset = np.abs(posData - avgPos)
-            n, bins, patches = ax.hist(ffOffset.flatten(),bins=binNum,range=(-0.005,offsetBox))
+            n, bins, patches = ax.hist(ffOffset.flatten(),bins=binNum,range=(0,offsetBox))
         
         popt = gaussianFit(n, bins)
         sigma = np.abs(popt[2])
@@ -1293,8 +1315,9 @@ class VisDianosticPlot(object):
             ax3.set_xlabel('distance (mm)')
             plt.subplots_adjust(wspace=0,hspace=0.3)
 
+        return ranPt
     
-    def visRemeasurePhiCenter(self, data):
+    def visRemeasurePhiCenter(self, data, radiusTolerance = 0.5):
 
         """
         Remeasuring the phi center and radius of from fiber spots.
@@ -1318,8 +1341,11 @@ class VisDianosticPlot(object):
             return Ri - Ri.mean()
 
         
-        
-        medianR = np.median(np.abs((data-np.mean(data))))
+        estCenter = np.mean([data[0],data[-1]])
+        medianR = np.median(np.abs((data-estCenter)))
+        indx = np.where(np.abs((data-estCenter)) < medianR+radiusTolerance)
+        data=data[indx]
+
         x = data.real
         y = data.imag
 
@@ -1349,7 +1375,7 @@ class VisDianosticPlot(object):
         
 
 
-    def visRemeasureThetaCenter(self, fw, rv):
+    def visRemeasureThetaCenter(self, fw, rv, estCenter, radiusTolerance = 0.5, badAngle = None) :
 
         """
         Remeasuring the theta center and radius of from fiber spots.
@@ -1373,15 +1399,20 @@ class VisDianosticPlot(object):
             return Ri - Ri.mean()
 
         data = np.append(fw,rv)
-        medianR = np.median(np.abs((data-np.mean(data))))
-        indx = np.where(np.abs((data-np.mean(data))) < medianR+1.5)
-
+        medianR = np.median(np.abs((data-estCenter)))
+        indx = np.where(np.abs((data-estCenter)) < medianR+radiusTolerance)
         data=data[indx]
+        
+        if badAngle is not None:
+            pointAngle = np.rad2deg(np.angle(data-estCenter))% 360
+            angleIndx = np.where((pointAngle < badAngle[0]) | (pointAngle > badAngle[1]))[0]
+            data=data[angleIndx]
+       
 
         x = data.real
         y = data.imag
 
-        center_estimate = np.mean(x), np.mean(y)
+        center_estimate = estCenter.real, estCenter.imag
         center_2, ier = optimize.leastsq(f_2, center_estimate)
 
         xc_2, yc_2 = center_2
@@ -1401,8 +1432,9 @@ class VisDianosticPlot(object):
         ax.legend()
                 
         self.logger.info(f'The center is at (x ,y) = {xc_2+yc_2*1j} R = {R_2:.4f}')
+        return xc_2+yc_2*1j, R_2
 
-    
+
     def visSaveFigure(self, fileName, **kwargs):
         """
         Saves an image of the current figure.

@@ -449,7 +449,7 @@ class CobraCoach():
                 centers = self.calibModel.centers
             elif len(guess) == self.nCobras:
                 centers = guess
-            elif len(guess) != len(idx):
+            elif len(guess) != self.nCobras:
                 raise RuntimeError('len(guess) should be equal to the visible cobras or total cobras')
             else:
                 centers = guess
