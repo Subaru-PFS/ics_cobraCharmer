@@ -395,7 +395,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     logger.info(f'Move theta arms to angle={np.round(np.rad2deg(targetThetas[cIds]),2)} degree')
     logger.info(f'Move phi arms to angle={np.round(np.rad2deg(targetPhis[cIds]),2)} degree')
 
-    if homed:
+    if homed is True:
         # go home for safe movement
         cobras = cc.allCobras[cIds]
         logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
