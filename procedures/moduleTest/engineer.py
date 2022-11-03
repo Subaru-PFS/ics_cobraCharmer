@@ -7,7 +7,7 @@ from copy import deepcopy
 import pathlib
 from procedures.moduleTest.speedModel import SpeedModel
 from procedures.moduleTest.trajectory import Trajectories
-import cv2
+#import cv2
 import os, fnmatch
 
 from ics.cobraCharmer import pfiDesign
