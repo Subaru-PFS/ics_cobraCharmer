@@ -3,7 +3,7 @@ import sep
 from ics.cobraCharmer import pfiDesign
 import os
 import sys
-import cv2
+#import cv2
 import math
 
 #from ics.cobraCharmer.procedures.moduleTest import trajectory
