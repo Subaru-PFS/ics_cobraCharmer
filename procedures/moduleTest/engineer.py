@@ -1979,7 +1979,7 @@ def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0
         threshold: the threshold for using slow or fast motor maps
         timeStep: timeStep parameter for the trajectory
     """
-    if tries < 4:
+    if tries < 3:
         raise ValueError("tries parameter should be larger than 4")
 
     targets = np.zeros((len(cIds), 2))
