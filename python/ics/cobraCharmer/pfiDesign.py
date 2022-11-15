@@ -27,6 +27,12 @@ class PFIDesign():
 
     COBRA_BROKEN_MOTOR_MASK = COBRA_BROKEN_THETA_MASK | COBRA_BROKEN_PHI_MASK
 
+    FIBER_A_BROKEN = 0x0010  # 5th bit is 1 if cable A is broken
+    FIBER_B_BROKEN = 0x0020  # 6th bit is 1 if cable B is broken
+    FIBER_C_BROKEN = 0x0040  # 7th bit is 1 if cable C is broken
+
+    FIBER_BROKEN_MASK = FIBER_A_BROKEN | FIBER_B_BROKEN | FIBER_C_BROKEN
+
     def __init__(self, fileName=None):
         """
         Constructs a new cobras calibration product using the information
@@ -415,7 +421,8 @@ class PFIDesign():
         moduleId = self.getRealModuleId(moduleId)
         return np.where(self.moduleIds == moduleId)[0]
 
-    def setCobraStatus(self, cobraId, moduleId=1, brokenTheta=False, brokenPhi=False, invisible=False):
+    def setCobraStatus(self, cobraId, moduleId=1, brokenTheta=False, brokenPhi=False, invisible=False,
+        brokenFiberA=False, brokenFiberB=False, brokenFiberC=False):
         """ Set the operational status of a cobra.
         """
         cobraIdx = self.findCobraByModuleAndPositioner(moduleId, cobraId)
@@ -429,6 +436,15 @@ class PFIDesign():
             self.status[cobraIdx] &= ~self.COBRA_OK_MASK
         if brokenPhi:
             self.status[cobraIdx] |= self.COBRA_BROKEN_PHI_MASK
+            self.status[cobraIdx] &= ~self.COBRA_OK_MASK
+        if brokenFiberA:
+            self.status[cobraIdx] |= self.FIBER_A_BROKEN
+            self.status[cobraIdx] &= ~self.COBRA_OK_MASK
+        if brokenFiberB:
+            self.status[cobraIdx] |= self.FIBER_B_BROKEN
+            self.status[cobraIdx] &= ~self.COBRA_OK_MASK
+        if brokenFiberC:
+            self.status[cobraIdx] |= self.FIBER_C_BROKEN
             self.status[cobraIdx] &= ~self.COBRA_OK_MASK
 
         # Arrange for the new value to be persisted.
