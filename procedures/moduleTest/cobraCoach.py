@@ -1026,7 +1026,7 @@ class CobraCoach():
         cIds = self._getIndex(cobras)
         return self.moveInfo['position'][cIds]
 
-    def moveToHome(self, cobras, thetaEnable=False, phiEnable=False, thetaCCW=True):
+    def moveToHome(self, cobras, thetaEnable=False, phiEnable=False, thetaCCW=True, noMCS=False):
         """ move arms to hard stop positions """
         if not thetaEnable and not phiEnable:
             self.logger.info('Both arms are disabled, ignore the command')
