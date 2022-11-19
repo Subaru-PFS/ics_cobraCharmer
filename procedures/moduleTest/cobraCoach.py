@@ -1073,7 +1073,12 @@ class CobraCoach():
             # update current positions
             # Here we need to think about how to deal with it. 
             # There are dots, so we may wanto to skip this
-            self.cobraInfo['position'][self.visibleIdx] = self.exposeAndExtractPositions(dbMatch = False)[self.visibleIdx]
+            if noMCS is True:
+                thetaHome = ((self.calibModel.tht1 - self.calibModel.tht0 + np.pi)
+                              % (np.pi*2) + np.pi)
+                self.setCurrentAngles(self.allCobras, thetaAngles=thetaHome, phiAngles=0)             
+            else:
+                self.cobraInfo['position'][self.visibleIdx] = self.exposeAndExtractPositions(dbMatch = False)[self.visibleIdx]
 
         diff = None
 
