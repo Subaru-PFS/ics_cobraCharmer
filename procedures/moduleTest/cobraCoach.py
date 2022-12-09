@@ -1026,7 +1026,7 @@ class CobraCoach():
         cIds = self._getIndex(cobras)
         return self.moveInfo['position'][cIds]
 
-    def moveToHome(self, cobras, thetaEnable=False, phiEnable=False, thetaCCW=True):
+    def moveToHome(self, cobras, thetaEnable=False, phiEnable=False, thetaCCW=True, noMCS=False):
         """ move arms to hard stop positions """
         if not thetaEnable and not phiEnable:
             self.logger.info('Both arms are disabled, ignore the command')
@@ -1073,7 +1073,13 @@ class CobraCoach():
             # update current positions
             # Here we need to think about how to deal with it. 
             # There are dots, so we may wanto to skip this
-            self.cobraInfo['position'][self.visibleIdx] = self.exposeAndExtractPositions(dbMatch = False)[self.visibleIdx]
+            if noMCS is True:
+                self.logger.info('noMCS flag is passed, set angles instead of exposure.')
+                thetaHome = ((self.calibModel.tht1 - self.calibModel.tht0 + np.pi)
+                              % (np.pi*2) + np.pi)
+                self.setCurrentAngles(self.allCobras[cIds], thetaAngles=thetaHome[cIds], phiAngles=0)             
+            else:
+                self.cobraInfo['position'][self.visibleIdx] = self.exposeAndExtractPositions(dbMatch = False)[self.visibleIdx]
 
         diff = None
 
