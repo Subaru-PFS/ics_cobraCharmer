@@ -28,6 +28,10 @@ class McsActorCamera(camera.Camera):
             self.logger.warn('text="Camera initialization failed"')
             return None
 
+    def _getCameraName(self):
+        
+        self.cameraName = self.actor.models['mcs'].keyVarDict['cameraName']
+
     def _camExpose(self, exptime=None, frameNum=None, _takeDark=False,
                    doCentroid=True, doFibreID=True, cmd=None):
         """Actually arrange for an mcsActor exposure.
