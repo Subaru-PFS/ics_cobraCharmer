@@ -400,7 +400,7 @@ class CobraCoach():
         else:
             self.logger.info(f'dbMatching is turned off! THIS HAS TO BE MOTOR MAP RUN!')
 
-            self.cameraName = 'canon'
+            self.cameraName = self.actor.models['mcs'].keyVarDict['cameraName']
             self.logger.info(f'Current camera name is {self.cameraName}')
             
             #idx = self.visibleIdx
