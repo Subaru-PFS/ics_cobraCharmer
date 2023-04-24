@@ -238,7 +238,7 @@ class VisDianosticPlot(object):
 
 
     def visGeometryFromXML(self, newXml=None, thetaAngle=None, phiAngle=None,
-        markCobra=False, patrol=False, visHardStops = True):
+        markCobra=False, patrol=False, visHardStops = True, allCobra = False):
         
         if newXml is None:
             des = self.calibModel
@@ -247,8 +247,10 @@ class VisDianosticPlot(object):
         
         ax = plt.gca()
 
-        ax.scatter(des.centers.real, des.centers.imag,marker='o', color='red', s=20)
-
+        if allCobra is False:
+            ax.scatter(des.centers.real[self.goodIdx], des.centers.imag[self.goodIdx],marker='o', color='red', s=20)
+        else:
+            ax.scatter(des.centers.real, des.centers.imag,marker='o', color='red', s=20)
 
         # Adding theta hard-stops
         if visHardStops is True:
@@ -398,7 +400,7 @@ class VisDianosticPlot(object):
     def visArmlengthComp(self, diff, arm='theta', crange=[-0.025, 0.025], hrange=[-0.05,0.05],
         gauFit = True, extraLable=None):
         
-        if arm is 'phi':
+        if arm == 'phi':
             arm = 'L2'
         else: arm = 'L1'
         
@@ -1200,7 +1202,7 @@ class VisDianosticPlot(object):
             insrot=teleInfo['insrot'].values[0])
 
 
-        if ffdata is 'insdata':
+        if ffdata == 'insdata':
             outerRing = np.zeros(len(fids), dtype=bool)
             for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
                 outerRing[fids.fiducialId == i] = True
@@ -1233,7 +1235,7 @@ class VisDianosticPlot(object):
         x_mm, y_mm = pfiTransform.mcsToPfi(ff_mcs_x,ff_mcs_y)
         traPt = x_mm+y_mm*1j
         traPt = traPt[~np.isnan(traPt)]
-        if ffdata is 'insdata':
+        if ffdata == 'insdata':
             oriPt = fids['x_mm'].values+fids['y_mm'].values*1j
         else:
             oriPt = -fidData['ff_center_on_pfi_x_mm'].values+fidData['ff_center_on_pfi_y_mm'].values*1j
@@ -1257,7 +1259,7 @@ class VisDianosticPlot(object):
         if vectorOnly is True:
             ax=plt.gca()
             ax.plot(ranPt.real,ranPt.imag,'r.', label='MCS projection')
-            if ffdata is 'insdata':
+            if ffdata == 'insdata':
                 ax.plot(fids['x_mm'].values, fids['y_mm'].values,'b+',label='XY stage')
 
             else:
@@ -1270,7 +1272,7 @@ class VisDianosticPlot(object):
 
             ax0 = plt.subplot(224)
             ax0.plot(ranPt.real,ranPt.imag,'r.', label='MCS projection')
-            if ffdata is 'insdata':
+            if ffdata == 'insdata':
                 ax0.plot(fids['x_mm'].values, fids['y_mm'].values,'b+',label='XY stage')
                 q=ax0.quiver(fids['x_mm'].values, fids['y_mm'].values,dx,dy,color='red',units='xy')
             else:
@@ -1375,7 +1377,8 @@ class VisDianosticPlot(object):
         
 
 
-    def visRemeasureThetaCenter(self, fw, rv, estCenter, radiusTolerance = 0.5, badAngle = None) :
+    def visRemeasureThetaCenter(self, fw, rv, estCenter, radiusTolerance = 0.5, badAngle = None,
+        doPlots = False) :
 
         """
         Remeasuring the theta center and radius of from fiber spots.
@@ -1420,17 +1423,18 @@ class VisDianosticPlot(object):
         R_2        = Ri_2.mean()
         residu_2   = sum((Ri_2 - R_2)**2)
 
-        ax=plt.gca()
-        ax.plot(fw.real,fw.imag,'.',label='FW')
-        ax.plot(rv.real,rv.imag,'.',label='RV')
-        
-        d = plt.Circle((xc_2, yc_2), R_2, color='blue', fill=False)
-        ax.add_artist(d)
+        if doPlots == True:
+            ax=plt.gca()
+            ax.plot(fw.real,fw.imag,'.',label='FW')
+            ax.plot(rv.real,rv.imag,'.',label='RV')
+            
+            d = plt.Circle((xc_2, yc_2), R_2, color='blue', fill=False)
+            ax.add_artist(d)
 
-        ax.text(xc_2,yc_2,f'{xc_2:.3f}+{yc_2:.3f}j')
+            ax.text(xc_2,yc_2,f'{xc_2:.3f}+{yc_2:.3f}j')
 
-        ax.legend()
-                
+            ax.legend()
+                    
         self.logger.info(f'The center is at (x ,y) = {xc_2+yc_2*1j} R = {R_2:.4f}')
         return xc_2+yc_2*1j, R_2
 
