@@ -13,7 +13,7 @@ import pathlib
 from scipy import optimize
 from scipy.optimize import curve_fit
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-
+import re
 
 
 
@@ -43,6 +43,46 @@ import logging
 
 from pfs.utils.butler import Butler
 import pfs.utils.coordinates.transform as transformUtils
+
+
+def findDesignFromVisit(visit):
+    command = f"grep moveToPfsDesign /data/logs/actors/fps/2023-*-*.log | grep {visit}"
+    output = subprocess.check_output(command, shell=True, text=True)
+    slist_str = str(output)
+    pattern = pattern = r"designId\)=\[Long\((\d+)\)\]"
+    match = re.search(pattern, str(slist_str))
+    
+
+    if match:
+        value = int(match.group(1))  # Extract the captured numerical value and convert it to float
+        #print(value)
+    else:
+        print("No match found.")
+    
+    return value
+
+
+def findToleranceFromVisit(visit):
+    command = f"grep moveToPfsDesign /data/logs/actors/fps/2023-*-*.log | grep {visit}"
+    output = subprocess.check_output(command, shell=True, text=True)
+    slist_str = str(output)
+    pattern = r"\{KEY\(tolerance\)=\[Float\((\d+(\.\d+)?)\)\]\}"
+    
+    match = re.search(pattern, str(slist_str))
+
+    if match:
+        value = float(match.group(1))  # Extract the captured numerical value and convert it to float
+        #print(value)
+    else:
+        print("No match found. Set to default 0.01")
+        value = 0.01
+    return value
+
+
+def findRunDir(pfsVisitId):
+    command = f"find /data/MCS/2023* |grep {pfsVisitId}"
+    output = subprocess.check_output(command, shell=True, text=True)
+    return output.split('\n')[0][10:22]
 
 
 def findVisit(runDir):
@@ -469,7 +509,7 @@ class VisDianosticPlot(object):
         if len(mcs_finised) > maxIteration:
             mcs_finised = np.array(mcs_finised[1:])
         else:
-             mcs_finised = np.array(mcs_finised)
+            mcs_finised = np.array(mcs_finised)
 
         
 
@@ -496,21 +536,24 @@ class VisDianosticPlot(object):
 
     def visTargetConvergence(self, pfsVisitID, maxIteration = 11, tolerance = 0.01):
         vmax = 4*tolerance
+
+        tolerance=findToleranceFromVisit(pfsVisitID)
+
         ax = plt.gcf().get_axes()[0]
-        self.visSubaruConvergence(Axes=ax, pfsVisitID = pfsVisitID,subVisit=maxIteration-1,vmax=vmax)
+        self.visSubaruConvergence(Axes=ax, pfsVisitID = pfsVisitID,subVisit=maxIteration-1, 
+                        tolerance=tolerance,vmax=vmax)
         ax = plt.gcf().get_axes()[1]
         self.visSubaruConvergence(Axes=ax,pfsVisitID = pfsVisitID,subVisit=3,tolerance=tolerance, histo=True, bins=20,range=(0,vmax))
        
 
 
     def visSubaruConvergence(self, Axes = None, pfsVisitID=None, subVisit=11, 
-        histo=False, heatmap=True, vectormap=False, range=(0,0.08), bins=20, tolerance=0.01, **kwargs):
+        histo=False, histoThres = True, heatmap=True, vectormap=False, excludeUnassign = True, 
+        range=(0,0.08), bins=20, tolerance=0.01, **kwargs):
         '''
             Visulization of cobra convergence result at certain iteration.  
             This fuction gets the locations of all fibers from database
             and then calculate the distance to the final targets. 
-
-
         '''
         if Axes is None:
             ax = plt.gca()
@@ -525,7 +568,41 @@ class VisDianosticPlot(object):
         if subVisit is not None:    
             subID = subVisit
 
+        # Getting unassined fiber 
+        pfsDesignID = findDesignFromVisit(pfsVisitID)
+        
+        import psycopg2
+        from sqlalchemy import create_engine
+
+        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+        engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
+
+        with conn:
+                fiberData = pd.read_sql(f'''
+                    SELECT DISTINCT 
+                        fiber_id, pfi_nominal_x_mm, pfi_nominal_y_mm, fiber_status
+                    FROM pfs_design_fiber
+                    WHERE
+                        pfs_design_fiber.pfs_design_id = %(pfsDesignID)s
+                    -- limit 10
+                ''', engine, params={'pfsDesignID': pfsDesignID})
+        
+        from pfs.utils.fiberids import FiberIds
+        fid=FiberIds()
+        fiberData['cobra_id']=fid.fiberIdToCobraId(fiberData['fiber_id'].values)
+        fiberData=fiberData.sort_values('cobra_id')
+        df = fiberData.loc[fiberData['cobra_id'] != 65535]
+        unassigned_rows = df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].isna().all(axis=1)]
+        unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1 
+
+
+        assigned_row= df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].notna().all(axis=1)]
+        assigned_cobraIdx =  assigned_row['cobra_id'].values - 1 
+
+        targetFromDB = df['pfi_nominal_x_mm'].values+df['pfi_nominal_y_mm'].values*1j
+
         frameid = visitID*100+subID
+
         try:
             db=opdb.OpDB(hostname='pfsa-db01', port=5432,
                    dbname='opdb',username='pfs')
@@ -543,7 +620,11 @@ class VisDianosticPlot(object):
         tarfile = path+'targets.npy'
         movfile = path+'moves.npy'
 
-        targets=np.load(tarfile)
+        if excludeUnassign is True:
+            targets = targetFromDB
+        else:
+            targets=np.load(tarfile)
+        
         mov = np.load(movfile)
 
         try:
@@ -551,9 +632,9 @@ class VisDianosticPlot(object):
         except:
             mov = np.array([mov])
             maxIteration = mov.shape[2]
-
-        dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
-            (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
+        
+        dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets[self.goodIdx].real)**2+
+            (match['pfi_center_y_mm'].values[self.goodIdx]-targets[self.goodIdx].imag)**2)
         
         self.logger.info(f'Tolerance: {tolerance}')
 
@@ -578,13 +659,28 @@ class VisDianosticPlot(object):
                 match = db.bulkSelect('cobra_match','select * from cobra_match where '
                             f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
         
-
-                dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
+                if excludeUnassign is True:
+                    dist=np.sqrt((match['pfi_center_x_mm'].values[assigned_cobraIdx]-targets[assigned_cobraIdx].real)**2+
+                            (match['pfi_center_y_mm'].values[assigned_cobraIdx]-targets[assigned_cobraIdx].imag)**2)
+                else:    
+                    dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
                             (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
+                
+                # This setting will set all value larger than the threshold to be exact the
+                #   thresold.  So that there will be a big bar in histogram. 
+                if histoThres is True:
+                    dist[dist > range[1]]=range[1]
+                
                 n, bins, patches = ax.hist(dist,range=range, bins=bins, alpha=0.7,
                     histtype='step',linewidth=3,
                     label=f'{subID+1}-th Iteration')
             
+
+            x_vertical = tolerance  # x-coordinate for the vertical line
+            ax.axvline(x=x_vertical, color='r', linestyle='--')
+
+
+
             outIdx = np.where(bins > tolerance)
             #print(np.sum(n[outIdx[0][0]:]))
             #print(np.sum(n[np.where(bins > 0.01)[0]]))
@@ -620,11 +716,26 @@ class VisDianosticPlot(object):
             ax.set_aspect('equal')
             sc=ax.scatter(self.calibModel.centers.real[self.goodIdx],self.calibModel.centers.imag[self.goodIdx],
                 c=dist,marker='s', **kwargs)
+            
+
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="5%", pad=0.05)
             colorbar = self.fig.colorbar(sc,cax=cax)
+            if excludeUnassign is True:
+                print('here')
+                ax.scatter(self.calibModel.centers.real[unassigned_cobraIdx],self.calibModel.centers.imag[unassigned_cobraIdx],
+                c='red',marker='s',label='UNASSIGNED', **kwargs)
+            
+
+            assigned_row
+            # Add a red line on the colorbar
+            line_color = 'red'
+            line_position = tolerance  # Position of the line on the colorbar (between 0 and 1)
+            cax.axhline(line_position, color=line_color, linewidth=2)
+
             ax.set_xlabel('X (mm)')
             ax.set_ylabel('Y (mm)')
+            ax.legend()
             #plt.colorbar(sc)
 
         #ind = np.where(np.abs(mov[0,:,maxIteration-1]['position']) > 0)
