@@ -49,7 +49,7 @@ def findDesignFromVisit(visit):
     command = f"grep moveToPfsDesign /data/logs/actors/fps/2023-*-*.log | grep {visit}"
     output = subprocess.check_output(command, shell=True, text=True)
     slist_str = str(output)
-    pattern = pattern = r"designId\)=\[Long\((\d+)\)\]"
+    pattern = r"designI[dD]\)=\[Long\((\d+)\)\]"
     match = re.search(pattern, str(slist_str))
     
 
@@ -534,6 +534,14 @@ class VisDianosticPlot(object):
         if getStoppedNum:
             return fpga_finished[-1], mcs_finised[-1]
 
+    def visConvergenceRun(self, runDirList):
+        '''
+            This function is used to plot the overall convergence performance in a given list
+        '''
+        
+        pass
+
+
     def visTargetConvergence(self, pfsVisitID, maxIteration = 11, tolerance = 0.01):
         vmax = 4*tolerance
 
@@ -892,7 +900,9 @@ class VisDianosticPlot(object):
         dataRange=None, histo=False, getAllFFPos = False, badFF=None, binNum=7, dataOnly=False):
 
         '''
-            
+            This function is used to plot the averaged vector map of all fiducial fiber related to
+            PRE-MEASURED (on XY stage) position.  
+
             Args
             ----
             pfsVisitID:  The pfsVisitID 
@@ -1086,8 +1096,8 @@ class VisDianosticPlot(object):
         heatMap = False, badFF = None, binNum=40):
 
         '''
-            This function plots the relative offsets for all FF.  It is very useful for 
-            identifing the unstable FF.
+            This function plots the relative offsets for all FF of A SINGLE ITERATION
+            against to the averaged position. It is very useful for identifing the unstable FF.
 
             posData: FF positions transformed from MCS exposures. 
 
@@ -1163,7 +1173,7 @@ class VisDianosticPlot(object):
         ax.set_xlim(-offsetBox,offsetBox)
         ax.set_ylim(-offsetBox,offsetBox)
 
-    def visAllFFOffsetHisto(self, posData, Iteration = None, Axes = None, binNum = 80, offsetBox = 0.05):
+    def visAllFFOffsetHisto(self, posData, Iteration = None, Axes = None, binNum = 80, offsetBox = 0.05, dataOnly=False):
         
         if Axes is None:
             ax = plt.gca()
@@ -1184,10 +1194,14 @@ class VisDianosticPlot(object):
         ax.plot(bins[:-1],gaus(bins[:-1],*popt),'r:',label='fit')
         ax.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}', 
             horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
+        ax.text(0.5, 0.8, f'Median = {np.nanmedian(ffOffset.flatten()):.4f}, $\sigma$={sigma:.4f}', 
+            horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
 
-        
-        pass
-
+        if dataOnly:
+            data = ffOffset.flatten()
+            clean_data = np.array(data)[~np.isnan(data)]
+            return xPeak, np.nanmedian(clean_data), np.percentile(clean_data, 75)
+    
 
     def visAllFFOffset(self, posData, Axes=None, offsetThres = 0.006, offsetBox = 0.2, 
         heatMap = False, badFF = None, binNum=40):
