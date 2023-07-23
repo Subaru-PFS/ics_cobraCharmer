@@ -95,7 +95,7 @@ class McsActorCamera(camera.Camera):
 
     def expose(self, name=None, exptime=None,
                doCentroid=True, doFibreID=True,
-               frameNum=None, cmd=None):
+               frameNum=None, cmd=None, doStack=False):
         """Take an exposure, usually measure centroids, and save the outputs.
 
         Args
@@ -162,7 +162,7 @@ class McsActorCamera(camera.Camera):
                          f'total: {t4-t0:0.3f}')
         return objects, filename, None
 
-    def linkImage(self, filename, extraName=None, doStack=True):
+    def linkImage(self, filename, extraName=None, doStack=False):
         """Link mcsActor raw image file into our per-run directory.
 
         Args
