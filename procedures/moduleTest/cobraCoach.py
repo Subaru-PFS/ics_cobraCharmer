@@ -400,7 +400,7 @@ class CobraCoach():
         else:
             self.logger.info(f'dbMatching is turned off! THIS HAS TO BE MOTOR MAP RUN!')
 
-            self.cameraName = self.actor.models['mcs'].keyVarDict['cameraName']
+            self.cameraName = str(self.actor.models['mcs'].keyVarDict['cameraName'][0])
             self.logger.info(f'Current camera name is {self.cameraName}')
             
             #idx = self.visibleIdx
@@ -415,7 +415,7 @@ class CobraCoach():
                         f'mcs_frame_id = {frameNum}')
 
 
-            if 'rmod' in self.cameraName.lower():
+            if 'rmod' in str(self.cameraName).lower():
                 altitude = 90.0
                 insrot = 0
             else: 
