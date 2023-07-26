@@ -147,7 +147,7 @@ class McsActorCamera(camera.Camera):
         filename = self._camExpose(exptime, doCentroid=doCentroid, frameNum=frameNum,
                                    doFibreID=doFibreID, cmd=cmd)
         t1 = time.time()
-        self.linkImage(filename, extraName=name)
+        self.linkImage(filename, extraName=name, doStack=doStack)
         t2 = time.time()
 
         self.logger.info(f"Getting positions from DB for frame {frameNum}")
