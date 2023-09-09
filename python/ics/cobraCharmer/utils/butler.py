@@ -230,7 +230,7 @@ def modulesForPfi(version=None, rootDir=None):
     """
     yamlPath = configPathForPfi(version=version, rootDir=rootDir)
     with open(yamlPath, mode='rt') as yamlFile:
-        config = yaml.load(yamlFile)
+        config = yaml.safe_load(yamlFile)
 
     return [c.strip() for c in config['modules']]
 
