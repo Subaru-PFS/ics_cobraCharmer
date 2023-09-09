@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-setup(name="ics_cobraCharmer",
+setup(name="ics.cobraCharmer",
       #version="x.y",
       author="Craig Loomis",
       #author_email="",
