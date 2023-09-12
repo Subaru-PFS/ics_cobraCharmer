@@ -14,6 +14,7 @@ from scipy import optimize
 from scipy.optimize import curve_fit
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import re
+from scipy.optimize import least_squares
 
 
 
@@ -43,39 +44,80 @@ import logging
 
 from pfs.utils.butler import Butler
 import pfs.utils.coordinates.transform as transformUtils
-
+import psycopg2
+from sqlalchemy import create_engine
+from pfs.utils.fiberids import FiberIds
 
 def findDesignFromVisit(visit):
     command = f"grep moveToPfsDesign /data/logs/actors/fps/2023-*-*.log | grep {visit}"
-    output = subprocess.check_output(command, shell=True, text=True)
-    slist_str = str(output)
-    pattern = r"designI[dD]\)=\[Long\((\d+)\)\]"
-    match = re.search(pattern, str(slist_str))
+    
+    try:
+        output = subprocess.check_output(command, shell=True, text=True)
+        slist_str = str(output)
+        pattern = r"designI[dD]\)=\[Long\((\d+)\)\]"
+        match = re.search(pattern, str(slist_str))
     
 
-    if match:
-        value = int(match.group(1))  # Extract the captured numerical value and convert it to float
-        #print(value)
-    else:
-        print("No match found.")
+        if match:
+            value = int(match.group(1))  # Extract the captured numerical value and convert it to float
+            #print(value)
+        else:
+            value = None
     
+    except subprocess.CalledProcessError as e:
+        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+        engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
+
+
+        pfsConfig = pd.read_sql(f'''
+                    SELECT 
+                        visit0,pfs_design_id,converg_tolerance   FROM public.pfs_config
+                    WHERE 
+                        pfs_config.visit0 = %(pfs_config)s
+                ''', engine, params={'pfs_config': visit})
+
+        conn.close()
+
+        value = pfsConfig['pfs_design_id'].values[0]
+
     return value
 
 
 def findToleranceFromVisit(visit):
     command = f"grep moveToPfsDesign /data/logs/actors/fps/2023-*-*.log | grep {visit}"
-    output = subprocess.check_output(command, shell=True, text=True)
-    slist_str = str(output)
-    pattern = r"\{KEY\(tolerance\)=\[Float\((\d+(\.\d+)?)\)\]\}"
     
-    match = re.search(pattern, str(slist_str))
+    try:
+        output = subprocess.check_output(command, shell=True, text=True)
+        slist_str = str(output)
+        pattern = r"\{KEY\(tolerance\)=\[Float\((\d+(\.\d+)?)\)\]\}"
+        
+        match = re.search(pattern, str(slist_str))
 
-    if match:
-        value = float(match.group(1))  # Extract the captured numerical value and convert it to float
-        #print(value)
-    else:
-        print("No match found. Set to default 0.01")
-        value = 0.01
+        if match:
+            value = float(match.group(1))  # Extract the captured numerical value and convert it to float
+            #print(value)
+        else:
+            print("No match found. Set to default 0.01")
+            value = 0.01
+    except subprocess.CalledProcessError as e:
+        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+        engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
+
+
+        pfsConfig = pd.read_sql(f'''
+                    SELECT 
+                        visit0,converg_tolerance  FROM public.pfs_config
+                    WHERE 
+                        pfs_config.visit0 = %(pfs_config)s
+                ''', engine, params={'pfs_config': visit})
+
+        conn.close()
+
+        if pfsConfig['converg_tolerance'].values[0] is None:
+            value = 0.01
+        else:
+            value = round(pfsConfig['converg_tolerance'].values[0],3)
+
     return value
 
 
@@ -106,6 +148,66 @@ def gaussianFit(n, bins, initGuess = None):
     sigma=np.abs(popt[2])
 
     return popt
+
+
+def circle_residuals(params, x, y):
+    """
+    Calculate the residuals (errors) between the data points and the circle.
+    params: (cx, cy, r) - circle center (cx, cy) and radius r
+    x, y: arrays of data points coordinates
+    """
+    cx, cy, r = params
+    return np.sqrt((x - cx)**2 + (y - cy)**2)-r
+
+def fit_circle(x, y, initial_guess=None):
+    """
+    Fit a circle to the given x, y points using the Least Squares Circle Fitting method.
+    x, y: arrays of data points coordinates
+    initial_guess: initial estimation of the circle (optional)
+    return: (cx, cy, r) - circle center (cx, cy) and radius r
+    """
+    if initial_guess is None:
+        # Choose the first three points as the initial estimation
+        initial_guess = (x[0], y[0], np.sqrt((x[1]-x[0])**2 + (y[1]-y[0])**2))
+
+    # Use least_squares to perform the iterative nonlinear least squares optimization
+    result = least_squares(circle_residuals, initial_guess, args=(x, y))
+    
+    cx, cy, r = result.x
+    
+    return cx, cy, r
+
+
+def fit_circle_ransac(x, y, num_iterations=100, threshold=1.0):
+    best_inliers = None
+    best_params = None
+
+    for _ in range(num_iterations):
+        # Randomly sample 3 data points to form an initial estimation of the circle
+        indices = np.random.choice(len(x), 9, replace=False)
+        initial_guess = (x[indices[0]], y[indices[0]], np.sqrt((x[indices[1]]-x[indices[0]])**2 + (y[indices[1]]-y[indices[0]])**2))
+
+        # Fit the circle using the initial estimation
+        cx, cy, r = fit_circle(x, y, initial_guess)
+
+        # Calculate residuals and identify inliers
+        residuals = circle_residuals((cx, cy, r), x, y)
+        inliers = np.abs(residuals) < threshold
+
+        # Update best parameters if we found more inliers
+        if best_inliers is None or np.sum(inliers) > np.sum(best_inliers):
+            best_inliers = inliers
+            best_params = (cx, cy, r)
+
+
+    # Check if we have at least three inliers before refitting the circle
+    if np.sum(best_inliers) >= 3:
+        cx, cy, r = fit_circle(x[best_inliers], y[best_inliers])
+    else:
+        raise ValueError("Not enough inliers to fit the circle.")
+
+    return cx, cy, r, best_inliers
+
 
 class VisDianosticPlot(object):
 
@@ -489,8 +591,10 @@ class VisDianosticPlot(object):
 
         mcs_finised = []
         
-        maxIteration = mov.shape[2]
-
+        try:
+            maxIteration = mov.shape[2]
+        except:
+            maxIteration = mov.shape[-1]
 
         for subID in range(maxIteration+1):
             frameid = pfsVisitID*100+subID
@@ -515,8 +619,12 @@ class VisDianosticPlot(object):
 
         fpga_notDone = []
         for iteration in range(maxIteration):
-            ind = np.where(np.abs(mov[0,:,iteration]['position']) > 0)
-            notDone = len(np.where(np.abs(mov[0,ind[0],iteration]['position']-targets[ind[0]]) > tolerance)[0])
+            try:
+                ind = np.where(np.abs(mov[0,:,iteration]['position']) > 0)
+                notDone = len(np.where(np.abs(mov[0,ind[0],iteration]['position']-targets[ind[0]]) > tolerance)[0])
+            except:
+                ind = np.where(np.abs(mov[:,iteration]['position']) > 0)
+                notDone = len(np.where(np.abs(mov[ind[0],iteration]['position']-targets[ind[0]]) > tolerance)[0])
             fpga_notDone.append(notDone)
 
 
@@ -524,7 +632,7 @@ class VisDianosticPlot(object):
         fpga_finished = len(self.goodIdx) - fpga_notDone
 
         ax.set_aspect('auto')
-
+        ax.set_xlim(0,maxIteration+1)
         ax.plot(fpga_finished, linestyle ='-', marker='x', label='FPS')
         ax.plot(mcs_finised, linestyle ='-',marker='.',label='MCS')
         ax.plot(fpga_finished - mcs_finised, label = 'FPS - MCS')
@@ -542,16 +650,17 @@ class VisDianosticPlot(object):
         pass
 
 
-    def visTargetConvergence(self, pfsVisitID, maxIteration = 11, tolerance = 0.01):
+    def visTargetConvergence(self, pfsVisitID, maxIteration = 11, excludeUnassign=True, tolerance = 0.01):
         vmax = 4*tolerance
 
         tolerance=findToleranceFromVisit(pfsVisitID)
 
         ax = plt.gcf().get_axes()[0]
-        self.visSubaruConvergence(Axes=ax, pfsVisitID = pfsVisitID,subVisit=maxIteration-1, 
+        self.visSubaruConvergence(Axes=ax, pfsVisitID = pfsVisitID,subVisit=maxIteration-1,excludeUnassign=excludeUnassign, 
                         tolerance=tolerance,vmax=vmax)
         ax = plt.gcf().get_axes()[1]
-        self.visSubaruConvergence(Axes=ax,pfsVisitID = pfsVisitID,subVisit=3,tolerance=tolerance, histo=True, bins=20,range=(0,vmax))
+        self.visSubaruConvergence(Axes=ax,pfsVisitID = pfsVisitID,subVisit=3,tolerance=tolerance, excludeUnassign=excludeUnassign,
+                        histo=True, bins=20,range=(0,vmax))
        
 
 
@@ -577,37 +686,41 @@ class VisDianosticPlot(object):
             subID = subVisit
 
         # Getting unassined fiber 
-        pfsDesignID = findDesignFromVisit(pfsVisitID)
+        pfsDesignID = int(findDesignFromVisit(pfsVisitID))
         
         import psycopg2
         from sqlalchemy import create_engine
 
-        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
-        engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
+        if excludeUnassign is True:
+            conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+            engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
 
-        with conn:
-                fiberData = pd.read_sql(f'''
-                    SELECT DISTINCT 
-                        fiber_id, pfi_nominal_x_mm, pfi_nominal_y_mm, fiber_status
-                    FROM pfs_design_fiber
-                    WHERE
-                        pfs_design_fiber.pfs_design_id = %(pfsDesignID)s
-                    -- limit 10
-                ''', engine, params={'pfsDesignID': pfsDesignID})
-        
-        from pfs.utils.fiberids import FiberIds
-        fid=FiberIds()
-        fiberData['cobra_id']=fid.fiberIdToCobraId(fiberData['fiber_id'].values)
-        fiberData=fiberData.sort_values('cobra_id')
-        df = fiberData.loc[fiberData['cobra_id'] != 65535]
-        unassigned_rows = df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].isna().all(axis=1)]
-        unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1 
+            
+            with conn:
+                    fiberData = pd.read_sql(f'''
+                        SELECT DISTINCT 
+                            fiber_id, pfi_center_final_x_mm, pfi_center_final_y_mm, 
+                            pfi_nominal_x_mm, pfi_nominal_y_mm
+                        FROM 
+                            pfs_config_fiber
+                        WHERE
+                            pfs_config_fiber.visit0 = %(visit0)s
+                        -- limit 10
+                    ''', engine, params={'visit0': pfsVisitID})
+            
+            
+            fid=FiberIds()
+            fiberData['cobra_id']=fid.fiberIdToCobraId(fiberData['fiber_id'].values)
+            fiberData=fiberData.sort_values('cobra_id')
+            df = fiberData.loc[fiberData['cobra_id'] != 65535]
+            unassigned_rows = df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].isna().all(axis=1)]
+            unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1 
 
 
-        assigned_row= df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].notna().all(axis=1)]
-        assigned_cobraIdx =  assigned_row['cobra_id'].values - 1 
+            assigned_row= df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].notna().all(axis=1)]
+            assigned_cobraIdx =  assigned_row['cobra_id'].values - 1 
 
-        targetFromDB = df['pfi_nominal_x_mm'].values+df['pfi_nominal_y_mm'].values*1j
+            targetFromDB = df['pfi_nominal_x_mm'].values+df['pfi_nominal_y_mm'].values*1j
 
         frameid = visitID*100+subID
 
@@ -630,8 +743,12 @@ class VisDianosticPlot(object):
 
         if excludeUnassign is True:
             targets = targetFromDB
+            dist=np.sqrt((match['pfi_center_x_mm'].values[assigned_cobraIdx]-targets[assigned_cobraIdx].real)**2+
+                            (match['pfi_center_y_mm'].values[assigned_cobraIdx]-targets[assigned_cobraIdx].imag)**2)
         else:
             targets=np.load(tarfile)
+            dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
+                (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
         
         mov = np.load(movfile)
 
@@ -641,8 +758,9 @@ class VisDianosticPlot(object):
             mov = np.array([mov])
             maxIteration = mov.shape[2]
         
-        dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets[self.goodIdx].real)**2+
-            (match['pfi_center_y_mm'].values[self.goodIdx]-targets[self.goodIdx].imag)**2)
+        #dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets[self.goodIdx].real)**2+
+        #    (match['pfi_center_y_mm'].values[self.goodIdx]-targets[self.goodIdx].imag)**2)
+        
         
         self.logger.info(f'Tolerance: {tolerance}')
 
@@ -683,16 +801,20 @@ class VisDianosticPlot(object):
                     histtype='step',linewidth=3,
                     label=f'{subID+1}-th Iteration')
             
-
+            
             x_vertical = tolerance  # x-coordinate for the vertical line
             ax.axvline(x=x_vertical, color='r', linestyle='--')
 
 
-
+            #print(bins)
             outIdx = np.where(bins > tolerance)
+            #print(len(outIdx), outIdx)
+            if np.size(outIdx) != 0:
             #print(np.sum(n[outIdx[0][0]:]))
             #print(np.sum(n[np.where(bins > 0.01)[0]]))
-            outRegion =  np.sum(n[outIdx[0][0]-1:])
+                outRegion =  np.sum(n[outIdx[0][0]-1:])
+            else:
+                outRegion = 0
             ax.text(0.7, 0.45, f'N. of non-converged (MCS) = {outRegion}', 
                         horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
             ax.text(0.7, 0.4, f'N. of non-converged (FPS) = {notDone}', 
@@ -722,20 +844,23 @@ class VisDianosticPlot(object):
         
         if heatmap:
             ax.set_aspect('equal')
-            sc=ax.scatter(self.calibModel.centers.real[self.goodIdx],self.calibModel.centers.imag[self.goodIdx],
-                c=dist,marker='s', **kwargs)
-            
+
+            if excludeUnassign is True:
+                sc=ax.scatter(self.calibModel.centers.real[assigned_cobraIdx],self.calibModel.centers.imag[assigned_cobraIdx],
+                    c=dist,marker='s', **kwargs)
+            else:
+                sc=ax.scatter(self.calibModel.centers.real[self.goodIdx],self.calibModel.centers.imag[self.goodIdx],
+                    c=dist,marker='s', **kwargs)
 
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="5%", pad=0.05)
             colorbar = self.fig.colorbar(sc,cax=cax)
             if excludeUnassign is True:
-                print('here')
+                #print('here')
                 ax.scatter(self.calibModel.centers.real[unassigned_cobraIdx],self.calibModel.centers.imag[unassigned_cobraIdx],
                 c='red',marker='s',label='UNASSIGNED', **kwargs)
             
 
-            assigned_row
             # Add a red line on the colorbar
             line_color = 'red'
             line_position = tolerance  # Position of the line on the colorbar (between 0 and 1)
@@ -748,7 +873,7 @@ class VisDianosticPlot(object):
 
         #ind = np.where(np.abs(mov[0,:,maxIteration-1]['position']) > 0)
         #notDone = len(np.where(np.abs(mov[0,ind[0],maxIteration-1]['position']-targets[ind[0]]) > tolerance)[0])
-        
+        self.logger.info(f'75% perceitile: {np.percentile(dist, 75)}')
         self.logger.info(f'Number of still moving cobra: {(len(ind[0]))}')
         self.logger.info(f'Number of not done cobra (FPS): {notDone}')
 

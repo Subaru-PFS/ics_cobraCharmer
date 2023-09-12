@@ -2000,7 +2000,7 @@ def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0
         toggleFlag = False
     cc.trajectory = Trajectories(cc.nCobras, timeStep)
 
-    tolerance = 0.1
+    tolerance = 0.005
     if twoSteps:
         # limit phi angle for first two tries
         limitPhi = np.pi/3 - cc.calibModel.phiIn[cIds] - np.pi
