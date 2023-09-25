@@ -189,6 +189,7 @@ class McsActorCamera(camera.Camera):
             linkname.symlink_to(filename.name)
 
         if doStack:
+            self.logger.info(f'Adding to a stacked image.')
             img = pyfits.getdata(filename, extname='IMAGE')
             self._updateStack(img)
 
