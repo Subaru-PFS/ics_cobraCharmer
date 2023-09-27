@@ -16,6 +16,7 @@ from ics.cobraCharmer import func
 from ics.cobraCharmer.utils import butler as cbutler
 from pfs.utils import butler 
 import pfs.utils.coordinates.transform as transformUtils
+import mcsActor.mcsRoutines.mcsRoutines as mcsTools
 
 from opdb import opdb
 
@@ -418,16 +419,19 @@ class CobraCoach():
             if 'rmod' in str(self.cameraName).lower():
                 altitude = 90.0
                 insrot = 0
+                pfiTransform = transformUtils.fromCameraName('usmcs', 
+                    altitude=altitude, insrot=insrot,nsigma=0, alphaRot=0)
             else: 
                 altitude = teleInfo['altitude'].values[0]
                 insrot = teleInfo['insrot'].values[0]
-
-            pfiTransform = transformUtils.fromCameraName(self.cameraName, 
-            altitude=altitude, insrot=insrot,nsigma=0, alphaRot=1)
+                pfiTransform = transformUtils.fromCameraName(self.cameraName, 
+                    altitude=altitude, insrot=insrot,nsigma=0, alphaRot=1)
         
-            outerRingIds = [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]
-            fidsOuterRing = fids[fids.fiducialId.isin(outerRingIds)]
+            #outerRingIds = [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]
+            #fidsOuterRing = fids[fids.fiducialId.isin(outerRingIds)]
 
+            fidsOuterRing, fidsGood = mcsTools.readFiducialMasks(fids)
+            
             pfiTransform.updateTransform(mcsData, fidsOuterRing, matchRadius=8.0, nMatchMin=0.1)
 
             nsigma = 0
