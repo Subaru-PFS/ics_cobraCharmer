@@ -194,7 +194,7 @@ def configPathForFFDot(version=None, rootDir=None):
 
     if version is None:
         fname = 'ff_subaru_20210710_el90_rot+00_ave.csv'
-    
+
 
     return rootDir / fname
 def configPathForModule(module, version=None, rootDir=None):
@@ -230,7 +230,16 @@ def modulesForPfi(version=None, rootDir=None):
     """
     yamlPath = configPathForPfi(version=version, rootDir=rootDir)
     with open(yamlPath, mode='rt') as yamlFile:
-        config = yaml.load(yamlFile)
+        # - yaml.load() always requires Loader for pyyaml >= 6.0
+        #   yaml.full_load() is an alias of yaml.load() with Loader=yaml.FullLoader
+        #   and equivalent to yaml.load() for pyyaml 5.1+
+        #   https://github.com/yaml/pyyaml/wiki/PyYAML-yaml.load(input)-Deprecation
+        #   https://github.com/yaml/pyyaml/blob/155ec463f6a854ac14ccd5e2dda8017ce42a508a/CHANGES#L21C40-L21C40
+        from pkg_resources import parse_version
+        if parse_version(yaml.__version__) < parse_version('6.0'):
+            config = yaml.load(yamlFile)
+        else:
+            config = yaml.full_load(yamlFile)
 
     return [c.strip() for c in config['modules']]
 
