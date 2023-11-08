@@ -1083,7 +1083,7 @@ class CobraCoach():
                               % (np.pi*2) + np.pi)
                 self.setCurrentAngles(self.allCobras[cIds], thetaAngles=thetaHome[cIds], phiAngles=0)             
             else:
-                self.cobraInfo['position'][self.visibleIdx] = self.exposeAndExtractPositions(dbMatch = False)[self.visibleIdx]
+                self.cobraInfo['position'][self.visibleIdx] = self.exposeAndExtractPositions(dbMatch = True)[self.visibleIdx]
 
         diff = None
 
