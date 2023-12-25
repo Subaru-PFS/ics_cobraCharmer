@@ -20,7 +20,7 @@ from scipy.optimize import least_squares
 
 from bokeh.io import output_notebook, show, export_png,export_svgs
 from selenium import webdriver
-from webdriver_manager.chrome import ChromeDriverManager
+#from webdriver_manager.chrome import ChromeDriverManager
 
 
 from bokeh.plotting import figure, show, output_file
