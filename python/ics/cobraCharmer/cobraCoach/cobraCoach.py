@@ -583,6 +583,7 @@ class CobraCoach():
 
         if not self.trajectoryMode and self.cam.filePrefix == 'PFAC':
             self.cam.startRecord()
+        self.logger.info('Sending step number to FPGA for moving cobra.')
         if nSegments == 0:
             self.pfi.moveSteps(cobras, thetaSteps, phiSteps,
                                thetaFast=thetaFast, phiFast=phiFast,
@@ -590,13 +591,14 @@ class CobraCoach():
                                trajectoryMode=self.trajectoryMode)
         else:
             for n in range(nSegments):
-                self.logger.info('Sending step number to FPGA for moving cobra.')
+                
                 self.pfi.moveSteps(cobras, thetaSteps[n], phiSteps[n],
                                    thetaOntimes=thetaOntimes[n], phiOntimes=phiOntimes[n],
                                    trajectoryMode=self.trajectoryMode)
         if not self.trajectoryMode and self.cam.filePrefix == 'PFAC':
             self.cam.stopRecord()
-
+        self.logger.info('cobra control FPGA operation done.')
+        
         if self.mode == self.thetaMode:
             thetas = self.thetaInfo['angle'] + self.thetaInfo['ccwHome']
             thetas[cIds] += expectedThetas
@@ -871,7 +873,7 @@ class CobraCoach():
                                             fromTheta[c_i], fromPhi[c_i], thetaFast[c_i], phiFast[c_i], self.calibModel)
 
             # send move command
-            #self.logger.info(f'thetaSteps = {thetaSteps}')
+            self.logger.info(f'Finished converting angle to steps, sending command to moveSteps.')
             self.moveSteps(cobras, thetaSteps, phiSteps, thetaFast, phiFast, thetaAngles, phiAngles)
 
         else:
