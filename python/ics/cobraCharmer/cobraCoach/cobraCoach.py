@@ -590,6 +590,7 @@ class CobraCoach():
                                trajectoryMode=self.trajectoryMode)
         else:
             for n in range(nSegments):
+                self.logger.info('Sending step number to FPGA for moving cobra.')
                 self.pfi.moveSteps(cobras, thetaSteps[n], phiSteps[n],
                                    thetaOntimes=thetaOntimes[n], phiOntimes=phiOntimes[n],
                                    trajectoryMode=self.trajectoryMode)
@@ -627,6 +628,7 @@ class CobraCoach():
             pos[self.visibleIdx] = targets[self.visibleIdx]
         else:
             #pos[self.visibleIdx] = self.exposeAndExtractPositions(guess=targets[self.visibleIdx])
+            self.logger.info('Asking for MCS exposure for spots after moving.')
             pos[self.visibleIdx] = self.exposeAndExtractPositions(dbMatch=True)[self.visibleIdx]
 
             #np.save('/tmp/cobraCharmer_pos',pos)
@@ -927,6 +929,7 @@ class CobraCoach():
             segments['phiSpeeds'] = phiSpeeds
             np.savez(dataPath / f'segments_{nowSecond}', idx=cIds, segs=segments)
 
+            self.logger.info(f'Finished converting angle to steps, sending command to moveSteps.')
             self.moveSteps(cobras, thetaSteps, phiSteps, thetaFast, phiFast, thetaAngles, phiAngles, False, thetaOntimes, phiOntimes, nSegments, thetaSpeeds, phiSpeeds)
 
         return self.moveInfo['movedTheta'][cIds], self.moveInfo['movedPhi'][cIds]
@@ -1000,8 +1003,8 @@ class CobraCoach():
             deltaPhi = None
 
         # send the command
-        #self.logger.debug(f'Moving deltaTheta = {deltaTheta}')
-        #self.logger.debug(f'Moving deltaPhi = {deltaPhi}')
+        self.logger.info(f'Moving deltaTheta = {deltaTheta}')
+        self.logger.info(f'Moving deltaPhi = {deltaPhi}')
         self.moveDeltaAngles(cobras, deltaTheta, deltaPhi, thetaFast, phiFast)
         if local:
             if self.mode == self.thetaMode:

@@ -10,8 +10,8 @@ from sqlalchemy import create_engine
 import pandas as pd
 import os
 import pathlib
-from reportlab.platypus import SimpleDocTemplate
-
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Image
 
 def get_total_iteration(pfsVisit):
     #pfsVisitID = visDianosticPlot.findVisit(runDir)

@@ -408,6 +408,8 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
         _phiFast = farAwayMask[notDoneMask] & phiFast[notDoneMask]
         cc.thetaScaling = np.logical_not(farAwayMask)
         cc.phiScaling = np.logical_not(farAwayMask)
+        
+        logger.info(f'Sending angles to moveToAngles for {j}-th iteration')
         atThetas[notDoneMask], atPhis[notDoneMask] = \
             cc.moveToAngles(cobras, targetThetas[notDoneMask], targetPhis[notDoneMask], _thetaFast, _phiFast, True)
 
@@ -417,6 +419,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
         newlyDone = nowDone & notDoneMask
         farAwayMask = (distances > threshold) & farAwayMask
 
+        logger.info(f'Updating the cobra information')
         ndIdx = notDoneMask[cIds]
         moves['position'][ndIdx,j] = atPositions[notDoneMask]
         moves['thetaAngle'][ndIdx,j] = atThetas[notDoneMask]
