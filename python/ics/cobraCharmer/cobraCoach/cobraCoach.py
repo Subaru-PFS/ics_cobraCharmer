@@ -583,7 +583,7 @@ class CobraCoach():
 
         if not self.trajectoryMode and self.cam.filePrefix == 'PFAC':
             self.cam.startRecord()
-        self.logger.info('Sending step number to FPGA for moving cobra.')
+        self.logger.info('Sending step numbers to FPGA for moving cobra.')
         if nSegments == 0:
             self.pfi.moveSteps(cobras, thetaSteps, phiSteps,
                                thetaFast=thetaFast, phiFast=phiFast,
