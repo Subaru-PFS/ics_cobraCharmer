@@ -8,6 +8,9 @@ import matplotlib.pyplot as plt
 import astropy.io.fits as pyfits
 import mpfit
 import concurrent.futures
+import os
+import glob
+
 
 def fit_gaussian_and_get_fwhm(args):
     x, y, subimage = args
@@ -32,7 +35,10 @@ def visMcsImageQuality(frameNum):
         -- limit 10
         ''', engine)
     
-    file=f'/data/raw/2024-01-17/mcs/PFSC{frameNum}.fits'
+    search_pattern = os.path.join('/data/raw', '*', 'mcs', f'*{frameNum}*')
+    matching_files = glob.glob(search_pattern, recursive=True)
+    file = matching_files[0]
+
     image = pyfits.open(file)[1].data
     
     xcent = mcsData['mcs_center_x_pix'].values
