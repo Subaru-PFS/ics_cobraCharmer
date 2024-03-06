@@ -92,7 +92,8 @@ class Camera(object):
         self._cam = None
         self.dark = None
         self.exptime = 0.8
-
+        self.doWriteFitsSpots = True
+        
         if runManager is None:
             runManager = butler.RunTree()
         self.runManager = runManager
@@ -429,9 +430,10 @@ class Camera(object):
         """
 
         t0 = time.time()
-        hdulist = pyfits.open(filename, mode='append')
-        hdulist.append(pyfits.BinTableHDU(spots, name='SPOTS'))
-        hdulist.close()
+        if self.doWriteFitsSpots:
+            hdulist = pyfits.open(filename, mode='append')
+            hdulist.append(pyfits.BinTableHDU(spots, name='SPOTS'))
+            hdulist.close()
 
         spotfile = self.outputDir / 'spots.npz'
         if spotfile.exists():
