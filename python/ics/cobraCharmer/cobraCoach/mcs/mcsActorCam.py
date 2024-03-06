@@ -15,6 +15,7 @@ class McsActorCamera(camera.Camera):
         super().__init__(**kw)
 
         self.actor = actor
+        self.doWriteFitsSpots = False # the mcsActor takes care of this.
 
         self.logger.info('mcsActor camera')
         self._lock = threading.Lock()
