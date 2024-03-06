@@ -49,7 +49,7 @@ from sqlalchemy import create_engine
 from pfs.utils.fiberids import FiberIds
 
 def findDesignFromVisit(visit):
-    command = f"grep moveToPfsDesign /data/logs/actors/fps/2023-*-*.log | grep {visit}"
+    command = f"grep moveToPfsDesign /data/logs/actors/fps/202?-*-*.log | grep {visit}"
     
     try:
         output = subprocess.check_output(command, shell=True, text=True)
@@ -84,7 +84,7 @@ def findDesignFromVisit(visit):
 
 
 def findToleranceFromVisit(visit):
-    command = f"grep moveToPfsDesign /data/logs/actors/fps/2023-*-*.log | grep {visit}"
+    command = f"grep moveToPfsDesign /data/logs/actors/fps/202?-*-*.log | grep {visit}"
     
     try:
         output = subprocess.check_output(command, shell=True, text=True)
@@ -122,7 +122,7 @@ def findToleranceFromVisit(visit):
 
 
 def findRunDir(pfsVisitId):
-    command = f"find /data/MCS/2023* |grep {pfsVisitId}"
+    command = f"find /data/MCS/202?* |grep {pfsVisitId}"
     output = subprocess.check_output(command, shell=True, text=True)
     return output.split('\n')[0][10:22]
 
@@ -377,7 +377,60 @@ class VisDianosticPlot(object):
         ax.set_xlim(xLim)
         ax.set_ylim(yLim)
     
+    def visSetCobra(self, cobraIdx, scale=1.1):
+        """
+            Set plot region to a given cobra index
+        """
+        center = self.calibModel.centers[cobraIdx]
+        dist = scale*(self.calibModel.L1[cobraIdx]+self.calibModel.L2[cobraIdx])
+        
+        self.visSetAxesLimits([center.real-dist,center.real+dist],[center.imag-dist,center.imag+dist])
 
+    def visUnassignedFibers(self, pfsVisitID):
+
+        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+        engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
+
+
+        with conn:
+                fiberData = pd.read_sql(f'''
+                    SELECT DISTINCT 
+                        fiber_id, pfi_center_final_x_mm, pfi_center_final_y_mm, 
+                        pfi_nominal_x_mm, pfi_nominal_y_mm
+                    FROM 
+                        pfs_config_fiber
+                    WHERE
+                        pfs_config_fiber.visit0 = %(visit0)s
+                    -- limit 10
+                ''', engine, params={'visit0': pfsVisitID})
+
+
+        fid=FiberIds()
+        fiberData['cobra_id']=fid.fiberIdToCobraId(fiberData['fiber_id'].values)
+        fiberData=fiberData.sort_values('cobra_id')
+        df = fiberData.loc[fiberData['cobra_id'] != 65535]
+        unassigned_rows = df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].isna().all(axis=1)]
+        unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1 
+
+        ax = plt.gca()
+
+        ax.scatter(self.calibModel.centers.real[unassigned_cobraIdx], 
+                   self.calibModel.centers.imag[unassigned_cobraIdx], marker='X', color='red', s=20)
+
+    def visCobraArms(self, center, thetaLength, phiLength, thetaAngle, phiAngle):
+        
+        ax = plt.gca()
+        self._addLine(center,thetaLength, thetaAngle,color='blue',
+                    linewidth=2,linestyle='-')
+
+        x = thetaLength*np.cos(thetaAngle)
+        y = thetaLength*np.sin(thetaAngle)
+        newx = center.real + x
+        newy = center.imag + y
+        newPos = newx+newy*1j
+        phiOpenAngle = phiAngle+thetaAngle - np.pi
+        self._addLine(newPos,phiLength,phiOpenAngle,color='blue',
+                linewidth=10,linestyle='-', solid_capstyle='round',alpha=0.5)
 
     def visGeometryFromXML(self, newXml=None, thetaAngle=None, phiAngle=None,
         markCobra=False, patrol=False, visHardStops = True, allCobra = False):
@@ -685,13 +738,14 @@ class VisDianosticPlot(object):
         if subVisit is not None:    
             subID = subVisit
 
-        # Getting unassined fiber 
-        pfsDesignID = int(findDesignFromVisit(pfsVisitID))
+        
         
         import psycopg2
         from sqlalchemy import create_engine
 
         if excludeUnassign is True:
+            # Getting unassined fiber 
+            pfsDesignID = int(findDesignFromVisit(pfsVisitID))
             conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
             engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
 

@@ -19,8 +19,57 @@ def fit_gaussian_and_get_fwhm(args):
     fwhm_y = 2.35 * p[4]
     return fwhm_x, fwhm_y
 
-def visMcsImageQuality(frameNum):
-    
+
+def visMcsFocusSequence(visitId):
+    xarr = []
+    yarr = []
+    farr = []
+
+    for i in range(9):
+        firstFrame = visitId 
+        frameNum = (firstFrame+i)*100
+        
+        xf, yf, fval =  visMcsImageQuality.visMcsImageQuality(frameNum, xval=[2.0, 3.2], yval=[2.7, 4.5], dataOnly=True)
+        xarr.append(xf)
+        yarr.append(yf)
+        farr.append(fval)
+        
+    fwhm_x = np.array(xarr)
+    fwhm_y = np.array(yarr)
+    focus_pos=np.array(farr)
+
+    sort_idx = sorted(range(len(focus_pos)), key=lambda k: focus_pos[k])
+
+    fig, ax = plt.subplots(figsize=(8,6), facecolor="white")
+
+    plt.plot(focus_pos[sort_idx],fwhm_x[sort_idx,1], color='blue', linestyle='dashed')
+    plt.plot(focus_pos[sort_idx],fwhm_x[sort_idx,2], color='blue', label='50 percentile FWHM in X')
+    plt.plot(focus_pos[sort_idx],fwhm_x[sort_idx,3], color='blue',linestyle='dashed')
+    plt.plot(focus_pos[sort_idx],fwhm_y[sort_idx,1], color='red', linestyle='dashed')
+    plt.plot(focus_pos[sort_idx],fwhm_y[sort_idx,2], color='red', label='50 percentile FWHM in Y')
+    plt.plot(focus_pos[sort_idx],fwhm_y[sort_idx,3], color='red',linestyle='dashed')
+
+    plt.xlabel('Focus Position')
+    plt.xlabel('Spot FWHM')
+
+    plt.legend()
+    plt.show()
+
+    xval = [0.6*np.min(fwhm_x[sort_idx,1]),1.2*np.max(fwhm_x[sort_idx,3])]
+    yval = [0.6*np.min(fwhm_y[sort_idx,1]),1.2*np.max(fwhm_y[sort_idx,3])]
+
+    for i in range(9):
+        firstFrame = visitId 
+        frameNum = (firstFrame+i)*100
+        
+        xf, yf, fval =  visMcsImageQuality.visMcsImageQuality(frameNum, xval=xval, yval=yval)
+
+
+def visMcsImageQuality(frameNum, xval=None, yval=None, dataOnly=False):
+    '''
+        xval : The color range for plotting FWHM in X direction
+        yval : The color range for plotting FWHM in X direction 
+    '''
     # Assuming you have the necessary credentials
     db_credentials = "postgresql://pfs@db-ics:5432/opdb"
     engine = create_engine(db_credentials)
@@ -40,7 +89,8 @@ def visMcsImageQuality(frameNum):
     file = matching_files[0]
 
     image = pyfits.open(file)[1].data
-    
+    focus_val = pyfits.open(file)[0].header['FOC-VAL']
+
     xcent = mcsData['mcs_center_x_pix'].values
     ycent = mcsData['mcs_center_y_pix'].values
     
@@ -61,31 +111,41 @@ def visMcsImageQuality(frameNum):
     xcent = mcsData['mcs_center_x_pix']
     ycent = mcsData['mcs_center_y_pix']
 
-
-    fig, ax = plt.subplots(1, 2,figsize=(14,6), facecolor="white")
-    cm = plt.cm.get_cmap('RdYlBu').reversed() 
-    plt.suptitle(f'')
-    ax = plt.gcf().get_axes()[0]
     xvalue = np.quantile(fwhm_x, [0,0.25,0.5,0.75,1]) 
-    sc=ax.scatter(xcent,ycent,
-                        c=fwhm_x,marker='s',vmin=0.8*xvalue[1],vmax=1.2*xvalue[3],cmap=cm)
-    ax.set_title(f'X')
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="5%", pad=0.1)
-    colorbar = fig.colorbar(sc,cax=cax)
-
-
-    ax = plt.gcf().get_axes()[1]
     yvalue = np.quantile(fwhm_y, [0,0.25,0.5,0.75,1]) 
-    sc=ax.scatter(xcent,ycent,
-                        c=fwhm_y,marker='s',vmin=0.8*yvalue[1],vmax=1.2*yvalue[3],cmap=cm)
-    ax.set_title(f'Y')
 
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="5%", pad=0.1)
-    colorbar = fig.colorbar(sc,cax=cax)
+    if dataOnly is False:
+        fig, ax = plt.subplots(1, 2,figsize=(14,6), facecolor="white")
+        cm = plt.cm.get_cmap('RdYlBu').reversed() 
+        plt.suptitle(f'')
+        ax = plt.gcf().get_axes()[0]
+        if xval is None:
+            sc=ax.scatter(xcent,ycent,
+                            c=fwhm_x,marker='s',vmin=0.8*xvalue[1],vmax=1.2*xvalue[3],cmap=cm)
+        else:
+            sc=ax.scatter(xcent,ycent,
+                            c=fwhm_x,marker='s',vmin=xval[0],vmax=xval[1],cmap=cm)
+        ax.set_title(f'X')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.1)
+        colorbar = fig.colorbar(sc,cax=cax)
 
-    return xvalue, yvalue
+
+        ax = plt.gcf().get_axes()[1]
+        if yval is None:
+            sc=ax.scatter(xcent,ycent,
+                            c=fwhm_y,marker='s',vmin=0.8*yvalue[1],vmax=1.2*yvalue[3],cmap=cm)
+        else:
+            sc=ax.scatter(xcent,ycent,
+                            c=fwhm_y,marker='s',vmin=yval[0],vmax=yval[1],cmap=cm)
+        ax.set_title(f'Y')
+
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.1)
+        colorbar = fig.colorbar(sc,cax=cax)
+        plt.suptitle(f'Focus Encoder = {focus_val}')
+        
+    return xvalue, yvalue, focus_val
 
 
 def gaussian_2d(params, x, y):
