@@ -122,7 +122,7 @@ def findToleranceFromVisit(visit):
 
 
 def findRunDir(pfsVisitId):
-    command = f"find /data/MCS/202?* |grep {pfsVisitId}"
+    command = f"find /data/MCS/202[234]* |grep {pfsVisitId}"
     output = subprocess.check_output(command, shell=True, text=True)
     return output.split('\n')[0][10:22]
 
@@ -745,7 +745,7 @@ class VisDianosticPlot(object):
 
         if excludeUnassign is True:
             # Getting unassined fiber 
-            pfsDesignID = int(findDesignFromVisit(pfsVisitID))
+            #pfsDesignID = int(findDesignFromVisit(pfsVisitID))
             conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
             engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
 
@@ -914,6 +914,9 @@ class VisDianosticPlot(object):
                 ax.scatter(self.calibModel.centers.real[unassigned_cobraIdx],self.calibModel.centers.imag[unassigned_cobraIdx],
                 c='red',marker='s',label='UNASSIGNED', **kwargs)
             
+            # Plot the location of broken fibers
+            ax.scatter(self.calibModel.centers.real[self.badIdx],self.calibModel.centers.imag[self.badIdx],
+                c='lightpink',marker='s',label='BROKEN', **kwargs)    
 
             # Add a red line on the colorbar
             line_color = 'red'
