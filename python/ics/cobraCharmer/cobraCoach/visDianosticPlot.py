@@ -680,6 +680,34 @@ class VisDianosticPlot(object):
                 notDone = len(np.where(np.abs(mov[ind[0],iteration]['position']-targets[ind[0]]) > tolerance)[0])
             fpga_notDone.append(notDone)
 
+        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+        engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
+
+        
+        with conn:
+            fiberData = pd.read_sql(f'''
+                SELECT DISTINCT 
+                    fiber_id, pfi_center_final_x_mm, pfi_center_final_y_mm, 
+                    pfi_nominal_x_mm, pfi_nominal_y_mm
+                FROM 
+                    pfs_config_fiber
+                WHERE
+                    pfs_config_fiber.visit0 = %(visit0)s
+                -- limit 10
+            ''', engine, params={'visit0': pfsVisitID})
+        
+        
+        fid=FiberIds()
+        fiberData['cobra_id']=fid.fiberIdToCobraId(fiberData['fiber_id'].values)
+        fiberData=fiberData.sort_values('cobra_id')
+        df = fiberData.loc[fiberData['cobra_id'] != 65535]
+        #unassigned_rows = df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].isna().all(axis=1)]
+        #unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1 
+
+
+        assigned_row= df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].notna().all(axis=1)]
+        assigned_cobraIdx =  assigned_row['cobra_id'].values - 1 
+
 
         fpga_notDone = np.array(fpga_notDone)   
         fpga_finished = len(self.goodIdx) - fpga_notDone
@@ -689,7 +717,9 @@ class VisDianosticPlot(object):
         ax.plot(fpga_finished, linestyle ='-', marker='x', label='FPS')
         ax.plot(mcs_finised, linestyle ='-',marker='.',label='MCS')
         ax.plot(fpga_finished - mcs_finised, label = 'FPS - MCS')
-        ax.plot(np.zeros(12)+len(self.goodIdx)*0.95,linestyle ='dotted', label = '95% Threshold')
+
+        # Plot the 95% of all assigned cobra
+        ax.plot(np.zeros(12)+len(assigned_cobraIdx)*0.95,linestyle ='dotted', label = '95% Threshold')
         ax.legend()
 
         if getStoppedNum:
