@@ -4,7 +4,6 @@ import numpy as np
 import glob
 import astropy.io.fits as pyfits
 import numpy as np
-import matplotlib.pyplot as plt
 import os
 import subprocess
 import sys
@@ -350,7 +349,7 @@ class VisDianosticPlot(object):
                 plt.title(title)
             plt.xlabel(xLabel)
             plt.ylabel(yLabel)
-            plt.show(block=False)
+            #plt.show(block=False)
 
             # Set the axes aspect ratio
             ax = plt.gca()
@@ -1970,6 +1969,18 @@ class VisDianosticPlot(object):
         im = ax.imshow(image, interpolation='nearest', 
                     cmap='gray', vmin=m-s, vmax=m+3*s, origin='lower')
     
+    def visMcsImage(self, frameNum):
+        visit = int(frameNum/100)
+        image = pyfits.open(pathlib.Path(f'/data/MCS/{findRunDir(visit)}/data/PFSC{frameNum}.fits'))
+        data = image[1].data
+        m, s = np.mean(data), np.std(data)
+
+        ax = plt.gca()
+
+        im = ax.imshow(data, interpolation='nearest', 
+                    cmap='gray', vmin=m-s, vmax=m+3*s, origin='lower')
+
+
     def visCobraMotorMap(self, stepsize=50, figPath=None, arm=None, pdffile=None, debug=False):
         try:
             self.mf
