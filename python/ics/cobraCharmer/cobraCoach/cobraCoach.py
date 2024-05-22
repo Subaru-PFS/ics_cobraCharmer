@@ -16,7 +16,6 @@ from ics.cobraCharmer import func
 from ics.cobraCharmer.utils import butler as cbutler
 from pfs.utils import butler 
 import pfs.utils.coordinates.transform as transformUtils
-import mcsActor.mcsRoutines.mcsRoutines as mcsTools
 
 from opdb import opdb
 
@@ -429,6 +428,8 @@ class CobraCoach():
         
             #outerRingIds = [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]
             #fidsOuterRing = fids[fids.fiducialId.isin(outerRingIds)]
+
+            import mcsActor.mcsRoutines.mcsRoutines as mcsTools
 
             fidsOuterRing, fidsGood = mcsTools.readFiducialMasks(fids)
             
