@@ -448,7 +448,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     
     badMoveIdx = np.where(notDoneMask)[0]
 
-    return dataPath, atThetas[cIds], atPhis[cIds], moves
+    return dataPath, atThetas, atPhis, moves
 
 def movePositions(cIds, targets, tolerance=0.1, tries=6, thetaMarginCCW=0.1, homed=False, newDir=True):
     """
