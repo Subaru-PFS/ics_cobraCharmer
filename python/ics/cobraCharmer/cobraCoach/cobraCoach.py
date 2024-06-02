@@ -1084,9 +1084,20 @@ class CobraCoach():
             # There are dots, so we may wanto to skip this
             if noMCS is True:
                 self.logger.info('noMCS flag is passed, set angles instead of exposure.')
-                thetaHome = ((self.calibModel.tht1 - self.calibModel.tht0 + np.pi)
-                              % (np.pi*2) + np.pi)
-                self.setCurrentAngles(self.allCobras[cIds], thetaAngles=thetaHome[cIds], phiAngles=0)             
+                if thetaEnable:
+                    thetaHome = ((self.calibModel.tht1 - self.calibModel.tht0 + np.pi)
+                                  % (np.pi*2) + np.pi)
+                    thetaHome = thetaHome[cIds]
+                else:
+                    thetaHome = None
+                if phiEnable:
+                    phiHome = 0
+                else:
+                    phiHome = None
+
+                self.setCurrentAngles(self.allCobras[cIds],
+                                      thetaAngles=thetaHome, 
+                                      phiAngles=phiHome)
             else:
                 self.cobraInfo['position'][self.visibleIdx] = self.exposeAndExtractPositions(dbMatch = True)[self.visibleIdx]
 
