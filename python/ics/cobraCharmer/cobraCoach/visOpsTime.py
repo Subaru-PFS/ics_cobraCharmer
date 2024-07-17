@@ -200,7 +200,7 @@ def visFPSTimeBar(visit, figName = None):
     plt.figure(figsize=(8, 6))
     plt.bar(0, fpsOps, width=bar_width, label=f'FPS init')
 
-    # Create a bar plot for each repetition
+    # Create a bar plot for each repeat
     if get_total_iteration(visit)+1 == get_input_iteration(visit):
         for i in range(num_repetitions):
             plt.bar(x + i*bar_width, duration[i], width=bar_width, label=f'Iteration {i+1}')
@@ -269,16 +269,15 @@ def parse_mcs_log(pfsVisit, debug=False):
             elif 'newpath' in line:
                 if debug: print(line)
                 readDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-            elif 'write image to filename' in line:
-                if debug: print(line)
-                saveDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
                 match = re.search(r'PFSC(\d+)\.fits', line)
                 number = int(match.group(1))
-                if int(number/100) != pfsVisit:
-                    last_frame = True
                 if number == pfsVisit*100+maxSubframe:
                     last_frame = True
                 if debug: print(last_frame)
+            elif 'hdr done' in line:
+                if debug: print(line)
+                saveDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+                
             elif 'Sending centroid data to database' in line:
                 cenTime.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
                 if debug: print(line)

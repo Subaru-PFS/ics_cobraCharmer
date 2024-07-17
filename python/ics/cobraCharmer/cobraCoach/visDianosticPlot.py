@@ -14,7 +14,9 @@ from scipy.optimize import curve_fit
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import re
 from scipy.optimize import least_squares
-
+from functools import partial
+import multiprocessing as mp
+import time
 
 
 from bokeh.io import output_notebook, show, export_png,export_svgs
@@ -36,7 +38,6 @@ from bokeh.palettes import Category20
 from ics.cobraCharmer import pfiDesign
 from ics.cobraCharmer import func
 import fnmatch
-from ics.fpsActor import fpsFunction as fpstool
 import pandas as pd
 from opdb import opdb
 import logging
@@ -242,11 +243,14 @@ class VisDianosticPlot(object):
             allCobras = np.array(cobras)
             nCobras = len(allCobras)
 
+            brokenNums = [i+1 for i,c in enumerate(allCobras) if
+                    des.fiberIsBroken(c.cobraNum, c.module)]
             goodNums = [i+1 for i,c in enumerate(allCobras) if
                     des.cobraIsGood(c.cobraNum, c.module)]
             badNums = [e for e in range(1, nCobras+1) if e not in goodNums]
 
 
+            self.invisibleIdx = np.array(brokenNums, dtype='i4') - 1
             self.goodIdx = np.array(goodNums, dtype='i4') - 1
             self.badIdx = np.array(badNums, dtype='i4') - 1
 
@@ -724,12 +728,108 @@ class VisDianosticPlot(object):
         if getStoppedNum:
             return fpga_finished[-1], mcs_finised[-1]
 
-    def visConvergenceRun(self, runDirList):
+    def visNotDoneCobra(self, pfsVisitID, tolerance = 0.1, doPlots=False):
         '''
-            This function is used to plot the overall convergence performance in a given list
+            This function is used to plot the location of not done cobra
         '''
+        if doPlots:
+            ax = plt.gca()
+
+        if pfsVisitID is None:
+            visitID = int(self._findFITS()[0][-12:-7])
+        else:
+            visitID = pfsVisitID
         
-        pass
+        path=f'{self.path}/data/'
+        movfile = path+'moves.npy'
+        mov = np.load(movfile)
+        
+        maxIteration = mov.shape[-1]
+
+        frameid = visitID*100+maxIteration-1
+
+        # Getting unassined fiber 
+        #pfsDesignID = int(findDesignFromVisit(pfsVisitID))
+        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+        engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
+
+        
+        with conn:
+            fiberData = pd.read_sql(f'''
+                SELECT DISTINCT 
+                    fiber_id, pfi_center_final_x_mm, pfi_center_final_y_mm, 
+                    pfi_nominal_x_mm, pfi_nominal_y_mm
+                FROM 
+                    pfs_config_fiber
+                WHERE
+                    pfs_config_fiber.visit0 = %(visit0)s
+                -- limit 10
+            ''', engine, params={'visit0': pfsVisitID})
+        
+        
+        fid=FiberIds()
+        fiberData['cobra_id']=fid.fiberIdToCobraId(fiberData['fiber_id'].values)
+        fiberData=fiberData.sort_values('cobra_id')
+        df = fiberData.loc[fiberData['cobra_id'] != 65535]
+        unassigned_rows = df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].isna().all(axis=1)]
+        unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1 
+
+
+        assigned_row= df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].notna().all(axis=1)]
+        assigned_cobraIdx =  assigned_row['cobra_id'].values - 1 
+
+        targetFromDB = df['pfi_nominal_x_mm'].values+df['pfi_nominal_y_mm'].values*1j
+
+       
+        db=opdb.OpDB(hostname='db-ics', port=5432,
+                   dbname='opdb',username='pfs')
+        
+        match = db.bulkSelect('cobra_match','select * from cobra_match where '
+                            f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
+        
+        dist=np.sqrt((match['pfi_center_x_mm'].values[assigned_cobraIdx]-targetFromDB[assigned_cobraIdx].real)**2+
+                            (match['pfi_center_y_mm'].values[assigned_cobraIdx]-targetFromDB[assigned_cobraIdx].imag)**2)
+        ind = np.where(dist > tolerance)
+        
+        if doPlots:
+            sc=ax.scatter(self.calibModel.centers.real,self.calibModel.centers.imag,
+                    c='grey',marker='s')
+            ax.scatter(self.calibModel.centers.real[assigned_cobraIdx[ind]],self.calibModel.centers.imag[assigned_cobraIdx[ind]],
+                c='red',marker='s',label='Not Converged')
+        
+        return assigned_cobraIdx[ind]
+    
+    def visCobraMovement(self, pfsVisitID, cobraIdx=0, iteration = 8):
+        visit = 107682
+        runDir = findRunDir(pfsVisitID)
+        iteration=8
+
+        mov=np.load(f'/data/MCS/{runDir}/data/moves.npy')
+        tar=np.load(f'/data/MCS/{runDir}/data/targets.npy')
+        
+        movIdx = np.where(self.goodIdx == cobraIdx)[0][0]
+        
+        self.visCreateNewPlot(f'Visit = {visit} Cobra Index = {self.goodIdx[movIdx]}','X','Y')
+        self.visGeometryFromXML(thetaAngle=mov[0,movIdx,iteration-1]['thetaAngle']+self.calibModel.tht0[self.goodIdx[movIdx]],
+                            phiAngle=mov[0,movIdx,iteration-1]['phiAngle'],patrol=True)
+
+        #vis.visGeometryFromXML(patrol=True)
+                            
+        self.visUnassignedFibers(pfsVisitID)
+
+        ax=plt.gca()
+        x = mov[0,movIdx,:]['position'].real
+        y = mov[0,movIdx,:]['position'].imag
+
+        for i in range(len(x)):
+            ax.scatter(x[i], y[i], marker='.', alpha=0.5,label=f'{i+1}')
+            ax.text(x[i], y[i],f'{i}')
+        ax.scatter(tar.real[movIdx],tar.imag[movIdx],c='red',marker='x',label='target',s=80)
+        #ax.scatter(vis.calibModel.centers.real[idx], vis.calibModel.centers.imag[idx])
+
+        ax.legend()
+        self.visSetCobra(self.goodIdx[movIdx], scale=1.0)
+
 
 
     def visTargetConvergence(self, pfsVisitID, maxIteration = 11, excludeUnassign=True, tolerance = 0.01):
@@ -887,6 +987,9 @@ class VisDianosticPlot(object):
             
             x_vertical = tolerance  # x-coordinate for the vertical line
             ax.axvline(x=x_vertical, color='r', linestyle='--')
+            ax.axhline(np.percentile(dist, 50), color='green', linewidth=2,label='50 percentile')
+            ax.axhline(np.percentile(dist, 75), color='blue', linewidth=2,label='75 percentile')
+            ax.axhline(np.percentile(dist, 95), color='brown', linewidth=2,label='95 percentile')
 
 
             #print(bins)
@@ -950,7 +1053,8 @@ class VisDianosticPlot(object):
             # Add a red line on the colorbar
             line_color = 'red'
             line_position = tolerance  # Position of the line on the colorbar (between 0 and 1)
-            cax.axhline(line_position, color=line_color, linewidth=2)
+            cax.axhline(line_position, color=line_color, linewidth=2,label='tolerance')
+            
 
             ax.set_xlabel('X (mm)')
             ax.set_ylabel('Y (mm)')
@@ -960,13 +1064,14 @@ class VisDianosticPlot(object):
         #ind = np.where(np.abs(mov[0,:,maxIteration-1]['position']) > 0)
         #notDone = len(np.where(np.abs(mov[0,ind[0],maxIteration-1]['position']-targets[ind[0]]) > tolerance)[0])
         self.logger.info(f'75% perceitile: {np.percentile(dist, 75)}')
+        self.logger.info(f'95% perceitile: {np.percentile(dist, 95)}')
         self.logger.info(f'Number of still moving cobra: {(len(ind[0]))}')
         self.logger.info(f'Number of not done cobra (FPS): {notDone}')
 
     def visCobraCenter(self, baseData, targetData, histo=False, gauFit = True, vectorLength=0.05, **kwargs):
         
         '''
-            This function is used to compare the center locations between two datasets. 
+            This function is used to compare the center locations between two datasets (target - base).  
             
             Input:
                 baseData: The referenced center locations 
@@ -1713,7 +1818,7 @@ class VisDianosticPlot(object):
         
 
 
-    def visRemeasureThetaCenter(self, fw, rv, estCenter, radiusTolerance = 0.5, badAngle = None,
+    def visRemeasureThetaCenter(self, fw, rv, estCenter=None, radiusTolerance = 0.5, badAngle = None,
         doPlots = False) :
 
         """
@@ -1751,7 +1856,11 @@ class VisDianosticPlot(object):
         x = data.real
         y = data.imag
 
-        center_estimate = estCenter.real, estCenter.imag
+        if center_estimate is not None:
+            center_estimate = estCenter.real, estCenter.imag
+        else:
+            center_estimate = np.mean(data)
+            
         center_2, ier = optimize.leastsq(f_2, center_estimate)
 
         xc_2, yc_2 = center_2
@@ -1773,7 +1882,101 @@ class VisDianosticPlot(object):
                     
         self.logger.info(f'The center is at (x ,y) = {xc_2+yc_2*1j} R = {R_2:.4f}')
         return xc_2+yc_2*1j, R_2
+    
+    def remeasureCobraCenterFromDB(eslf, pfsVisitID, cobraIdx, doPlot=False):
+        cobraID = cobraIdx + 1
 
+        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+        engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
+
+
+        cobraMatch = pd.read_sql(f'''
+                    SELECT  
+                        mcs_frame_id, cobra_id, iteration, pfi_center_x_mm,pfi_center_y_mm
+                    FROM cobra_match
+                    WHERE
+                        cobra_match.pfs_visit_id = %(pfsVisitID)s 
+                        AND
+                        cobra_match.cobra_id = %(cobraID)s 
+                        AND
+                        cobra_match.spot_id != -1
+                    ORDER BY
+                        iteration ASC
+                    -- limit 10
+                ''', engine, params={'pfsVisitID': pfsVisitID, 'cobraID': cobraID})
+
+        conn.close()
+        
+
+
+        x= cobraMatch.pfi_center_x_mm.values
+        y= cobraMatch.pfi_center_y_mm.values
+
+        xc, yc, radius, inliers = fit_circle_ransac(x, y)
+        
+        # Calculate the residuals for each data point
+        residuals = circle_residuals((xc, yc, radius), x, y)
+        
+        if doPlot is True:
+            x= cobraMatch.pfi_center_x_mm.values
+            y= cobraMatch.pfi_center_y_mm.values
+
+
+            fig, ax = plt.subplots(figsize=(8,6), facecolor="white")
+            ax.scatter(x,y,color='r')
+            # Plot the data points, inliers, and the fitted circle
+            ax.scatter(x[inliers], y[inliers], color='b', label='Inliers')
+        
+            #ax.scatter(xc, yc, color='r', marker='x', s=100, label='Circle Center')
+            d = plt.Circle((xc,yc, ), 
+                            radius,edgecolor='blue', 
+                            fill=False,alpha=0.7)
+            ax.add_artist(d)
+
+
+            ax.set_aspect('equal')
+        
+        
+        return xc, yc, radius, residuals
+
+    def calculate_center(self, pfsVisitId, i, centers):
+        try:
+            xc, yc, r, res = self.remeasureCobraCenterFromDB(pfsVisitId, i)
+            radius = r
+            cent = xc + yc * 1j
+            if r > 2.8 or r < 1.9:
+                cent = centers[i]
+        except:
+            cent = centers[i]
+            radius = np.nan
+        return cent, radius
+
+
+    def visRemeasureCenter(self, pfsVisitId, centers):
+        num_centers = 2394
+        newCenters = np.zeros(num_centers).astype('complex')
+        newR = np.zeros(num_centers).astype('float')
+
+        # Number of CPU cores available
+        num_cores = mp.cpu_count()
+
+        # Create a partial function with pfsVisitId and centers as fixed arguments
+        calculate_center_partial = partial(self.calculate_center, pfsVisitId, centers=centers)
+        
+        # Start timing the parallel processing
+        start_time = time.time()
+        
+        with mp.Pool(processes=num_cores) as pool:
+            results = pool.map(calculate_center_partial, range(num_centers))
+        
+        end_time = time.time()
+        for i, (cent, r) in enumerate(results):
+            newCenters[i] = cent
+            newR[i] = r
+        total_time = end_time - start_time
+        self.logger.info(f"Total time for parallel processing: {total_time:.2f} seconds")
+        
+        return newCenters, newR
 
     def visSaveFigure(self, fileName, **kwargs):
         """
@@ -1972,7 +2175,7 @@ class VisDianosticPlot(object):
     def visMcsImage(self, frameNum):
         visit = int(frameNum/100)
         image = pyfits.open(pathlib.Path(f'/data/MCS/{findRunDir(visit)}/data/PFSC{frameNum}.fits'))
-        data = image[1].data
+        data = image[1].data[:,1500:7278]
         m, s = np.mean(data), np.std(data)
 
         ax = plt.gca()
