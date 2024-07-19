@@ -447,7 +447,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
                          f'{np.round(distances[notDoneMask],2)}')
     
     badMoveIdx = np.where(notDoneMask)[0]
-
+    logger.info(f'Returning {len(atThetas)} atThetas and {len(atPhis)} atPhis')
     return dataPath, atThetas, atPhis, moves
 
 def movePositions(cIds, targets, tolerance=0.1, tries=6, thetaMarginCCW=0.1, homed=False, newDir=True):
