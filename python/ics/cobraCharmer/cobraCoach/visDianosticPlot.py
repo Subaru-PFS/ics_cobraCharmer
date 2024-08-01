@@ -129,6 +129,7 @@ def findRunDir(pfsVisitId):
 
 def findVisit(runDir):
     return int(pathlib.Path(sorted(glob.glob(f'/data/MCS/{runDir}/data/PFSC*.fits'))[0]).name[4:-7])
+    #return int(pathlib.Path(sorted(glob.glob(f'/data/MCS/{runDir}/data/'))[0]).name[4:-7])
 
 def gaus(x,a,x0,sigma):
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
@@ -833,9 +834,9 @@ class VisDianosticPlot(object):
 
 
     def visTargetConvergence(self, pfsVisitID, maxIteration = 11, excludeUnassign=True, tolerance = 0.01):
-        vmax = 4*tolerance
 
         tolerance=findToleranceFromVisit(pfsVisitID)
+        vmax = 4*tolerance
 
         ax = plt.gcf().get_axes()[0]
         self.visSubaruConvergence(Axes=ax, pfsVisitID = pfsVisitID,subVisit=maxIteration-1,excludeUnassign=excludeUnassign, 
@@ -1030,7 +1031,6 @@ class VisDianosticPlot(object):
         
         if heatmap:
             ax.set_aspect('equal')
-
             if excludeUnassign is True:
                 sc=ax.scatter(self.calibModel.centers.real[assigned_cobraIdx],self.calibModel.centers.imag[assigned_cobraIdx],
                     c=dist,marker='s', **kwargs)

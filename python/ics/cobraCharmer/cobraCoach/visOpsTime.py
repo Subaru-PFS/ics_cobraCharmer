@@ -13,6 +13,12 @@ import pathlib
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Image
 
+def validate_array_sizes(*arrays):
+    """Check if all input arrays have the same length."""
+    lengths = [len(arr) for arr in arrays]
+    if len(set(lengths)) > 1:
+        raise ValueError(f"Arrays have different sizes: {lengths}")
+    
 def get_total_iteration(pfsVisit):
     #pfsVisitID = visDianosticPlot.findVisit(runDir)
     #pfsDesignID = visDianosticPlot.findDesignFromVisit(pfsVisitID)
@@ -45,7 +51,7 @@ def get_input_iteration(pfsVisit, debug=False):
             else:
                 return None
             
-def get_subframe_maxium(pfsVisit, mcsLogFile=None):
+def get_subframe_maxium(pfsVisit, mcsLogFile=None, debug=False):
 
     if mcsLogFile is None:
         directory_path = '/data/logs/actors/mcs/'
@@ -61,9 +67,13 @@ def get_subframe_maxium(pfsVisit, mcsLogFile=None):
     pattern = re.compile(fr'{re.escape(str(pfsVisit))}(\d{{2}})')
     matches = pattern.findall(file_contents)
 
+    if debug:
+        print(pattern,matches)
     # If matches are found, convert them to integers and find the maximum
     if matches:
-        max_value = max(map(int, matches))
+        max_value = max(map(int, matches[-1]))
+        if max_value > 12:
+            print("Max iteration is more than 12")
         #print("Maximum value of XX:", max_value)
     else:
         print("No matches found.")
@@ -153,6 +163,9 @@ def parse_fps_log(visit, debug= False):
             elif 'Returing result from matching' in line:
                 cobraStart.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
                 if debug: print(line)
+            elif 'cobras did not finish' in line:
+                cobraDone = datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ')
+                if debug: print(line)
             elif 'We are at design position' in line:
                 start_analysis = False
                 if debug: print(line)
@@ -172,6 +185,12 @@ def parse_fps_log(visit, debug= False):
         tempStart.append(ele)
         #print(tempStart)
     cobrsStart = tempStart
+
+    # Sometimes, there will be file writing error when saving pfsconfig.  If 
+    if len(fpsDone) == 0:
+        fpsDone.append(cobraDone)
+    #print(fpsDone,len(fpsStart))
+
     return fpsStart, mcsStart, mcsDone, linkDone, tempStart[:-1], fpsDone
 
 def visFPSTimeBar(visit, figName = None):
@@ -220,10 +239,12 @@ def visFPSTimeBar(visit, figName = None):
     plt.legend()
     plt.ylim(0,30)
     plt.tight_layout()  # Adjusts spacing between plot elements
-    plt.show()
+    
     
     if figName is not None:
         plt.savefig(figName)
+    else:
+        plt.show()
 
 def parse_mcs_log(pfsVisit, debug=False):
     
@@ -231,7 +252,8 @@ def parse_mcs_log(pfsVisit, debug=False):
     search_string = f'frameId={pfsVisit}'
 
     mcsLogFile = find_log_file_with_string(directory_path, search_string)
-    
+    if debug:
+        print(mcsLogFile)
     maxSubframe = get_subframe_maxium(pfsVisit, mcsLogFile=mcsLogFile)
     
     # Read the log file and extract the time stamps
@@ -273,7 +295,8 @@ def parse_mcs_log(pfsVisit, debug=False):
                 number = int(match.group(1))
                 if number == pfsVisit*100+maxSubframe:
                     last_frame = True
-                if debug: print(last_frame)
+                if debug: 
+                    print(number,pfsVisit*100+maxSubframe,last_frame)
             elif 'hdr done' in line:
                 if debug: print(line)
                 saveDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
@@ -350,8 +373,10 @@ def visMCSTimeBar(visit, figName=None):
     plt.legend()
     plt.ylim(0,15)
     plt.tight_layout()  # Adjusts spacing between plot elements
-    plt.show()
+    
     
     if figName is not None:
         plt.savefig(figName)
+    else:
+        plt.show()
     
