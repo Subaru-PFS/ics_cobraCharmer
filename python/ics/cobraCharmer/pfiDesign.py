@@ -680,7 +680,7 @@ class PFIDesign():
             if theta[i_i] is not None:
                 self.motorFreq1[i] = theta[i_i]
                 header.find('Motor1_Run_Frequency').text = str(theta[i_i])
-            if phi is not None:
+            if phi[i_i] is not None:
                 self.motorFreq2[i] = phi[i_i]
                 header.find('Motor2_Run_Frequency').text = str(phi[i_i])
 
