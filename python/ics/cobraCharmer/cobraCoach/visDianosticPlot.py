@@ -122,10 +122,15 @@ def findToleranceFromVisit(visit):
 
 
 def findRunDir(pfsVisitId):
-    command = f"find /data/MCS/202[234]* |grep {pfsVisitId}"
-    output = subprocess.check_output(command, shell=True, text=True)
-    return output.split('\n')[0][10:22]
+    search_pattern = f"/data/MCS/202[234]*/data/PFSC{pfsVisitId:06d}??.fits"
+    fits_files = glob.glob(search_pattern)
 
+    if fits_files:
+        # Extract the run directory from the first match
+        run_dir = fits_files[0].split('/')[3]  # Assuming the format '/data/MCS/20240827_007/data'
+        return run_dir
+    else:
+        return None
 
 def findVisit(runDir):
     return int(pathlib.Path(sorted(glob.glob(f'/data/MCS/{runDir}/data/PFSC*.fits'))[0]).name[4:-7])
@@ -800,8 +805,19 @@ class VisDianosticPlot(object):
         
         return assigned_cobraIdx[ind]
     
-    def visCobraMovement(self, pfsVisitID, cobraIdx=0, iteration = 8):
-        visit = 107682
+    def visCobraMovement(self, pfsVisitID, cobraIdx=0, iteration = 8, newPlot=True):
+        """
+        Visualize the movement of a specific cobra during a PFS visit.
+        Args:
+            pfsVisitID (int): The PFS visit ID.
+            cobraIdx (int, optional): The index of the cobra. Defaults to 0.
+            iteration (int, optional): The iteration number. Defaults to 8.
+        """
+        pass
+
+        #visit = 107682
+        visit = pfsVisitID
+
         runDir = findRunDir(pfsVisitID)
         iteration=8
 
@@ -810,25 +826,29 @@ class VisDianosticPlot(object):
         
         movIdx = np.where(self.goodIdx == cobraIdx)[0][0]
         
-        self.visCreateNewPlot(f'Visit = {visit} Cobra Index = {self.goodIdx[movIdx]}','X','Y')
+        if newPlot is True:
+            self.visCreateNewPlot(f'Visit = {visit} Cobra Index = {self.goodIdx[movIdx]}','X','Y')
+        
         self.visGeometryFromXML(thetaAngle=mov[0,movIdx,iteration-1]['thetaAngle']+self.calibModel.tht0[self.goodIdx[movIdx]],
                             phiAngle=mov[0,movIdx,iteration-1]['phiAngle'],patrol=True)
 
-        #vis.visGeometryFromXML(patrol=True)
                             
-        self.visUnassignedFibers(pfsVisitID)
+        #self.visUnassignedFibers(pfsVisitID)
 
         ax=plt.gca()
         x = mov[0,movIdx,:]['position'].real
         y = mov[0,movIdx,:]['position'].imag
 
         for i in range(len(x)):
+            if x[i]==0 and y[i]==0:
+                x[i] = x[i-1]
+                y[i] = y[i-1]   
             ax.scatter(x[i], y[i], marker='.', alpha=0.5,label=f'{i+1}')
             ax.text(x[i], y[i],f'{i}')
         ax.scatter(tar.real[movIdx],tar.imag[movIdx],c='red',marker='x',label='target',s=80)
-        #ax.scatter(vis.calibModel.centers.real[idx], vis.calibModel.centers.imag[idx])
+        #ax.scatter(self.calibModel.centers.real[idx], vis.calibModel.centers.imag[idx])
 
-        ax.legend()
+        #ax.legend()
         self.visSetCobra(self.goodIdx[movIdx], scale=1.0)
 
 

@@ -874,7 +874,7 @@ class CobraCoach():
                                             fromTheta[c_i], fromPhi[c_i], thetaFast[c_i], phiFast[c_i], self.calibModel)
 
             # send move command
-            self.logger.info(f'Finished converting angle to steps, sending command to moveSteps.')
+            self.logger.info(f'Finished converting angle to steps, sending command to moveSteps (constantOntime).')
             self.moveSteps(cobras, thetaSteps, phiSteps, thetaFast, phiFast, thetaAngles, phiAngles)
 
         else:

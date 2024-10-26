@@ -231,7 +231,7 @@ def visFPSTimeBar(visit, figName = None):
                 plt.bar(x + i*bar_width, duration[i], width=bar_width, label=f'Iteration {i}')
 
     totalTime = (fpsDone[-1] - fpsStart[0]).total_seconds()    
-
+    print(totalTime)
     plt.xlabel('Steps')
     plt.ylabel('Time spent (seconds)')
     plt.title(f'FPS Time spent in each step (visit={visit}, t={totalTime}s)')
