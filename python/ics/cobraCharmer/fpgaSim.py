@@ -4,9 +4,9 @@ import struct
 import asyncio
 import time
 
-from . import convert
-from . import fpgaProtocol as proto
-from .fpgaLogger import FPGAProtocolLogger
+from ics.cobraCharmer import convert
+from ics.cobraCharmer import fpgaProtocol as proto
+from ics.cobraCharmer.fpgaLogger import FPGAProtocolLogger
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
