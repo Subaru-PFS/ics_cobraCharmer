@@ -85,7 +85,54 @@ class PFIDesign():
         self.loadModelFiles(modulePaths)
 
         return self
+    
+    def _replaceZeros(self, data):
+        """
+        Replace zeros in the input data array with the mean of the nearest non-zero neighbors.
 
+        Parameters:
+        -----------
+        data : numpy.ndarray
+            The input array in which zeros need to be replaced.
+
+        Returns:
+        --------
+        numpy.ndarray
+            The array with zeros replaced by the mean of the nearest non-zero neighbors.
+
+        Notes:
+        ------
+        - If a zero is at the start of the array, it will be replaced by the next non-zero value.
+        - If a zero is at the end of the array, it will be replaced by the previous non-zero value.
+        - If there are consecutive zeros, each zero will be replaced iteratively based on the updated array.
+        """
+        # Locate the indices where the value is zero
+        zero_indices = np.where(data == 0)[0]
+
+        # Interpolate by replacing zeros with the mean of nearest non-zero neighbors
+        for i in zero_indices:
+            # Find previous and next non-zero values
+            prev_idx = i - 1
+            next_idx = i + 1
+
+            # Move to the previous non-zero element
+            while prev_idx >= 0 and data[prev_idx] == 0:
+                prev_idx -= 1
+
+            # Move to the next non-zero element
+            while next_idx < len(data) and data[next_idx] == 0:
+                next_idx += 1
+
+            # Calculate the mean of non-zero neighbors
+            if prev_idx >= 0 and next_idx < len(data):
+                data[i] = (data[prev_idx] + data[next_idx]) / 2
+            elif prev_idx >= 0:  # Case where zero is at the end of the array
+                data[i] = data[prev_idx]
+            elif next_idx < len(data):  # Case where zero is at the start of the array
+                data[i] = data[next_idx]
+
+        return data 
+    
     def fixModuleIds(self):
         """
         During the testing phase, not all cobra modules are installed.
@@ -276,7 +323,7 @@ class PFIDesign():
                 self.motorOntimeSlowRev1[i] = float(kinematics.find('Link1_rev_Duration_Slow').text)
                 self.motorOntimeSlowFwd2[i] = float(kinematics.find('Link2_fwd_Duration_Slow').text)
                 self.motorOntimeSlowRev2[i] = float(kinematics.find('Link2_rev_Duration_Slow').text)
-
+                
                 # Get the cobra motors speeds in degrees per step
                 slowJoint1Fwd = slowCalTable.find("Joint1_fwd_stepsizes").text.split(",")[2:-1]
                 slowJoint1Rev = slowCalTable.find("Joint1_rev_stepsizes").text.split(",")[2:-1]
@@ -286,16 +333,17 @@ class PFIDesign():
                 fastJoint1Rev = fastCalTable.find("Joint1_rev_stepsizes").text.split(",")[2:-1]
                 fastJoint2Fwd = fastCalTable.find("Joint2_fwd_stepsizes").text.split(",")[2:-1]
                 fastJoint2Rev = fastCalTable.find("Joint2_rev_stepsizes").text.split(",")[2:-1]
-
-                # Calculate the motor steps required to move that angular step
-                self.S1Pm[i] = angularStep / np.array(list(map(float, slowJoint1Fwd)))
-                self.S1Nm[i] = angularStep / np.array(list(map(float, slowJoint1Rev)))
-                self.S2Pm[i] = angularStep / np.array(list(map(float, slowJoint2Fwd)))
-                self.S2Nm[i] = angularStep / np.array(list(map(float, slowJoint2Rev)))
-                self.F1Pm[i] = angularStep / np.array(list(map(float, fastJoint1Fwd)))
-                self.F1Nm[i] = angularStep / np.array(list(map(float, fastJoint1Rev)))
-                self.F2Pm[i] = angularStep / np.array(list(map(float, fastJoint2Fwd)))
-                self.F2Nm[i] = angularStep / np.array(list(map(float, fastJoint2Rev)))
+                
+                    
+                self.S1Pm[i] = angularStep / self._replaceZeros(np.array(list(map(float, slowJoint1Fwd))))
+                self.S1Nm[i] = angularStep / self._replaceZeros(np.array(list(map(float, slowJoint1Rev))))
+                self.S2Pm[i] = angularStep / self._replaceZeros(np.array(list(map(float, slowJoint2Fwd))))
+                self.S2Nm[i] = angularStep / self._replaceZeros(np.array(list(map(float, slowJoint2Rev))))
+                self.F1Pm[i] = angularStep / self._replaceZeros(np.array(list(map(float, fastJoint1Fwd))))
+                self.F1Nm[i] = angularStep / self._replaceZeros(np.array(list(map(float, fastJoint1Rev))))
+                self.F2Pm[i] = angularStep / self._replaceZeros(np.array(list(map(float, fastJoint2Fwd))))
+                self.F2Nm[i] = angularStep / self._replaceZeros(np.array(list(map(float, fastJoint2Rev))))
+            
 
                 # Save the angular step in radians
                 self.angularSteps[i] = np.deg2rad(angularStep)
