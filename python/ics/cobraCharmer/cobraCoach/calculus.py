@@ -3,7 +3,7 @@ import sep
 from ics.cobraCharmer import pfiDesign
 import os
 import sys
-#import cv2
+from numpy import inf
 import math
 
 #from ics.cobraCharmer.procedures.moduleTest import trajectory
@@ -841,6 +841,8 @@ def calculateSteps(cId, maxSteps, thetaAngle, phiAngle, fromTheta, fromPhi, thet
 
     # Calculate the total number of motor steps for the theta movement
     stepsRange = np.interp([fromTheta, fromTheta + thetaAngle], model.thtOffsets[cId], thetaModel)
+    stepsRange[~np.isfinite(stepsRange)] = maxSteps
+
     if not np.all(np.isfinite(stepsRange)):
         raise ValueError(f"theta angle to step interpolation out of range: "
                          f"Cobra#{cId+1} {fromTheta}:{fromTheta + thetaAngle}")
@@ -849,6 +851,7 @@ def calculateSteps(cId, maxSteps, thetaAngle, phiAngle, fromTheta, fromPhi, thet
 
     # Calculate the total number of motor steps for the phi movement
     stepsRange = np.interp([fromPhi, fromPhi + phiAngle], model.phiOffsets[cId], phiModel)
+    stepsRange[~np.isfinite(stepsRange)] = maxSteps
     if not np.all(np.isfinite(stepsRange)):
         raise ValueError(f"phi angle to step interpolation out of range: "
                          f"Cobra#{cId+1} {fromPhi}:{fromPhi + phiAngle}")
