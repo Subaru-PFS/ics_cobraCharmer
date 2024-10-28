@@ -161,7 +161,7 @@ class CobraCoach():
                    self.calibModel.fiberIsBroken(c.cobraNum, c.module)]
         visibles = [e for e in range(1, self.nCobras+1) if e not in brokens]
         if len(brokens) > 0:
-            self.logger.warn("setting invisible cobras: %s", brokens)
+            self.logger.warning("setting invisible cobras: %s", brokens)
 
         self.invisibleIdx = np.array(brokens, dtype='i4') - 1
         self.visibleIdx = np.array(visibles, dtype='i4') - 1
@@ -172,7 +172,7 @@ class CobraCoach():
                    self.calibModel.cobraIsGood(c.cobraNum, c.module)]
         badNums = [e for e in range(1, self.nCobras+1) if e not in goodNums]
         if len(badNums) > 0:
-            self.logger.warn("setting bad cobras: %s", badNums)
+            self.logger.warning("setting bad cobras: %s", badNums)
 
         self.goodIdx = np.array(goodNums, dtype='i4') - 1
         self.badIdx = np.array(badNums, dtype='i4') - 1
@@ -334,7 +334,7 @@ class CobraCoach():
                 self.logger.info('MCS actor is not present, using RMOD camera')    
                 self.cam = camera.cameraFactory(name='rmod',doClear=True, runManager=self.runManager)
         except Exception as e:
-            self.logger.warn(f'Problem when connecting to camera: {e}')
+            self.logger.warning(f'Problem when connecting to camera: {e}')
             #self.cam = None
 
     def _getIndex(self, cobras):
@@ -672,11 +672,11 @@ class CobraCoach():
             if flags[cId, 0] & self.pfi.SOLUTION_OK != 0:
                 theta = thetas[cId, 0]
             elif flags[cId, 0] & self.pfi.TOO_FAR_FROM_CENTER != 0:
-                self.logger.warn(f'Cobra#{cId+1} is too far from center')
+                self.logger.warning(f'Cobra#{cId+1} is too far from center')
                 theta = thetas[cId, 0]
             #elif flags[cId, 0] & self.pfi.TOO_CLOSE_TO_CENTER != 0:
             else:
-                self.logger.warn(f'Cobra#{cId+1} is too close to center')
+                self.logger.warning(f'Cobra#{cId+1} is too close to center')
                 theta = self.cobraInfo['thetaAngle'][cId] + expectedThetas[c_i]
             phi = phis[cId, 0]
 
@@ -694,7 +694,7 @@ class CobraCoach():
                         direction = 'cw' if expectedThetas[c_i] > 0 else 'ccw'
                         scale = expectedThetas[c_i] / self.moveInfo['movedTheta'][cId]
                         if scale < 0:
-                            self.logger.warn(f'Theta scale negative: Cobra#{cId+1}, steps:{tSteps}, angle:{angle}')
+                            self.logger.warning(f'Theta scale negative: Cobra#{cId+1}, steps:{tSteps}, angle:{angle}')
                         else:
                             scale = (scale - 1) / self.thetaScaleFactor + 1
                             self.pfi.scaleMotorOntime(cobras[c_i], 'theta', direction, scale)
@@ -703,7 +703,7 @@ class CobraCoach():
                         direction = 'cw' if expectedPhis[c_i] > 0 else 'ccw'
                         scale = expectedPhis[c_i] / self.moveInfo['movedPhi'][cId]
                         if scale < 0:
-                            self.logger.warn(f'Phi scale negative: Cobra#{cId+1}, steps:{pSteps}, angle:{phis[cId, 0]}')
+                            self.logger.warning(f'Phi scale negative: Cobra#{cId+1}, steps:{pSteps}, angle:{phis[cId, 0]}')
                         else:
                             scale = (scale - 1) / self.phiScaleFactor + 1
                             self.pfi.scaleMotorOntime(cobras[c_i], 'phi', direction, scale)
@@ -726,7 +726,7 @@ class CobraCoach():
                     direction = 'cw' if expectedThetas[c_i] > 0 else 'ccw'
                     scale = expectedThetas[c_i] / self.moveInfo['movedTheta'][cId]
                     if scale < 0:
-                        self.logger.warn(f'scale is negative: Cobra#{cId+1}, steps:{tSteps}, angle:{angle}')
+                        self.logger.warning(f'scale is negative: Cobra#{cId+1}, steps:{tSteps}, angle:{angle}')
                     else:
                         scale = (scale - 1) / self.thetaScaleFactor + 1
                         self.pfi.scaleMotorOntime(cobras[c_i], 'theta', direction, scale)
@@ -743,7 +743,7 @@ class CobraCoach():
                     direction = 'cw' if expectedPhis[c_i] > 0 else 'ccw'
                     scale = expectedPhis[c_i] / self.moveInfo['movedPhi'][cId]
                     if scale < 0:
-                        self.logger.warn(f'scale is negative: Cobra#{cId+1}, steps:{pSteps}, angle:{angle}')
+                        self.logger.warning(f'scale is negative: Cobra#{cId+1}, steps:{pSteps}, angle:{angle}')
                     else:
                         scale = (scale - 1) / self.phiScaleFactor + 1
                         self.pfi.scaleMotorOntime(cobras[c_i], 'phi', direction, scale)
@@ -806,7 +806,7 @@ class CobraCoach():
         if self.mode == self.thetaMode:
             badFromThetaIdx = cIds[np.isnan(self.thetaInfo['angle'][cIds])]
             if len(badFromThetaIdx) > 0:
-                self.logger.warn(f'Last theta angle is unknown: {badFromThetaIdx}')
+                self.logger.warning(f'Last theta angle is unknown: {badFromThetaIdx}')
 
             fromPhi[:] = 0
             for c_i in range(len(cobras)):
@@ -822,7 +822,7 @@ class CobraCoach():
         elif self.mode == self.phiMode:
             badFromPhiIdx = cIds[np.isnan(self.phiInfo['angle'][cIds])]
             if len(badFromPhiIdx) > 0:
-                self.logger.warn(f'Last phi angle is unknown: {badFromPhiIdx}')
+                self.logger.warning(f'Last phi angle is unknown: {badFromPhiIdx}')
 
             fromTheta[:] = 0
             fromPhi[:] = self.phiInfo['angle'][cIds]
@@ -840,10 +840,10 @@ class CobraCoach():
             # normal mode
             badFromThetaIdx = cIds[np.isnan(self.cobraInfo['thetaAngle'][cIds])]
             if len(badFromThetaIdx) > 0:
-                self.logger.warn(f'Last theta angle is unknown: {badFromThetaIdx}')
+                self.logger.warning(f'Last theta angle is unknown: {badFromThetaIdx}')
             badFromPhiIdx = cIds[np.isnan(self.cobraInfo['phiAngle'][cIds])]
             if len(badFromPhiIdx) > 0:
-                self.logger.warn(f'Last phi angle is unknown: {badFromPhiIdx}')
+                self.logger.warning(f'Last phi angle is unknown: {badFromPhiIdx}')
 
             for c_i in range(len(cobras)):
                 cId = cIds[c_i]
@@ -885,14 +885,14 @@ class CobraCoach():
                 _mmTheta = self.mmTheta[cId] if thetaFast[c_i] else self.mmThetaSlow[cId]
                 _mmPhi = self.mmPhi[cId] if phiFast[c_i] else self.mmPhiSlow[cId]
                 
-                self.logger.warn(f'''Calulate theta arm {c_i}/{len(cobras)}, {thetaAngles[c_i]}, 
+                self.logger.warning(f'''Calulate theta arm {c_i}/{len(cobras)}, {thetaAngles[c_i]}, 
                     {fromTheta[c_i]} {self.maxStepsPerSeg}''')
                 
                 n = calculus.calNSegments(thetaAngles[c_i], fromTheta[c_i], _mmTheta, self.maxStepsPerSeg)
                 if nSegments < n:
                     nSegments = n
 
-                self.logger.warn(f'''Calulate phi arm {c_i}/{len(cobras)}, {phiAngles[c_i]}, 
+                self.logger.warning(f'''Calulate phi arm {c_i}/{len(cobras)}, {phiAngles[c_i]}, 
                     {fromPhi[c_i]} {self.maxStepsPerSeg}''')
                 
                 n = calculus.calNSegments(phiAngles[c_i], fromPhi[c_i], _mmPhi, self.maxStepsPerSeg)
@@ -981,7 +981,7 @@ class CobraCoach():
             deltaTheta = toTheta - fromTheta
             badThetaIdx = np.where(np.isnan(deltaTheta))[0]
             if len(badThetaIdx) > 0:
-                self.logger.warn(f'Last theta angle is unknown, not moving: {cIds[badThetaIdx]}')
+                self.logger.warning(f'Last theta angle is unknown, not moving: {cIds[badThetaIdx]}')
                 deltaTheta[badThetaIdx] = 0
         else:
             deltaTheta = None
@@ -1000,7 +1000,7 @@ class CobraCoach():
             deltaPhi = toPhi - fromPhi
             badPhiIdx = np.where(np.isnan(deltaPhi))[0]
             if len(badPhiIdx) > 0:
-                self.logger.warn(f'Last phi angle is unknown, not moving: {cIds[badPhiIdx]}')
+                self.logger.warning(f'Last phi angle is unknown, not moving: {cIds[badPhiIdx]}')
                 deltaPhi[badPhiIdx] = 0
         else:
             deltaPhi = None
@@ -1460,12 +1460,12 @@ class CobraCoach():
                     phiFW[self.visibleIdx, n, k+2:] = phiFW[self.visibleIdx, n, k+1][:,None]
                     break
             if doneMask is not None and np.any(notdoneMask) and self.phiInfoIsValid:
-                self.logger.warn(f'{(notdoneMask == True).sum()} cobras did not reach phi CW limit:')
+                self.logger.warning(f'{(notdoneMask == True).sum()} cobras did not reach phi CW limit:')
                 for c_i in np.where(notdoneMask)[0]:
                     c = self.allCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
                     with np.printoptions(precision=2, suppress=True):
-                        self.logger.warn(f'  {str(c)}: {d}')
+                        self.logger.warning(f'  {str(c)}: {d}')
 
             # make sure it goes to the limit
             self.logger.info(f'{n+1}/{repeat} phi forward {limitSteps} to limit')
@@ -1519,12 +1519,12 @@ class CobraCoach():
                     break
 
             if doneMask is not None and np.any(notdoneMask) and self.phiInfoIsValid:
-                self.logger.warn(f'{(notdoneMask == True).sum()} did not reach phi CCW limit:')
+                self.logger.warning(f'{(notdoneMask == True).sum()} did not reach phi CCW limit:')
                 for c_i in np.where(notdoneMask)[0]:
                     c = self.allCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
                     with np.printoptions(precision=2, suppress=True):
-                        self.logger.warn(f'  {str(c)}: {d}')
+                        self.logger.warning(f'  {str(c)}: {d}')
 
             # At the end, make sure the cobra back to the hard stop
             self.logger.info(f'{n+1}/{repeat} phi reverse {-limitSteps} steps to limit')
@@ -1624,12 +1624,12 @@ class CobraCoach():
                     thetaFW[self.visibleIdx, n, k+2:] = thetaFW[self.visibleIdx, n, k+1][:,None]
                     break
             if doneMask is not None and np.any(notdoneMask) and self.thetaInfoIsValid and not force:
-                self.logger.warn(f'{(notdoneMask == True).sum()} cobras did not reach theta CW limit:')
+                self.logger.warning(f'{(notdoneMask == True).sum()} cobras did not reach theta CW limit:')
                 for c_i in np.where(notdoneMask)[0]:
                     c = self.allCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
                     with np.printoptions(precision=2, suppress=True):
-                        self.logger.warn(f'  {str(c)}: {d}')
+                        self.logger.warning(f'  {str(c)}: {d}')
 
             # make sure it goes to the limit
             self.logger.info(f'{n+1}/{repeat} theta forward {limitSteps} to limit')
@@ -1666,12 +1666,12 @@ class CobraCoach():
                     break
 
             if doneMask is not None and np.any(notdoneMask) and self.thetaInfoIsValid and not force:
-                self.logger.warn(f'{(notdoneMask == True).sum()} did not reach theta CCW limit:')
+                self.logger.warning(f'{(notdoneMask == True).sum()} did not reach theta CCW limit:')
                 for c_i in np.where(notdoneMask)[0]:
                     c = self.allCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
                     with np.printoptions(precision=2, suppress=True):
-                        self.logger.warn(f'  {str(c)}: {d}')
+                        self.logger.warning(f'  {str(c)}: {d}')
 
             # At the end, make sure the cobra back to the hard stop
             self.logger.info(f'{n+1}/{repeat} theta reverse {-limitSteps} steps to limit')
