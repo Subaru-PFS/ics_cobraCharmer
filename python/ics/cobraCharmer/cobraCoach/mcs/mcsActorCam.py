@@ -5,6 +5,7 @@ import subprocess as sub
 import astropy.io.fits as pyfits
 import threading
 import pathlib
+import ics.utils.cmd as cmdUtils
 from . import camera
 reload(camera)
 
@@ -66,8 +67,7 @@ class McsActorCamera(camera.Camera):
         cmdVar = self.actor.cmdr.call(actor='mcs', cmdStr=cmdString,
                                       forUserCmd=cmd, timeLim=exptime+60)
         if cmdVar.didFail:
-            msg = 'Failed to expose with %s: %s' % (cmdString, cmdVar)
-            self.cmd.warn(f'text="{msg}"')
+            cmd.fail(f'text="MCS expose failed: {cmdUtils.interpretFailure(cmdVar)}"')
             raise RuntimeError(f'FAILED to read mcs image!')
 
         t2=time.time()
