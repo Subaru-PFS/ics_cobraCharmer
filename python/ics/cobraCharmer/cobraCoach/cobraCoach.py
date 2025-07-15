@@ -73,8 +73,7 @@ class CobraCoach():
         self.cam = None
         self.fpgaHost = fpgaHost
 
-        if loadModel:
-            self.loadModel()
+        
 
         # scaling model
         self.useScaling = True
@@ -91,6 +90,9 @@ class CobraCoach():
         self.trajectoryMode = trajectoryMode
         self.trajectory = None
         
+        if loadModel:
+            self.loadModel()
+        
         self.simMode=False
         if simDataPath is not None:
             self.simMode = True
@@ -102,7 +104,7 @@ class CobraCoach():
         self.frameNum = None
         self.expTime = None
 
-    def loadModel(self, file=None, version=None, moduleVersion=None, camSplit=28):
+    def loadModel(self, file=None, version='ALL', moduleVersion=None, camSplit=28):
         if file is not None:
             self.calibModel = pfiDesign.PFIDesign(file)
         else:
