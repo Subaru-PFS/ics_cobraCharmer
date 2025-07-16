@@ -107,7 +107,7 @@ class Trajectories():
             return self._fiberPositions
 
         # Initialize the fiber positions array
-        self._fiberPositions = np.empty((self.nCobras, self.steps), dtype=np.complex)
+        self._fiberPositions = np.empty((self.nCobras, self.steps), dtype=complex)
 
         # Calculate the fiber positions for each cobra movement
         lastStep = 0
@@ -143,7 +143,7 @@ class Trajectories():
             return self._elbowPositions
 
         # Initialize the elbow positions array
-        self._elbowPositions = np.empty((self.nCobras, self.steps), dtype=np.complex)
+        self._elbowPositions = np.empty((self.nCobras, self.steps), dtype=complex)
 
         # Calculate the elbow positions for each cobra movement
         lastStep = 0
