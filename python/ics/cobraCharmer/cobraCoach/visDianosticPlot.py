@@ -20,6 +20,7 @@ import time
 
 
 from bokeh.io import output_notebook, show, export_png,export_svgs
+from ics.cobraCharmer.cobraCoach import visUtils
 from selenium import webdriver
 #from webdriver_manager.chrome import ChromeDriverManager
 
@@ -47,6 +48,9 @@ import pfs.utils.coordinates.transform as transformUtils
 import psycopg2
 from sqlalchemy import create_engine
 from pfs.utils.fiberids import FiberIds
+
+
+import mcsActor.mcsRoutines.fiducials as fiducials
 
 def findDesignFromVisit(visit):
     command = f"grep moveToPfsDesign /data/logs/actors/fps/202?-*-*.log | grep {visit}"
@@ -84,57 +88,66 @@ def findDesignFromVisit(visit):
 
 
 def findToleranceFromVisit(visit):
-    command = f"grep moveToPfsDesign /data/logs/actors/fps/202?-*-*.log | grep {visit}"
+    #command = f"grep moveToPfsDesign /data/logs/actors/fps/2024-*-*.log | grep {visit}"
     
-    try:
-        output = subprocess.check_output(command, shell=True, text=True)
-        slist_str = str(output)
-        pattern = r"\{KEY\(tolerance\)=\[Float\((\d+(\.\d+)?)\)\]\}"
+    #try:
+    #    output = subprocess.check_output(command, shell=True, text=True)
+    #    slist_str = str(output)
+    #    pattern = r"\{KEY\(tolerance\)=\[Float\((\d+(\.\d+)?)\)\]\}"
         
-        match = re.search(pattern, str(slist_str))
+    #    match = re.search(pattern, str(slist_str))
 
-        if match:
-            value = float(match.group(1))  # Extract the captured numerical value and convert it to float
-            #print(value)
-        else:
-            print("No match found. Set to default 0.01")
-            value = 0.01
-    except subprocess.CalledProcessError as e:
-        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
-        engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
+    #    if match:
+    #        value = float(match.group(1))  # Extract the captured numerical value and convert it to float
+    #        #print(value)
+    #    else:
+    #        print("No match found. Set to default 0.01")
+    #        value = 0.01
+    
+    #except subprocess.CalledProcessError as e:
+    conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+    engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
 
 
-        pfsConfig = pd.read_sql(f'''
-                    SELECT 
-                        visit0,converg_tolerance  FROM public.pfs_config
-                    WHERE 
-                        pfs_config.visit0 = %(pfs_config)s
-                ''', engine, params={'pfs_config': visit})
+    pfsConfig = pd.read_sql(f'''
+                SELECT 
+                    visit0,converg_tolerance  FROM public.pfs_config
+                WHERE 
+                    pfs_config.visit0 = %(pfs_config)s
+            ''', engine, params={'pfs_config': visit})
 
-        conn.close()
+    conn.close()
 
-        if pfsConfig['converg_tolerance'].values[0] is None:
-            value = 0.01
-        else:
-            value = round(pfsConfig['converg_tolerance'].values[0],3)
+    if pfsConfig['converg_tolerance'].values[0] is None:
+        value = 0.01
+    else:
+        value = round(pfsConfig['converg_tolerance'].values[0],3)
 
     return value
 
 
 def findRunDir(pfsVisitId):
-    search_pattern = f"/data/MCS/202[234]*/data/PFSC{pfsVisitId:06d}??.fits"
-    fits_files = glob.glob(search_pattern)
-
-    if fits_files:
-        # Extract the run directory from the first match
-        run_dir = fits_files[0].split('/')[3]  # Assuming the format '/data/MCS/20240827_007/data'
-        return run_dir
-    else:
-        return None
+    import os
+    import fnmatch
+    base_dir = "/data/MCS/"
+    pattern = f"PFSC{pfsVisitId:06d}??.fits"
+    # Only look in directories matching 202[2345]*
+    for entry in os.scandir(base_dir):
+        if entry.is_dir() and fnmatch.fnmatch(entry.name, "202[2345]*"):
+            data_dir = os.path.join(base_dir, entry.name, "data")
+            if os.path.isdir(data_dir):
+                for fname in os.listdir(data_dir):
+                    if fnmatch.fnmatch(fname, pattern):
+                        return entry.name  # run_dir
+    return None
 
 def findVisit(runDir):
-    return int(pathlib.Path(sorted(glob.glob(f'/data/MCS/{runDir}/data/PFSC*.fits'))[0]).name[4:-7])
-    #return int(pathlib.Path(sorted(glob.glob(f'/data/MCS/{runDir}/data/'))[0]).name[4:-7])
+    try:
+        filename = pathlib.Path(sorted(glob.glob(f'/data/MCS/{runDir}/data/PFSC*.fits'))[0]).name
+        digits = ''.join(filter(str.isdigit, filename))
+        return int(digits[:-2])
+    except:
+        return None
 
 def gaus(x,a,x0,sigma):
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
@@ -676,6 +689,8 @@ class VisDianosticPlot(object):
             mcs_finised = np.array(mcs_finised[1:])
         else:
             mcs_finised = np.array(mcs_finised)
+        
+        print(f'MCS report: {mcs_finised}')
 
         
 
@@ -688,7 +703,6 @@ class VisDianosticPlot(object):
                 ind = np.where(np.abs(mov[:,iteration]['position']) > 0)
                 notDone = len(np.where(np.abs(mov[ind[0],iteration]['position']-targets[ind[0]]) > tolerance)[0])
             fpga_notDone.append(notDone)
-
         conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
         engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
 
@@ -717,7 +731,7 @@ class VisDianosticPlot(object):
         assigned_row= df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].notna().all(axis=1)]
         assigned_cobraIdx =  assigned_row['cobra_id'].values - 1 
 
-
+        print(f'FPGA report: {fpga_notDone}')
         fpga_notDone = np.array(fpga_notDone)   
         fpga_finished = len(self.goodIdx) - fpga_notDone
 
@@ -746,20 +760,10 @@ class VisDianosticPlot(object):
         else:
             visitID = pfsVisitID
         
-        path=f'{self.path}/data/'
-        movfile = path+'moves.npy'
-        mov = np.load(movfile)
-        
-        maxIteration = mov.shape[-1]
-
-        frameid = visitID*100+maxIteration-1
-
-        # Getting unassined fiber 
-        #pfsDesignID = int(findDesignFromVisit(pfsVisitID))
         conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
         engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
 
-        
+
         with conn:
             fiberData = pd.read_sql(f'''
                 SELECT DISTINCT 
@@ -771,8 +775,8 @@ class VisDianosticPlot(object):
                     pfs_config_fiber.visit0 = %(visit0)s
                 -- limit 10
             ''', engine, params={'visit0': pfsVisitID})
-        
-        
+
+
         fid=FiberIds()
         fiberData['cobra_id']=fid.fiberIdToCobraId(fiberData['fiber_id'].values)
         fiberData=fiberData.sort_values('cobra_id')
@@ -785,25 +789,58 @@ class VisDianosticPlot(object):
         assigned_cobraIdx =  assigned_row['cobra_id'].values - 1 
 
         targetFromDB = df['pfi_nominal_x_mm'].values+df['pfi_nominal_y_mm'].values*1j
+        isNan = np.isnan(targetFromDB)
+        targetFromDB[isNan] = self.calibModel.centers[isNan]
 
-       
+        path=f'{self.path}/data/'
+        tarfile = path+'targets.npy'
+        movfile = path+'moves.npy'
+
+        mov = np.load(movfile)
+    
+        frameid = pfsVisitID*100+(mov.shape[2]-1)
+
         db=opdb.OpDB(hostname='db-ics', port=5432,
-                   dbname='opdb',username='pfs')
-        
+                        dbname='opdb',username='pfs')
         match = db.bulkSelect('cobra_match','select * from cobra_match where '
-                            f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
+                f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
+
+        # path=f'{self.path}/data/'
+
+        # tarfile = path+'targets.npy'
+        # movfile = path+'moves.npy'
+
+        # mov = np.load(movfile)
+
+        targets = targetFromDB
+        dist=np.sqrt((match['pfi_center_x_mm'].values[assigned_cobraIdx]-targets[assigned_cobraIdx].real)**2+
+                        (match['pfi_center_y_mm'].values[assigned_cobraIdx]-targets[assigned_cobraIdx].imag)**2)
         
-        dist=np.sqrt((match['pfi_center_x_mm'].values[assigned_cobraIdx]-targetFromDB[assigned_cobraIdx].real)**2+
-                            (match['pfi_center_y_mm'].values[assigned_cobraIdx]-targetFromDB[assigned_cobraIdx].imag)**2)
-        ind = np.where(dist > tolerance)
-        
+
+        try:
+            maxIteration = mov.shape[2]
+        except:
+            mov = np.array([mov])
+            maxIteration = mov.shape[2]
+
+            
+        print(f'Tolerance: {tolerance}')
+
+        #targets=np.load(tarfile)
+        tar = targetFromDB[self.goodIdx]
+        ind = np.where(np.abs(mov[0,:,maxIteration-1]['position']) > 0)
+        notDone = len(np.where(np.abs(mov[0,ind[0],maxIteration-1]['position']-tar[ind[0]]) > tolerance)[0])
+
+        #notDone = fpga_notDone[-1]
+        print(f'Number of not done cobra (FPGA): {notDone}')
+                
         if doPlots:
             sc=ax.scatter(self.calibModel.centers.real,self.calibModel.centers.imag,
                     c='grey',marker='s')
-            ax.scatter(self.calibModel.centers.real[assigned_cobraIdx[ind]],self.calibModel.centers.imag[assigned_cobraIdx[ind]],
+            ax.scatter(self.calibModel.centers.real[self.goodIdx[ind]],self.calibModel.centers.imag[self.goodIdx[ind]],
                 c='red',marker='s',label='Not Converged')
         
-        return assigned_cobraIdx[ind]
+        return ind[0]
     
     def visCobraMovement(self, pfsVisitID, cobraIdx=0, iteration = 8, newPlot=True):
         """
@@ -853,9 +890,11 @@ class VisDianosticPlot(object):
 
 
 
-    def visTargetConvergence(self, pfsVisitID, maxIteration = 11, excludeUnassign=True, tolerance = 0.01):
-
-        tolerance=findToleranceFromVisit(pfsVisitID)
+    def visTargetConvergence(self, pfsVisitID, maxIteration = 11, excludeUnassign=True, tolerance = None):
+        
+        if tolerance is None:
+            tolerance=findToleranceFromVisit(pfsVisitID)
+        
         vmax = 4*tolerance
 
         ax = plt.gcf().get_axes()[0]
@@ -869,7 +908,7 @@ class VisDianosticPlot(object):
 
     def visSubaruConvergence(self, Axes = None, pfsVisitID=None, subVisit=11, 
         histo=False, histoThres = True, heatmap=True, vectormap=False, excludeUnassign = True, 
-        range=(0,0.08), bins=20, tolerance=0.01, **kwargs):
+        plot_range=(0,0.08), bins=20, tolerance=0.01, **kwargs):
         '''
             Visulization of cobra convergence result at certain iteration.  
             This fuction gets the locations of all fibers from database
@@ -901,16 +940,16 @@ class VisDianosticPlot(object):
 
             
             with conn:
-                    fiberData = pd.read_sql(f'''
-                        SELECT DISTINCT 
-                            fiber_id, pfi_center_final_x_mm, pfi_center_final_y_mm, 
-                            pfi_nominal_x_mm, pfi_nominal_y_mm
-                        FROM 
-                            pfs_config_fiber
-                        WHERE
-                            pfs_config_fiber.visit0 = %(visit0)s
-                        -- limit 10
-                    ''', engine, params={'visit0': pfsVisitID})
+                fiberData = pd.read_sql(f'''
+                    SELECT DISTINCT 
+                        fiber_id, pfi_center_final_x_mm, pfi_center_final_y_mm, 
+                        pfi_nominal_x_mm, pfi_nominal_y_mm
+                    FROM 
+                        pfs_config_fiber
+                    WHERE
+                        pfs_config_fiber.visit0 = %(visit0)s
+                    -- limit 10
+                ''', engine, params={'visit0': pfsVisitID})
             
             
             fid=FiberIds()
@@ -922,9 +961,11 @@ class VisDianosticPlot(object):
 
 
             assigned_row= df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].notna().all(axis=1)]
-            assigned_cobraIdx =  assigned_row['cobra_id'].values - 1 
+            assigned_cobraIdx =  assigned_row['cobra_id'].values - 1
 
             targetFromDB = df['pfi_nominal_x_mm'].values+df['pfi_nominal_y_mm'].values*1j
+            isNan = np.isnan(targetFromDB)
+            targetFromDB[isNan] = self.calibModel.centers[isNan]
 
         frameid = visitID*100+subID
 
@@ -967,10 +1008,198 @@ class VisDianosticPlot(object):
         
         
         self.logger.info(f'Tolerance: {tolerance}')
-
-        ind = np.where(np.abs(mov[0,:,maxIteration-1]['position']) > 0)
-        notDone = len(np.where(np.abs(mov[0,ind[0],maxIteration-1]['position']-targets[ind[0]]) > tolerance)[0])
         
+        #targets=np.load(tarfile)
+        tar = targetFromDB[self.goodIdx]
+        ind = np.where(np.abs(mov[0,:,maxIteration-1]['position']) > 0)
+        notDone = len(np.where(np.abs(mov[0,ind[0],maxIteration-1]['position']-tar[ind[0]]) > tolerance)[0])
+        
+        #notDone = fpga_notDone[-1]
+        print(f'Number of not done cobra (FPGA): {notDone}')
+                
+        if doPlots:
+            sc=ax.scatter(self.calibModel.centers.real,self.calibModel.centers.imag,
+                    c='grey',marker='s')
+            ax.scatter(self.calibModel.centers.real[self.goodIdx[ind]],self.calibModel.centers.imag[self.goodIdx[ind]],
+                c='red',marker='s',label='Not Converged')
+        
+        return ind[0]
+    
+    def visCobraMovement(self, pfsVisitID, cobraIdx=0, iteration = 8, newPlot=True):
+        """
+        Visualize the movement of a specific cobra during a PFS visit.
+        Args:
+            pfsVisitID (int): The PFS visit ID.
+            cobraIdx (int, optional): The index of the cobra. Defaults to 0.
+            iteration (int, optional): The iteration number. Defaults to 8.
+        """
+        pass
+
+        #visit = 107682
+        visit = pfsVisitID
+
+        runDir = findRunDir(pfsVisitID)
+        iteration=8
+
+        mov=np.load(f'/data/MCS/{runDir}/data/moves.npy')
+        tar=np.load(f'/data/MCS/{runDir}/data/targets.npy')
+        
+        movIdx = np.where(self.goodIdx == cobraIdx)[0][0]
+        
+        if newPlot is True:
+            self.visCreateNewPlot(f'Visit = {visit} Cobra Index = {self.goodIdx[movIdx]}','X','Y')
+        
+        self.visGeometryFromXML(thetaAngle=mov[0,movIdx,iteration-1]['thetaAngle']+self.calibModel.tht0[self.goodIdx[movIdx]],
+                            phiAngle=mov[0,movIdx,iteration-1]['phiAngle'],patrol=True)
+
+                            
+        #self.visUnassignedFibers(pfsVisitID)
+
+        ax=plt.gca()
+        x = mov[0,movIdx,:]['position'].real
+        y = mov[0,movIdx,:]['position'].imag
+
+        for i in range(len(x)):
+            if x[i]==0 and y[i]==0:
+                x[i] = x[i-1]
+                y[i] = y[i-1]   
+            ax.scatter(x[i], y[i], marker='.', alpha=0.5,label=f'{i+1}')
+            ax.text(x[i], y[i],f'{i}')
+        ax.scatter(tar.real[movIdx],tar.imag[movIdx],c='red',marker='x',label='target',s=80)
+        #ax.scatter(self.calibModel.centers.real[idx], vis.calibModel.centers.imag[idx])
+
+        #ax.legend()
+        self.visSetCobra(self.goodIdx[movIdx], scale=1.0)
+
+
+
+    def visTargetConvergence(self, pfsVisitID, maxIteration = 11, excludeUnassign=True, tolerance = None):
+        
+        if tolerance is None:
+            tolerance=findToleranceFromVisit(pfsVisitID)
+        
+        vmax = 4*tolerance
+
+        ax = plt.gcf().get_axes()[0]
+        self.visSubaruConvergence(Axes=ax, pfsVisitID = pfsVisitID,subVisit=maxIteration-1,excludeUnassign=excludeUnassign, 
+                        tolerance=tolerance,vmax=vmax)
+        ax = plt.gcf().get_axes()[1]
+        self.visSubaruConvergence(Axes=ax,pfsVisitID = pfsVisitID,subVisit=3,tolerance=tolerance, excludeUnassign=excludeUnassign,
+                        histo=True, bins=20,range=(0,vmax))
+       
+
+
+    def visSubaruConvergence(self, Axes = None, pfsVisitID=None, subVisit=11, 
+        histo=False, histoThres = True, heatmap=True, vectormap=False, excludeUnassign = True, 
+        plot_range=(0,0.08), bins=20, tolerance=0.01, **kwargs):
+        '''
+            Visulization of cobra convergence result at certain iteration.  
+            This fuction gets the locations of all fibers from database
+            and then calculate the distance to the final targets. 
+        '''
+        if Axes is None:
+            ax = plt.gca()
+        else:
+            ax = Axes
+
+        if pfsVisitID is None:
+            visitID = int(self._findFITS()[0][-12:-7])
+        else:
+            visitID = pfsVisitID
+        
+        if subVisit is not None:    
+            subID = subVisit
+
+        
+        
+        import psycopg2
+        from sqlalchemy import create_engine
+
+        if excludeUnassign is True:
+            # Getting unassined fiber 
+            #pfsDesignID = int(findDesignFromVisit(pfsVisitID))
+            conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+            engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
+
+            
+            with conn:
+                fiberData = pd.read_sql(f'''
+                    SELECT DISTINCT 
+                        fiber_id, pfi_center_final_x_mm, pfi_center_final_y_mm, 
+                        pfi_nominal_x_mm, pfi_nominal_y_mm
+                    FROM 
+                        pfs_config_fiber
+                    WHERE
+                        pfs_config_fiber.visit0 = %(visit0)s
+                    -- limit 10
+                ''', engine, params={'visit0': pfsVisitID})
+            
+            
+            fid=FiberIds()
+            fiberData['cobra_id']=fid.fiberIdToCobraId(fiberData['fiber_id'].values)
+            fiberData=fiberData.sort_values('cobra_id')
+            df = fiberData.loc[fiberData['cobra_id'] != 65535]
+            unassigned_rows = df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].isna().all(axis=1)]
+            unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1 
+
+
+            assigned_row= df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].notna().all(axis=1)]
+            assigned_cobraIdx =  assigned_row['cobra_id'].values - 1
+
+            targetFromDB = df['pfi_nominal_x_mm'].values+df['pfi_nominal_y_mm'].values*1j
+            isNan = np.isnan(targetFromDB)
+            targetFromDB[isNan] = self.calibModel.centers[isNan]
+
+        frameid = visitID*100+subID
+
+        try:
+            db=opdb.OpDB(hostname='pfsa-db01', port=5432,
+                   dbname='opdb',username='pfs')
+            match = db.bulkSelect('cobra_match','select * from cobra_match where '
+                      f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
+        except:
+            db=opdb.OpDB(hostname='db-ics', port=5432,
+                   dbname='opdb',username='pfs')
+        
+            match = db.bulkSelect('cobra_match','select * from cobra_match where '
+                      f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
+
+        path=f'{self.path}/data/'
+
+        tarfile = path+'targets.npy'
+        movfile = path+'moves.npy'
+
+        if excludeUnassign is True:
+            targets = targetFromDB
+            dist=np.sqrt((match['pfi_center_x_mm'].values[assigned_cobraIdx]-targets[assigned_cobraIdx].real)**2+
+                            (match['pfi_center_y_mm'].values[assigned_cobraIdx]-targets[assigned_cobraIdx].imag)**2)
+        else:
+            targets=np.load(tarfile)
+            dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
+                (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
+        
+        mov = np.load(movfile)
+
+        try:
+            maxIteration = mov.shape[2]
+        except:
+            mov = np.array([mov])
+            maxIteration = mov.shape[2]
+        
+        #dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets[self.goodIdx].real)**2+
+        #    (match['pfi_center_y_mm'].values[self.goodIdx]-targets[self.goodIdx].imag)**2)
+        
+        
+        self.logger.info(f'Tolerance: {tolerance}')
+        
+        #targets=np.load(tarfile)
+        tar = targetFromDB[self.goodIdx]
+        ind = np.where(np.abs(mov[0,:,maxIteration-1]['position']) > 0)
+        notDone = len(np.where(np.abs(mov[0,ind[0],maxIteration-1]['position']-tar[ind[0]]) > tolerance)[0])
+        
+        #notDone = fpga_notDone[-1]
+        print(f'Number of not done cobra (FPGA): {notDone}')
+
         if histo is True:
             heatmap, vectormap = False, False
 
@@ -999,19 +1228,18 @@ class VisDianosticPlot(object):
                 # This setting will set all value larger than the threshold to be exact the
                 #   thresold.  So that there will be a big bar in histogram. 
                 if histoThres is True:
-                    dist[dist > range[1]]=range[1]
+                    dist[dist > plot_range[1]]=plot_range[1]
                 
-                n, bins, patches = ax.hist(dist,range=range, bins=bins, alpha=0.7,
+                n, bins, patches = ax.hist(dist,range=plot_range, bins=bins, alpha=0.7,
                     histtype='step',linewidth=3,
                     label=f'{subID+1}-th Iteration')
             
             
             x_vertical = tolerance  # x-coordinate for the vertical line
-            ax.axvline(x=x_vertical, color='r', linestyle='--')
-            ax.axhline(np.percentile(dist, 50), color='green', linewidth=2,label='50 percentile')
-            ax.axhline(np.percentile(dist, 75), color='blue', linewidth=2,label='75 percentile')
-            ax.axhline(np.percentile(dist, 95), color='brown', linewidth=2,label='95 percentile')
-
+            #ax.axvline(x=x_vertical, color='r', linestyle='--')
+            #ax.axhline(np.percentile(dist, 50), color='green', linewidth=2,label='50 percentile')
+            #ax.axhline(np.percentile(dist, 75), color='blue', linewidth=2,label='75 percentile')
+            #ax.axhline(np.percentile(dist, 95), color='brown', linewidth=2,label='95 percentile')
 
             #print(bins)
             outIdx = np.where(bins > tolerance)
@@ -1022,10 +1250,10 @@ class VisDianosticPlot(object):
                 outRegion =  np.sum(n[outIdx[0][0]-1:])
             else:
                 outRegion = 0
-            ax.text(0.7, 0.45, f'N. of non-converged (MCS) = {outRegion}', 
-                        horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
-            ax.text(0.7, 0.4, f'N. of non-converged (FPS) = {notDone}', 
-                        horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
+            #ax.text(0.7, 0.45, f'N. of non-converged (MCS) = {outRegion}', 
+            #            horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
+            #ax.text(0.7, 0.4, f'N. of non-converged (FPS) = {notDone}', 
+            #            horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
             ax.legend(loc='upper right')
             ax.set_xlabel('Distance (mm)')
             ax.set_ylabel('Counts')
@@ -1252,8 +1480,9 @@ class VisDianosticPlot(object):
         butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
 
         # Read fiducial and spot geometry
-        fids = butler.get('fiducials')
-
+        #fids = butler.get('fiducials')
+        fids = fiducials.Fiducials.read(butler)
+        
         try:
             db=opdb.OpDB(hostname='db-ics', port=5432,dbname='opdb',
                         username='pfs')
@@ -1300,13 +1529,13 @@ class VisDianosticPlot(object):
             pt = transformUtils.fromCameraName(camera, altitude=altitude, 
                     insrot=rotation)
     
-            outerRing = np.zeros(len(fids), dtype=bool)
-            for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
-                outerRing[fids.fiducialId == i] = True
-            pt.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
-            
+            fidsGood = fids[fids.goodMask]
+            fidsOuterRing = fids[fids.goodMask & fids.outerRingMask]
+
+            pt.updateTransform(mcsData, fidsOuterRing, matchRadius=8.0, nMatchMin=0.1)
+
             for i in range(2):
-                rfid, rdmin = pt.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
+                rfid, rdmin = pt.updateTransform(mcsData, fidsGood, matchRadius=4.2,nMatchMin=0.1)
             nMatch = sum(rfid > 0)
             self.logger.info(f'Total matched = {nMatch}')   
 
@@ -1746,7 +1975,15 @@ class VisDianosticPlot(object):
             ax1 = plt.subplot(223)
             n, bins, patches = ax1.hist(diff,range=(0,np.mean(diff)+1*np.std(diff)), bins=10, color='#0504aa',
                 alpha=0.7)
-            ax1.text(0.8, 0.8, f'Mean = {np.mean(diff):.2f}, $\sigma$={np.std(diff):.2f}', 
+
+            popt = gaussianFit(n, bins)
+            sigma = popt[2]
+            xPeak = popt[1]
+
+            ax1.plot(bins[:-1],gaus(bins[:-1],*popt),'r:',label='fit')
+            
+            #ax1.text(0.8, 0.8, f'Median = {np.nanmedian(diff[stableFF]):.2f}, $\sigma$={sigma:.2f}', 
+            ax1.text(0.8, 0.8, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
             ax1.set_title('2D')
             ax1.set_xlabel('distance (mm)')
@@ -1755,9 +1992,9 @@ class VisDianosticPlot(object):
 
 
             ax2 = plt.subplot(221)
-            ax2.hist(dx,range=(np.mean(dx)-2*np.std(dx),np.mean(dx)+2*np.std(dx)), 
+            ax2.hist(dx,range=(np.nanmean(dx[stableFF])-3*np.nanstd(dx[stableFF]),np.nanmean(dx[stableFF])+3*np.nanstd(dx[stableFF])), 
                 bins=10, color='#0504aa',alpha=0.7)
-            ax2.text(0.7, 0.8, f'Mean = {np.mean(dx):.2f}, $\sigma$={np.std(dx):.2f}', 
+            ax2.text(0.7, 0.8, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax2.transAxes)
             ax2.set_title('X direction')
             ax2.set_xlabel('distance (mm)')
@@ -1769,776 +2006,22 @@ class VisDianosticPlot(object):
             ax3.tick_params(axis='both',labelleft=False)
 
 
-            ax3.hist(dy,range=(np.mean(dy)-2*np.std(dx),np.mean(dy)+2*np.std(dx)), 
+            ax3.hist(dy,range=(np.nanmean(dy[stableFF])-3*np.nanstd(dy[stableFF]),np.nanmean(dy[stableFF])+3*np.nanstd(dy[stableFF])), 
                 bins=10, color='#0504aa', alpha=0.7)
-            ax3.text(0.7, 0.8, f'Mean = {np.mean(dy):.2f}, $\sigma$={np.std(dy):.2f}', 
+            
+            popt = gaussianFit(n, bins)
+            sigma = np.abs(popt[2])
+            xPeak = popt[1]
+            ax3.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
+            
+            #ax3.text(0.7, 0.8, f'Median = {np.nanmedian(dy):.2f}, $\sigma$={sigma:.2f}', 
+            ax3.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax3.transAxes)
 
             ax3.set_title('Y direction')
             ax3.set_xlabel('distance (mm)')
             plt.subplots_adjust(wspace=0,hspace=0.3)
 
-        return ranPt
-    
-    def visRemeasurePhiCenter(self, data, radiusTolerance = 0.5):
-
-        """
-        Remeasuring the phi center and radius of from fiber spots.
-        
-        Parameters
-        ----------
-        data: compelex array
-            fiber spots of forward movement
-
-        rv: compelex array
-            fiber spots of reverse movement
-        
-        """
-        def calc_R(xc, yc):
-            """ calculate the distance of each 2D points from the center (xc, yc) """
-            return np.sqrt((x-xc)**2 + (y-yc)**2)
-
-        def f_2(c):
-            """ calculate the algebraic distance between the data points and the mean circle centered at c=(xc, yc) """
-            Ri = calc_R(*c)
-            return Ri - Ri.mean()
-
-        
-        estCenter = np.mean([data[0],data[-1]])
-        medianR = np.median(np.abs((data-estCenter)))
-        indx = np.where(np.abs((data-estCenter)) < medianR+radiusTolerance)
-        data=data[indx]
-
-        x = data.real
-        y = data.imag
-
-        center_estimate = np.mean(x), np.mean(y)
-        center_2, ier = optimize.leastsq(f_2, center_estimate)
-
-        xc_2, yc_2 = center_2
-        Ri_2       = calc_R(*center_2)
-        R_2        = Ri_2.mean()
-        residu_2   = sum((Ri_2 - R_2)**2)
-
-        ax=plt.gca()
-        ax.plot(data.real,data.imag,'.',label='data spot')
-        
-        ax.plot(xc_2,yc_2,'+',label='New center')
-
-        d = plt.Circle((xc_2, yc_2), R_2, color='blue', fill=False)
-        ax.add_artist(d)
-
-        ax.text(xc_2,yc_2,f'{xc_2:.3f}+{yc_2:.3f}j')
-
-        ax.legend()
-                
-        self.logger.info(f'The center is at (x ,y) = {xc_2+yc_2*1j} R = {R_2:.4f}')
-
-        return xc_2+yc_2*1j, R_2
-        
-
-
-    def visRemeasureThetaCenter(self, fw, rv, estCenter=None, radiusTolerance = 0.5, badAngle = None,
-        doPlots = False) :
-
-        """
-        Remeasuring the theta center and radius of from fiber spots.
-        
-        Parameters
-        ----------
-        fw: compelex array
-            fiber spots of forward movement
-
-        rv: compelex array
-            fiber spots of reverse movement
-        
-        """
-        def calc_R(xc, yc):
-            """ calculate the distance of each 2D points from the center (xc, yc) """
-            return np.sqrt((x-xc)**2 + (y-yc)**2)
-
-        def f_2(c):
-            """ calculate the algebraic distance between the data points and the mean circle centered at c=(xc, yc) """
-            Ri = calc_R(*c)
-            return Ri - Ri.mean()
-
-        data = np.append(fw,rv)
-        medianR = np.median(np.abs((data-estCenter)))
-        indx = np.where(np.abs((data-estCenter)) < medianR+radiusTolerance)
-        data=data[indx]
-        
-        if badAngle is not None:
-            pointAngle = np.rad2deg(np.angle(data-estCenter))% 360
-            angleIndx = np.where((pointAngle < badAngle[0]) | (pointAngle > badAngle[1]))[0]
-            data=data[angleIndx]
-       
-
-        x = data.real
-        y = data.imag
-
-        if center_estimate is not None:
-            center_estimate = estCenter.real, estCenter.imag
-        else:
-            center_estimate = np.mean(data)
-            
-        center_2, ier = optimize.leastsq(f_2, center_estimate)
-
-        xc_2, yc_2 = center_2
-        Ri_2       = calc_R(*center_2)
-        R_2        = Ri_2.mean()
-        residu_2   = sum((Ri_2 - R_2)**2)
-
-        if doPlots == True:
-            ax=plt.gca()
-            ax.plot(fw.real,fw.imag,'.',label='FW')
-            ax.plot(rv.real,rv.imag,'.',label='RV')
-            
-            d = plt.Circle((xc_2, yc_2), R_2, color='blue', fill=False)
-            ax.add_artist(d)
-
-            ax.text(xc_2,yc_2,f'{xc_2:.3f}+{yc_2:.3f}j')
-
-            ax.legend()
-                    
-        self.logger.info(f'The center is at (x ,y) = {xc_2+yc_2*1j} R = {R_2:.4f}')
-        return xc_2+yc_2*1j, R_2
-    
-    def remeasureCobraCenterFromDB(eslf, pfsVisitID, cobraIdx, doPlot=False):
-        cobraID = cobraIdx + 1
-
-        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
-        engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
-
-
-        cobraMatch = pd.read_sql(f'''
-                    SELECT  
-                        mcs_frame_id, cobra_id, iteration, pfi_center_x_mm,pfi_center_y_mm
-                    FROM cobra_match
-                    WHERE
-                        cobra_match.pfs_visit_id = %(pfsVisitID)s 
-                        AND
-                        cobra_match.cobra_id = %(cobraID)s 
-                        AND
-                        cobra_match.spot_id != -1
-                    ORDER BY
-                        iteration ASC
-                    -- limit 10
-                ''', engine, params={'pfsVisitID': pfsVisitID, 'cobraID': cobraID})
-
-        conn.close()
-        
-
-
-        x= cobraMatch.pfi_center_x_mm.values
-        y= cobraMatch.pfi_center_y_mm.values
-
-        xc, yc, radius, inliers = fit_circle_ransac(x, y)
-        
-        # Calculate the residuals for each data point
-        residuals = circle_residuals((xc, yc, radius), x, y)
-        
-        if doPlot is True:
-            x= cobraMatch.pfi_center_x_mm.values
-            y= cobraMatch.pfi_center_y_mm.values
-
-
-            fig, ax = plt.subplots(figsize=(8,6), facecolor="white")
-            ax.scatter(x,y,color='r')
-            # Plot the data points, inliers, and the fitted circle
-            ax.scatter(x[inliers], y[inliers], color='b', label='Inliers')
-        
-            #ax.scatter(xc, yc, color='r', marker='x', s=100, label='Circle Center')
-            d = plt.Circle((xc,yc, ), 
-                            radius,edgecolor='blue', 
-                            fill=False,alpha=0.7)
-            ax.add_artist(d)
-
-
-            ax.set_aspect('equal')
-        
-        
-        return xc, yc, radius, residuals
-
-    def calculate_center(self, pfsVisitId, i, centers):
-        try:
-            xc, yc, r, res = self.remeasureCobraCenterFromDB(pfsVisitId, i)
-            radius = r
-            cent = xc + yc * 1j
-            if r > 2.8 or r < 1.9:
-                cent = centers[i]
-        except:
-            cent = centers[i]
-            radius = np.nan
-        return cent, radius
-
-
-    def visRemeasureCenter(self, pfsVisitId, centers):
-        num_centers = 2394
-        newCenters = np.zeros(num_centers).astype('complex')
-        newR = np.zeros(num_centers).astype('float')
-
-        # Number of CPU cores available
-        num_cores = mp.cpu_count()
-
-        # Create a partial function with pfsVisitId and centers as fixed arguments
-        calculate_center_partial = partial(self.calculate_center, pfsVisitId, centers=centers)
-        
-        # Start timing the parallel processing
-        start_time = time.time()
-        
-        with mp.Pool(processes=num_cores) as pool:
-            results = pool.map(calculate_center_partial, range(num_centers))
-        
-        end_time = time.time()
-        for i, (cent, r) in enumerate(results):
-            newCenters[i] = cent
-            newR[i] = r
-        total_time = end_time - start_time
-        self.logger.info(f"Total time for parallel processing: {total_time:.2f} seconds")
-        
-        return newCenters, newR
-
-    def visSaveFigure(self, fileName, **kwargs):
-        """
-        Saves an image of the current figure.
-        
-        Parameters
-        ----------
-        fileName: object
-            The image file name path.
-        kwargs: figure.savefig properties
-            Any additional property that should be passed to the savefig method.
-        
-        """
-
-        plt.gcf().savefig(fileName, **kwargs)
-
-        plt.close()
-
-    def visPauseExecution(self):
-        """Pauses the general program execution to allow figure inspection.
-        
-        """
-        plt.show()
-
-
-    def visCobraLocation(self, moveRunDir, phiGeoRunDir=None, thetaGeoRunDir = None):
-
-        if phiGeoRunDir is not None:
-            
-            angleList=np.load(f'/data/MCS/{phiGeoRunDir}/output/phiOpenAngle.npy')
-                
-
-
-    def visPlotGeometry(self, arm=None, pngfile=None):
-        try:
-            self.centers
-        except AttributeError:
-            self._loadCobraData(arm=arm)
-        
-        if arm is None:
-            raise Exception('Define the arm')
-
-        plt.figure(figsize=(10, 20))
-        plt.clf()
-
-        plt.subplot(211)
-        ax = plt.gca()
-
-        ax.plot(self.centers[self.group1].real, self.centers[self.group1].imag, 'ro')
-        ax.axis('equal')
-        for idx in self.group1:
-            c = plt.Circle((self.centers[idx].real, self.centers[idx].imag), self.radius[idx], color='g', fill=False)
-            ax.add_artist(c)
-        ax.set_title(f'1st camera')
-
-        plt.subplot(212)
-        ax = plt.gca()
-
-        ax.plot(self.centers[self.group2].real, self.centers[self.group2].imag, 'ro')
-        ax.axis('equal')
-        for idx in self.group2:
-            c = plt.Circle((self.centers[idx].real, self.centers[idx].imag), self.radius[idx], color='g', fill=False)
-            ax.add_artist(c)
-        ax.set_title(f'2nd camera')
-
-        if pngfile is not None:
-            plt.savefig(pngfile)
-        else:
-            plt.show()
-
-    def visDotLocation(self, dotDF=None, dotColor = None):
-        
-        ax = plt.gca()
-
-        if dotDF is None:
-            dotFile = '/software/devel/pfs/pfs_instdata/data/pfi/dot/black_dots_mm.csv'
-            newDot = pd.read_csv(dotFile)
-        else:
-            neeDot = dotDF
-
-        if dotColor is None:
-            dotColor = 'grey'
-        # Plot DOT location
-        for dotidx in range(len(newDot)):
-            e = plt.Circle((newDot['x'].values[dotidx], newDot['y'].values[dotidx]), newDot['r'].values[dotidx], 
-                        color=dotColor, fill=True, alpha=0.5)
-            ax.add_artist(e)
-
-
-
-    def visPlotFiberSpots(self, cobraIdx=None, moveData=None, color=None, 
-        markCobra=False, markGeometry=True):
-        
-        '''
-            This function is mainly used to plot round trip data, for example, motor map or geometry
-
-            Args
-            -------
-            cobraIdx: cobra index to show
-            moveData: input of FW and RV data 
-        
-        '''
-
-        ax = plt.gca()
-        
-        
-        if cobraIdx is None:
-            cobra = self.goodIdx
-        else:
-            cobra = cobraIdx
-
-        # By default, we do not want to see cobra marked as bad
-        
-
-        for idx in cobra:
-            c = plt.Circle((self.calibModel.centers[idx].real, 
-                self.calibModel.centers[idx].imag), 
-                self.calibModel.L1[idx]+self.calibModel.L2[idx], facecolor='g', edgecolor=None,alpha=0.5)
-            ax.add_artist(c)
-
-            if markCobra is True:
-                ax.text(self.calibModel.centers[idx].real, self.calibModel.centers[idx].imag,idx, fontsize=8)
-
-
-        if markGeometry is True:
-            if moveData is None:
-                for idx in cobra:
-                    d = plt.Circle((self.centers[idx].real, self.centers[idx].imag), self.radius[idx], color='red', fill=False)
-                    ax.add_artist(d)
-        
-                ax.scatter(self.centers[cobra].real,self.centers[cobra].imag,color='red')    
-
-        if moveData is None:
-            for n in range(1):
-                for k in cobra:
-                    if k % 3 == 0:
-                        c = 'r'
-                        d = 'c'
-                    elif k % 3 == 1:
-                        c = 'g'
-                        d = 'm'
-                    else:
-                        c = 'b'
-                        d = 'y'
-                    if k == 0:
-                        ax.plot(self.fw[k][n,0].real, self.fw[k][n,0].imag, c + 'o',label='FW0')
-                        ax.plot(self.rv[k][n,0].real, self.rv[k][n,0].imag, d + 's',label='RV0')
-                    ax.plot(self.fw[k][n,0].real, self.fw[k][n,0].imag, c + 'o')
-                    ax.plot(self.rv[k][n,0].real, self.rv[k][n,0].imag, d + 's')
-                    ax.plot(self.fw[k][n,1:].real, self.fw[k][n,1:].imag, c + '.')
-                    ax.plot(self.rv[k][n,1:].real, self.rv[k][n,1:].imag, d + '.')
-        else:
-            fw = moveData[0]
-            rv = moveData[1]
-            for n in range(1):
-                for k in cobra:
-                    if k % 3 == 0:
-                        c = 'r'
-                        d = 'c'
-                    elif k % 3 == 1:
-                        c = 'g'
-                        d = 'm'
-                    else:
-                        c = 'b'
-                        d = 'y'
-                    if color is not None:
-                        c = color
-                        d = color
-                    if k == 0:
-                        ax.plot(self.fw[k][n,0].real, self.fw[k][n,0].imag, c + 'o',label='FW0')
-                        ax.plot(self.rv[k][n,0].real, self.rv[k][n,0].imag, d + 's',label='RV0')
-                    ax.plot(fw[k][n,0].real, fw[k][n,0].imag, c + 'o')
-                    ax.plot(rv[k][n,0].real, rv[k][n,0].imag, d + 's')
-                    ax.plot(fw[k][n,1:].real, fw[k][n,1:].imag, c + '.')
-                    ax.plot(rv[k][n,1:].real, rv[k][n,1:].imag, d + '.')
-
-        ax.legend()
-
-        #plt.show()
-    
-    def visStackedImage(self, direction='fwd', flip=False):
-        if direction == 'fwd':
-            data = self.fwdStack
-        else:
-            data = self.revStack
-
-        if flip is True:
-            image=(np.flip(data).T).copy(order='C')
-        else:
-            image=data
-        m, s = np.mean(image), np.std(data)
-        ax = plt.gca()
-        im = ax.imshow(image, interpolation='nearest', 
-                    cmap='gray', vmin=m-s, vmax=m+3*s, origin='lower')
-    
-    def visMcsImage(self, frameNum):
-        visit = int(frameNum/100)
-        image = pyfits.open(pathlib.Path(f'/data/MCS/{findRunDir(visit)}/data/PFSC{frameNum}.fits'))
-        data = image[1].data[:,1500:7278]
-        m, s = np.mean(data), np.std(data)
-
-        ax = plt.gca()
-
-        im = ax.imshow(data, interpolation='nearest', 
-                    cmap='gray', vmin=m-s, vmax=m+3*s, origin='lower')
-
-
-    def visCobraMotorMap(self, stepsize=50, figPath=None, arm=None, pdffile=None, debug=False):
-        try:
-            self.mf
-        except AttributeError:
-            self._loadCobraData(arm=arm)
-        
-        if arm is None:
-            raise Exception('Define the arm')
-        
-
-        #ymax = 1.1*np.rad2deg(np.max(self.mf))
-        #ymin = -1.1*np.rad2deg(np.max(self.mr))
-
-
-
-        for fiber in self.goodIdx:
-            if arm == 'phi':
-                ymax = 0.15
-                ymin = -0.15
-            else:
-                ymax = 0.25
-                ymin = -0.25
-
-            #width = (fiber + 1) / 2
-            
-            #bar = "\r[" + "#" * int(math.ceil(width)) + " " * int(29 - width) + "]"
-            #sys.stdout.write(f'{bar}')
-            #sys.stdout.flush()
-
-            x=np.arange(112)*3.6
-            c = fiber
-
-            plt.figure(figsize=(8,6))
-            plt.clf()
-            ax = plt.gca()
-            ax.set_title(f'Fiber {arm} #{c+1}')
-
-
-            daf = np.zeros(len(self.af[c][0])-1)
-            dar = np.zeros(len(self.ar[c][0])-1)
-
-            for data in self.af[c]: 
-                for i,item in enumerate(data):
-                    if i < len(daf):
-                        daf[i] = np.rad2deg(data[i+1] - data[i])/stepsize
-                        ax.plot([np.rad2deg(data[i+1]),np.rad2deg(data[i])],[daf[i],daf[i]],color='grey')
-            ax.plot(x,np.rad2deg(self.mf[c]), 'r')        
-           
-
-
-            for data in self.ar[c]: 
-                for i,item in enumerate(data):
-                    if i < len(daf):
-                        dar[i] = np.rad2deg(data[i+1] - data[i])/stepsize
-                        ax.plot([np.rad2deg(data[i+1]),np.rad2deg(data[i])],[dar[i],dar[i]],color='grey')
-            ax.plot(x,-np.rad2deg(self.mr[c]), 'r')
-            
-            
-            
-            if np.max(np.rad2deg(self.mf[c])) > ymax: 
-                ymax = 1.1*np.max(np.rad2deg(self.mf[c]))
-            if np.min(-np.rad2deg(self.mr[c])) < ymin: 
-                ymin = 1.1*np.min(-np.rad2deg(self.mr[c]))
-            
-            #print(np.max(np.rad2deg(self.mf[c])),
-            #np.max(np.rad2deg(self.mr[c])),ymax,ymin)
-            ax.set_ylim([ymin,ymax])
-            if arm == 'phi':
-                ax.set_xlim([0,200])
-            else:
-                ax.set_xlim([0,400])
-            
-            if figPath is not None:
-                if not (os.path.exists(figPath)):
-                    os.mkdir(figPath)
-                plt.ioff()
-                plt.savefig(f'{figPath}/motormap_{arm}_{c+1}.png')
-            else:
-                plt.show()
-            plt.close()
-
-        self.visSpeedHisto(arm=f'{arm}', figPath=f'{figPath}')
-
-        if pdffile is not None:
-            cmd=f"""convert {figPath}motormap*_[0-9].png {figPath}motormap*_[0-9]?.png \
-            {figPath}motormap*_[0-9]??.png {figPath}motormap*_[0-9]???.png {pdffile}"""
-            retcode = subprocess.call(cmd,shell=True)
-            if debug is True:
-                print(cmd)
-
-    def _visSpeedHistogram(self, avg1, Title, Legend1):
-        
-        hist1, edges1 = np.histogram(avg1, bins=np.arange(0.0, 0.3, 0.01))
-        #hist2, edges2 = np.histogram(avg2, bins=np.arange(0.0, 0.3, 0.01))
-
-        TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
-        p = figure(title=Title, tools=TOOLS, background_fill_color="#fafafa")
-        #p.quad(top=hist1, bottom=0, left=edges1[:-1], right=edges1[1:],
-        #    fill_color="navy", line_color="white", alpha=0.3,legend=Legend1)
-
-        p.step(x=edges1[0:-2],y=hist1[0:-1], color='black',legend=Legend1,line_width=2,mode="after")
-
-        return p
-
-
-    def _visSpeedStdHistogram(self, std,Title, Legend1):
-            
-        hist1, edges1 = np.histogram(std, bins=np.arange(0.0, 0.1, 0.005))
-        #hist2, edges2 = np.histogram(avg2, bins=np.arange(0.0, 0.1, 0.005))
-
-        TOOLS = ['pan','box_zoom','wheel_zoom', 'save' ,'reset','hover']
-        p = figure(title=Title, tools=TOOLS, background_fill_color="#fafafa")
-        #p.quad(top=hist1, bottom=0, left=edges1[:-1], right=edges1[1:],
-        #    fill_color="navy", line_color="white", alpha=0.3,legend=Legend1)
-
-        p.step(x=edges1[0:-2],y=hist1[0:-1], color='black',legend=Legend1,line_width=2,mode="after")
-
-        return p
-
-    def visSpeedHisto(self, arm=None, figPath=None):
-        try:
-            self.sf
-        except AttributeError:
-            self._loadCobraData(arm=arm)
-
-        p1=self._visSpeedHistogram(np.rad2deg(self.sf), f'{arm} Fwd', 'ASIAA')
-        p2=self._visSpeedHistogram(np.rad2deg(self.sr), f'{arm} Rev', 'ASIAA')
-        
-        fwdstd = []
-        revstd = []
-
-        for i in self.mf:
-            fwdstd.append(np.std(np.rad2deg(i)))
-        for i in self.mr:
-            revstd.append(np.std(np.rad2deg(i)))
-        
-        fwdstd = np.array(fwdstd)
-        revstd = np.array(revstd)
-
-        q1=self._visSpeedStdHistogram(fwdstd, f'{arm} Fwd Std', 'ASIAA')
-        q2=self._visSpeedStdHistogram(revstd, f'{arm} Rev Std', 'ASIAA')
-        #q3=makeStdHistoPlot(j2fwd_std1, j2fwd_std2, 'Phi Fwd Std', 'Caltech', 'ASIAA')
-        #q4=makeStdHistoPlot(j2rev_std1, j2rev_std2, 'Phi Rev Std', 'Caltech', 'ASIAA')
-        #show(column(p1,p2,p3,p4))
-        grid = gridplot([[p1, p2]])
-        qgrid = gridplot([[q1, q2]])
-        #show(grid)
-        
-
-        if figPath is not None:
-            options = webdriver.ChromeOptions()
-            options.add_argument('--headless')
-            driver = webdriver.Chrome(ChromeDriverManager().install(),options=options)
-
-            export_png(grid,filename=figPath+f"{arm}_motor_speed_histogram.png",webdriver=driver)
-            export_png(qgrid,filename=figPath+f"{arm}_motor_speed_std.png",webdriver=driver)
-
-
-    def visAngleMovement(self, figPath=None, arm = 'phi', pdffile=None):
-        try:
-            self.fw
-        except AttributeError:
-            self._loadCobraData(arm=arm)
-        
-        if arm is None:
-            raise Exception('Define the arm')
-
-
-        plt.figure(figsize=(10, 8))
-        plt.clf()
-        ax = plt.gca()
-        ax.set_title(f'Fiber {arm} Speed')
-
-        ax.plot(self.goodIdx+1,np.rad2deg(self.sf[self.goodIdx]),'o',label='Fwd')
-        ax.plot(self.goodIdx+1,np.rad2deg(self.sr[self.goodIdx]),'o',label='Rev')
-        ax.legend()
-        if figPath is not None:
-            if not (os.path.exists(figPath)):
-                    os.mkdir(figPath)
-            plt.savefig(figPath+f'FiberSpeed.png')
-        else:
-            plt.show()
-        plt.close()
-        
-        for fiberIdx in self.goodIdx:
-            c = fiberIdx
-            plt.figure(figsize=(10, 8))
-            plt.clf()
-            ax = plt.gca()
-            ax.set_title(f'Fiber {arm} #{c+1}')
-        
-            for n in range(self.af.shape[1]):
-                ax.plot(np.rad2deg(self.af[c, n]), '.')
-                ax.plot(np.rad2deg(self.ar[c, n]), '.')
-            ax.set_xlabel("Steps",fontsize=10)
-            ax.set_ylabel("Angle from hard-stop (Degree)",fontsize=10)
-            if figPath is not None:
-                if not (os.path.exists(figPath)):
-                    os.mkdir(figPath)
-                plt.savefig(figPath+f'AngleMove_{arm}_{c+1}.png')
-            else:
-                plt.show()
-            plt.close()
-
-        if pdffile is not None:
-            cmd=f"""convert {figPath}FiberSpeed.png {figPath}AngleMove*_[0-9].png \
-                {figPath}AngleMove*_[0-9]?.png {figPath}AngleMove*_[0-9]??.png {figPath}AngleMove*_[0-9]???.png {pdffile}"""
-            retcode = subprocess.call(cmd,shell=True)
-            print(cmd)
-
-    def visConverge(self, figPath = None, arm = 'phi', runs = 50, margin = 15, montage=None, pdffile=None):
-        
-        if arm == 'phi':
-            phiPath = self.path
-            moveData = np.load(phiPath+'phiData.npy')
-            angleLimit = 180
-        else:
-            thetaPath =  self.path
-            moveData = np.load(thetaPath+'thetaData.npy')
-            angleLimit = 360
-        
-        
-        snr_list = np.array([])
-        fiber_list = np.array([])
-        repeat_list = np.array([])
-
-        for fiberIdx in self.goodIdx:
-            xdata=[]
-            ydata=[]
-            z=[]
-            
-            x =np.arange(10)
-            #fig, (vax, hax) = plt.subplots(1, 2, figsize=(12, 6),sharey='all')
-            fig = plt.figure(figsize=(12, 12),constrained_layout=True)
-            gs = gridspec.GridSpec(2, 2)
-            vax = fig.add_subplot(gs[0, 0])
-            hax = fig.add_subplot(gs[0, 1])
-            sax = fig.add_subplot(gs[1, :])
-
-            for i in range(runs):
-                angle = margin + (angleLimit - 2 * margin) * i / (runs - 1)
-                if i == 0:
-                    delAngle = (angleLimit - 2 * margin) / (runs - 1)
-                y=np.rad2deg(np.append([0], moveData[fiberIdx,i,:,0]))
-                xdata.append(np.arange(10))
-                ydata.append(np.full(len(x), angle))
-                z.append(np.log10(np.abs(angle - np.rad2deg(np.append([0], moveData[fiberIdx,i,:,0])))))
-
-                hax.plot(x[:9],y,marker='o',fillstyle='none',markersize=3)
-                #hax.scatter(x,y,marker='o',fillstyle='none')
-            
-            """Adding one extra data for pcolor function requirement"""
-            xdata.append(np.arange(10))
-            ydata.append(np.full(len(x), angle+delAngle))
-            xdata=np.array(xdata)
-            ydata=np.array(ydata)
-            #if arm is 'theta':
-            ydata=ydata[:,:]-delAngle 
-            #else:
-            #    ydata=ydata[:,:]-0.5*delAngle            
-            z=np.array(z)
-
-            sc=vax.pcolor(xdata,ydata,z,cmap='inferno_r',vmin=-1.0,vmax=1.0)
-            
-            #plt.xticks(np.arange(8)+0.5,np.arange(8)+1)
-            cbaxes = fig.add_axes([0.05,0.13,0.01,0.75]) 
-            cb = plt.colorbar(sc, cax = cbaxes,orientation='vertical')
-            #cbar=vax.colorbar(sc)
-            
-            cbaxes.yaxis.set_ticks_position('left')
-            cbaxes.yaxis.set_label_position('left')
-            cb.set_label('Angle Different (log)', labelpad=-1)
-            vax.set_xlabel("Iteration",fontsize=10)
-            vax.set_ylabel("Cabra Location (Degree)",fontsize=10)
-            
-            #Plot SNR
-            snr_array=[]
-            k_offset=1/(.074)**2
-            tmax=76
-            tobs=900
-            tstep=x*8+12
-            
-            linklength=2.35
-            
-
-            for i in range(runs):
-                angle = margin + (angleLimit - 2 * margin) * i / (runs - 1)
-
-                dist=2*np.sin(0.5*(np.abs(np.deg2rad(angle)-(np.append([0], moveData[fiberIdx,i,:,0])))))*linklength
-                snr=(1-k_offset*dist**2)*(np.sqrt((tmax+tobs-tstep[0:9])/(tobs)))
-                snr[snr < 0]=0
-                
-                if np.max(snr) < 0.95:
-                    if fiberIdx+1 not in [139,172,194,226,322,399,400,470]:
-                        print(f'Fiber {fiberIdx+1}, angle = {angle}, SNR= {np.max(snr)}')
-                sax.scatter(tstep[0:9],snr,s=50)
-                snr_array.append(snr)
-
-            snr_array=np.array(snr_array)
-            snr_avg=np.mean(snr_array,axis=0)
-
-            sax.plot(tstep[0:9],snr_avg,color='green',linewidth=4)
-            sax.scatter(tstep[0:9],snr_avg,color='green',s=100)
-            sax.set_title('SNR = %.3f'%(np.max(snr_avg)),fontsize=20)
-            #if np.max(snr_avg) < 0.95:
-                #print(f'Fiber {fiberIdx+1} SNR {np.max(snr_avg)}')
-
-            if arm == 'phi':
-                vax.set_ylim([-10,200])
-                hax.set_ylim([-10,200])
-                sax.set_ylim([0.5,1.20])
-            else:
-                vax.set_ylim([-10,400])
-                vax.set_ylim([-10,400])
-                sax.set_ylim([0.5,1.20])
-
-            fig.suptitle(f'Fiber No. {fiberIdx+1}',fontsize=15)
-            #plt.subplots_adjust(bottom=0.15, wspace=0.05)
-            if figPath is not None:
-                if not (os.path.exists(figPath)):
-                    os.mkdir(figPath)
-                plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
-            else:
-                plt.show()
-            plt.close()
-
-        if montage is not None:
-            cmd=f"""montage {figPath}Con*_[0-9].png {figPath}Con*_[0-9]?.png \
-                -tile 4x -geometry +4+4 {montage}"""
-            retcode = subprocess.call(cmd,shell=True)
-            if retcode != 0:
-                raise Exception
-            #if figPath is not None:
-            #    plt.savefig(figPath+f'Converge_{arm}_{fiberIdx+1}.png')
-        
         if pdffile is not None:
             cmd=f"""convert {figPath}Con*_{arm}_[0-9].png {figPath}Con*_{arm}_[0-9]?.png \
             {figPath}Con*_{arm}_[0-9]??.png {figPath}Con*_{arm}_[0-9]???.png  {pdffile}"""
@@ -2781,7 +2264,7 @@ class VisDianosticPlot(object):
 
         if pdffile is not None:
             cmd=f"""convert {figPath}motormap*{arm}*_[0-9].png {figPath}motormap*{arm}*_[0-9]?.png \
-            {figPath}motormap*{arm}*_[0-9]?.png {pdffile}"""
+            {figPath}motormap*{arm}*_[0-9]??.png {figPath}motormap*{arm}*_[0-9]???.png {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
             print(cmd)
 
@@ -2913,7 +2396,7 @@ class VisDianosticPlot(object):
 
         if pdffile is not None:
             cmd=f"""convert {figPath}motormap*_[0-9].png {figPath}motormap*_[0-9]?.png \
-            {figPath}motormap*_[0-9]?.png {pdffile}"""
+            {figPath}motormap*_[0-9]??.png {figPath}motormap*_[0-9]???.png {pdffile}"""
             retcode = subprocess.call(cmd,shell=True)
             print(cmd)
         return var_fwd,var_rev
