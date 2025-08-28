@@ -346,6 +346,105 @@ class CobraCoach():
 
         return cIds
 
+
+    def checkFiducialInterference(self, thetas, phis):
+        """Check if the targets interfere with the fiducial fiber.
+        
+        Returns:
+            list: Indices of cobra arms that have interference/collision
+        """
+        #file = 'cobraInterferenceROM_20250627.csv'
+        #df = pd.read_csv(file)
+        butlerResource = butler.Butler()
+        df = butlerResource.getPath("cobraInterferenced")
+
+        # Remove 'SC' from 'Module #' and 'PID' from 'Cobra ID'
+        df["Module #"] = df["Module #"].str.replace("SC", "", regex=False)
+        df["Cobra ID"] = df["Cobra ID"].str.replace("PID", "", regex=False)
+        df = df[df["comments"] != "no cllision"]
+
+        # Convert 'Module #' and 'Cobra ID' to integers
+        df["Module #"] = df["Module #"].astype(int)
+        df["Cobra ID"] = df["Cobra ID"].astype(int)
+        df["Cobra Index"] = df.apply(
+            lambda row: self.cc.calibModel.findCobraByModuleAndPositioner(row["Module #"], row["Cobra ID"]),
+            axis=1
+        )
+
+        # Reorder columns to move 'Cobra Index' to third column
+        cols = df.columns.tolist()
+        cols.insert(2, cols.pop(cols.index("Cobra Index")))
+        df = df[cols]
+
+        # Convert theta and phi values from radians to degrees
+        thetas_deg = np.rad2deg(thetas)
+        phis_deg = np.rad2deg(phis)
+
+        # Track cobra indices with interference
+        interfering_cobra_indices = []
+        interference_warnings = []
+
+        for i, (theta_deg, phi_deg) in enumerate(zip(thetas_deg, phis_deg)):
+            # Get the goodIdx for this theta/phi position
+            if not hasattr(self, 'cc') or not hasattr(self.cc, 'goodIdx'):
+                raise RuntimeError("cc or goodIdx is not initialized. Cannot proceed.")
+            
+            cobra_idx = self.cc.goodIdx[i]
+            # Find matching rows in the interference DataFrame for this cobra
+            matching_rows = df[df["Cobra Index"] == cobra_idx]
+
+            if not matching_rows.empty:
+                cobra_has_interference = False
+                
+                for _, row in matching_rows.iterrows():
+                    # Check if theta is within the forbidden range
+                    if 'theta limit 1' in df.columns and 'theta limit 2' in df.columns:
+                        theta_limit_1 = row['theta limit 1']
+                        theta_limit_2 = row['theta limit 2']
+
+                        # Handle wrap-around case
+                        if theta_limit_1 > theta_limit_2:
+                            if theta_deg >= theta_limit_1 or theta_deg <= theta_limit_2:
+                                warning_msg = (f"WARNING: Cobra {cobra_idx} theta angle {theta_deg:.2f}° "
+                                            f"is within interference limits [{theta_limit_1:.2f}°, {theta_limit_2:.2f}°]")
+                                interference_warnings.append(warning_msg)
+                                cobra_has_interference = True
+                        else:
+                            if theta_limit_1 <= theta_deg <= theta_limit_2:
+                                warning_msg = (f"WARNING: Cobra {cobra_idx} theta angle {theta_deg:.2f}° "
+                                            f"is within interference limits [{theta_limit_1:.2f}°, {theta_limit_2:.2f}°]")
+                                interference_warnings.append(warning_msg)
+                                cobra_has_interference = True
+
+                    # Check if phi exceeds the maximum allowed angle
+                    if 'max phi angle for full theta circular motion' in df.columns:
+                        max_phi_angle = row['max phi angle for full theta circular motion']
+
+                        if phi_deg > max_phi_angle:
+                            warning_msg = (f"WARNING: Cobra {cobra_idx} phi angle {phi_deg:.2f}° "
+                                        f"exceeds the maximum allowed angle {max_phi_angle:.2f}°")
+                            interference_warnings.append(warning_msg)
+                            cobra_has_interference = True
+                
+                # Add to interfering list if this cobra has any interference
+                if cobra_has_interference and cobra_idx not in interfering_cobra_indices:
+                    interfering_cobra_indices.append(cobra_idx)
+
+        # Log or raise warnings if interferences are found
+        if interference_warnings:
+            for warning in interference_warnings:
+                if hasattr(self, 'logger'):
+                    self.logger.warning(warning)
+                else:
+                    print(warning)
+        else:
+            if hasattr(self, 'logger'):
+                self.logger.info("No fiducial interference detected for the given theta and phi angles")
+            else:
+                print("No fiducial interference detected for the given theta and phi angles")
+        
+        return interfering_cobra_indices
+
     def exposeAndExtractPositions(self, name=None, guess=None, tolerance=None, 
                                   exptime=None, dbMatch = True, writeData = None, doStack=False):
         """ Take an exposure, measure centroids, match to cobras, save info.
