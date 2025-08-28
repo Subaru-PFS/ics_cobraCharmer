@@ -346,7 +346,6 @@ class CobraCoach():
 
         return cIds
 
-
     def checkFiducialInterference(self, thetas, phis):
         """Check if the targets interfere with the fiducial fiber.
         
@@ -389,7 +388,7 @@ class CobraCoach():
             if not hasattr(self, 'cc') or not hasattr(self.cc, 'goodIdx'):
                 raise RuntimeError("cc or goodIdx is not initialized. Cannot proceed.")
             
-            cobra_idx = self.cc.goodIdx[i]
+            cobra_idx = self.goodIdx[i]
             # Find matching rows in the interference DataFrame for this cobra
             matching_rows = df[df["Cobra Index"] == cobra_idx]
 
