@@ -366,7 +366,7 @@ class CobraCoach():
         df["Module #"] = df["Module #"].astype(int)
         df["Cobra ID"] = df["Cobra ID"].astype(int)
         df["Cobra Index"] = df.apply(
-            lambda row: self.cc.calibModel.findCobraByModuleAndPositioner(row["Module #"], row["Cobra ID"]),
+            lambda row: self.calibModel.findCobraByModuleAndPositioner(row["Module #"], row["Cobra ID"]),
             axis=1
         )
 
@@ -385,7 +385,7 @@ class CobraCoach():
 
         for i, (theta_deg, phi_deg) in enumerate(zip(thetas_deg, phis_deg)):
             # Get the goodIdx for this theta/phi position
-            if not hasattr(self, 'cc') or not hasattr(self.cc, 'goodIdx'):
+            if not hasattr(self, 'cc') or not hasattr(self, 'goodIdx'):
                 raise RuntimeError("cc or goodIdx is not initialized. Cannot proceed.")
             
             cobra_idx = self.goodIdx[i]
