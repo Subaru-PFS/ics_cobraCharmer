@@ -18,6 +18,7 @@ from pfs.utils import butler
 import pfs.utils.coordinates.transform as transformUtils
 
 from opdb import opdb
+import pandas as pd
 
 class CobraCoach():
     nCobrasPerModule = 57
@@ -355,7 +356,7 @@ class CobraCoach():
         #file = 'cobraInterferenceROM_20250627.csv'
         #df = pd.read_csv(file)
         butlerResource = butler.Butler()
-        df = butlerResource.getPath("cobraInterferenced")
+        df = pd.read_csv(butlerResource.getPath("cobraInterferenced"))
 
         # Remove 'SC' from 'Module #' and 'PID' from 'Cobra ID'
         df["Module #"] = df["Module #"].str.replace("SC", "", regex=False)
@@ -385,8 +386,6 @@ class CobraCoach():
 
         for i, (theta_deg, phi_deg) in enumerate(zip(thetas_deg, phis_deg)):
             # Get the goodIdx for this theta/phi position
-            if not hasattr(self, 'cc') or not hasattr(self, 'goodIdx'):
-                raise RuntimeError("cc or goodIdx is not initialized. Cannot proceed.")
             
             cobra_idx = self.goodIdx[i]
             # Find matching rows in the interference DataFrame for this cobra
