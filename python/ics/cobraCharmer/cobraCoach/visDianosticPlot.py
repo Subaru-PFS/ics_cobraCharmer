@@ -1425,6 +1425,54 @@ class VisDianosticPlot(object):
 
         ax.plot(fids['x_mm'].values,fids['y_mm'].values,'b+')
 
+    def visDotLocation(self):
+        '''
+            This function plots the location of black dots used for collision avoidance.
+        '''
+        ax = plt.gca()
+        
+        # Use butler to get dot location data
+        butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
+        
+        try:
+            # Try to get dot data from butler configuration
+            dotDF = pd.read_csv(butler.configPathForDot(version='mcs'))
+            
+            # Plot dots as circles with their radii
+            for i, (x, y, r) in enumerate(zip(dotDF['x_dot'].values, dotDF['y_dot'].values, dotDF['r_dot'].values)):
+                circle = plt.Circle((x, y), r, fill=False, color='red', alpha=0.7)
+                ax.add_patch(circle)
+                
+            # Also plot dot centers as small markers
+            ax.plot(dotDF['x_dot'].values, dotDF['y_dot'].values, 'ro', markersize=2, alpha=0.8, label='Dot centers')
+            
+            ax.set_aspect('equal')
+            ax.legend()
+            
+        except Exception as e:
+            # Fallback: try to load from calibration model if available
+            try:
+                from ics.cobraCharmer import pfiDesign
+                pfi = pfiDesign.PFIDesign.loadPfi()
+                
+                if hasattr(pfi, 'dotpos') and hasattr(pfi, 'dotradii'):
+                    # Plot dots as circles
+                    for i, (pos, r) in enumerate(zip(pfi.dotpos, pfi.dotradii)):
+                        circle = plt.Circle((pos.real, pos.imag), r, fill=False, color='red', alpha=0.7)
+                        ax.add_patch(circle)
+                    
+                    # Plot dot centers
+                    ax.plot(pfi.dotpos.real, pfi.dotpos.imag, 'ro', markersize=2, alpha=0.8, label='Dot centers')
+                    ax.set_aspect('equal')
+                    ax.legend()
+                else:
+                    ax.text(0.5, 0.5, 'Dot location data not available', 
+                           transform=ax.transAxes, ha='center', va='center')
+                    
+            except Exception as e2:
+                ax.text(0.5, 0.5, f'Error loading dot locations: {str(e2)}', 
+                       transform=ax.transAxes, ha='center', va='center')
+
 
     def visFiducialXYStage(self, temp=[0,0], compEL=[90,60]):
         '''
