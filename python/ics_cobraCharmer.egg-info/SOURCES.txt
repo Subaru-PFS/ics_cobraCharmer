@@ -1,0 +1,7 @@
+setup.py
+python/ics_cobraCharmer.egg-info/PKG-INFO
+python/ics_cobraCharmer.egg-info/SOURCES.txt
+python/ics_cobraCharmer.egg-info/dependency_links.txt
+python/ics_cobraCharmer.egg-info/not-zip-safe
+python/ics_cobraCharmer.egg-info/requires.txt
+python/ics_cobraCharmer.egg-info/top_level.txt

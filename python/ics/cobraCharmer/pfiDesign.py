@@ -365,7 +365,7 @@ class PFIDesign():
             self.negPhiSteps = np.hstack((zeros, np.cumsum(self.F2Nm, axis=1)))
         
         # In the end, load dot location
-        #self._loadDotLocations()
+        self._loadDotLocations()
 
 
     def findAllCobras(self):
