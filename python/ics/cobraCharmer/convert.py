@@ -1,4 +1,3 @@
-import sys
 
 ADC_VREF = 2.5
 NO_CONVERT = False

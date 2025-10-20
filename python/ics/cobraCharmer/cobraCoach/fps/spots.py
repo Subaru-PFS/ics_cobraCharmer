@@ -1,5 +1,7 @@
 import logging
+
 import numpy as np
+
 
 def lazyIdentification(centers, spots, radii=None):
     """ match spots to cobras.
@@ -44,11 +46,11 @@ def lazyIdentification(centers, spots, radii=None):
             ans[i] = j
 
         if i>0 and j in ans[:i-1]:
-            logging.warn('matched a spot to multiple cobras: %s', spots[j])
+            logging.warning('matched a spot to multiple cobras: %s', spots[j])
 
     return ans
 
-class SpotSet(object):
+class SpotSet:
     def __init__(self, cobras, setId=None, startingPositions=None):
         self.setId = setId
         self.lastPositions = startingPositions
@@ -88,9 +90,9 @@ def measureSpots(centers, dataSet, positions, names=None, disp=None,
 
         spots = np.array([c['x']+c['y']*(1j) for c in cs])
         idx = lazyIdentification(nearestCenters, spots, radii=radii)
-        nomatch_w = (-1 == idx)
+        nomatch_w = (idx == -1)
         if nomatch_w.sum() > 0:
-            logging.warn(f'failed to match spots {np.where(nomatch_w)[0]} for {names[i]} at {positions[i]} steps')
+            logging.warning(f'failed to match spots {np.where(nomatch_w)[0]} for {names[i]} at {positions[i]} steps')
         if trackCenters:
             nearestCenters = spots[idx]
             radii = trackRadius

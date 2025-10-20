@@ -1,10 +1,10 @@
 import logging
+import multiprocessing
 import os
 import struct
-import multiprocessing
 
-from . import convert
-from . import fpgaProtocol as proto
+from ics.cobraCharmer import convert
+from ics.cobraCharmer import fpgaProtocol as proto
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(filename)s:%(lineno)s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
@@ -39,7 +39,7 @@ def launchLogger():
     return loggerProcess
 
 
-class FPGAProtocolLogger(object):
+class FPGAProtocolLogger:
     """
     A logger for the PFI FPGA protocol.
 
@@ -313,7 +313,7 @@ class FPGAProtocolLogger(object):
                 '>BBHHHHH', tlm[:12])
             tlmData = tlm[12:]
         else:
-            cmd, cmdNum, responseCode, boardNumber, temp1, temp2, voltage = [int(i) for i in tlm]
+            cmd, cmdNum, responseCode, boardNumber, temp1, temp2, voltage = (int(i) for i in tlm)
 
         self.logger.info(
             f"TLM hk {cmd} cmdNum= {cmdNum} board= {boardNumber} temps= {convert.conv_temp(temp1):5.2f} {convert.conv_temp(temp2):5.2f} {convert.conv_volt(voltage):5.2f}")
@@ -324,7 +324,7 @@ class FPGAProtocolLogger(object):
             fmt = 'H'*nwords
             tlmData = struct.unpack(('>%s' % fmt), tlmData)
         for cobra_i, i in enumerate(range(0, len(tlmData), 4)):
-            mot1freq, mot1current, mot2freq, mot2current = [int(i) for i in tlmData[i:i+4]]
+            mot1freq, mot1current, mot2freq, mot2current = (int(i) for i in tlmData[i:i+4])
             self.logger.info("  hk  cobra %2d %2d  Theta: %0.2f %0.2f  Phi: %0.2f %0.2f" %
                              (boardNumber, cobra_i + 1,
                               convert.get_freq(mot1freq), convert.conv_current(mot1current),

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 #
 # ics_cobraCharmer documentation build configuration file, created by
 # sphinx-quickstart on Wed May 16 21:23:56 2018.

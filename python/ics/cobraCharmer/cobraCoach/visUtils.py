@@ -1,10 +1,11 @@
 
 import numpy as np
-from ics.cobraCharmer.cobraCoach import visDianosticPlot
-import psycopg2
-from sqlalchemy import create_engine
-from opdb import opdb
 import pandas as pd
+import psycopg2
+from ics.cobraCharmer.cobraCoach import visDianosticPlot
+from opdb import opdb
+from sqlalchemy import create_engine
+
 
 def getMaxIterationFromRunDir(runDir):
     try:
@@ -19,14 +20,14 @@ def getMaxIterationFromRunDir(runDir):
 
 
 def getMeanTargetDist(runDir, iteration):
-    
-    
+
+
     pfsVisitID = visDianosticPlot.findVisit(runDir)
     pfsDesignID = int(np.int64(visDianosticPlot.findDesignFromVisit(98501)))
-    conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+    conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'")
     engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
 
-    fiberData = pd.read_sql(f'''
+    fiberData = pd.read_sql('''
         SELECT DISTINCT 
             fiber_id, pfi_center_final_x_mm, pfi_center_final_y_mm, 
             pfi_nominal_x_mm, pfi_nominal_y_mm
@@ -44,10 +45,10 @@ def getMeanTargetDist(runDir, iteration):
         fiberData=fiberData.sort_values('cobra_id')
         df = fiberData.loc[fiberData['cobra_id'] != 65535]
         unassigned_rows = df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].isna().all(axis=1)]
-        unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1 
+        unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1
 
         assigned_row= df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].notna().all(axis=1)]
-        assigned_cobraIdx =  assigned_row['cobra_id'].values - 1 
+        assigned_cobraIdx =  assigned_row['cobra_id'].values - 1
 
         targetFromDB = df['pfi_nominal_x_mm'].values+df['pfi_nominal_y_mm'].values*1j
 
@@ -58,18 +59,18 @@ def getMeanTargetDist(runDir, iteration):
                 753,  798,  820,  852,  948, 1149, 1207, 1209, 1302, 1459, 1493,
                1519, 1538, 1579, 1636, 1652, 1723, 1789, 1790, 1791, 1824, 1835,
                1881, 1902, 2052, 2351, 2379])
-        assigned_cobraIdx= np.array([i for i in range(2394) if i not in disabled])        
-    
+        assigned_cobraIdx= np.array([i for i in range(2394) if i not in disabled])
+
         tarfile=f'/data/MCS/{runDir}/data/targets.npy'
         targets=np.load(tarfile)
-        
+
     moveFile = f'/data/MCS/{runDir}/data/moves.npy'
     mov = np.load(moveFile)
     try:
         maxMove = mov.shape[2]
     except:
         maxMove = mov.shape[-1]
-        
+
     frameid = pfsVisitID*100+12
 
     db=opdb.OpDB(hostname='db-ics', port=5432,
@@ -77,13 +78,13 @@ def getMeanTargetDist(runDir, iteration):
 
     match = db.bulkSelect('cobra_match','select * from cobra_match where '
               f'pfs_visit_id = {pfsVisitID} and iteration = {iteration}').sort_values(by=['cobra_id']).reset_index()
-    
+
     if len(fiberData) != 0:
         dist=np.sqrt((match['pfi_center_x_mm'].values[assigned_cobraIdx]-targets[assigned_cobraIdx].real)**2+
                                 (match['pfi_center_y_mm'].values[assigned_cobraIdx]-targets[assigned_cobraIdx].imag)**2)
     else:
         dist=np.sqrt((match['pfi_center_x_mm'].values[assigned_cobraIdx]-targets.real)**2+
-                                (match['pfi_center_y_mm'].values[assigned_cobraIdx]-targets.imag)**2) 
+                                (match['pfi_center_y_mm'].values[assigned_cobraIdx]-targets.imag)**2)
     conn.close()
     db.close()
     return np.mean(dist), np.median(dist), np.percentile(dist, 75), np.percentile(dist, 95)

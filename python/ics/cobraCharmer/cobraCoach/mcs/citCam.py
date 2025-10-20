@@ -1,8 +1,15 @@
-from importlib import reload
-import numpy as np
 import time
+from importlib import reload
 
-from . import camera
+import numpy as np
+
+from ics.cobraCharmer.cobraCoach.mcs import camera
+
+try:
+    from Camera import andor
+except Exception:
+    andor = None
+
 reload(camera)
 
 class CitCamera(camera.Camera):
@@ -17,7 +24,6 @@ class CitCamera(camera.Camera):
         if self.simulationPath is not None:
             return None
 
-        from Camera import andor
         self._camClose()
         cam = andor.Andor()
         self._initPfsAndor(cam)

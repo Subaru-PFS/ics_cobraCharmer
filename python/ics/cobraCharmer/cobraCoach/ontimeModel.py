@@ -2,12 +2,12 @@ import logging
 
 import numpy as np
 import pandas as pd
-from scipy import stats
-
 from ics.cobraCharmer import pfiDesign
 from ics.cobraCharmer.utils import butler
+from scipy import stats
 
-class ontimeModel():
+
+class ontimeModel:
 
     def __init__(self, modelPath, runDirs, logLevel=logging.INFO):
         self.runDirs = runDirs
@@ -83,11 +83,11 @@ class ontimeModel():
 
         fastOnes = np.where((newOntimeFwd < self.minOntime) | (newOntimeRev < self.minOntime))
         if len(fastOnes[0]) > 0:
-            self.logger.warn(f'some motors too fast: {fastOnes[0]}: '
+            self.logger.warning(f'some motors too fast: {fastOnes[0]}: '
                              f'fwd:{newOntimeFwd[fastOnes]} rev:{newOntimeRev[fastOnes]}')
         slowOnes = np.where((newOntimeFwd > self.maxOntime) | (newOntimeRev > self.maxOntime))
         if len(slowOnes[0]) > 0:
-            self.logger.warn(f'some motors too slow {slowOnes[0]}: '
+            self.logger.warning(f'some motors too slow {slowOnes[0]}: '
                              f'fwd:{newOntimeFwd[slowOnes]} rev:{newOntimeRev[slowOnes]}')
 
         return newOntimeFwd, newOntimeRev
@@ -274,7 +274,7 @@ class ontimeModel():
             else:
                 visibleFibers = np.array([c for c in model.positionerIds if model.cobraIsGood(c)], dtype='i4')
                 if not np.all(visibleFibers == self.visibleFibers):
-                    self.logger.warn('list of useable fibers differs between models (%s is one)', xml)
+                    self.logger.warning('list of useable fibers differs between models (%s is one)', xml)
 
             ontimeFwd = self.fwdOntimeModel(model)
             ontimeRev = self.revOntimeModel(model)
@@ -306,7 +306,7 @@ class ontimeModel():
             fw_s, fw_i = self.getFwdSlope(pid)
             rv_s, rv_i = self.getRevSlope(pid)
             if fw_s <= 0 or rv_s >= 0:
-                self.logger.warn(f'pid {pid}: fw={fw_s},{fw_i} rv={rv_s},{rv_i}')
+                self.logger.warning(f'pid {pid}: fw={fw_s},{fw_i} rv={rv_s},{rv_i}')
 
             fwd_slope[pid-1] = fw_s
             fwd_int[pid-1] = fw_i

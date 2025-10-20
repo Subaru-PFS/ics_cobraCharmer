@@ -1,22 +1,15 @@
-from importlib import reload
 import logging
+from importlib import reload
+
 import numpy as np
-
-from ics.cobraCharmer import ethernet
-from ics.cobraCharmer import func
-from ics.cobraCharmer import log
+from ics.cobraCharmer import cobraState, ethernet, fpgaLogger, func, log, pfiDesign
 from ics.cobraCharmer.log import Logger
-
-from ics.cobraCharmer import pfiDesign
-from ics.cobraCharmer import fpgaLogger
-
-from ics.cobraCharmer import cobraState
 
 reload(pfiDesign)
 reload(func)
 
 
-class PFI(object):
+class PFI:
     nCobrasPerModule = 57
     nModules = 42
 
@@ -78,7 +71,7 @@ class PFI(object):
         """ Disconnect from COBRA fpga device """
         ethernet.sock.close()
         ethernet.sock = ethernet.Sock()
-        self.ioLogger.info(f'FPGA connection closed')
+        self.ioLogger.info('FPGA connection closed')
         self.protoLogger.logger.info('FPGA connection closed')
 
     def loadModel(self, filename=None, version=None, moduleVersion=None):
@@ -107,16 +100,16 @@ class PFI(object):
             return self.calibModel.findCobraByModuleAndPositioner(cobra.module,
                                                                   cobra.cobraNum)
         else:
-            self.logger.warn('no calibModel, so we are guessing about the calibModel index for a cobra')
+            self.logger.warning('no calibModel, so we are guessing about the calibModel index for a cobra')
             return ((cobra.module - 1)*self.nCobrasPerModule + cobra.cobraNum-1)
 
     def reset(self, sectors=0x3f):
         """ Reset COBRA fpga device """
         err = func.RST(sectors)
         if err:
-            self.logger.error(f'send RST command failed')
+            self.logger.error('send RST command failed')
         else:
-            self.logger.debug(f'send RST command succeeded')
+            self.logger.debug('send RST command succeeded')
 
     def diag(self):
         """ Get fpga board inventory"""
@@ -128,18 +121,18 @@ class PFI(object):
         """ Set debug level, get version and uptime """
         err, version, uptime = func.ADMIN(debugLevel=debugLevel)
         if err:
-            self.logger.error(f'send ADMIN command failed')
+            self.logger.error('send ADMIN command failed')
         else:
-            self.logger.debug(f'send ADMIN command succeeded')
+            self.logger.debug('send ADMIN command succeeded')
         return version, uptime
 
     def power(self, sectors=0x3f):
         """ Set COBRA PSU on/off """
         err = func.POW(sectors)
         if err:
-            self.logger.error(f'send POW command failed')
+            self.logger.error('send POW command failed')
         else:
-            self.logger.debug(f'send POW command succeeded')
+            self.logger.debug('send POW command succeeded')
 
     def hk(self, module, board, updateModel=False):
         """ Fetch housekeeping info for a board.
@@ -155,7 +148,7 @@ class PFI(object):
         if err:
             self.logger.error(f'send HK command failed: {err}')
         else:
-            self.logger.debug(f'send HK command succeeded')
+            self.logger.debug('send HK command succeeded')
 
         return ret
 
@@ -170,7 +163,7 @@ class PFI(object):
         if err:
             self.logger.error(f'send HK command failed: {err}')
         else:
-            self.logger.debug(f'send HK command succeeded')
+            self.logger.debug('send HK command succeeded')
 
         return ret
 
@@ -199,9 +192,9 @@ class PFI(object):
             c.p = func.SetParams(p0=thetaPer, p1=phiPer, en=(True, True))
         err = func.SET(cobras)
         if err:
-            self.logger.error(f'send SET command failed')
+            self.logger.error('send SET command failed')
         else:
-            self.logger.debug(f'send SET command succeeded')
+            self.logger.debug('send SET command succeeded')
 
     def calibrateFreq(self, cobras=None,
                       thetaLow=60.4, thetaHigh=70.3, phiLow=94.4, phiHigh=108.2,
@@ -218,9 +211,9 @@ class PFI(object):
             c.p = func.CalParams(m0=m0, m1=m1, en=enabled, dir=spin)
         err = func.CAL(cobras, timeout=65535)
         if err:
-            self.logger.error(f'send Calibrate command failed')
+            self.logger.error('send Calibrate command failed')
         else:
-            self.logger.debug(f'send Calibrate command succeeded')
+            self.logger.debug('send Calibrate command succeeded')
 
     def houseKeeping(self, modules=None, m0=(0, 1000), m1=(0, 1000), temps=(16.0, 31.0), cur=(0.25, 1.2), volt=(9.5, 10.5)):
         """ HK command """
@@ -289,7 +282,7 @@ class PFI(object):
         cIdx = [self._mapCobraIndex(c) for c in cobras]
         cThetaSteps = thetaSteps[cIdx]
         cPhiSteps = phiSteps[cIdx]
-        self.logger.debug(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
+        self.logger.debug(f'steps: {list(zip(cThetaSteps, cPhiSteps, strict=False))}')
         self.moveSteps(cobras, cThetaSteps, cPhiSteps, thetaFast=thetaFast, phiFast=phiFast)
 
     def moveAllSteps(self, cobras, thetaSteps, phiSteps, thetaFast=True, phiFast=True):
@@ -375,7 +368,7 @@ class PFI(object):
         cThetaSteps[thetaIndex] = 0
         cPhiSteps[phiIndex] = 0
 
-        self.logger.debug(f'steps (run={doRun}): {list(zip(cThetaSteps, cPhiSteps))}')
+        self.logger.debug(f'steps (run={doRun}): {list(zip(cThetaSteps, cPhiSteps, strict=False))}')
         if doRun:
             self.moveSteps(cobras, cThetaSteps, cPhiSteps, thetaFast=thetaFast, phiFast=phiFast)
 
@@ -472,10 +465,10 @@ class PFI(object):
 
         newScale = existingScale * scale
         if newScale < 0.3:
-            self.logger.warn(f'clipping scale adjustment from {newScale} to 0.3')
+            self.logger.warning(f'clipping scale adjustment from {newScale} to 0.3')
             newScale = 0.3
         if newScale > 2.0:
-            self.logger.warn(f'clipping scale adjustment from {newScale} to 2.0')
+            self.logger.warning(f'clipping scale adjustment from {newScale} to 2.0')
             newScale = 2.0
 
         cobraState.motorScales[mapId] = newScale
@@ -507,7 +500,7 @@ class PFI(object):
         existingScale = cobraState.motorScales.get(mapId, 1.0)
 
         if scale <= 0:
-            self.logger.warn(f'scale is negative, give up scaling: {scale}')
+            self.logger.warning(f'scale is negative, give up scaling: {scale}')
             return cobraState.motorScales[mapId]
 
         if ontime != 0.0:
@@ -520,11 +513,10 @@ class PFI(object):
                     ontime = self.calibModel.motorOntimeFwd1[cobraId]
                 else:
                     ontime = self.calibModel.motorOntimeRev1[cobraId]
+            elif direction == 'cw':
+                ontime = self.calibModel.motorOntimeSlowFwd1[cobraId]
             else:
-                if direction == 'cw':
-                    ontime = self.calibModel.motorOntimeSlowFwd1[cobraId]
-                else:
-                    ontime = self.calibModel.motorOntimeSlowRev1[cobraId]
+                ontime = self.calibModel.motorOntimeSlowRev1[cobraId]
             nowOntime = existingScale * ontime
 
         else:
@@ -533,11 +525,10 @@ class PFI(object):
                     ontime = self.calibModel.motorOntimeFwd2[cobraId]
                 else:
                     ontime = self.calibModel.motorOntimeRev2[cobraId]
+            elif direction == 'cw':
+                ontime = self.calibModel.motorOntimeSlowFwd2[cobraId]
             else:
-                if direction == 'cw':
-                    ontime = self.calibModel.motorOntimeSlowFwd2[cobraId]
-                else:
-                    ontime = self.calibModel.motorOntimeSlowRev2[cobraId]
+                ontime = self.calibModel.motorOntimeSlowRev2[cobraId]
             nowOntime = existingScale * ontime
 
         if motor == 'theta':
@@ -549,7 +540,7 @@ class PFI(object):
         a1 = a0*scale + b0
         newOntime = np.sqrt(a1*a1 - b0*b0)
         if not np.isfinite(newOntime):
-            self.logger.warn(f'invalid scaling adjustment, give up')
+            self.logger.warning('invalid scaling adjustment, give up')
             return 1.0
 
         if motor == 'theta' and newOntime > self.maxThetaOntime:
@@ -559,10 +550,10 @@ class PFI(object):
 
         ontimeScale = newOntime / ontime
         if ontimeScale < 0.3:
-            self.logger.warn(f'clipping scale adjustment from {ontimeScale} to 0.3')
+            self.logger.warning(f'clipping scale adjustment from {ontimeScale} to 0.3')
             ontimeScale = 0.3
         if ontimeScale > 2.0:
-            self.logger.warn(f'clipping scale adjustment from {ontimeScale} to 2.0')
+            self.logger.warning(f'clipping scale adjustment from {ontimeScale} to 2.0')
             ontimeScale = 2.0
         trueOntime = ontimeScale * ontime
         trueScale = (np.sqrt(trueOntime*trueOntime + b0*b0) - b0) / a0
@@ -581,7 +572,7 @@ class PFI(object):
         if newOntime > self.maxThetaOntime:
             newOntime = self.maxThetaOntime
             cobraState.motorScales[mapId] = newOntime/ontime
-            self.logger.warn(f'clipping {mapId} ontime to {newOntime} and '
+            self.logger.warning(f'clipping {mapId} ontime to {newOntime} and '
                              f'scale {scale:0.2f} to {cobraState.motorScales[mapId]}')
 
         return newOntime
@@ -595,7 +586,7 @@ class PFI(object):
         if newOntime > self.maxPhiOntime:
             newOntime = self.maxPhiOntime
             cobraState.motorScales[mapId] = newOntime/ontime
-            self.logger.warn(f'clipping {mapId} ontime to {newOntime} and '
+            self.logger.warning(f'clipping {mapId} ontime to {newOntime} and '
                              f'scale {scale:0.2f} to {cobraState.motorScales[mapId]}')
 
         return newOntime
@@ -643,7 +634,7 @@ class PFI(object):
             raise RuntimeError("number of phiOntimes must match number of cobras")
 
         if len(cobras) == 0:
-            self.logger.debug(f'skipping RUN command: no cobras')
+            self.logger.debug('skipping RUN command: no cobras')
             return
 
         maxStep = int(np.amax(np.abs((thetaSteps, phiSteps))))
@@ -651,10 +642,10 @@ class PFI(object):
             cobraId = self._mapCobraIndex(c)
             steps1 = [int(np.abs(thetaSteps[c_i])), int(np.abs(phiSteps[c_i]))]
             if steps1[0] > self.maxThetaSteps:
-                self.logger.warn(f'clipping #{c_i+1} theta steps from {steps1[0]} to {self.maxThetaSteps}')
+                self.logger.warning(f'clipping #{c_i+1} theta steps from {steps1[0]} to {self.maxThetaSteps}')
                 steps1[0] = self.maxThetaSteps
             if steps1[1] > self.maxPhiSteps:
-                self.logger.warn(f'clipping #{c_i+1} phi steps from {steps1[1]} to {self.maxPhiSteps}')
+                self.logger.warning(f'clipping #{c_i+1} phi steps from {steps1[1]} to {self.maxPhiSteps}')
                 steps1[1] = self.maxPhiSteps
 
             dirs1 = ['cw', 'cw']
@@ -675,11 +666,10 @@ class PFI(object):
                         ontime1 = self.calibModel.motorOntimeFwd1[cobraId]
                     else:
                         ontime1 = self.calibModel.motorOntimeRev1[cobraId]
+                elif dirs1[0] == 'cw':
+                    ontime1 = self.calibModel.motorOntimeSlowFwd1[cobraId]
                 else:
-                    if dirs1[0] == 'cw':
-                        ontime1 = self.calibModel.motorOntimeSlowFwd1[cobraId]
-                    else:
-                        ontime1 = self.calibModel.motorOntimeSlowRev1[cobraId]
+                    ontime1 = self.calibModel.motorOntimeSlowRev1[cobraId]
             else:
                 ontime1 = thetaOntimes[c_i]
             ontime1 = self.adjustThetaOnTime(cobraId, ontime1, fast=_thetaFast[c_i], direction=dirs1[0])
@@ -690,11 +680,10 @@ class PFI(object):
                         ontime2 = self.calibModel.motorOntimeFwd2[cobraId]
                     else:
                         ontime2 = self.calibModel.motorOntimeRev2[cobraId]
+                elif dirs1[1] == 'cw':
+                    ontime2 = self.calibModel.motorOntimeSlowFwd2[cobraId]
                 else:
-                    if dirs1[1] == 'cw':
-                        ontime2 = self.calibModel.motorOntimeSlowFwd2[cobraId]
-                    else:
-                        ontime2 = self.calibModel.motorOntimeSlowRev2[cobraId]
+                    ontime2 = self.calibModel.motorOntimeSlowRev2[cobraId]
             else:
                 ontime2 = phiOntimes[c_i]
             ontime2 = self.adjustPhiOnTime(cobraId, ontime2, fast=_phiFast[c_i], direction=dirs1[1])
@@ -728,9 +717,9 @@ class PFI(object):
         if not trajectoryMode:
             err = func.RUN(cobras, inter=int(interval*1000/16), timeout=65535)
             if err:
-                self.logger.error(f'send RUN command failed')
+                self.logger.error('send RUN command failed')
             else:
-                self.logger.debug(f'send RUN command succeeded')
+                self.logger.debug('send RUN command succeeded')
 
     def homePhi(self, cobras, nsteps=-5000, fast=True):
         # go to the hard stops for phi arms
@@ -827,11 +816,10 @@ class PFI(object):
                     thtSteps = self.calibModel.posThtSteps[c]
                 else:
                     thtSteps = self.calibModel.posThtSlowSteps[c]
+            elif _thetaFast[c]:
+                thtSteps = self.calibModel.negThtSteps[c]
             else:
-                if _thetaFast[c]:
-                    thtSteps = self.calibModel.negThtSteps[c]
-                else:
-                    thtSteps = self.calibModel.negThtSlowSteps[c]
+                thtSteps = self.calibModel.negThtSlowSteps[c]
 
             # Get the integrated step maps for the phi angle
             if deltaPhi[c] >= 0:
@@ -839,11 +827,10 @@ class PFI(object):
                     phiSteps = self.calibModel.posPhiSteps[c]
                 else:
                     phiSteps = self.calibModel.posPhiSlowSteps[c]
+            elif _phiFast[c]:
+                phiSteps = self.calibModel.negPhiSteps[c]
             else:
-                if _phiFast[c]:
-                    phiSteps = self.calibModel.negPhiSteps[c]
-                else:
-                    phiSteps = self.calibModel.negPhiSlowSteps[c]
+                phiSteps = self.calibModel.negPhiSlowSteps[c]
 
             # Calculate the total number of motor steps for the theta movement
             stepsRange = np.interp([startTht[c], startTht[c] + deltaTht[c]], self.calibModel.thtOffsets[c],
@@ -892,10 +879,10 @@ class PFI(object):
             cIdx = cIdx[:, np.newaxis]
 
         thtRange = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx] + np.pi) % (2*np.pi) + np.pi
-        if np.any(0 > thetaAngles) or np.any(thtRange < thetaAngles):
+        if np.any(thetaAngles < 0) or np.any(thtRange < thetaAngles):
             self.logger.error('Some theta angles are out of range')
         phiRange = self.calibModel.phiOut[cIdx] - self.calibModel.phiIn[cIdx]
-        if np.any(0 > phiAngles) or np.any(phiRange < phiAngles):
+        if np.any(phiAngles < 0) or np.any(phiRange < phiAngles):
             self.logger.error('Some phi angles are out of range')
 
         ang1 = self.calibModel.tht0[cIdx] + thetaAngles
@@ -926,7 +913,7 @@ class PFI(object):
             cIdx = cIdx[:, np.newaxis]
 
         thtRange = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx] + np.pi) % (2*np.pi) + np.pi
-        if np.any(0 > thetaAngles) or np.any(thtRange < thetaAngles):
+        if np.any(thetaAngles < 0) or np.any(thtRange < thetaAngles):
             self.logger.error('Some theta angles are out of range')
 
         ang = self.calibModel.tht0[cIdx] + thetaAngles
@@ -1135,7 +1122,7 @@ class PFI(object):
         if len(valid_cobras) <= 0:
             raise RuntimeError("no valid target position found")
         elif not np.all(valids):
-            self.logger.warn("some target positions are invalid")
+            self.logger.warning("some target positions are invalid")
 
         # define home positions
         phiHomes = np.zeros(len(valid_cobras))
@@ -1145,8 +1132,8 @@ class PFI(object):
             cIdx = np.array([self._mapCobraIndex(c) for c in valid_cobras])
             thtHomes = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx] + np.pi) % (2*np.pi) + np.pi
         self.logger.info(f"engaged cobras: {[(c.module,c.cobraNum) for c in valid_cobras]}")
-        self.logger.info(f"move to: {list(zip(targetTht[valids,0], targetPhi[valids,0]))}")
-        self.logger.info(f"move from: {list(zip(thtHomes, phiHomes))}")
+        self.logger.info(f"move to: {list(zip(targetTht[valids,0], targetPhi[valids,0], strict=False))}")
+        self.logger.info(f"move from: {list(zip(thtHomes, phiHomes, strict=False))}")
 
         # move cobras by angles
         deltaTht = targetTht[valids, 0] - thtHomes
@@ -1186,7 +1173,7 @@ class PFI(object):
         if len(valid_cobras) <= 0:
             raise RuntimeError("no valid target positions are found")
         elif not np.all(valids):
-            self.logger.warn("some target positions are invalid")
+            self.logger.warning("some target positions are invalid")
 
         # define home positions
         phiHomes = np.zeros(len(valid_cobras))

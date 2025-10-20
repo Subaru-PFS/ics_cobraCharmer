@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class FpgaState(object):
+class FpgaState:
     """ Track state of FPGA. Currently just tracks the last move made, per-cobra """
 
     def __init__(self):

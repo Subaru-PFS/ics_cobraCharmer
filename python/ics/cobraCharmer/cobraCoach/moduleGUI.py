@@ -1,13 +1,24 @@
-from PyQt5.QtWidgets import (
-    QPushButton, QMainWindow, QHBoxLayout, QLineEdit, QSplitter,
-    QSizePolicy, QLabel, QCheckBox, QVBoxLayout, QWidget, QApplication)
-from PyQt5.QtGui import QIntValidator, QDoubleValidator
-from PyQt5.QtCore import Qt
-import sys
 import os
-import numpy as np
+import sys
+
 import matplotlib.pyplot as plt
+import numpy as np
 from moduleTest import ModuleTest, getCobras
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QDoubleValidator, QIntValidator
+from PyQt5.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QPushButton,
+    QSizePolicy,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
 
 active_cobras = np.full(57, False)
 bad_cobras = np.full(57, False)
@@ -185,7 +196,7 @@ class MainWindow(QMainWindow):
 
     def click_load(self):
         if len(self.xml.text()) <= 0:
-            self.statusBar().showMessage(f"Error: enter XML filename!")
+            self.statusBar().showMessage("Error: enter XML filename!")
             return
         xml = self.xml.text()
         if not os.path.exists(xml):

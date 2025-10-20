@@ -1,8 +1,8 @@
-from ics.cobraCharmer.cobraCoach import calculus as cal
+import logging
+
 import numpy as np
 import pandas as pd
-import logging
-import pandas as pd
+from ics.cobraCharmer.cobraCoach import calculus as cal
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
@@ -120,14 +120,14 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
         targetPhis[cIds] = phis
     targets = cc.pfi.anglesToPositions(cc.allCobras, targetThetas, targetPhis)
 
-    cc.camResetStack(f'Stack.fits')
+    cc.camResetStack('Stack.fits')
     logger.info(f'Move theta arms to angle={np.round(np.rad2deg(targetThetas[cIds]),2)} degree')
     logger.info(f'Move phi arms to angle={np.round(np.rad2deg(targetPhis[cIds]),2)} degree')
 
     if homed:
         # go home for safe movement
         cobras = cc.allCobras[cIds]
-        logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
+        logger.info('Move theta arms CW and phi arms CCW to the hard stops')
         cc.moveToHome(cobras, thetaEnable=True, phiEnable=True, thetaCCW=False)
 
     for j in range(tries):
@@ -160,17 +160,17 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
             notDoneMask &= ~newlyDone
             logger.info(f'done: {np.where(newlyDone)[0]}, {(notDoneMask == True).sum()} left')
         if not np.any(notDoneMask):
-            logger.info(f'all cobras are in positions')
+            logger.info('all cobras are in positions')
             break
 
     cc.camResetStack()
     cc.thetaScaling = np.full(cc.nCobras, True)
     cc.phiScaling = np.full(cc.nCobras, True)
     if np.any(notDoneMask):
-        logger.warn(f'{(notDoneMask == True).sum()} cobras did not finish: '
+        logger.warning(f'{(notDoneMask == True).sum()} cobras did not finish: '
                          f'{np.where(notDoneMask)[0]}, '
                          f'{np.round(distances[notDoneMask],2)}')
-    
+
     badMoveIdx = np.where(notDoneMask)[0]
 
     return dataPath, atThetas[cIds], atPhis[cIds], moves
@@ -282,10 +282,10 @@ def prepareThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.1, tries=10,
     # Loading dot locations
     dotFile = '/software/devel/pfs/pfs_instdata/data/pfi/dot/black_dots_mm.csv'
     dotDF=pd.read_csv(dotFile)
-    
+
     dots = (dotDF['x'].values)+(dotDF['y'].values)*1j
     dots_radii = dotDF['r'].values
-    
+
     #dots = cc.calibModel.dotpos
     #dots_radii = cc.calibModel.dotradii
     elbows = np.zeros(len(centers), 'complex')
@@ -295,21 +295,20 @@ def prepareThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.1, tries=10,
     # calculate theta angles and elbow positions
     for n in range(len(centers)):
         gidx = (n + (n//57) + (n//(14*57))) % 3
-        if not n in goodIdx or gidx == group:
+        if n not in goodIdx or gidx == group:
             thetaAngles[n] = np.pi/3
             elbows[n] = np.nan
+        elif (gidx - group) % 3 == 1:
+            thetaAngles[n] = np.pi/2
+            elbows[n] = centers[n] + cc.calibModel.L1[n] * np.exp(1j * np.pi/2)
         else:
-            if (gidx - group) % 3 == 1:
-                thetaAngles[n] = np.pi/2
-                elbows[n] = centers[n] + cc.calibModel.L1[n] * np.exp(1j * np.pi/2)
-            else:
-                thetaAngles[n] = np.pi/6
-                elbows[n] = centers[n] + cc.calibModel.L1[n] * np.exp(1j * np.pi/6)
+            thetaAngles[n] = np.pi/6
+            elbows[n] = centers[n] + cc.calibModel.L1[n] * np.exp(1j * np.pi/6)
 
     # calculate phi angles
     for n in range(len(centers)):
         gidx = (n + (n//57) + (n//(14*57))) % 3
-        if not n in goodIdx or gidx != group:
+        if n not in goodIdx or gidx != group:
             phiAngles[n] = np.pi/3
             continue
 
@@ -390,7 +389,7 @@ def runThetaMotorMaps(newXml, group=0, steps=500, totalSteps=10000, repeat=1, fa
         center[ci], radius[ci], angF[ci], angR[ci], bad[ci] = cal.thetaCenterAngles(posF[ci], posR[ci])
 
     for short in np.where(bad)[0]:
-        logger.warn(f'theta range for {short+1:-2d} is short: '
+        logger.warning(f'theta range for {short+1:-2d} is short: '
                          f'back={np.rad2deg(angF[short,0,0]):-6.2f} '
                          f'out={np.rad2deg(angR[short,0,-1]):-6.2f}')
     np.save(dataPath / 'thetaCenter', center)
@@ -440,7 +439,7 @@ def runThetaMotorMaps(newXml, group=0, steps=500, totalSteps=10000, repeat=1, fa
     for ci in cc.goodIdx:
         mmF[ci], mmR[ci], mmBad[ci] = cal.motorMaps(angF[ci], angR[ci], steps, delta)
     for bad_i in np.where(mmBad)[0]:
-        logger.warn(f'theta map for {bad_i+1} is bad')
+        logger.warning(f'theta map for {bad_i+1} is bad')
     np.save(dataPath / 'thetaMMFW', mmF)
     np.save(dataPath / 'thetaMMRV', mmR)
     np.save(dataPath / 'badMotorMap', np.where(mmBad)[0])
@@ -535,7 +534,7 @@ def runPhiMotorMaps(newXml, steps=250, totalSteps=5000, repeat=1, fast=False, ph
         center[ci], radius[ci], angF[ci], angR[ci], bad[ci] = cal.phiCenterAngles(posF[ci], posR[ci])
 
     for short in np.where(bad)[0]:
-        logger.warn(f'phi range for {short+1:-2d} is short: '
+        logger.warning(f'phi range for {short+1:-2d} is short: '
                          f'back={np.rad2deg(angF[short,0,0]):-6.2f} '
                          f'out={np.rad2deg(angR[short,0,-1]):-6.2f}')
     np.save(dataPath / 'phiCenter', center)
@@ -587,7 +586,7 @@ def runPhiMotorMaps(newXml, steps=250, totalSteps=5000, repeat=1, fast=False, ph
     for ci in cc.goodIdx:
         mmF[ci], mmR[ci], mmBad[ci] = cal.motorMaps(angF[ci], angR[ci], steps, delta)
     for bad_i in np.where(mmBad)[0]:
-        logger.warn(f'phi map for {bad_i+1} is bad')
+        logger.warning(f'phi map for {bad_i+1} is bad')
     np.save(dataPath / 'phiMMFW', mmF)
     np.save(dataPath / 'phiMMRV', mmR)
     np.save(dataPath / 'badMotorMap', np.where(mmBad)[0])

@@ -1,21 +1,23 @@
-from astropy.io import fits
-from concurrent.futures import ThreadPoolExecutor
+import fnmatch
+import logging
+import os
+import pathlib
 import re
-import pandas as pd
-import pfs.utils.coordinates.transform as transformUtils
-import mcsActor.mcsRoutines.fiducials as fiducials
-from pfs.utils import butler
+import warnings
+from concurrent.futures import ThreadPoolExecutor
+
 import matplotlib.pyplot as plt
 import numpy as np
-import os
-from ics.cobraCharmer.cobraCoach import visDianosticPlot
-from pfs.utils.fiberids import FiberIds
-import logging
-import pathlib
+import pandas as pd
+import pfs.utils.coordinates.transform as transformUtils
 import psycopg2
+from astropy.io import fits
+from ics.cobraCharmer.cobraCoach import visDianosticPlot
+from mcsActor.mcsRoutines import fiducials
+from pfs.utils import butler
+from pfs.utils.fiberids import FiberIds
 from sqlalchemy import create_engine
-import warnings
-import fnmatch
+
 
 class FitsImageProcessor:
     def __init__(self, pfsVisit, cameraName):
@@ -23,16 +25,16 @@ class FitsImageProcessor:
         self.pfsVisit = pfsVisit
         self.directory = f'/data/MCS/{visDianosticPlot.findRunDir(pfsVisit)}/data'
         self.cameraName = cameraName
-        
-        
+
+
         logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
         self.logger = logging.getLogger('FitsImageProcessor')
         self.logger.setLevel(logging.INFO)
-        
+
         self.butler = butler.Butler()
         self.fids = fiducials.Fiducials.read(self.butler)
-        
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             centX, centY = self.loadXmlfile()
@@ -44,14 +46,14 @@ class FitsImageProcessor:
         vis=visDianosticPlot.VisDianosticPlot(xml=newXml)
         self.vis = vis
         return vis.calibModel.centers.real, vis.calibModel.centers.imag
-    
+
     def fetchTarget(self):
-        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'")
         engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
 
-        
+
         with conn:
-            fiberData = pd.read_sql(f'''
+            fiberData = pd.read_sql('''
                 SELECT DISTINCT 
                     fiber_id, pfi_center_final_x_mm, pfi_center_final_y_mm, 
                     pfi_nominal_x_mm, pfi_nominal_y_mm
@@ -61,19 +63,19 @@ class FitsImageProcessor:
                     pfs_config_fiber.visit0 = %(visit0)s
                 -- limit 10
             ''', engine, params={'visit0': self.pfsVisit})
-            
+
         fid=FiberIds()
         fiberData['cobra_id']=fid.fiberIdToCobraId(fiberData['fiber_id'].values)
         fiberData=fiberData.sort_values('cobra_id')
-        df = fiberData.loc[fiberData['cobra_id'] != 65535]    
+        df = fiberData.loc[fiberData['cobra_id'] != 65535]
         unassigned_rows = df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].isna().all(axis=1)]
         unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1
 
         self.unassigned_cobraIdx = unassigned_cobraIdx
         targetFromDB = df['pfi_nominal_x_mm'].values+df['pfi_nominal_y_mm'].values*1j
-        
+
         return targetFromDB.real, targetFromDB.imag
-        
+
     def findFitsFiles(self):
         pattern = f'PFSC{self.pfsVisit:06d}??.fits'
         fitsFiles = [os.path.join(self.directory, file) for file in os.listdir(self.directory) if fnmatch.fnmatch(file, pattern)]
@@ -106,7 +108,7 @@ class FitsImageProcessor:
                   mcs_frame_id = {frameNum}
             ''', conn)
         return mcsData
-    
+
     def fetchTelescopeInfo(self, frameNum):
         connStr = "postgresql://pfs@db-ics/opdb"
         engine = create_engine(connStr)
@@ -126,12 +128,12 @@ class FitsImageProcessor:
         if 'rmod' in self.cameraName.lower():
             altitude = 90.0
             insrot = 0
-            pfiTransform = transformUtils.fromCameraName('usmcs', 
+            pfiTransform = transformUtils.fromCameraName('usmcs',
                 altitude=altitude, insrot=insrot, nsigma=0, alphaRot=0)
         else:
             altitude = telescopeInfo['altitude'].values[0]  # Default value; adjust if needed
             insrot = telescopeInfo['insrot'].values[0]  # Default value; adjust if needed
-            pfiTransform = transformUtils.fromCameraName(self.cameraName, 
+            pfiTransform = transformUtils.fromCameraName(self.cameraName,
                 altitude=altitude, insrot=insrot, nsigma=0, alphaRot=1)
 
         #self.logger.info(f'Camera name: {self.cameraName}')
@@ -142,7 +144,7 @@ class FitsImageProcessor:
         num_matches = []
         ffid, dist = pfiTransform.updateTransform(mcsData, self.fidsOuterRing, matchRadius=8.0, nMatchMin=0.1)
         num_matches.append((ffid != -1).sum())
-        
+
         nsigma = 0
         pfiTransform.nsigma = nsigma
         pfiTransform.alphaRot = 0
@@ -154,14 +156,14 @@ class FitsImageProcessor:
             ffid, dist = pfiTransform.updateTransform(mcsData, self.fidsGood, matchRadius=4.2,nMatchMin=0.1)
             #num_matches = (ffid != -1).sum()
             num_matches.append((ffid != -1).sum())
-            
+
             # Log or print the number of matches
-        
+
         self.logger.info(f'Number of matched elements: {num_matches}')
         return pfiTransform
-    
-    
-    
+
+
+
     def processFitsFiles(self, fitsFiles, x=None, y=None, cobraIdx=None, boxSize=50):
         results = {}
 
@@ -192,7 +194,7 @@ class FitsImageProcessor:
         box, x_adjusted, y_adjusted = self.extractImageBox(fitsFile, x, y, boxSize)
         return (box, x_adjusted, y_adjusted, mcsData, pfiTransform)
 
-        
+
     def plotImageBoxesWithData(self, pixelCoord=None, cobraIdx=None, boxSize=150):
         fitsFiles = self.findFitsFiles()
 
@@ -252,7 +254,7 @@ class FitsImageProcessor:
 
         # Create the bottom plot
         ax_bottom = plt.subplot2grid((nrows, ncols), (ncols, 0), colspan=3,rowspan=3)
-        
+
         self.vis.visCobraMovement(self.pfsVisit, cobraIdx=cobraIdx, newPlot=False)
         #ax_bottom.set_aspect('equal')  # Set equal aspect ratio to make height = width
 

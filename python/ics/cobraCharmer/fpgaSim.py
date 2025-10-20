@@ -1,7 +1,7 @@
 import argparse
+import asyncio
 import logging
 import struct
-import asyncio
 import time
 
 from ics.cobraCharmer import convert
@@ -165,11 +165,11 @@ class FPGAProtocol(asyncio.Protocol):
         try:
             cmd = int(buf[0])
         except IndexError:
-            raise IncompleteDataError()
+            raise IncompleteDataError
 
         headerSize, itemSize = proto.cmds[cmd]
         if len(buf) < headerSize:
-            raise IncompleteDataError()
+            raise IncompleteDataError
 
         header, allData = buf[:headerSize], buf[headerSize:]
 
@@ -180,7 +180,7 @@ class FPGAProtocol(asyncio.Protocol):
 
         dataLen = nCobras*itemSize
         if len(allData) < dataLen:
-            raise IncompleteDataError()
+            raise IncompleteDataError
 
         # empty bytearray if there is no per-arm data
         data = allData[:dataLen]
@@ -198,7 +198,7 @@ class FPGAProtocol(asyncio.Protocol):
         """ Look for a complete CALibrate command and process it. """
 
         if len(self.data) < proto.CAL_HEADER_SIZE:
-            raise IncompleteDataError()
+            raise IncompleteDataError
 
         dirName = {False: ' cw', True: 'ccw'}
 
@@ -207,7 +207,7 @@ class FPGAProtocol(asyncio.Protocol):
         self.ioLogger.debug(f"CAL header: nCobras={nCobras}")
 
         if len(self.data) < proto.CAL_HEADER_SIZE + nCobras * proto.CAL_ARM_SIZE:
-            raise IncompleteDataError()
+            raise IncompleteDataError
 
         splitAt = proto.CAL_HEADER_SIZE + nCobras*proto.CAL_ARM_SIZE
         calData, self.data = self.data[proto.CAL_HEADER_SIZE:splitAt], self.data[splitAt:]
@@ -262,7 +262,7 @@ class FPGAProtocol(asyncio.Protocol):
         try:
             _, _, debugLevel, _, timeout, CRC = struct.unpack('>BBBBHH', header)
         except:
-            self.logger.warn('admin unpack WTF: %f', header)
+            self.logger.warning('admin unpack WTF: %f', header)
         self.logger.info('admin debugLevel=%d', debugLevel)
 
         uptime = int(time.time() - self.connectTime)

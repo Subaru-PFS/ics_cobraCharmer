@@ -12,7 +12,7 @@ def arr2Hex(arr, seperator=','):
     # Takes ByteArray and makes it a string of Hex.
     str = ''
     size = len(arr)
-    for i in range(0, size):
+    for i in range(size):
         str = str + num2Hex(arr[i], 1)
         str = str + seperator if i != (size-1) else str
     return str

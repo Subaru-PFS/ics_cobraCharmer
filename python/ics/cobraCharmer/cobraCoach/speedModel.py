@@ -1,8 +1,10 @@
 import logging
+
 import numpy as np
 from scipy import optimize
 
-class SpeedModel():
+
+class SpeedModel:
     def __init__(self, p0=1.0, p1=0.08, p2=2, logLevel=logging.INFO):
         self.logger = logging.getLogger('speedModel')
         self.logger.setLevel(logLevel)
@@ -51,7 +53,7 @@ class SpeedModel():
             params, params_cov = optimize.curve_fit(speedFunc, t, s, p0=[10, 0.06])
             if params[0] < 0 or params[1] < 0:
                 # remove some slow data and try again
-                self.logger.warn(f'Build model failed, try again')
+                self.logger.warning('Build model failed, try again')
                 s[t==np.max(t)] = np.max(s[t==np.max(t)])
                 params, params_cov = optimize.curve_fit(speedFunc, t, s, p0=[10, 0.06])
             if params[0] < 0 or params[1] < 0:
@@ -60,7 +62,7 @@ class SpeedModel():
             self.p1 = params[1]
             return False
         except:
-            self.logger.warn(f'Building model failed!!!')
+            self.logger.warning('Building model failed!!!')
             return True
 
 

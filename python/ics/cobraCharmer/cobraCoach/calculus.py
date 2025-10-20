@@ -1,10 +1,7 @@
-import numpy as np
-import sep
-from ics.cobraCharmer import pfiDesign
-import os
-import sys
-from numpy import inf
 import math
+
+import cv2
+import numpy as np
 
 #from ics.cobraCharmer.procedures.moduleTest import trajectory
 
@@ -57,11 +54,11 @@ def filtered_circle_fitting(fw, rv, threshold=1.0):
 def mapF3CtoMCS(ff_mcs, ff_f3c, cobra_f3c):
     # Give the image size in (width, height)
     imageSize= (10000, 7096)
-    
+
     # preparing two arrays for opencv operation.
     objarr=[]
     imgarr=[]
-    
+
     # Re-arrange the array for CV2 convention
     for i in range(len(ff_mcs)):
 
@@ -69,45 +66,45 @@ def mapF3CtoMCS(ff_mcs, ff_f3c, cobra_f3c):
 
             imgarr.append([ff_mcs[i].real,ff_mcs[i].imag])
             objarr.append([ff_f3c[i].real,ff_f3c[i].imag,0])
-    
+
     objarr=np.array([objarr])
     imgarr=np.array([imgarr])
 
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objarr.astype(np.float32),
                                                        imgarr.astype(np.float32),imageSize, None, None)
-    
+
     camProperty = {'camMatrix':mtx, 'camDistor': dist, 'camRotVec':rvecs, 'camTranVec':tvecs}
-    
+
     tot_error = 0
-    
+
     for i in range(len(objarr)):
         imgpoints2, _ = cv2.projectPoints(objarr[i].astype(np.float32), rvecs[i], tvecs[i], mtx, dist)
         error = cv2.norm(imgarr[i].astype(np.float32),imgpoints2[:,0,:], cv2.NORM_L2)/len(imgpoints2[:,0,:])
         tot_error = tot_error+error
 
     print("total error: ", tot_error/len(objarr))
-    
+
     cobra_obj=np.array([cobra_f3c.real, cobra_f3c.imag, np.zeros(len(cobra_f3c))]).T
-    
-    imgpoints2, _ = cv2.projectPoints(cobra_obj.astype(np.float32), 
+
+    imgpoints2, _ = cv2.projectPoints(cobra_obj.astype(np.float32),
                                   rvecs[0], tvecs[0], mtx, dist)
 
     imgarr2=imgpoints2[:,0,:]
     output=imgarr2[:,0]+imgarr2[:,1]*1j
-    
+
     output=imgarr2[:,0]+imgarr2[:,1]*1j
-    
+
     return output, camProperty
-    
-    
+
+
 def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
     # Give the image size in (width, height)
     imageSize= (10000, 7096)
-    
+
     # preparing two arrays for opencv operation.
     objarr=[]
     imgarr=[]
-    
+
     # Re-arrange the array for CV2 convention
     for i in range(len(ff_mcs)):
 
@@ -115,44 +112,44 @@ def mapMCStoF3C(ff_mcs, ff_f3c, cobra_mcs):
 
             imgarr.append([ff_f3c[i].real,ff_f3c[i].imag])
             objarr.append([ff_mcs[i].real,ff_mcs[i].imag,0])
-    
+
     objarr=np.array([objarr])
     imgarr=np.array([imgarr])
 
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objarr.astype(np.float32),
                                                        imgarr.astype(np.float32),imageSize, None, None)
-    
+
     camProperty = {'camMatrix':mtx, 'camDistor': dist, 'camRotVec':rvecs, 'camTranVec':tvecs}
 
 
     tot_error = 0
-    
+
     for i in range(len(objarr)):
         imgpoints2, _ = cv2.projectPoints(objarr[i].astype(np.float32), rvecs[i], tvecs[i], mtx, dist)
         error = cv2.norm(imgarr[i].astype(np.float32),imgpoints2[:,0,:], cv2.NORM_L2)/len(imgpoints2[:,0,:])
         tot_error = tot_error+error
 
     print("total error: ", tot_error/len(objarr))
-    
+
     cobra_obj=np.array([cobra_mcs.real,cobra_mcs.imag,np.zeros(len(cobra_mcs))]).T
-    
-    
-    imgpoints2, _ = cv2.projectPoints(cobra_obj.astype(np.float32), 
+
+
+    imgpoints2, _ = cv2.projectPoints(cobra_obj.astype(np.float32),
                                   rvecs[0], tvecs[0], mtx, dist)
 
     imgarr2=imgpoints2[:,0,:]
     output=imgarr2[:,0]+imgarr2[:,1]*1j
-    
+
     return output, camProperty
 
 def projectFCtoPixel(coord, scale, rotation, fieldCenter):
-    
+
     xx=(coord[0]*scale)+fieldCenter[0]
     yy=(coord[1]*scale)+fieldCenter[1]
     rx,ry=rotatePoint2([xx,yy],[fieldCenter[0],fieldCenter[1]], rotation)
 
     return rx, ry
-    
+
 
 
 def rotatePoint2(coord, ori, angle):
@@ -162,7 +159,7 @@ def rotatePoint2(coord, ori, angle):
     y = coord[1] - ori[1]
     xx = x * math.cos(radians) + y * math.sin(radians)
     yy = -x * math.sin(radians) + y * math.cos(radians)
-    
+
     return xx+ori[0], yy+ori[1]
 
 
@@ -174,7 +171,7 @@ def pointMatch(target, source):
                 in the form of (x0, y0), (x1, y1) ....... 
     
     """
-    # Looking for proper distance 
+    # Looking for proper distance
     dist_all = []
     for i in range(len(target)):
         d=np.sqrt(np.sum((target[i]-source)**2,axis=1))
@@ -206,9 +203,9 @@ def pointMatch(target, source):
 
     matched=np.array(matched)
 
-    
+
     return matched
-        
+
 def transform(origPoints, newPoints):
     """ return the tranformation parameters and a function that can convert origPoints to newPoints """
     origCenter = np.mean(origPoints)
@@ -226,7 +223,7 @@ def transform(origPoints, newPoints):
 
 def tranformAffine(origPoints, newPoints):
 
-    
+
     ori=np.array([origPoints.real,origPoints.imag]).T
     new=np.array([newPoints.real,newPoints.imag]).T
 
@@ -253,30 +250,14 @@ def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, minSteps=50, 
         if absDiffAngle(angle, fromAngle) < delta and steps >= minSteps:
             # stuck at CW gard stop
             angle += np.pi*2
-        elif angle < fromAngle - delta and steps >= minSteps:
-            angle += np.pi*2
-        elif angle < fromAngle - delta2 and steps > 0:
-            angle += np.pi*2
-        elif angle < fromAngle - delta and steps > 0:
-            angle += np.pi*2
-        elif not np.isnan(toAngle) and toAngle >= np.pi*1.2:
-            angle += np.pi*2
-        elif np.isnan(toAngle) and fromAngle > np.pi*2.0:
+        elif angle < fromAngle - delta and steps >= minSteps or angle < fromAngle - delta2 and steps > 0 or (angle < fromAngle - delta and steps > 0 or not np.isnan(toAngle) and toAngle >= np.pi*1.2) or np.isnan(toAngle) and fromAngle > np.pi*2.0:
             angle += np.pi*2
     elif angle > np.pi*1.8:
         # check if the angle is negative
         if absDiffAngle(angle, fromAngle) < delta and steps <= -minSteps:
             # stuck at CCW gard stop
             angle -= np.pi*2
-        elif angle > fromAngle + delta and steps <= -minSteps:
-            angle -= np.pi*2
-        elif angle > fromAngle + delta2 and steps < 0:
-            angle -= np.pi*2
-        elif angle > fromAngle + delta and steps < 0:
-            angle -= np.pi*2
-        elif not np.isnan(toAngle) and toAngle < np.pi*0.8:
-            angle -= np.pi*2
-        elif np.isnan(toAngle) and fromAngle < 0:
+        elif angle > fromAngle + delta and steps <= -minSteps or angle > fromAngle + delta2 and steps < 0 or (angle > fromAngle + delta and steps < 0 or not np.isnan(toAngle) and toAngle < np.pi*0.8) or np.isnan(toAngle) and fromAngle < 0:
             angle -= np.pi*2
 
     return angle
@@ -576,7 +557,7 @@ def matchPositions(objects, guess, dist=None):
                 pos[n] = guess[n]
             else:
                 pos[n] = measPos[k]
-    
+
     #for n, k in enumerate(target):
     #    if k >= 0:
     #        pos[n] = measPos[k]
@@ -637,7 +618,7 @@ def smooth(x, window_len=11, window='hamming'):
         raise ValueError("Input vector needs to be bigger than window size.")
     if window_len < 3:
         return x
-    if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
+    if window not in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
         raise ValueError("Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
 
     s = np.r_[x[window_len-1:0:-1], x, x[-2:-window_len-1:-1]]
@@ -821,11 +802,10 @@ def calculateSteps(cId, maxSteps, thetaAngle, phiAngle, fromTheta, fromPhi, thet
             thetaModel = model.posThtSteps[cId]
         else:
             thetaModel = model.posThtSlowSteps[cId]
+    elif thetaFast:
+        thetaModel = model.negThtSteps[cId]
     else:
-        if thetaFast:
-            thetaModel = model.negThtSteps[cId]
-        else:
-            thetaModel = model.negThtSlowSteps[cId]
+        thetaModel = model.negThtSlowSteps[cId]
 
     # Get the integrated step maps for the phi angle
     if phiAngle >= 0:
@@ -833,11 +813,10 @@ def calculateSteps(cId, maxSteps, thetaAngle, phiAngle, fromTheta, fromPhi, thet
             phiModel = model.posPhiSteps[cId]
         else:
             phiModel = model.posPhiSlowSteps[cId]
+    elif phiFast:
+        phiModel = model.negPhiSteps[cId]
     else:
-        if phiFast:
-            phiModel = model.negPhiSteps[cId]
-        else:
-            phiModel = model.negPhiSlowSteps[cId]
+        phiModel = model.negPhiSlowSteps[cId]
 
     # Calculate the total number of motor steps for the theta movement
     stepsRange = np.interp([fromTheta, fromTheta + thetaAngle], model.thtOffsets[cId], thetaModel)
@@ -887,23 +866,22 @@ def calculateSteps(cId, maxSteps, thetaAngle, phiAngle, fromTheta, fromPhi, thet
                 thetaSteps = maxSteps
             else:
                 thetaSteps = -maxSteps
+        elif phiSteps > 0 and thetaSteps > 0:
+            thetaSteps = min(thetaSteps, maxSteps)
+            phiSteps = maxSteps
+        elif phiSteps > 0 and thetaSteps < 0:
+            thetaSteps = min(thetaSteps + phiSteps - maxSteps, 0)
+            phiSteps = maxSteps
+        elif phiSteps < 0 and thetaSteps > 0:
+            thetaSteps = min(thetaSteps, maxSteps)
+            phiSteps = -maxSteps
+        elif phiSteps < 0 and thetaSteps < 0:
+            thetaSteps = min(thetaSteps - phiSteps - maxSteps, 0)
+            phiSteps = -maxSteps
+        elif phiSteps > 0:
+            phiSteps = maxSteps
         else:
-            if phiSteps > 0 and thetaSteps > 0:
-                thetaSteps = min(thetaSteps, maxSteps)
-                phiSteps = maxSteps
-            elif phiSteps > 0 and thetaSteps < 0:
-                thetaSteps = min(thetaSteps + phiSteps - maxSteps, 0)
-                phiSteps = maxSteps
-            elif phiSteps < 0 and thetaSteps > 0:
-                thetaSteps = min(thetaSteps, maxSteps)
-                phiSteps = -maxSteps
-            elif phiSteps < 0 and thetaSteps < 0:
-                thetaSteps = min(thetaSteps - phiSteps - maxSteps, 0)
-                phiSteps = -maxSteps
-            elif phiSteps > 0:
-                phiSteps = maxSteps
-            else:
-                phiSteps = -maxSteps
+            phiSteps = -maxSteps
 
     toTheta = np.interp(thetaFromSteps + thetaSteps, thetaModel, model.thtOffsets[cId])
     toPhi = np.interp(phiFromSteps + phiSteps, phiModel, model.phiOffsets[cId])
@@ -989,11 +967,10 @@ def interpolateMoves(cIds, timeStep, thetaAngles, phiAngles, thetaSteps, phiStep
                 thetaModelSteps = model.posThtSteps[cIds[c]]
             else:
                 thetaModelSteps = model.posThtSlowSteps[cIds[c]]
+        elif thetaFast[c]:
+            thetaModelSteps = model.negThtSteps[cIds[c]]
         else:
-            if thetaFast[c]:
-                thetaModelSteps = model.negThtSteps[cIds[c]]
-            else:
-                thetaModelSteps = model.negThtSlowSteps[cIds[c]]
+            thetaModelSteps = model.negThtSlowSteps[cIds[c]]
 
         # Get the integrated step maps for the phi angle
         if phiSteps[c] >= 0:
@@ -1001,11 +978,10 @@ def interpolateMoves(cIds, timeStep, thetaAngles, phiAngles, thetaSteps, phiStep
                 phiModelSteps = model.posPhiSteps[cIds[c]]
             else:
                 phiModelSteps = model.posPhiSlowSteps[cIds[c]]
+        elif phiFast[c]:
+            phiModelSteps = model.negPhiSteps[cIds[c]]
         else:
-            if phiFast[c]:
-                phiModelSteps = model.negPhiSteps[cIds[c]]
-            else:
-                phiModelSteps = model.negPhiSlowSteps[cIds[c]]
+            phiModelSteps = model.negPhiSlowSteps[cIds[c]]
 
         # Calculate trajectory
         thtStart = np.interp(thetaAngles[c], model.thtOffsets[cIds[c]], thetaModelSteps)

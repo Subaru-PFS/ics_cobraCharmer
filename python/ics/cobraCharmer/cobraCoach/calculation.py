@@ -1,16 +1,13 @@
-import numpy as np
-import sep
-from ics.cobraCharmer import pfiDesign
+import logging
 import os
-import sys
-from ics.cobraCharmer import func
+
+import numpy as np
 import pandas as pd
-import logging 
-
-from pfs.utils.butler import Butler
 import pfs.utils.coordinates.transform as transformUtils
-
+import sep
+from ics.cobraCharmer import func
 from opdb import opdb
+from pfs.utils.butler import Butler
 
 binSize = np.deg2rad(3.6)
 regions = 112
@@ -38,7 +35,7 @@ def lazyIdentification(centers, spots, radii=None):
     return ans
 
 def circle_fitting(p):
-    # Remove nan 
+    # Remove nan
     p=p[~np.isnan(p)]
     x = np.real(p)
     y = np.imag(p)
@@ -78,14 +75,14 @@ def transform(origPoints, newPoints):
         return x * scale * np.exp(tilt * (1j)) + offset
     return offset, scale, tilt, tr
 
-class Calculation():
+class Calculation:
     def __init__(self, calibModel, brokens, camSplit, bads=None):
         self.calibModel = calibModel
         self.setBrokenCobras(brokens, bads)
         self.camSplit = camSplit
 
     def setBrokenCobras(self, brokens=None, bads=None):
-        
+
         cobras = []
         for i in self.calibModel.findAllCobras():
             c = func.Cobra(self.calibModel.moduleIds[i],
@@ -97,7 +94,7 @@ class Calculation():
         brokens = [i+1 for i,c in enumerate(self.allCobras) if
                    self.calibModel.fiberIsBroken(c.cobraNum, c.module)]
         visibles = [e for e in range(1, self.nCobras+1) if e not in brokens]
-        
+
         self.invisibleIdx = np.array(brokens, dtype='i4') - 1
         self.visibleIdx = np.array(visibles, dtype='i4') - 1
         self.invisibleCobras = self.allCobras[self.invisibleIdx]
@@ -106,7 +103,7 @@ class Calculation():
         goodNums = [i+1 for i,c in enumerate(self.allCobras) if
                    self.calibModel.cobraIsGood(c.cobraNum, c.module)]
         badNums = [e for e in range(1, self.nCobras+1) if e not in goodNums]
-        
+
 
         self.goodIdx = np.array(goodNums, dtype='i4') - 1
         self.badIdx = np.array(badNums, dtype='i4') - 1
@@ -115,16 +112,16 @@ class Calculation():
 
 
 
-        
+
         # define the broken/visible cobras, good/bad means broken/visible here
         # if brokens is None:
         #     brokens = []
         # if bads is None:
         #     bads = brokens
-        
-        
-        
-        
+
+
+
+
         # visibles = [e for e in range(1, len(self.calibModel.centers)+1) if e not in brokens]
         # usables = [e for e in range(1, len(self.calibModel.centers)+1) if e not in bads]
         # self.badIdx = np.array(bads, dtype=int) - 1
@@ -210,7 +207,7 @@ class Calculation():
             centers = self.calibModel.centers[idx]
         else:
             centers = guess[:len(idx)]
-        
+
         #print(centers)
         measPos = np.array(objects['x'] + objects['y']*(1j))
         target = lazyIdentification(centers, measPos, radii=radii)
@@ -225,17 +222,17 @@ class Calculation():
 
         return pos, target
 
-    def extractPositionsFromImage(self, data, frameid, cameraName, arm=None, guess=None, 
+    def extractPositionsFromImage(self, data, frameid, cameraName, arm=None, guess=None,
         tolerance=None, dbData = False, noDetect = 'dot', ffFile = None,
         badFF = None, debug=False):
-        
+
         if debug is True:
             logger.setLevel(logging.INFO)
         else:
             logger.setLevel(logging.DEBUG)
 
         idx = self.visibleIdx
-        
+
         if arm is None:
             arm_radii = (self.calibModel.L1 + self.calibModel.L2)
         if arm == 'phi':
@@ -254,7 +251,7 @@ class Calculation():
         else:
             centers = guess
 
-        
+
         bkg = sep.Background(data.astype(float), bw=64, bh=64, fw=3, fh=3)
         bkg_image = bkg.back()
 
@@ -263,9 +260,9 @@ class Calculation():
         #sigma = np.std(data_sub)
         ext = sep.extract(data_sub.astype(float), 10 , err=bkg.globalrms,
             filter_type='conv', minarea=9)
-        
+
         logger.info(f'Total detected spots = {len(ext)}')
-        
+
         if ffFile is None:
             # using FF to transform pixel to mm
             butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
@@ -273,7 +270,7 @@ class Calculation():
         else:
             logger.info(f'Loading FF from file = {ffFile}')
             fids = pd.read_csv(ffFile)
-            
+
         try:
             db=opdb.OpDB(hostname='db-ics', port=5432,
                     dbname='opdb',
@@ -290,28 +287,28 @@ class Calculation():
                       f'mcs_frame_id = {frameid}')
             mcsData = db.bulkSelect('mcs_data',f'select spot_id, mcs_center_x_pix, mcs_center_y_pix '
                     f'from mcs_data where mcs_frame_id = {frameid}')
-        
+
         logger.info(f'Total spots from opDB= {len(mcsData)}')
         df=mcsData.loc[mcsData['spot_id'] > 0]
 
-        pfiTransform = transformUtils.fromCameraName(cameraName, 
+        pfiTransform = transformUtils.fromCameraName(cameraName,
             altitude=90.0, insrot=teleInfo['insrot'].values[0])
-        
+
         outerRing = np.zeros(len(fids), dtype=bool)
         for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
             outerRing[fids.fiducialId == i] = True
-        
+
         pfiTransform.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
-        
+
         stableFF = np.zeros(len(fids), dtype=bool)
-        stableFF[:]=True 
+        stableFF[:]=True
 
         if badFF is not None:
             for idx in fids['fiducialId']:
                 if idx in badFF:
                     stableFF[fids.fiducialId == idx] = False
-        
-        logger.info(f'Stable FF = {stableFF}')           
+
+        logger.info(f'Stable FF = {stableFF}')
         for i in range(2):
             pfiTransform.updateTransform(mcsData, fids[stableFF], matchRadius=4.2,nMatchMin=0.1)
 
@@ -324,7 +321,7 @@ class Calculation():
 
 
         pos=x_mm+y_mm*(1j)
-        
+
         #pos = np.array(ext['x'] + ext['y']*(1j))
 
         # When doing the matching, always looking for spots close to center.
@@ -439,7 +436,7 @@ class Calculation():
             for i in range(len(thetaFW[c,0,:])):
                 if rpoint[i] < 0.8*r:
                     thetaFW[c,0,i]=thetaFW[c,0,i-1]
-            
+
             for i in range(len(thetaRV[c,0,:])):
                 if rpoint[i] < 0.8*r:
                     thetaRV[c,0,i]=thetaRV[c,0,i-1]
@@ -460,10 +457,10 @@ class Calculation():
 
             if thetaRadius[c] > 3*self.calibModel.L1[c]:
                 thetaRadius[c] = self.calibModel.L1[c]
-        
+
         if noAngles is True:
             return thetaCenter, thetaRadius
-            
+
         # measure theta angles
         for c in self.goodIdx:
             for n in range(thetaFW.shape[1]):

@@ -2,13 +2,11 @@
 
 import tkinter as tk
 from time import sleep
+from tkinter import messagebox
 
+from ics.cobraCharmer import ethernet, fpgaLogger
 from ics.cobraCharmer.convert import get_per
 from ics.cobraCharmer.func import *
-from ics.cobraCharmer import ethernet
-from ics.cobraCharmer import fpgaLogger
-
-from tkinter import messagebox
 
 
 class App(tk.Frame):
@@ -191,7 +189,7 @@ class App(tk.Frame):
             return
 
         path = self.protoLogger.logger.handlers[0].baseFilename
-        with open(path, 'rt') as f:
+        with open(path) as f:
             logData = f.read()
 
         self.txtLog.config(state=tk.NORMAL)
@@ -368,9 +366,8 @@ class App(tk.Frame):
         if board % 2 == 1:
             if c_high >= 29:
                 return
-        else:
-            if c_high >= 28:
-                return
+        elif c_high >= 28:
+            return
 
         self.ent_cob1.delete(0, tk.END)
         self.ent_cob2.delete(0, tk.END)

@@ -1,11 +1,14 @@
-from subprocess import Popen, PIPE
-import pathlib
 import threading
 
 import numpy as np
-import astropy.io.fits as pyfits
 
-from .camera import Camera
+from ics.cobraCharmer.cobraCoach.mcs.camera import Camera
+
+try:
+    from procedures.idsCamera import idsCamera
+except Exception:
+    idsCamera = None
+
 
 class AsrdCamera(Camera):
     filePrefix = 'PFAC'
@@ -22,7 +25,6 @@ class AsrdCamera(Camera):
         if self.simulationPath is not None:
             return None
 
-        from procedures.idsCamera import idsCamera
         cams = []
         for devId in self.devIds:
             cam = idsCamera(devId)

@@ -1,21 +1,21 @@
 #from cobraCoach.cobraCoach import CobraCoach as cc
-from ics.cobraCharmer.cobraCoach import calculus as cal
-from ics.cobraCharmer.cobraCoach import build_maps_with_dots as bmds
-import numpy as np
+import fnmatch
 import logging
-from copy import deepcopy
+
+#import cv2
+import os
 import pathlib
+import time
+from copy import deepcopy
+
+import astropy.io.fits as pyfits
+import numpy as np
+from ics.cobraCharmer import pfiDesign
+from ics.cobraCharmer.cobraCoach import build_maps_with_dots as bmds
+from ics.cobraCharmer.cobraCoach import calculation
+from ics.cobraCharmer.cobraCoach import calculus as cal
 from ics.cobraCharmer.cobraCoach.speedModel import SpeedModel
 from ics.cobraCharmer.cobraCoach.trajectory import Trajectories
-#import cv2
-import os, fnmatch
-
-from ics.cobraCharmer import pfiDesign
-from ics.cobraCharmer.cobraCoach import calculation
-import astropy.io.fits as pyfits
-
-import time
-
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
@@ -55,8 +55,8 @@ def findFITS(path):
         for name in files:
             if fnmatch.fnmatch(name, 'PFSC*.fits'):
                 result.append(os.path.join(root, name))
-    
-    
+
+
     return result
 
 
@@ -151,7 +151,7 @@ def moveThetaAngles(cIds, thetas, relative=False, local=True, tolerance=0.002, t
     else:
         targets[cIds] = thetas
 
-    cc.camResetStack(f'thetaStack.fits')
+    cc.camResetStack('thetaStack.fits')
     logger.info(f'Move theta arms to angle={np.round(np.rad2deg(targets[cIds]),2)} degree')
 
     for j in range(tries):
@@ -174,12 +174,12 @@ def moveThetaAngles(cIds, thetas, relative=False, local=True, tolerance=0.002, t
             notDoneMask &= ~newlyDone
             logger.info(f'done: {np.where(newlyDone)[0]}, {(notDoneMask == True).sum()} left')
         if not np.any(notDoneMask):
-            logger.info(f'all cobras are in positions')
+            logger.info('all cobras are in positions')
             break
 
     cc.camResetStack()
     if np.any(notDoneMask):
-        logger.warn(f'{(notDoneMask == True).sum()} cobras did not finish: '
+        logger.warning(f'{(notDoneMask == True).sum()} cobras did not finish: '
                          f'{np.where(notDoneMask)[0]}, '
                          f'{np.round(np.rad2deg(diffAngles)[notDoneMask], 2)}')
 
@@ -230,7 +230,7 @@ def movePhiAngles(cIds, phis, relative=False, local=True, tolerance=0.002, tries
     else:
         targets[cIds] = phis
 
-    cc.camResetStack(f'phiStack.fits')
+    cc.camResetStack('phiStack.fits')
     logger.info(f'Move phi arms to angle={np.round(np.rad2deg(targets[cIds]),2)} degree')
 
     for j in range(tries):
@@ -254,12 +254,12 @@ def movePhiAngles(cIds, phis, relative=False, local=True, tolerance=0.002, tries
             notDoneMask &= ~newlyDone
             logger.info(f'done: {np.where(newlyDone)[0]}, {(notDoneMask == True).sum()} left')
         if not np.any(notDoneMask):
-            logger.info(f'all cobras are in positions')
+            logger.info('all cobras are in positions')
             break
 
     cc.camResetStack()
     if np.any(notDoneMask):
-        logger.warn(f'{(notDoneMask == True).sum()} cobras did not finish: '
+        logger.warning(f'{(notDoneMask == True).sum()} cobras did not finish: '
                          f'{np.where(notDoneMask)[0]}, '
                          f'{np.round(np.rad2deg(diffAngles)[notDoneMask], 2)}')
 
@@ -391,7 +391,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
         targetPhis[cIds] = phis
     targets = cc.pfi.anglesToPositions(cc.allCobras, targetThetas, targetPhis)
 
-    cc.camResetStack(f'Stack.fits')
+    cc.camResetStack('Stack.fits')
     logger.info(f'Move theta arms to angle={np.round(np.rad2deg(targetThetas[cIds]),2)} degree')
     logger.info(f'Move phi arms to angle={np.round(np.rad2deg(targetPhis[cIds]),2)} degree')
 
@@ -399,7 +399,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     if homed is True:
         # go home for safe movement
         cobras = cc.allCobras[cIds]
-        logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
+        logger.info('Move theta arms CW and phi arms CCW to the hard stops')
         cc.moveToHome(cobras, thetaEnable=True, phiEnable=True, thetaCCW=False)
 
     for j in range(tries):
@@ -408,7 +408,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
         _phiFast = farAwayMask[notDoneMask] & phiFast[notDoneMask]
         cc.thetaScaling = np.logical_not(farAwayMask)
         cc.phiScaling = np.logical_not(farAwayMask)
-        
+
         logger.info(f'Sending angles to moveToAngles for {j}-th iteration')
         atThetas[notDoneMask], atPhis[notDoneMask] = \
             cc.moveToAngles(cobras, targetThetas[notDoneMask], targetPhis[notDoneMask], _thetaFast, _phiFast, True)
@@ -419,7 +419,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
         newlyDone = nowDone & notDoneMask
         farAwayMask = (distances > threshold) & farAwayMask
 
-        logger.info(f'Updating the cobra information')
+        logger.info('Updating the cobra information')
         ndIdx = notDoneMask[cIds]
         moves['position'][ndIdx,j] = atPositions[notDoneMask]
         moves['thetaAngle'][ndIdx,j] = atThetas[notDoneMask]
@@ -435,17 +435,17 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
             notDoneMask &= ~newlyDone
             logger.info(f'done: {np.where(newlyDone)[0]}, {(notDoneMask == True).sum()} left')
         if not np.any(notDoneMask):
-            logger.info(f'all cobras are in positions')
+            logger.info('all cobras are in positions')
             break
 
     cc.camResetStack()
     cc.thetaScaling = np.full(cc.nCobras, True)
     cc.phiScaling = np.full(cc.nCobras, True)
     if np.any(notDoneMask):
-        logger.warn(f'{(notDoneMask == True).sum()} cobras did not finish: '
+        logger.warning(f'{(notDoneMask == True).sum()} cobras did not finish: '
                          f'{np.where(notDoneMask)[0]}, '
                          f'{np.round(distances[notDoneMask],2)}')
-    
+
     badMoveIdx = np.where(notDoneMask)[0]
     logger.info(f'Returning {len(atThetas)} atThetas and {len(atPhis)} atPhis')
     return dataPath, atThetas, atPhis, moves
@@ -556,7 +556,7 @@ def convergenceTest(cIds, runs=8,
 
 
 def extractPhiSpotsFromRun(runDir, xml, stepsize = 250, dbData = True, badFF = None):
-    
+
     path = f'/data/MCS/{runDir}/'
     if os.path.exists(path) is not True:
         path = f'/data/MCS_Subaru/{runDir}/'
@@ -565,7 +565,7 @@ def extractPhiSpotsFromRun(runDir, xml, stepsize = 250, dbData = True, badFF = N
     t1 = time.time()
 
     totalSteps = 6000
-    
+
     steps = stepsize
     repeat = 1
 
@@ -583,10 +583,10 @@ def extractPhiSpotsFromRun(runDir, xml, stepsize = 250, dbData = True, badFF = N
     beginid=int(findFITS(dataPath)[0][-12:-7])*100
 
     if os.path.exists(os.readlink(findFITS(dataPath)[0])) is False:
-        newPath = f'/data_raw/'+os.readlink(findFITS(dataPath)[0])[10:21]+'mcs'
+        newPath = '/data_raw/'+os.readlink(findFITS(dataPath)[0])[10:21]+'mcs'
     else:
         newPath = dataPath
-            
+
     for n in range(repeat):
         if n == 0:
             cid = beginid
@@ -594,7 +594,7 @@ def extractPhiSpotsFromRun(runDir, xml, stepsize = 250, dbData = True, badFF = N
             cid += 1
         logger.info(f'phiBegin = {cid:08d}')
         data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
-        
+
         phiFW[goodIdx, n, 0] = cal.extractPositionsFromImage(data1, cid, 'rmod', dbData=dbData,
                                 tolerance=1.0, badFF=badFF)[goodIdx]
 
@@ -602,26 +602,26 @@ def extractPhiSpotsFromRun(runDir, xml, stepsize = 250, dbData = True, badFF = N
             cid+=1
             logger.info(f'Processing iteration {k}, visitID = {cid}')
             data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
-            
+
             phiFW[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1, cid ,'rmod', guess=phiFW[:, n, k],
-                                                                    tolerance=1.0, dbData=dbData, 
+                                                                    tolerance=1.0, dbData=dbData,
                                                                     noDetect = 'guess', badFF=badFF)[goodIdx]
 
         cid+=1
         logger.info(f'phiEnd = {cid}')
         data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
-        
+
         phiRV[goodIdx, n, 0] = cal.extractPositionsFromImage(data1, cid, 'rmod', guess=phiFW[:, n, -1],
-                                                            tolerance=1.0, dbData=dbData, 
+                                                            tolerance=1.0, dbData=dbData,
                                                             noDetect = 'guess', badFF=badFF)[goodIdx]
 
         for k in range(iteration):
             cid+=1
             logger.info(f'Processing iteration {k}, visitID = {cid}')
             data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
-            
+
             phiRV[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1, cid, 'rmod', guess=phiRV[:, n, k],
-                                                                    tolerance=1.0, dbData=dbData, 
+                                                                    tolerance=1.0, dbData=dbData,
                                                                     noDetect = 'guess', badFF=badFF)[goodIdx]
 
     t2 = time.time()
@@ -637,9 +637,9 @@ def extractThetaSpotsFromRun(runDir, xml, stepsize=250, badFF = None, ffFile = N
 
     t1 = time.time()
 
-  
+
     totalSteps = 10000
-    
+
 
     steps = stepsize
     repeat = 1
@@ -651,12 +651,12 @@ def extractThetaSpotsFromRun(runDir, xml, stepsize=250, badFF = None, ffFile = N
     thetaFW = np.zeros((2394, repeat, iteration+1), dtype=complex)
     thetaRV = np.zeros((2394, repeat, iteration+1), dtype=complex)
     goodIdx = cal.visibleIdx
-    
+
     dataPath=f'{path}/data'
     beginid=int(findFITS(dataPath)[0][-12:-7])*100
-    
+
     if os.path.exists(os.readlink(findFITS(dataPath)[0])) is False:
-        newPath = f'/data_raw/'+os.readlink(findFITS(dataPath)[0])[10:21]+'mcs'
+        newPath = '/data_raw/'+os.readlink(findFITS(dataPath)[0])[10:21]+'mcs'
     else:
         newPath = dataPath
 
@@ -667,40 +667,40 @@ def extractThetaSpotsFromRun(runDir, xml, stepsize=250, badFF = None, ffFile = N
             cid += 1
         logger.info(f'thetaBegin = {cid:08d}')
         data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
-        
-        thetaFW[goodIdx, n, 0] = cal.extractPositionsFromImage(data1, cid, 'rmod', 
+
+        thetaFW[goodIdx, n, 0] = cal.extractPositionsFromImage(data1, cid, 'rmod',
                             tolerance=0.8, dbData=True,noDetect='nan', badFF = badFF, ffFile = ffFile)[goodIdx]
-        
+
         for k in range(iteration):
             cid+=1
             logger.info(f'Processing iteration {k}, visitID = {cid}')
             data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
-            
+
             thetaFW[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1, cid ,'rmod',
                                                                 tolerance=0.8, dbData=True,
                                                                 noDetect='nan', badFF = badFF, ffFile = ffFile)[goodIdx]
-                
+
         cid+=1
         logger.info(f'thetaEnd = {cid}')
         data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
-        
-        thetaRV[goodIdx, n, 0] = cal.extractPositionsFromImage(data1, cid, 'rmod', 
+
+        thetaRV[goodIdx, n, 0] = cal.extractPositionsFromImage(data1, cid, 'rmod',
                                                          tolerance=0.8, dbData=True,
                                                          noDetect='nan', badFF = badFF, ffFile = ffFile)[goodIdx]
-        
+
         for k in range(iteration):
             cid+=1
             logger.info(f'Processing iteration {k}, visitID = {cid}')
             data1 = pyfits.getdata(newPath + f'/PFSC{cid:08d}.fits')
-            
+
             thetaRV[goodIdx, n, k+1] = cal.extractPositionsFromImage(data1, cid, 'rmod',
                                                                 tolerance=0.8, dbData=True,
                                                                 noDetect='nan', badFF = badFF, ffFile = ffFile)[goodIdx]
-    
+
     t2 = time.time()
     logger.info(f'total time = {t2 - t1}')
     return thetaFW, thetaRV
-    
+
 
 def makeThetaMotorMaps(newXml, steps=500, totalSteps=10000, repeat=1, fast=False, thetaOnTime=None,
                        limitOnTime=0.08, limitSteps=10000, updateGeometry=False, phiRunDir=None,
@@ -733,7 +733,7 @@ def makeThetaMotorMaps(newXml, steps=500, totalSteps=10000, repeat=1, fast=False
         center[ci], radius[ci], angF[ci], angR[ci], bad[ci] = cal.thetaCenterAngles(posF[ci], posR[ci])
 
     for short in np.where(bad)[0]:
-        logger.warn(f'theta range for {short+1:-2d} is short: '
+        logger.warning(f'theta range for {short+1:-2d} is short: '
                          f'back={np.rad2deg(angF[short,0,0]):-6.2f} '
                          f'out={np.rad2deg(angR[short,0,-1]):-6.2f}')
     np.save(dataPath / 'thetaCenter', center)
@@ -783,7 +783,7 @@ def makeThetaMotorMaps(newXml, steps=500, totalSteps=10000, repeat=1, fast=False
     for ci in cc.goodIdx:
         mmF[ci], mmR[ci], mmBad[ci] = cal.motorMaps(angF[ci], angR[ci], steps, delta)
     for bad_i in np.where(mmBad)[0]:
-        logger.warn(f'theta map for {bad_i+1} is bad')
+        logger.warning(f'theta map for {bad_i+1} is bad')
     np.save(dataPath / 'thetaMMFW', mmF)
     np.save(dataPath / 'thetaMMRV', mmR)
     np.save(dataPath / 'badMotorMap', np.where(mmBad)[0])
@@ -844,7 +844,7 @@ def makePhiMotorMaps(newXml, steps=250, totalSteps=5000, repeat=1, fast=False, p
         center[ci], radius[ci], angF[ci], angR[ci], bad[ci] = cal.phiCenterAngles(posF[ci], posR[ci])
 
     for short in np.where(bad)[0]:
-        logger.warn(f'phi range for {short+1:-2d} is short: '
+        logger.warning(f'phi range for {short+1:-2d} is short: '
                          f'back={np.rad2deg(angF[short,0,0]):-6.2f} '
                          f'out={np.rad2deg(angR[short,0,-1]):-6.2f}')
     np.save(dataPath / 'phiCenter', center)
@@ -896,7 +896,7 @@ def makePhiMotorMaps(newXml, steps=250, totalSteps=5000, repeat=1, fast=False, p
     for ci in cc.goodIdx:
         mmF[ci], mmR[ci], mmBad[ci] = cal.motorMaps(angF[ci], angR[ci], steps, delta)
     for bad_i in np.where(mmBad)[0]:
-        logger.warn(f'phi map for {bad_i+1} is bad')
+        logger.warning(f'phi map for {bad_i+1} is bad')
     np.save(dataPath / 'phiMMFW', mmF)
     np.save(dataPath / 'phiMMRV', mmR)
     np.save(dataPath / 'badMotorMap', np.where(mmBad)[0])
@@ -957,12 +957,12 @@ def searchOnTime(speed, sData, tData):
         err = model.buildModel(s, t)
 
         if err:
-            logger.warn(f'Building model failed #{c+1}, set to max value')
+            logger.warning(f'Building model failed #{c+1}, set to max value')
             onTime[c] = np.max(t)
         else:
             onTime[c] = model.toOntime(speed)
             if not np.isfinite(onTime[c]):
-                logger.warn(f'Curve fitting failed #{c+1}, set to median value')
+                logger.warning(f'Curve fitting failed #{c+1}, set to median value')
                 onTime[c] = np.median(t)
 
     return onTime
@@ -975,7 +975,7 @@ def thetaOnTimeSearch(newXml, speeds=(0.06,0.12), steps=(1000,500), iteration=3,
     speedLow = np.deg2rad(0.02)
 
     if iteration < 3:
-        logger.warn(f'Change iteration parameter from {iteration} to 3!')
+        logger.warning(f'Change iteration parameter from {iteration} to 3!')
         iteration = 3
     if np.isscalar(speeds) or len(speeds) != 2:
         raise ValueError(f'speeds parameter must be a tuple with two values: {speeds}')
@@ -1012,7 +1012,7 @@ def thetaOnTimeSearch(newXml, speeds=(0.06,0.12), steps=(1000,500), iteration=3,
     _spdF.append(spdF.copy())
     _spdR.append(spdR.copy())
 
-    for (speed, step) in zip(speeds, steps):
+    for (speed, step) in zip(speeds, steps, strict=False):
         logger.info(f'Search on-time for speed={np.rad2deg(speed)}.')
 
         # calculate on time
@@ -1075,7 +1075,7 @@ def phiOnTimeSearch(newXml, speeds=(0.06,0.12), steps=(500,250), iteration=3, re
     speedLow = np.deg2rad(0.02)
 
     if iteration < 3:
-        logger.warn(f'Change iteration parameter from {iteration} to 3!')
+        logger.warning(f'Change iteration parameter from {iteration} to 3!')
         iteration = 3
     if np.isscalar(speeds) or len(speeds) != 2:
         raise ValueError(f'speeds parameter should be a tuple with two values: {speeds}')
@@ -1112,7 +1112,7 @@ def phiOnTimeSearch(newXml, speeds=(0.06,0.12), steps=(500,250), iteration=3, re
     _spdF.append(spdF.copy())
     _spdR.append(spdR.copy())
 
-    for (speed, step) in zip(speeds, steps):
+    for (speed, step) in zip(speeds, steps, strict=False):
         logger.info(f'Search on-time for speed={np.rad2deg(speed)}.')
 
         # calculate on time
@@ -1277,17 +1277,17 @@ def convertXML2(newXml, homePhi=True, usePhiHome = False):
 
     afCor=cv2.transform(np.array([ori]),afCoeff)
     newcenters= afCor[0,:,0]+afCor[0,:,1]*1j
-    
+
     old = cc.calibModel
     new = deepcopy(old)
     #new.centers[:] = convert(old.centers)
-    
-    
+
+
     if usePhiHome is False:
         new.centers[:]=newcenters
     else:
         new.centers[:]=newPos
-        
+
     new.tht0[:] = (old.tht0 + tilt) % (2*np.pi)
     new.tht1[:] = (old.tht1 + tilt) % (2*np.pi)
     new.L1[:] = old.L1*scale
@@ -1349,7 +1349,7 @@ def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=
     notDoneMask = np.zeros(cc.nCobras, 'bool')
     limitAngles = (cc.phiInfo['cwHome'] - cc.phiInfo['ccwHome']) % (np.pi*2)
 
-    logger.info(f'Move phi to CCW home and reset motor scaling')
+    logger.info('Move phi to CCW home and reset motor scaling')
     cc.pfi.resetMotorScaling()
     cc.moveToHome(cc.allCobras[cIds], thetaEnable=False, phiEnable=True)
 
@@ -1405,13 +1405,13 @@ def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=
                 notDoneMask &= ~newlyDone
                 logger.info(f'done: {np.where(newlyDone)[0]}, {(notDoneMask == True).sum()} left')
             if not np.any(notDoneMask):
-                logger.info(f'all cobras reach CW limits')
+                logger.info('all cobras reach CW limits')
                 break
 
         cc.camResetStack()
         cc.calibModel.motorOntimeSlowFwd2[:] = oldOntimes
         if np.any(notDoneMask):
-            logger.warn(f'{(notDoneMask == True).sum()} cobras did not finish: '
+            logger.warning(f'{(notDoneMask == True).sum()} cobras did not finish: '
                         f'{np.where(notDoneMask)[0]}, ')
 
         nowDone[:] = False
@@ -1465,13 +1465,13 @@ def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=
                 notDoneMask &= ~newlyDone
                 logger.info(f'done: {np.where(newlyDone)[0]}, {(notDoneMask == True).sum()} left')
             if not np.any(notDoneMask):
-                logger.info(f'all cobras reach CCW limits')
+                logger.info('all cobras reach CCW limits')
                 break
 
         cc.camResetStack()
         cc.calibModel.motorOntimeSlowRev2[:] = oldOntimes
         if np.any(notDoneMask):
-            logger.warn(f'{(notDoneMask == True).sum()} cobras did not finish: '
+            logger.warning(f'{(notDoneMask == True).sum()} cobras did not finish: '
                         f'{np.where(notDoneMask)[0]}, ')
 
     np.save(dataPath / 'ontimes', ontimes)
@@ -1496,7 +1496,7 @@ def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=
             if len(nz) > 0:
                 lower = nz[0] + j
             else:
-                logger.warn(f'sticky at the beginning: {i}, {j}')
+                logger.warning(f'sticky at the beginning: {i}, {j}')
                 continue
 
             if j == 0:
@@ -1507,11 +1507,11 @@ def phiOntimeScan(cIds=None, speed=None, initOntimes=None, steps=10, totalSteps=
             if len(nz) > 0:
                 upper = nz[0] + j
             else:
-                logger.warn(f'sticky at the end: {i}, {j}')
+                logger.warning(f'sticky at the end: {i}, {j}')
                 continue
 
             if upper - lower < smooth_len:
-                logger.warn(f'moving range is too small: {i}, {j}')
+                logger.warning(f'moving range is too small: {i}, {j}')
                 continue
 
             mm[i,j,:upper-lower]['angle'] = angles[i,0,j,lower:upper]
@@ -1575,7 +1575,7 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None,
     notDoneMask = np.zeros(cc.nCobras, 'bool')
     limitAngles = (cc.thetaInfo['cwHome'] - cc.thetaInfo['ccwHome'] + np.pi) % (np.pi*2) + np.pi
 
-    logger.info(f'Move theta to CCW home and reset motor scaling')
+    logger.info('Move theta to CCW home and reset motor scaling')
     cc.pfi.resetMotorScaling()
     cc.moveToHome(cc.allCobras[cIds], thetaEnable=True, phiEnable=False)
 
@@ -1627,13 +1627,13 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None,
                 notDoneMask &= ~newlyDone
                 logger.info(f'done: {np.where(newlyDone)[0]}, {(notDoneMask == True).sum()} left')
             if not np.any(notDoneMask):
-                logger.info(f'all cobras reach CW limits')
+                logger.info('all cobras reach CW limits')
                 break
 
         cc.camResetStack()
         cc.calibModel.motorOntimeSlowFwd1[:] = oldOntimes
         if np.any(notDoneMask):
-            logger.warn(f'{(notDoneMask == True).sum()} cobras did not finish: '
+            logger.warning(f'{(notDoneMask == True).sum()} cobras did not finish: '
                         f'{np.where(notDoneMask)[0]}, ')
 
         nowDone[:] = False
@@ -1683,13 +1683,13 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None,
                 notDoneMask &= ~newlyDone
                 logger.info(f'done: {np.where(newlyDone)[0]}, {(notDoneMask == True).sum()} left')
             if not np.any(notDoneMask):
-                logger.info(f'all cobras reach CCW limits')
+                logger.info('all cobras reach CCW limits')
                 break
 
         cc.camResetStack()
         cc.calibModel.motorOntimeSlowRev1[:] = oldOntimes
         if np.any(notDoneMask):
-            logger.warn(f'{(notDoneMask == True).sum()} cobras did not finish: '
+            logger.warning(f'{(notDoneMask == True).sum()} cobras did not finish: '
                         f'{np.where(notDoneMask)[0]}, ')
 
     np.save(dataPath / 'ontimes', ontimes)
@@ -1714,7 +1714,7 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None,
             if len(nz) > 0:
                 lower = nz[0] + j
             else:
-                logger.warn(f'sticky at the beginning: {i}, {j}')
+                logger.warning(f'sticky at the beginning: {i}, {j}')
                 continue
 
             if j == 0:
@@ -1725,11 +1725,11 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None,
             if len(nz) > 0:
                 upper = nz[0] + j
             else:
-                logger.warn(f'sticky at the end: {i}, {j}')
+                logger.warning(f'sticky at the end: {i}, {j}')
                 continue
 
             if upper - lower < smooth_len:
-                logger.warn(f'moving range is too small: {i}, {j}')
+                logger.warning(f'moving range is too small: {i}, {j}')
                 continue
 
             mm[i,j,:upper-lower]['angle'] = angles[i,0,j,lower:upper]
@@ -1742,9 +1742,9 @@ def thetaOntimeScan(cIds=None, speed=None, initOntimes=None,
 
     return dataPath, ontimes, angles, speeds
 
-def convergenceTestX(cIds, runs=3, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0), 
+def convergenceTestX(cIds, runs=3, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0),
         tries=8, tolerance=0.1, threshold=3.0, newDir=False, twoSteps=False):
-    
+
     """ convergence test, even and odd cobras move toward each other in a single module """
     if tries < 4:
         raise ValueError("tries parameter should be larger than 4")
@@ -1804,7 +1804,7 @@ def convergenceTestX(cIds, runs=3, thetaMargin=np.deg2rad(15.0), phiMargin=np.de
     np.save(dataPath / 'moves', moves)
     return targets, moves
 
-def moveToPhiAngleForDot(cIds, phiAngle, tolerance=0.2, tries=10, homed=True, newDir=False, 
+def moveToPhiAngleForDot(cIds, phiAngle, tolerance=0.2, tries=10, homed=True, newDir=False,
     threshold=20.0, thetaMargin=np.deg2rad(15.0)):
     """ Move to a location with specified phi angle """
 
@@ -1818,13 +1818,13 @@ def moveToPhiAngleForDot(cIds, phiAngle, tolerance=0.2, tries=10, homed=True, ne
     thetas = thetas % (np.pi*2)
 
     cc.pfi.resetMotorScaling()
-    dataPath, thetas, phis, moves = moveThetaPhi(cIds, thetas, phis, 
+    dataPath, thetas, phis, moves = moveThetaPhi(cIds, thetas, phis,
         False, False, tolerance, tries, homed, newDir, True, True, threshold, thetaMargin)
 
 
-def moveToSafePosition(cIds, tolerance=0.2, tries=10, homed=True, newDir=False, threshold=20.0, 
+def moveToSafePosition(cIds, tolerance=0.2, tries=10, homed=True, newDir=False, threshold=20.0,
     thetaMargin=np.deg2rad(15.0)):
-    
+
     # move theta arms away from the bench center and phi arms to 60 degree
     ydir = np.angle(cc.calibModel.centers[1] - cc.calibModel.centers[55])
     thetas = np.full(len(cIds), ydir)
@@ -1833,15 +1833,15 @@ def moveToSafePosition(cIds, tolerance=0.2, tries=10, homed=True, newDir=False, 
     thetas = thetas % (np.pi*2)
 
     cc.pfi.resetMotorScaling()
-    dataPath, thetas, phis, moves = moveThetaPhi(cIds, thetas, np.pi/3, 
+    dataPath, thetas, phis, moves = moveThetaPhi(cIds, thetas, np.pi/3,
         False, False, tolerance, tries, homed, newDir, True, True, threshold, thetaMargin)
-    
+
     # Define safe location to be phi = 80-degree outward
     #dataPath, thetas, phis, moves = moveThetaPhi(cIds, thetas, np.pi*(4/9), False, False, tolerance, tries, homed, newDir, True, True, threshold, thetaMargin)
 
-    
 
-def convergenceTest2(cIds, runs=8, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0), thetaOffset=0, 
+
+def convergenceTest2(cIds, runs=8, thetaMargin=np.deg2rad(15.0), phiMargin=np.deg2rad(15.0), thetaOffset=0,
     phiAngle=(np.pi*5/6, np.pi/3, np.pi/4), tries=8, tolerance=0.2, threshold=20.0, newDir=False, twoSteps=False):
     """ convergence test, all theta arms in the same global direction. Three non-interfere groups use different phi angles  """
     cc.connect(False)
@@ -1996,7 +1996,7 @@ def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0
     positions = cc.pfi.anglesToPositions(cc.allCobras[cIds], thetas, phis)
 
     if not cc.trajectoryMode:
-        logger.info(f'switch cobraCoach to trajectoryMode mode')
+        logger.info('switch cobraCoach to trajectoryMode mode')
         cc.trajectoryMode = True
         toggleFlag = True
     else:
@@ -2036,11 +2036,11 @@ def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0
 def buildThetaMotorMaps(xml, steps=500, group=1, repeat=1, fast=False, tries=10, homed=True, cmd=None):
     bmds.setCobraCoach(cc)
     if homed:
-        logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
+        logger.info('Move theta arms CW and phi arms CCW to the hard stops')
         cc.moveToHome(cc.goodCobras, thetaEnable=True, phiEnable=True, thetaCCW=False)
-    
+
     logger.info(f'Move theta group = {group}')
-    
+
     #if group is None:
 
     #for group in range(3):
@@ -2052,7 +2052,7 @@ def buildThetaMotorMaps(xml, steps=500, group=1, repeat=1, fast=False, tries=10,
 def buildPhiMotorMaps(xml, steps=250, repeat=1, fast=False, tries=10, homed=True):
     bmds.setCobraCoach(cc)
     if homed:
-        logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
+        logger.info('Move theta arms CW and phi arms CCW to the hard stops')
         cc.moveToHome(cc.goodCobras, thetaEnable=True, phiEnable=True, thetaCCW=False)
     bmds.preparePhiMotorMaps(tries=tries, homed=False)
     bmds.runPhiMotorMaps(xml, steps=steps, repeat=repeat, fast=fast)
@@ -2064,4 +2064,3 @@ def buildMotorMapFromRunId(arm=None, runDir=None):
     '''
         Build motor map from given runDir.   This is used when we need to re-calculate the  
     '''
-    pass

@@ -6,18 +6,20 @@ is no pixel scaling or phi home hacking. The coordinate
 system here should be in F3C.
 
 """
-from importlib import reload
 import logging
-import pandas as pd
-import numpy as np
-import xml.etree.ElementTree as ElementTree
 from copy import deepcopy
+from importlib import reload
+from xml.etree import ElementTree
 
-from .utils import butler
+import numpy as np
+import pandas as pd
+
+from ics.cobraCharmer.utils import butler
+
 reload(butler)
 
 
-class PFIDesign():
+class PFIDesign:
     """ Class describing a cobras calibration product, the "motor map"  """
 
     COBRA_OK_MASK           = 0x0001  # a synthetic summary bit: 1 for good, 0 for bad.
@@ -85,7 +87,7 @@ class PFIDesign():
         self.loadModelFiles(modulePaths)
 
         return self
-    
+
     def _replaceZeros(self, data):
         """
         Replace zeros in the input data array with the mean of the nearest non-zero neighbors.
@@ -131,8 +133,8 @@ class PFIDesign():
             elif next_idx < len(data):  # Case where zero is at the start of the array
                 data[i] = data[next_idx]
 
-        return data 
-    
+        return data
+
     def fixModuleIds(self):
         """
         During the testing phase, not all cobra modules are installed.
@@ -153,12 +155,12 @@ class PFIDesign():
         """
         ffDotDF=pd.read_csv(butler.configPathForFFDot())
         dotDF = pd.read_csv(butler.configPathForDot(version='mcs'))
-        
+
         self.dotpos=dotDF['x_dot'].values+dotDF['y_dot'].values*1j
         self.dotradii = dotDF['r_dot'].values
         self.ffpos = ffDotDF['x_pixel'].values+ffDotDF['y_pixel'].values*1j
-        
-        
+
+
 
 
     def _loadCobrasFromModelFile(self, fileName):
@@ -323,7 +325,7 @@ class PFIDesign():
                 self.motorOntimeSlowRev1[i] = float(kinematics.find('Link1_rev_Duration_Slow').text)
                 self.motorOntimeSlowFwd2[i] = float(kinematics.find('Link2_fwd_Duration_Slow').text)
                 self.motorOntimeSlowRev2[i] = float(kinematics.find('Link2_rev_Duration_Slow').text)
-                
+
                 # Get the cobra motors speeds in degrees per step
                 slowJoint1Fwd = slowCalTable.find("Joint1_fwd_stepsizes").text.split(",")[2:-1]
                 slowJoint1Rev = slowCalTable.find("Joint1_rev_stepsizes").text.split(",")[2:-1]
@@ -333,8 +335,8 @@ class PFIDesign():
                 fastJoint1Rev = fastCalTable.find("Joint1_rev_stepsizes").text.split(",")[2:-1]
                 fastJoint2Fwd = fastCalTable.find("Joint2_fwd_stepsizes").text.split(",")[2:-1]
                 fastJoint2Rev = fastCalTable.find("Joint2_rev_stepsizes").text.split(",")[2:-1]
-                
-                    
+
+
                 self.S1Pm[i] = angularStep / self._replaceZeros(np.array(list(map(float, slowJoint1Fwd))))
                 self.S1Nm[i] = angularStep / self._replaceZeros(np.array(list(map(float, slowJoint1Rev))))
                 self.S2Pm[i] = angularStep / self._replaceZeros(np.array(list(map(float, slowJoint2Fwd))))
@@ -343,7 +345,7 @@ class PFIDesign():
                 self.F1Nm[i] = angularStep / self._replaceZeros(np.array(list(map(float, fastJoint1Rev))))
                 self.F2Pm[i] = angularStep / self._replaceZeros(np.array(list(map(float, fastJoint2Fwd))))
                 self.F2Nm[i] = angularStep / self._replaceZeros(np.array(list(map(float, fastJoint2Rev))))
-            
+
 
                 # Save the angular step in radians
                 self.angularSteps[i] = np.deg2rad(angularStep)
@@ -363,7 +365,7 @@ class PFIDesign():
             self.negThtSteps = np.hstack((zeros, np.cumsum(self.F1Nm, axis=1)))
             self.posPhiSteps = np.hstack((zeros, np.cumsum(self.F2Pm, axis=1)))
             self.negPhiSteps = np.hstack((zeros, np.cumsum(self.F2Nm, axis=1)))
-        
+
         # In the end, load dot location
         #self._loadDotLocations()
 
@@ -912,7 +914,7 @@ class PFIDesign():
         # Save the new XML calibration file
         newXmlTree.write(outputFileName, encoding="UTF-8", xml_declaration=True)
         self.logger.info(
-            f'wrote pfiDesign file for {self.nCobras} cobras and name={name} to {str(outputFileName)}')
+            f'wrote pfiDesign file for {self.nCobras} cobras and name={name} to {outputFileName!s}')
 
     def validatePhiLimits(self, rangeOnly=True):
         """ Confirm that the phi limits are sane. """
@@ -928,7 +930,7 @@ class PFIDesign():
 
         for cidx in np.where(duds)[0]:
             with np.printoptions(precision=2, suppress=True):
-                self.logger.warn(f'phi limits bad: mod={self.moduleIds[cidx]} pos={self.positionerIds[cidx]} '
+                self.logger.warning(f'phi limits bad: mod={self.moduleIds[cidx]} pos={self.positionerIds[cidx]} '
                                  f'CCW={np.rad2deg(self.phiIn[cidx])} CW={np.rad2deg(self.phiOut[cidx])}')
         return ~duds
 
@@ -942,7 +944,7 @@ class PFIDesign():
 
         for cidx in np.where(duds)[0]:
             with np.printoptions(precision=2, suppress=True):
-                self.logger.warn(f'theta limits bad: mod={self.moduleIds[cidx]} pos={self.positionerIds[cidx]} '
+                self.logger.warning(f'theta limits bad: mod={self.moduleIds[cidx]} pos={self.positionerIds[cidx]} '
                                  f'range={np.rad2deg(thetaRange[cidx])}')
         return ~duds
 

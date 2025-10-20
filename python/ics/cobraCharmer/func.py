@@ -1,18 +1,17 @@
-from .fpgaState import fpgaState
-from .cmds import *
-from .convert import *
-from .log import full_log, medium_log, short_log, eth_hex_logger
-from . import ethernet
-from importlib import reload
-
+import csv
 import math
 import os.path
-import csv
 import time
+from importlib import reload
 
 import numpy as np
 
-from . import cmds
+from ics.cobraCharmer import cmds, ethernet, convert
+from ics.cobraCharmer.cmds import *
+from ics.cobraCharmer.convert import *
+from ics.cobraCharmer.fpgaState import fpgaState
+from ics.cobraCharmer.log import eth_hex_logger, full_log, medium_log, short_log
+
 reload(cmds)
 
 
@@ -272,7 +271,7 @@ def POW(sectors=0x3f):
     short_log.log("--- POWER ---")
 
     sectors_off = []
-    for i in range(0, 6):
+    for i in range(6):
         if not sectors & (0x01 << i):
             sectors_off.append(i)
 
@@ -289,7 +288,7 @@ def RST(sectors=0x3f):
     short_log.log("--- RESET ---")
 
     sectors_reseting = []
-    for i in range(0, 6):
+    for i in range(6):
         if sectors & (0x01 << i):
             sectors_reseting.append(i)
 

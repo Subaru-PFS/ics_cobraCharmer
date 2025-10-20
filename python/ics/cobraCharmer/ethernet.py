@@ -1,9 +1,8 @@
 import array
 import socket
-import struct
 import time
 
-from .hexprint import arr2Hex
+from ics.cobraCharmer.hexprint import arr2Hex
 
 # TODO:
 #  Replace all array with bytearray
@@ -82,7 +81,7 @@ class Sock:
                 chunk = self._s.recv(remaining)
                 if logger is not None:
                     logger.debug("(ETH)Rcvd %d bytes on socket:%s" % (len(chunk), chunk))
-            except socket.timeout:
+            except TimeoutError:
                 t1 = time.time()
                 errMsg = "timed out (%0.3f s) waiting for %d bytes. Received %d bytes: %s" % (t1-t0, tgt_len,
                                                                                               tgt_len-remaining,
@@ -95,7 +94,7 @@ class Sock:
                     else:
                         print(errMsg)
                     retry += 1
-                    chunk = bytes()
+                    chunk = b''
                     continue
 
             msg.frombytes(chunk)

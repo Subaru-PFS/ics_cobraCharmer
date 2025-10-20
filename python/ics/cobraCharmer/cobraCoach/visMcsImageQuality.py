@@ -1,15 +1,16 @@
 
-import numpy as np
-from mpfit import mpfit
-import pandas as pd
-from sqlalchemy import create_engine
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-import matplotlib.pyplot as plt
-import astropy.io.fits as pyfits
-import mpfit
 import concurrent.futures
-import os
 import glob
+import os
+
+import astropy.io.fits as pyfits
+import matplotlib.pyplot as plt
+import mpfit
+import numpy as np
+import pandas as pd
+from mpfit import mpfit
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from sqlalchemy import create_engine
 
 
 def fit_gaussian_and_get_fwhm(args):
@@ -26,14 +27,14 @@ def visMcsFocusSequence(visitId):
     farr = []
 
     for i in range(9):
-        firstFrame = visitId 
+        firstFrame = visitId
         frameNum = (firstFrame+i)*100
-        
+
         xf, yf, fval =  visMcsImageQuality.visMcsImageQuality(frameNum, xval=[2.0, 3.2], yval=[2.7, 4.5], dataOnly=True)
         xarr.append(xf)
         yarr.append(yf)
         farr.append(fval)
-        
+
     fwhm_x = np.array(xarr)
     fwhm_y = np.array(yarr)
     focus_pos=np.array(farr)
@@ -59,9 +60,9 @@ def visMcsFocusSequence(visitId):
     yval = [0.6*np.min(fwhm_y[sort_idx,1]),1.2*np.max(fwhm_y[sort_idx,3])]
 
     for i in range(9):
-        firstFrame = visitId 
+        firstFrame = visitId
         frameNum = (firstFrame+i)*100
-        
+
         xf, yf, fval =  visMcsImageQuality.visMcsImageQuality(frameNum, xval=xval, yval=yval)
 
 
@@ -83,7 +84,7 @@ def visMcsImageQuality(frameNum, xval=None, yval=None, dataOnly=False):
             mcs_frame_id = {frameNum} and spot_id > 0
         -- limit 10
         ''', engine)
-    
+
     search_pattern = os.path.join('/data/raw', '*', 'mcs', f'*{frameNum}*')
     matching_files = glob.glob(search_pattern, recursive=True)
     file = matching_files[0]
@@ -93,31 +94,31 @@ def visMcsImageQuality(frameNum, xval=None, yval=None, dataOnly=False):
 
     xcent = mcsData['mcs_center_x_pix'].values
     ycent = mcsData['mcs_center_y_pix'].values
-    
+
     # Use NumPy array slicing to extract subimages efficiently
     subimages = [
         image[int(np.ceil(y))-8:int(np.ceil(y))+8, int(np.ceil(x))-8:int(np.ceil(x))+8]
-        for x, y in zip(xcent, ycent)
+        for x, y in zip(xcent, ycent, strict=False)
     ]
-    
-    args_list = zip(xcent, ycent, subimages)
-    
+
+    args_list = zip(xcent, ycent, subimages, strict=False)
+
     with concurrent.futures.ProcessPoolExecutor() as executor:
         results = list(executor.map(fit_gaussian_and_get_fwhm, args_list))
 
     # Unpack the results
-    fwhm_x, fwhm_y = zip(*results)
-    
+    fwhm_x, fwhm_y = zip(*results, strict=False)
+
     xcent = mcsData['mcs_center_x_pix']
     ycent = mcsData['mcs_center_y_pix']
 
-    xvalue = np.quantile(fwhm_x, [0,0.25,0.5,0.75,1]) 
-    yvalue = np.quantile(fwhm_y, [0,0.25,0.5,0.75,1]) 
+    xvalue = np.quantile(fwhm_x, [0,0.25,0.5,0.75,1])
+    yvalue = np.quantile(fwhm_y, [0,0.25,0.5,0.75,1])
 
     if dataOnly is False:
         fig, ax = plt.subplots(1, 2,figsize=(14,6), facecolor="white")
-        cm = plt.cm.get_cmap('RdYlBu').reversed() 
-        plt.suptitle(f'')
+        cm = plt.cm.get_cmap('RdYlBu').reversed()
+        plt.suptitle('')
         ax = plt.gcf().get_axes()[0]
         if xval is None:
             sc=ax.scatter(xcent,ycent,
@@ -125,7 +126,7 @@ def visMcsImageQuality(frameNum, xval=None, yval=None, dataOnly=False):
         else:
             sc=ax.scatter(xcent,ycent,
                             c=fwhm_x,marker='s',vmin=xval[0],vmax=xval[1],cmap=cm)
-        ax.set_title(f'X')
+        ax.set_title('X')
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.1)
         colorbar = fig.colorbar(sc,cax=cax)
@@ -138,13 +139,13 @@ def visMcsImageQuality(frameNum, xval=None, yval=None, dataOnly=False):
         else:
             sc=ax.scatter(xcent,ycent,
                             c=fwhm_y,marker='s',vmin=yval[0],vmax=yval[1],cmap=cm)
-        ax.set_title(f'Y')
+        ax.set_title('Y')
 
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.1)
         colorbar = fig.colorbar(sc,cax=cax)
         plt.suptitle(f'Focus Encoder = {focus_val}')
-        
+
     return xvalue, yvalue, focus_val
 
 
@@ -161,7 +162,7 @@ def fit_gaussian_2d(params, fjac=None, x=None, y=None, data=None):
 
 def mpfit2dgaussian(subimage, visPlot=False, debug=False):
     size = subimage.shape
-    
+
     # Example usage
     # Generate example data with noise
     x = np.arange(0, size[0], 1)
@@ -172,7 +173,7 @@ def mpfit2dgaussian(subimage, visPlot=False, debug=False):
     maxi = np.max(subimage)
     offset = np.median(subimage)
     max_index = np.unravel_index(np.argmax(subimage, axis=None), subimage.shape)
-    
+
     initial_params = [maxi, max_index[0], max_index[1], 2, 2, offset]
 
     fa = {'x': x, 'y': y, 'data': subimage}
@@ -191,10 +192,10 @@ def mpfit2dgaussian(subimage, visPlot=False, debug=False):
         best_params = initial_params
 
     #print('Best-fit parameters:', best_params)
-    
-  
 
-    if visPlot == True: 
+
+
+    if visPlot == True:
         # Plotting
         fit_result = gaussian_2d(m.params, x, y)
         residuals = subimage - fit_result.reshape(16, 16)
@@ -220,5 +221,5 @@ def mpfit2dgaussian(subimage, visPlot=False, debug=False):
         plt.colorbar()
 
         plt.show()
-    
+
     return best_params

@@ -1,9 +1,10 @@
-from importlib import reload
 import logging
 import pathlib
 import platform
 import time
+from importlib import reload
 
+import astropy.io.fits as pyfits
 import numpy as np
 import numpy.lib.recfunctions as recfuncs
 
@@ -12,6 +13,9 @@ import pandas as pd
 
 from ics.utils.database.opdb import OpDB
 from ics.cobraCharmer.utils import butler
+from ics.cobraCharmer.cobraCoach.mcs import mcsActorCam, mcsCam, citCam, asrdCam, rmodCam
+
+reload(najaVenator)
 
 # Configure the default formatter and logger.
 logging.basicConfig(datefmt = "%Y-%m-%d %H:%M:%S", level=logging.DEBUG,
@@ -23,7 +27,6 @@ def whereAmI():
     For now we only look for the CIT cube and the ASRD bench. Windows v. Unix.
 
     """
-    import platform
 
     if platform.system() == 'Windows':
         return 'cit'
@@ -47,29 +50,24 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None
             name = whereAmI()
 
         if name == 'mcsActor':
-            from . import mcsActorCam
             reload(mcsActorCam)
             if simulationPath is not None:
                 raise NotImplementedError("for mcsActorCam, you *must* use the mcsActor-side simulation.")
             cameraFactory.__camera = mcsActorCam.McsActorCamera(actor=actor,
                                                                 cmd=cmd,runManager=runManager)
         elif name == 'mcs':
-            from . import mcsCam
             reload(mcsCam)
             cameraFactory.__camera = mcsCam.McsCamera(simulationPath=simulationPath,actor=actor,
                                                       cmd=cmd,runManager=runManager)
         elif name == 'cit':
-            from . import citCam
             reload(citCam)
             cameraFactory.__camera = citCam.CitCamera(simulationPath=simulationPath,
                                                       runManager=runManager)
         elif name == 'asrd':
-            from . import asrdCam
             reload(asrdCam)
             cameraFactory.__camera = asrdCam.AsrdCamera(simulationPath=simulationPath,
                                                         runManager=runManager)
         elif name == 'rmod':
-            from . import rmodCam
             reload(rmodCam)
             cameraFactory.__camera = rmodCam.RmodCamera(simulationPath=simulationPath,
                                                         runManager=runManager)
@@ -81,7 +79,7 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None
 
         return cameraFactory.__camera
 
-class Camera(object):
+class Camera:
     filePrefix = 'PFXC'
 
     def __init__(self, runManager=None, simulationPath=None, logLevel=logging.INFO, cmd=None):
@@ -93,7 +91,7 @@ class Camera(object):
         self.dark = None
         self.exptime = 0.8
         self.doWriteFitsSpots = True
-        
+
         if runManager is None:
             runManager = butler.RunTree()
         self.runManager = runManager
@@ -139,11 +137,11 @@ class Camera(object):
 
     def _camConnect(self):
         """ Implement in subclass. Must set self._cam """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def _camExpose(self, exptime, _takeDark=False):
         """ Implement in subclass. Returns image """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def _readNextSimulatedImage(self):
         path, idx = self.simulationPath
@@ -189,6 +187,7 @@ class Camera(object):
 
         mcsData=mcsData.loc[mcsData['fiberId'] > 0]
         self.logger.info(f'mcs data {mcsData.shape[0]}')
+
 
         centroids=np.rec.array([mcsData['centroidx'].values.astype('float'),
                                 mcsData['centroidy'].values.astype('float')],
@@ -300,7 +299,7 @@ class Camera(object):
                 exptime = self.exptime
             im = self._camExpose(exptime)
             if np.all(im == 0):
-                self.logger.warn('image is all 0s; reconnecting')
+                self.logger.warning('image is all 0s; reconnecting')
                 self._camClose()
                 _ = self.cam
                 time.sleep(2)
@@ -316,7 +315,7 @@ class Camera(object):
             t0 = time.time()
             #objects, data_sub, bkgd = self.getObjects(im, filename.stem)
             if self.frameId is None:
-                self.logger.info(f'Gen2 Frame ID is not given. Run SExtractor.')
+                self.logger.info('Gen2 Frame ID is not given. Run SExtractor.')
                 objects, data_sub, bkgd = self.getObjects(im, filename.stem)
             else:
                 self.logger.info(f'Gen2 Frame ID {self.frameId} is given. Get position from DB')
@@ -350,11 +349,11 @@ class Camera(object):
 
         sequenceNumberFile = pathlib.Path(self.dataRoot, self.sequenceNumberFilename)
         if not sequenceNumberFile.exists():
-            with open(sequenceNumberFile, 'wt') as sf:
+            with open(sequenceNumberFile, "w") as sf:
                 sf.write("1\n")
                 sf.close()
         try:
-            sf = open(sequenceNumberFile, "rt")
+            sf = open(sequenceNumberFile)
             seq = sf.readline()
             seq = seq.strip()
             seqno = int(seq)
@@ -363,7 +362,7 @@ class Camera(object):
                                (sequenceNumberFile, e))
         nextSeqno = seqno+1
         try:
-            sf = open(sequenceNumberFile, "wt")
+            sf = open(sequenceNumberFile, "w")
             sf.write("%d\n" % (nextSeqno))
             sf.truncate()
             sf.close()

@@ -11,7 +11,7 @@ logger = logging.getLogger('butler')
 dataRoot = pathlib.Path("/data/MCS")
 
 
-class RunTree(object):
+class RunTree:
     def __init__(self, rootDir=None, runDir=None, doCreate=True):
         """ Create and track "runs": sequences of exposures taken as a unit, plus some output.
 
@@ -56,7 +56,7 @@ class RunTree(object):
         for d in self.allDirs:
             d.mkdir(mode=0o2775)
 
-        self.logger.warn('newRun: %s', self.runDir)
+        self.logger.warning('newRun: %s', self.runDir)
         return self.runDir
 
     @property
@@ -80,7 +80,7 @@ class RunTree(object):
         mapDir = self.outputDir
 
         if not doFind:
-            raise NotImplementedError()
+            raise NotImplementedError
 
         if moduleName is not None or version is not None:
             raise RuntimeError("can only look for any map for now")
@@ -229,7 +229,7 @@ def modulesForPfi(version=None, rootDir=None):
     See modulesPathForPfi for more info.
     """
     yamlPath = configPathForPfi(version=version, rootDir=rootDir)
-    with open(yamlPath, mode='rt') as yamlFile:
+    with open(yamlPath) as yamlFile:
         # - yaml.load() always requires Loader for pyyaml >= 6.0
         #   yaml.full_load() is an alias of yaml.load() with Loader=yaml.FullLoader
         #   and equivalent to yaml.load() for pyyaml 5.1+
@@ -281,7 +281,7 @@ def mapForModule(moduleName, version=None):
 
     mapPath = mapPathForModule(moduleName, version=version)
 
-    with open(mapPath, mode='rt') as mapFile:
+    with open(mapPath) as mapFile:
         content = mapFile.read()
         return content
 

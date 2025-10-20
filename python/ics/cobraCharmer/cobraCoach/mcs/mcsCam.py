@@ -1,11 +1,14 @@
-from importlib import reload
-import numpy as np
-import time
-import subprocess as sub
-import astropy.io.fits as pyfits
-import threading
 import pathlib
-from . import camera
+import subprocess as sub
+import threading
+import time
+from importlib import reload
+
+import astropy.io.fits as pyfits
+import numpy as np
+
+from ics.cobraCharmer.cobraCoach.mcs import camera
+
 reload(camera)
 
 class McsCamera(camera.Camera):
@@ -27,7 +30,7 @@ class McsCamera(camera.Camera):
             return None
 
         self.logger.info('text="Starting camera initialization."')
-        
+
         if self.actor is None:
             p = sub.Popen(['/opt/EDTpdv/initcam', '-f', '/home/pfs/mhs/devel/ics_cobraCharmer/etc/illusnis-71mp.cfg'],
                       stdout=sub.PIPE, stderr=sub.PIPE)
@@ -36,13 +39,13 @@ class McsCamera(camera.Camera):
             if (string == 'done'):
                 self.logger.info('text="Camera initialization message: %s"' % (string))
         else:
-            cmdString = f'status'
+            cmdString = 'status'
             cmdVar = self.actor.cmdr.call(actor='mcs', cmdStr=cmdString,
                                           forUserCmd=cmd)
             if cmdVar.didFail:
-                self.logger.warn('text="Camera initialization failed: %s"' % (string))
+                self.logger.warning('text="Camera initialization failed: %s"' % (string))
                 return None
-        
+
     def _camExpose(self, exptime, frameNum=None, _takeDark=False):
         t1=time.time()
 
@@ -55,13 +58,13 @@ class McsCamera(camera.Camera):
 
             output, errors = p.communicate()
             t2=time.time()
-    
-            self.logger.info('exposureState="reading"')                
+
+            self.logger.info('exposureState="reading"')
             f = pyfits.open(slicename)
 
             image = f[0].data
-            t3=time.time()    
-        
+            t3=time.time()
+
         else:
             if frameNum is not None:
                 frameArg = "frameId={frameNum} "
@@ -76,12 +79,12 @@ class McsCamera(camera.Camera):
                 return None
 
             t2=time.time()
-        
+
             filekey= self.actor.models['mcs'].keyVarDict['filename'][0]
             filename = pathlib.Path(filekey)
             datapath = filename.parents[0]
             frameId = int(filename.stem[4:], base=10)
-            
+
             self.frameId = frameId
 
             self.logger.info(f'MCS frame ID={frameId}')
@@ -91,7 +94,7 @@ class McsCamera(camera.Camera):
             image = f[1].data
 
         # t1=time.time()
-    
+
         # # Command camera to do exposure sequence
         # slicename='/tmp/rmodexpose.fits'
 
@@ -100,13 +103,13 @@ class McsCamera(camera.Camera):
 
         # output, errors = p.communicate()
         # t2=time.time()
-    
-        # self.logger.info('exposureState="reading"')                
+
+        # self.logger.info('exposureState="reading"')
         # f = pyfits.open(slicename)
 
         # image = f[0].data
         t3=time.time()
-        
+
         self.logger.info('Time for exposure = %f. '% ((t2-t1)/1.))
         self.logger.info('text="Time for image loading= %f. '% ((t3-t2)/1.))
 
@@ -148,4 +151,3 @@ class McsCamera(camera.Camera):
             filename = self.saveImage(self._imRecord, extraName=name)
 
         return filename
-

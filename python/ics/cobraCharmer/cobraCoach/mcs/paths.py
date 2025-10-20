@@ -1,7 +1,7 @@
 import logging
+
 import numpy as np
 
-import sep
 
 def measureSpots(centers, dataSet, positions, names=None, disp=None,
                  trackCenters=True, sigma=10.0, trackRadius=20.0):
@@ -37,9 +37,9 @@ def measureSpots(centers, dataSet, positions, names=None, disp=None,
 
         spots = np.array([c['x']+c['y']*(1j) for c in cs])
         idx = lazyIdentification(nearestCenters, spots, radii=radii)
-        nomatch_w = (-1 == idx)
+        nomatch_w = (idx == -1)
         if nomatch_w.sum() > 0:
-            logging.warn(f'failed to match spots {np.where(nomatch_w)[0]} for {names[i]} at {positions[i]} steps')
+            logging.warning(f'failed to match spots {np.where(nomatch_w)[0]} for {names[i]} at {positions[i]} steps')
         if trackCenters:
             nearestCenters = spots[idx]
             radii = trackRadius

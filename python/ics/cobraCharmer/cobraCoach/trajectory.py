@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class Trajectories():
+class Trajectories:
     """Class that stores cobras trajectories.
     A trajectory is a list of cobra movements, so it could describe the complete
     trajectory until target convergence.

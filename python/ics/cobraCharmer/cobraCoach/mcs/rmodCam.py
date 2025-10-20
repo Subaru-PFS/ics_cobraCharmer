@@ -1,11 +1,13 @@
-from importlib import reload
-import numpy as np
-import time
 import subprocess as sub
-import astropy.io.fits as pyfits
 import threading
+import time
+from importlib import reload
 
-from . import camera
+import astropy.io.fits as pyfits
+import numpy as np
+
+from ics.cobraCharmer.cobraCoach.mcs import camera
+
 reload(camera)
 
 class RmodCamera(camera.Camera):
@@ -17,7 +19,7 @@ class RmodCamera(camera.Camera):
         self.imageSize = (7096, 10000)
         self._exptime = 0.5
         self._lock = threading.Lock()
-        
+
 
     def _camConnect(self):
         if self.simulationPath is not None:
@@ -32,9 +34,9 @@ class RmodCamera(camera.Camera):
             self.logger.info('text="Camera initialization message: %s"' % (string))
 
     def _camExpose(self, exptime, _takeDark=False):
-        
+
         t1=time.time()
-    
+
         # Command camera to do exposure sequence
         slicename='/tmp/rmodexpose.fits'
 
@@ -43,8 +45,8 @@ class RmodCamera(camera.Camera):
 
         output, errors = p.communicate()
         t2=time.time()
-    
-        self.logger.info('exposureState="reading"')                
+
+        self.logger.info('exposureState="reading"')
         f = pyfits.open(slicename)
 
         image = f[0].data

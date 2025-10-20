@@ -1,37 +1,37 @@
 
 
 import datetime
-import numpy as np
-import re
 import glob
+import re
+
 import matplotlib.pyplot as plt
-import psycopg2
-from sqlalchemy import create_engine
+import numpy as np
 import pandas as pd
-import os
-import pathlib
+import psycopg2
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Image
+from reportlab.platypus import Image, SimpleDocTemplate
+from sqlalchemy import create_engine
+
 
 def validate_array_sizes(*arrays):
     """Check if all input arrays have the same length."""
     lengths = [len(arr) for arr in arrays]
     if len(set(lengths)) > 1:
         raise ValueError(f"Arrays have different sizes: {lengths}")
-    
+
 def get_total_iteration(pfsVisit):
     #pfsVisitID = visDianosticPlot.findVisit(runDir)
     #pfsDesignID = visDianosticPlot.findDesignFromVisit(pfsVisitID)
-    conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+    conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'")
     engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
 
 
-    Data = pd.read_sql(f'''
+    Data = pd.read_sql('''
             SELECT DISTINCT pfs_visit_id,iteration FROM public.cobra_match
             WHERE
             cobra_match.pfs_visit_id = %(pfsVisit)s
             ''', engine, params={'pfsVisit': pfsVisit})
-    
+
     return np.max(Data['iteration'].values)
 
 def get_input_iteration(pfsVisit, debug=False):
@@ -40,7 +40,7 @@ def get_input_iteration(pfsVisit, debug=False):
 
     fpsLogFile = find_log_file_with_string(directory_path, search_string)
     if debug: print(fpsLogFile)
-    with open(fpsLogFile, 'r') as file:
+    with open(fpsLogFile) as file:
         log_lines = file.readlines()
 
     for line in log_lines:
@@ -50,7 +50,7 @@ def get_input_iteration(pfsVisit, debug=False):
                 return int(match.group(1))
             else:
                 return None
-            
+
 def get_subframe_maxium(pfsVisit, mcsLogFile=None, debug=False):
 
     if mcsLogFile is None:
@@ -60,7 +60,7 @@ def get_subframe_maxium(pfsVisit, mcsLogFile=None, debug=False):
         mcsLogFile = find_log_file_with_string(directory_path, search_string)
 
     # Read the file and extract the contents
-    with open(mcsLogFile, 'r') as file:
+    with open(mcsLogFile) as file:
         file_contents = file.read()
 
     # Use regular expression to find all occurrences of the pattern
@@ -84,7 +84,7 @@ def find_log_file_with_string(directory, search_string):
     log_files = glob.glob(directory + '/*.log')  # Update the file extension if necessary
 
     for log_file in log_files:
-        with open(log_file, 'r') as file:
+        with open(log_file) as file:
             log_content = file.read()
             if search_string in log_content:
                 return log_file
@@ -114,12 +114,12 @@ def parse_fps_log(visit, debug= False):
 
     fpsLogFile = find_log_file_with_string(directory_path, search_string)
     if debug: print(fpsLogFile)
-    
+
     # Read the log file and extract the time stamps
-    with open(fpsLogFile, 'r') as file:
+    with open(fpsLogFile) as file:
         log_lines = file.readlines()
     start_analysis = False
-    
+
     fpsDone = []
     fpsStart = []
     mcsStart = []
@@ -127,11 +127,11 @@ def parse_fps_log(visit, debug= False):
     mcsDone = []
     linkDone = []
     homeCobra = []
-    
+
     total_iteration = get_total_iteration(visit)
-    
+
     goHome = False
-    
+
     # Parse the time stamps and calculate the time spent
     for line in log_lines:
         if not start_analysis:
@@ -139,54 +139,50 @@ def parse_fps_log(visit, debug= False):
                 start_analysis = True
                 fpsStart.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
                 if debug: print(line,start_analysis)
-        else:
-            if 'new cmd: moveToPfsDesign' in line:
-                pass
-                #if debug: print(line)
-            elif 'Checking passed homed argument = True' in line:
-                goHome = True
-            elif 'home cobras'in line:
-                homeCobra.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-                if debug: print(line)
-            elif 'calling mcs expose object' in line:
-                mcsStart.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-                if debug: print(line)
-            elif 'Time for exposure' in line:
-                mcsDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-                if debug: print(line)
-            elif 'Getting positions from DB' in line:
-                linkDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-                if debug: print(line)
-            elif 'Total detected spots' in line:
-                cobraStart.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-                if debug: print(line)
-            elif 'Returing result from matching' in line:
-                cobraStart.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-                if debug: print(line)
-            elif 'cobras did not finish' in line:
-                cobraDone = datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ')
-                if debug: print(line)
-            elif 'We are at design position' in line:
-                start_analysis = False
-                if debug: print(line)
-            elif 'pfsConfig updated successfully' in line:
-                start_analysis = False
-                fpsDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-                if debug: print(line)
+        elif 'new cmd: moveToPfsDesign' in line:
+            pass
+            #if debug: print(line)
+        elif 'Checking passed homed argument = True' in line:
+            goHome = True
+        elif 'home cobras'in line:
+            homeCobra.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+            if debug: print(line)
+        elif 'calling mcs expose object' in line:
+            mcsStart.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+            if debug: print(line)
+        elif 'Time for exposure' in line:
+            mcsDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+            if debug: print(line)
+        elif 'Getting positions from DB' in line:
+            linkDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+            if debug: print(line)
+        elif 'Total detected spots' in line or 'Returing result from matching' in line:
+            cobraStart.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+            if debug: print(line)
+        elif 'cobras did not finish' in line:
+            cobraDone = datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ')
+            if debug: print(line)
+        elif 'We are at design position' in line:
+            start_analysis = False
+            if debug: print(line)
+        elif 'pfsConfig updated successfully' in line:
+            start_analysis = False
+            fpsDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+            if debug: print(line)
             #elif total_iteration+1 == len(mcsStart):
             #    start_analysis = False
     tempStart = []
     #print(homeCobra)
     if len(homeCobra) > 1:
         tempStart.append(homeCobra[-1])
-    else: 
+    else:
         tempStart = homeCobra
     for ele in cobraStart:
         tempStart.append(ele)
         #print(tempStart)
     cobrsStart = tempStart
 
-    # Sometimes, there will be file writing error when saving pfsconfig.  If 
+    # Sometimes, there will be file writing error when saving pfsconfig.  If
     if len(fpsDone) == 0:
         fpsDone.append(cobraDone)
     #print(fpsDone,len(fpsStart))
@@ -195,12 +191,12 @@ def parse_fps_log(visit, debug= False):
 
 def visFPSTimeBar(visit, figName = None):
     fpsStart, mcsStart, mcsDone, linkDone, cobraStart, fpsDone = parse_fps_log(visit)
-    
+
     duration = []
     for i in range(len(cobraStart)):
         duration.append(np.array([
-            (mcsStart[i] - cobraStart[i]).total_seconds(), 
-            (mcsDone[i] - mcsStart[i]).total_seconds(),  
+            (mcsStart[i] - cobraStart[i]).total_seconds(),
+            (mcsDone[i] - mcsStart[i]).total_seconds(),
             (linkDone[i] - mcsDone[i]).total_seconds(),
         ]))
 
@@ -217,7 +213,7 @@ def visFPSTimeBar(visit, figName = None):
     bar_width = 0.8 / num_repetitions  # Width of each bar
 
     plt.figure(figsize=(8, 6))
-    plt.bar(0, fpsOps, width=bar_width, label=f'FPS init')
+    plt.bar(0, fpsOps, width=bar_width, label='FPS init')
 
     # Create a bar plot for each repeat
     if get_total_iteration(visit)+1 == get_input_iteration(visit):
@@ -226,11 +222,11 @@ def visFPSTimeBar(visit, figName = None):
     else:
         for i in range(num_repetitions):
             if i == 0:
-                plt.bar(x + i*bar_width, duration[i], width=bar_width, label=f'Home Cobra')
+                plt.bar(x + i*bar_width, duration[i], width=bar_width, label='Home Cobra')
             else:
                 plt.bar(x + i*bar_width, duration[i], width=bar_width, label=f'Iteration {i}')
 
-    totalTime = (fpsDone[-1] - fpsStart[0]).total_seconds()    
+    totalTime = (fpsDone[-1] - fpsStart[0]).total_seconds()
     print(totalTime)
     plt.xlabel('Steps')
     plt.ylabel('Time spent (seconds)')
@@ -239,15 +235,15 @@ def visFPSTimeBar(visit, figName = None):
     plt.legend()
     plt.ylim(0,30)
     plt.tight_layout()  # Adjusts spacing between plot elements
-    
-    
+
+
     if figName is not None:
         plt.savefig(figName)
     else:
         plt.show()
 
 def parse_mcs_log(pfsVisit, debug=False):
-    
+
     directory_path = '/data/logs/actors/mcs/'
     search_string = f'frameId={pfsVisit}'
 
@@ -255,23 +251,23 @@ def parse_mcs_log(pfsVisit, debug=False):
     if debug:
         print(mcsLogFile)
     maxSubframe = get_subframe_maxium(pfsVisit, mcsLogFile=mcsLogFile)
-    
+
     # Read the log file and extract the time stamps
-    with open(mcsLogFile, 'r') as file:
+    with open(mcsLogFile) as file:
         log_lines = file.readlines()
-    
+
     start_analysis = False
     last_frame = False
-    
+
     expStart=[]
     readDone = []
     saveDone = []
     expDone = []
-    
+
     fidStart = []
     fidDone = []
     cenTime = []
-    
+
     outFF = []
     allFF = []
     appTrans = []
@@ -279,51 +275,50 @@ def parse_mcs_log(pfsVisit, debug=False):
     for line in log_lines:
         if not start_analysis:
             if f'frameId={pfsVisit}00' in line:
-                if debug: 
+                if debug:
                     print(f'start_analysys = {start_analysis}')
                     print(line)
                 start_analysis = True
                 expStart.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-        else:
-            if 'expose object' in line:
-                if debug: print(line)
-                expStart.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-            elif 'newpath' in line:
-                if debug: print(line)
-                readDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-                match = re.search(r'PFSC(\d+)\.fits', line)
-                number = int(match.group(1))
-                if number == pfsVisit*100+maxSubframe:
-                    last_frame = True
-                if debug: 
-                    print(number,pfsVisit*100+maxSubframe,last_frame)
-            elif 'hdr done' in line:
-                if debug: print(line)
-                saveDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-                
-            elif 'Sending centroid data to database' in line:
-                cenTime.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-                if debug: print(line)
-            #elif 'Calcuating transofmtaion using FF' in line:
-            #    outFF.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-            #    if debug: print(line)
-            #elif 'Re-calcuating transofmtaion using ALL FFs.' in line:
-            #    allFF.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-            #    if debug: print(line)
-            #elif 'Apply transformation to MCS data points' in line:
-            #    appTrans.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-            #    if debug: print(line)
-            elif 'Starting Fiber ID' in line:
-                if debug: print(line)
-                fidStart.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-            elif 'Fiber ID finished' in line:
-                if debug: print(line)
-                fidDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-            elif 'exposureState=done' in line:
-                if debug: print(line)
-                expDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
-                if last_frame is True:
-                    start_analysis = False
+        elif 'expose object' in line:
+            if debug: print(line)
+            expStart.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+        elif 'newpath' in line:
+            if debug: print(line)
+            readDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+            match = re.search(r'PFSC(\d+)\.fits', line)
+            number = int(match.group(1))
+            if number == pfsVisit*100+maxSubframe:
+                last_frame = True
+            if debug:
+                print(number,pfsVisit*100+maxSubframe,last_frame)
+        elif 'hdr done' in line:
+            if debug: print(line)
+            saveDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+
+        elif 'Sending centroid data to database' in line:
+            cenTime.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+            if debug: print(line)
+        #elif 'Calcuating transofmtaion using FF' in line:
+        #    outFF.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+        #    if debug: print(line)
+        #elif 'Re-calcuating transofmtaion using ALL FFs.' in line:
+        #    allFF.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+        #    if debug: print(line)
+        #elif 'Apply transformation to MCS data points' in line:
+        #    appTrans.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+        #    if debug: print(line)
+        elif 'Starting Fiber ID' in line:
+            if debug: print(line)
+            fidStart.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+        elif 'Fiber ID finished' in line:
+            if debug: print(line)
+            fidDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+        elif 'exposureState=done' in line:
+            if debug: print(line)
+            expDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+            if last_frame is True:
+                start_analysis = False
     #return expStart, readDone, saveDone, cenTime, outFF, allFF, appTrans, fidStart, fidDone, expDone
     return expStart, readDone, saveDone, cenTime, fidStart, expDone
     #return expStart[:-1], readDone[:-1], saveDone[:-1], cenTime[:-1], fidStart[:-1], expDone[:-1]
@@ -335,18 +330,18 @@ def visMCSTimeBar(visit, figName=None):
     duration = []
     for i in range(len(readDone)):
         duration.append(np.array([
-            (readDone[i] - expStart[i]).total_seconds(), 
-            (saveDone[i] - readDone[i]).total_seconds(),  
+            (readDone[i] - expStart[i]).total_seconds(),
+            (saveDone[i] - readDone[i]).total_seconds(),
             (cenTime[i] - saveDone[i]).total_seconds(),
             #(allFF[i] - outFF[i]).total_seconds(),
             #(appTrans[i] - allFF[i]).total_seconds(),
             (fidStart[i] - cenTime[i]).total_seconds(),
-            (expDone[i] - fidStart[i]).total_seconds(),        
-            #(expDone[i] - fidDone[i]).total_seconds(),        
+            (expDone[i] - fidStart[i]).total_seconds(),
+            #(expDone[i] - fidDone[i]).total_seconds(),
         ]))
 
     duration = np.array(duration)
-    
+
         # Step names and corresponding durations for each repetition
     step_names = ['MCS exposure', 'FITS process', 'Centroid Time', 'Transform','Fiber ID']
 
@@ -362,7 +357,7 @@ def visMCSTimeBar(visit, figName=None):
     else:
         for i in range(num_repetitions):
             if i == 0:
-                plt.bar(x + i*bar_width, duration[i], width=bar_width, label=f'Home Cobra')
+                plt.bar(x + i*bar_width, duration[i], width=bar_width, label='Home Cobra')
             else:
                 plt.bar(x + i*bar_width, duration[i], width=bar_width, label=f'Iteration {i}')
 
@@ -373,10 +368,10 @@ def visMCSTimeBar(visit, figName=None):
     plt.legend()
     plt.ylim(0,15)
     plt.tight_layout()  # Adjusts spacing between plot elements
-    
-    
+
+
     if figName is not None:
         plt.savefig(figName)
     else:
         plt.show()
-    
+

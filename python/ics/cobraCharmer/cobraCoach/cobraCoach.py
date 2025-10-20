@@ -1,26 +1,22 @@
-from importlib import reload
 import logging
-from bokeh.transform import factor_cmap
-import numpy as np
-from astropy.io import fits
 import pathlib
 import time
+from importlib import reload
 
-from ics.cobraCharmer.cobraCoach import calculus
-from ics.cobraCharmer.cobraCoach.speedModel import SpeedModel
-
-from ics.cobraCharmer.cobraCoach.mcs import camera
-from ics.cobraCharmer import pfi as pfiControl
-import ics.cobraCharmer.pfiDesign as pfiDesign
-from ics.cobraCharmer import func
-from ics.cobraCharmer.utils import butler as cbutler
-from pfs.utils import butler 
-import pfs.utils.coordinates.transform as transformUtils
-
-from opdb import opdb
+import numpy as np
 import pandas as pd
+import pfs.utils.coordinates.transform as transformUtils
+from ics.cobraCharmer import func, pfiDesign
+from ics.cobraCharmer import pfi as pfiControl
+from ics.cobraCharmer.cobraCoach import calculus
+from ics.cobraCharmer.cobraCoach.mcs import camera
+from ics.cobraCharmer.cobraCoach.speedModel import SpeedModel
+from ics.cobraCharmer.utils import butler as cbutler
+from opdb import opdb
+from pfs.utils import butler
 
-class CobraCoach():
+
+class CobraCoach:
     nCobrasPerModule = 57
     nModules = 42
     thetaHomeSteps = 10000
@@ -74,7 +70,7 @@ class CobraCoach():
         self.cam = None
         self.fpgaHost = fpgaHost
 
-        
+
 
         # scaling model
         self.useScaling = True
@@ -90,15 +86,15 @@ class CobraCoach():
         # create cobra trajectory
         self.trajectoryMode = trajectoryMode
         self.trajectory = None
-        
+
         if loadModel:
             self.loadModel()
-        
+
         self.simMode=False
         if simDataPath is not None:
             self.simMode = True
             self.simDataPath = simDataPath
-        
+
         self.actor = actor
         self.cmd = cmd
 
@@ -110,7 +106,7 @@ class CobraCoach():
             self.calibModel = pfiDesign.PFIDesign(file)
         else:
             self.calibModel = pfiDesign.PFIDesign.loadPfi(version, moduleVersion)
-        
+
         self.calibModel.fixModuleIds()
 
         self.camSplit = camSplit
@@ -241,7 +237,7 @@ class CobraCoach():
             self.logger.info(f'Scaling enabled, Scaling Factor: {self.thetaScaleFactor}/{self.phiScaleFactor}, '
                              f'Min Steps: {self.minThetaStepsForScaling}/{self.minPhiStepsForScaling}')
         else:
-            self.logger.info(f'Scaling disabled')
+            self.logger.info('Scaling disabled')
 
     def setMode(self, mode):
         if mode == 'normal':
@@ -315,26 +311,26 @@ class CobraCoach():
                 self.pfi.reset()
                 time.sleep(1)
                 self.pfi.diag()
-            
+
             self.pfi.calibModel = self.calibModel
             self.pfi.setFreq()        # initialize cameras
         try:
             #if self.actor is not None:
-            #    self.cam = camera.cameraFactory(name='mcs',doClear=True, 
+            #    self.cam = camera.cameraFactory(name='mcs',doClear=True,
             #        runManager=self.runManager, actor=self.actor)
-            #else:    
+            #else:
             if self.actor is not None:
                 if self.simMode is False:
                     self.logger.info(f'MCS actor is given, try using mcsActor camera. simMode = {self.simMode}')
                     self.cam = camera.cameraFactory(name='mcsActor',doClear=True, runManager=self.runManager,
                                                     actor=self.actor, cmd=self.cmd)
                 else:
-                    self.logger.info(f'MCS actor is given, try using mcsActor camera in simulation mode')
+                    self.logger.info('MCS actor is given, try using mcsActor camera in simulation mode')
                     self.cam = camera.cameraFactory(name='mcsActor',doClear=True,
                                                     runManager=self.runManager, actor=self.actor,
                                                     cmd=self.cmd, simulationPath=self.simDataPath)
             else:
-                self.logger.info('MCS actor is not present, using RMOD camera')    
+                self.logger.info('MCS actor is not present, using RMOD camera')
                 self.cam = camera.cameraFactory(name='rmod',doClear=True, runManager=self.runManager)
         except Exception as e:
             self.logger.warning(f'Problem when connecting to camera: {e}')
@@ -384,16 +380,16 @@ class CobraCoach():
         interfering_cobra_indices = []
         interference_warnings = []
 
-        for i, (theta_deg, phi_deg) in enumerate(zip(thetas_deg, phis_deg)):
+        for i, (theta_deg, phi_deg) in enumerate(zip(thetas_deg, phis_deg, strict=False)):
             # Get the goodIdx for this theta/phi position
-            
+
             cobra_idx = self.goodIdx[i]
             # Find matching rows in the interference DataFrame for this cobra
             matching_rows = df[df["Cobra Index"] == cobra_idx]
 
             if not matching_rows.empty:
                 cobra_has_interference = False
-                
+
                 for _, row in matching_rows.iterrows():
                     # Check if theta is within the forbidden range
                     if 'theta limit 1' in df.columns and 'theta limit 2' in df.columns:
@@ -407,12 +403,11 @@ class CobraCoach():
                                             f"is within interference limits [{theta_limit_1:.2f}°, {theta_limit_2:.2f}°]")
                                 interference_warnings.append(warning_msg)
                                 cobra_has_interference = True
-                        else:
-                            if theta_limit_1 <= theta_deg <= theta_limit_2:
-                                warning_msg = (f"WARNING: Cobra {cobra_idx} theta angle {theta_deg:.2f}° "
-                                            f"is within interference limits [{theta_limit_1:.2f}°, {theta_limit_2:.2f}°]")
-                                interference_warnings.append(warning_msg)
-                                cobra_has_interference = True
+                        elif theta_limit_1 <= theta_deg <= theta_limit_2:
+                            warning_msg = (f"WARNING: Cobra {cobra_idx} theta angle {theta_deg:.2f}° "
+                                        f"is within interference limits [{theta_limit_1:.2f}°, {theta_limit_2:.2f}°]")
+                            interference_warnings.append(warning_msg)
+                            cobra_has_interference = True
 
                     # Check if phi exceeds the maximum allowed angle
                     if 'max phi angle for full theta circular motion' in df.columns:
@@ -423,7 +418,7 @@ class CobraCoach():
                                         f"exceeds the maximum allowed angle {max_phi_angle:.2f}°")
                             interference_warnings.append(warning_msg)
                             cobra_has_interference = True
-                
+
                 # Add to interfering list if this cobra has any interference
                 if cobra_has_interference and cobra_idx not in interfering_cobra_indices:
                     interfering_cobra_indices.append(cobra_idx)
@@ -435,15 +430,14 @@ class CobraCoach():
                     self.logger.warning(warning)
                 else:
                     print(warning)
+        elif hasattr(self, 'logger'):
+            self.logger.info("No fiducial interference detected for the given theta and phi angles")
         else:
-            if hasattr(self, 'logger'):
-                self.logger.info("No fiducial interference detected for the given theta and phi angles")
-            else:
-                print("No fiducial interference detected for the given theta and phi angles")
-        
+            print("No fiducial interference detected for the given theta and phi angles")
+
         return interfering_cobra_indices
 
-    def exposeAndExtractPositions(self, name=None, guess=None, tolerance=None, 
+    def exposeAndExtractPositions(self, name=None, guess=None, tolerance=None,
                                   exptime=None, dbMatch = True, writeData = None, doStack=False):
         """ Take an exposure, measure centroids, match to cobras, save info.
 
@@ -490,18 +484,18 @@ class CobraCoach():
                    username='pfs')
             match = db.bulkSelect('cobra_match','select * from cobra_match where '
                       f'mcs_frame_id = {frameNum}').sort_values(by=['cobra_id']).reset_index()
-            
+
 
             positions = match['pfi_center_x_mm'].values+match['pfi_center_y_mm'].values*(1j)
-            
+
             self.logger.info(f'Returing result from matching table ncen={len(positions)} ')
-            
+
         else:
-            self.logger.info(f'dbMatching is turned off! THIS HAS TO BE MOTOR MAP RUN!')
+            self.logger.info('dbMatching is turned off! THIS HAS TO BE MOTOR MAP RUN!')
 
             self.cameraName = str(self.actor.models['mcs'].keyVarDict['cameraName'][0])
             self.logger.info(f'Current camera name is {self.cameraName}')
-            
+
             #idx = self.visibleIdx
             # Here we start to process the centroid.  Converting them from pixel to mm
             fids = butler.Butler().get('fiducials')
@@ -517,21 +511,21 @@ class CobraCoach():
             if 'rmod' in str(self.cameraName).lower():
                 altitude = 90.0
                 insrot = 0
-                pfiTransform = transformUtils.fromCameraName('usmcs', 
+                pfiTransform = transformUtils.fromCameraName('usmcs',
                     altitude=altitude, insrot=insrot,nsigma=0, alphaRot=0)
-            else: 
+            else:
                 altitude = teleInfo['altitude'].values[0]
                 insrot = teleInfo['insrot'].values[0]
-                pfiTransform = transformUtils.fromCameraName(self.cameraName, 
+                pfiTransform = transformUtils.fromCameraName(self.cameraName,
                     altitude=altitude, insrot=insrot,nsigma=0, alphaRot=1)
-        
+
             #outerRingIds = [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]
             #fidsOuterRing = fids[fids.fiducialId.isin(outerRingIds)]
 
             import mcsActor.mcsRoutines.mcsRoutines as mcsTools
 
             fidsOuterRing, fidsGood = mcsTools.readFiducialMasks(fids)
-            
+
             pfiTransform.updateTransform(mcsData, fidsOuterRing, matchRadius=8.0, nMatchMin=0.1)
 
             nsigma = 0
@@ -543,7 +537,7 @@ class CobraCoach():
 
             xx , yy = pfiTransform.mcsToPfi(mcsData['mcs_center_x_pix'],mcsData['mcs_center_y_pix'])
             centroids=np.rec.array([xx,yy],formats='float,float',names='x,y')
-            
+
             if tolerance is not None:
                 radii = (self.calibModel.L1 + self.calibModel.L2) * (1 + tolerance)
             else:
@@ -558,7 +552,7 @@ class CobraCoach():
             else:
                 centers = guess
 
-        
+
             self.logger.info('Running object matching!')
             positions, indexMap = calculus.matchPositions(centroids, guess=centers, dist=radii)
             self.logger.info(f'Total detected spots={len(centroids)} Npos={len(positions)} nguess={len(centers)}')
@@ -691,14 +685,14 @@ class CobraCoach():
                                trajectoryMode=self.trajectoryMode)
         else:
             for n in range(nSegments):
-                
+
                 self.pfi.moveSteps(cobras, thetaSteps[n], phiSteps[n],
                                    thetaOntimes=thetaOntimes[n], phiOntimes=phiOntimes[n],
                                    trajectoryMode=self.trajectoryMode)
         if not self.trajectoryMode and self.cam.filePrefix == 'PFAC':
             self.cam.stopRecord()
         self.logger.info('cobra control FPGA operation done.')
-        
+
         if self.mode == self.thetaMode:
             thetas = self.thetaInfo['angle'] + self.thetaInfo['ccwHome']
             thetas[cIds] += expectedThetas
@@ -973,7 +967,7 @@ class CobraCoach():
                                             fromTheta[c_i], fromPhi[c_i], thetaFast[c_i], phiFast[c_i], self.calibModel)
 
             # send move command
-            self.logger.info(f'Finished converting angle to steps, sending command to moveSteps (constantOntime).')
+            self.logger.info('Finished converting angle to steps, sending command to moveSteps (constantOntime).')
             self.moveSteps(cobras, thetaSteps, phiSteps, thetaFast, phiFast, thetaAngles, phiAngles)
 
         else:
@@ -983,17 +977,17 @@ class CobraCoach():
                 cId = cIds[c_i]
                 _mmTheta = self.mmTheta[cId] if thetaFast[c_i] else self.mmThetaSlow[cId]
                 _mmPhi = self.mmPhi[cId] if phiFast[c_i] else self.mmPhiSlow[cId]
-                
+
                 self.logger.warning(f'''Calulate theta arm {c_i}/{len(cobras)}, {thetaAngles[c_i]}, 
                     {fromTheta[c_i]} {self.maxStepsPerSeg}''')
-                
+
                 n = calculus.calNSegments(thetaAngles[c_i], fromTheta[c_i], _mmTheta, self.maxStepsPerSeg)
                 if nSegments < n:
                     nSegments = n
 
                 self.logger.warning(f'''Calulate phi arm {c_i}/{len(cobras)}, {phiAngles[c_i]}, 
                     {fromPhi[c_i]} {self.maxStepsPerSeg}''')
-                
+
                 n = calculus.calNSegments(phiAngles[c_i], fromPhi[c_i], _mmPhi, self.maxStepsPerSeg)
                 if nSegments < n:
                     nSegments = n
@@ -1031,7 +1025,7 @@ class CobraCoach():
             segments['phiSpeeds'] = phiSpeeds
             np.savez(dataPath / f'segments_{nowSecond}', idx=cIds, segs=segments)
 
-            self.logger.info(f'Finished converting angle to steps, sending command to moveSteps.')
+            self.logger.info('Finished converting angle to steps, sending command to moveSteps.')
             self.moveSteps(cobras, thetaSteps, phiSteps, thetaFast, phiFast, thetaAngles, phiAngles, False, thetaOntimes, phiOntimes, nSegments, thetaSpeeds, phiSpeeds)
 
         return self.moveInfo['movedTheta'][cIds], self.moveInfo['movedPhi'][cIds]
@@ -1180,7 +1174,7 @@ class CobraCoach():
         else:
             self.pfi.moveAllSteps(cobras, thetaSteps, phiSteps, thetaFast=True, phiFast=True)
             # update current positions
-            # Here we need to think about how to deal with it. 
+            # Here we need to think about how to deal with it.
             # There are dots, so we may wanto to skip this
             if noMCS is True:
                 self.logger.info('noMCS flag is passed, set angles instead of exposure.')
@@ -1196,7 +1190,7 @@ class CobraCoach():
                     phiHome = None
 
                 self.setCurrentAngles(self.allCobras[cIds],
-                                      thetaAngles=thetaHome, 
+                                      thetaAngles=thetaHome,
                                       phiAngles=phiHome)
             else:
                 self.cobraInfo['position'][self.visibleIdx] = self.exposeAndExtractPositions(dbMatch = True)[self.visibleIdx]
@@ -1533,7 +1527,7 @@ class CobraCoach():
             self.cam.resetStack(f'phiForwardStack{n}.fits')
 
             # forward phi motor maps
-            phiFW[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiBegin{n}.fits', 
+            phiFW[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'phiBegin{n}.fits',
                 dbMatch=True, doStack=False)[self.visibleIdx]
 
             self.cobraInfo['position'][self.visibleIdx] = phiFW[self.visibleIdx, n, 0]
@@ -1543,9 +1537,9 @@ class CobraCoach():
             for k in range(iteration):
                 self.logger.info(f'{n+1}/{repeat} phi forward to {(k+1)*steps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], 0, steps, phiFast=False)
-                # Here we turn-off dbMatch because we need good matching 
+                # Here we turn-off dbMatch because we need good matching
                 phiFW[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'phiForward{n}N{k}.fits',
-                                                    guess=phiFW[:, n, k], 
+                                                    guess=phiFW[:, n, k],
                                                     tolerance=1.0, dbMatch = True, doStack=False)[self.visibleIdx]
 
                 self.cobraInfo['position'][self.visibleIdx] = phiFW[self.visibleIdx, n, k+1]
@@ -1564,7 +1558,7 @@ class CobraCoach():
                     c = self.allCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
                     with np.printoptions(precision=2, suppress=True):
-                        self.logger.warning(f'  {str(c)}: {d}')
+                        self.logger.warning(f'  {c!s}: {d}')
 
             # make sure it goes to the limit
             self.logger.info(f'{n+1}/{repeat} phi forward {limitSteps} to limit')
@@ -1623,7 +1617,7 @@ class CobraCoach():
                     c = self.allCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
                     with np.printoptions(precision=2, suppress=True):
-                        self.logger.warning(f'  {str(c)}: {d}')
+                        self.logger.warning(f'  {c!s}: {d}')
 
             # At the end, make sure the cobra back to the hard stop
             self.logger.info(f'{n+1}/{repeat} phi reverse {-limitSteps} steps to limit')
@@ -1728,7 +1722,7 @@ class CobraCoach():
                     c = self.allCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
                     with np.printoptions(precision=2, suppress=True):
-                        self.logger.warning(f'  {str(c)}: {d}')
+                        self.logger.warning(f'  {c!s}: {d}')
 
             # make sure it goes to the limit
             self.logger.info(f'{n+1}/{repeat} theta forward {limitSteps} to limit')
@@ -1770,7 +1764,7 @@ class CobraCoach():
                     c = self.allCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
                     with np.printoptions(precision=2, suppress=True):
-                        self.logger.warning(f'  {str(c)}: {d}')
+                        self.logger.warning(f'  {c!s}: {d}')
 
             # At the end, make sure the cobra back to the hard stop
             self.logger.info(f'{n+1}/{repeat} theta reverse {-limitSteps} steps to limit')

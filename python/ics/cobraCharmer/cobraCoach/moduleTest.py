@@ -1,20 +1,21 @@
-from importlib import reload
 import logging
-import numpy as np
-from astropy.io import fits
-import sep
 from copy import deepcopy
+from importlib import reload
 
+import numpy as np
+import sep
 from procedures.moduleTest import calculation
+
 reload(calculation)
+from procedures.moduleTest.mcs import camera
 from procedures.moduleTest.speedModel import SpeedModel
 
-from procedures.moduleTest.mcs import camera
 reload(camera)
-from ics.cobraCharmer import pfi as pfiControl
-from ics.cobraCharmer.utils import butler
-from ics.cobraCharmer.fpgaState import fpgaState
 from ics.cobraCharmer import cobraState
+from ics.cobraCharmer import pfi as pfiControl
+from ics.cobraCharmer.fpgaState import fpgaState
+from ics.cobraCharmer.utils import butler
+
 
 def unwrappedAngle(angle, fromAngle, toAngle,
                    tripAngle=np.pi, allowAngle=np.pi/6):
@@ -90,7 +91,7 @@ def unwrappedPosition(pos, center, homeAngle, fromAngle, toAngle,
     return unwrappedAngle(diffAngle, fromAngle, toAngle,
                           tripAngle=tripAngle, allowAngle=allowAngle)
 
-class ModuleTest():
+class ModuleTest:
     nCobrasPerModule = 57
     nModules = 42
 
@@ -175,7 +176,7 @@ class ModuleTest():
                 cobraId = (c_i - 1) % self.nCobrasPerModule + 1
                 self.pfi.calibModel.setCobraStatus(cobraId, moduleId, invisible=True)
         if len(brokens) > 0:
-            self.logger.warn("setting invisible cobras: %s", brokens)
+            self.logger.warning("setting invisible cobras: %s", brokens)
 
         visibles = [e for e in range(1, self.nCobras+1) if e not in brokens]
         self.invisibleIdx = np.array(brokens, dtype='i4') - 1
@@ -191,7 +192,7 @@ class ModuleTest():
         self.goodCobras = self.allCobras[self.goodIdx]
         self.badCobras = self.allCobras[self.badIdx]
         if len(badNums) > 0:
-            self.logger.warn("setting bad cobras: %s", badNums)
+            self.logger.warning("setting bad cobras: %s", badNums)
 
 
     movesDtype = np.dtype(dict(names=['expId', 'spotId',
@@ -567,9 +568,9 @@ class ModuleTest():
 
             lastAngles = atAngles
             if ntries >= maxTries:
-                self.logger.warn(f'Reached max {maxTries} tries, {notDone.sum()} cobras left')
-                self.logger.warn(f'   cobras: {[c.cobraNum for c in cobras[np.where(notDone)]]}')
-                self.logger.warn(f'   left: {np.round(np.rad2deg(left)[notDone], 2)}')
+                self.logger.warning(f'Reached max {maxTries} tries, {notDone.sum()} cobras left')
+                self.logger.warning(f'   cobras: {[c.cobraNum for c in cobras[np.where(notDone)]]}')
+                self.logger.warning(f'   left: {np.round(np.rad2deg(left)[notDone], 2)}')
 
                 _, phiSteps = self.pfi.moveThetaPhi(cobras[notDone],
                                                     thetaAngles[notDone],
@@ -577,7 +578,7 @@ class ModuleTest():
                                                     phiFroms=lastAngles[notDone],
                                                     phiFast=(doFast and ntries==1),
                                                     doRun=False)
-                self.logger.warn(f'   steps: {phiSteps}')
+                self.logger.warning(f'   steps: {phiSteps}')
 
                 break
             ntries += 1
@@ -685,7 +686,7 @@ class ModuleTest():
 
         if not keepExistingPosition or not hasattr(self, 'thetaHomes'):
             # extract sources and fiber identification
-            self.logger.info(f'theta backward -10000 steps to limit')
+            self.logger.info('theta backward -10000 steps to limit')
             self.pfi.moveAllSteps(cobras, -10000, 0)
             allCurPos = np.zeros(self.nCobras, dtype='complex')
             allCurPos[self.visibleIdx] = self.exposeAndExtractPositions(tolerance=0.2)
@@ -798,9 +799,9 @@ class ModuleTest():
             lastAngles = atAngles
             self.thetaAngles[idx] = atAngles
             if ntries >= maxTries:
-                self.logger.warn(f'Reached max {maxTries} tries, {notDone.sum()} cobras left')
-                self.logger.warn(f'   cobras: {[c.cobraNum for c in cobras[np.where(notDone)]]}')
-                self.logger.warn(f'   left: {np.round(np.rad2deg(left)[notDone], 2)}')
+                self.logger.warning(f'Reached max {maxTries} tries, {notDone.sum()} cobras left')
+                self.logger.warning(f'   cobras: {[c.cobraNum for c in cobras[np.where(notDone)]]}')
+                self.logger.warning(f'   left: {np.round(np.rad2deg(left)[notDone], 2)}')
 
                 thetaSteps, _ = self.pfi.moveThetaPhi(cobras[notDone],
                                                       left[notDone],
@@ -808,7 +809,7 @@ class ModuleTest():
                                                       thetaFroms=lastAngles[notDone],
                                                       thetaFast=(doFast and ntries==1),
                                                       doRun=False)
-                self.logger.warn(f'   steps: {thetaSteps}')
+                self.logger.warning(f'   steps: {thetaSteps}')
                 break
             ntries += 1
 
@@ -1008,7 +1009,7 @@ class ModuleTest():
         phis = np.full(self.nCobras, np.deg2rad(phiAngle))
 
         # Home the good cobras
-        self.logger.info(f'theta/phi move 10000/-5000 steps to limit')
+        self.logger.info('theta/phi move 10000/-5000 steps to limit')
         self.pfi.moveAllSteps(self.goodCobras, 10000, -5000)
 
         # move to safe angles
@@ -1107,12 +1108,12 @@ class ModuleTest():
                     phiFW[self.visibleIdx, n, k+2:] = phiFW[self.visibleIdx, n, k+1][:,None]
                     break
             if doneMask is not None and np.any(notdoneMask):
-                self.logger.warn(f'{(notdoneMask == True).sum()} cobras did not reach phi CW limit:')
+                self.logger.warning(f'{(notdoneMask == True).sum()} cobras did not reach phi CW limit:')
                 for c_i in np.where(notdoneMask)[0]:
                     c = self.allCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
                     with np.printoptions(precision=2, suppress=True):
-                        self.logger.warn(f'  {str(c)}: {d}')
+                        self.logger.warning(f'  {c!s}: {d}')
 
             # make sure it goes to the limit
             self.logger.info(f'{n+1}/{repeat} phi forward {limitSteps} to limit')
@@ -1146,12 +1147,12 @@ class ModuleTest():
                     break
 
             if doneMask is not None and np.any(notdoneMask):
-                self.logger.warn(f'{(notdoneMask == True).sum()} did not reach phi CCW limit:')
+                self.logger.warning(f'{(notdoneMask == True).sum()} did not reach phi CCW limit:')
                 for c_i in np.where(notdoneMask)[0]:
                     c = self.allCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
                     with np.printoptions(precision=2, suppress=True):
-                        self.logger.warn(f'  {str(c)}: {d}')
+                        self.logger.warning(f'  {c!s}: {d}')
 
             # At the end, make sure the cobra back to the hard stop
             self.logger.info(f'{n+1}/{repeat} phi reverse {-limitSteps} steps to limit')
@@ -1170,9 +1171,9 @@ class ModuleTest():
         phiCenter, phiRadius, phiAngFW, phiAngRV, badRange = self.cal.phiCenterAngles(phiFW, phiRV)
         for short in badRange:
             if short in self.badIdx:
-                self.logger.warn(f"phi range for {short+1:-2d} is short, but that was expected")
+                self.logger.warning(f"phi range for {short+1:-2d} is short, but that was expected")
             else:
-                self.logger.warn(f'phi range for {short+1:-2d} is short: '
+                self.logger.warning(f'phi range for {short+1:-2d} is short: '
                                  f'out={np.rad2deg(phiAngRV[short,0,0]):-6.2f} '
                                  f'back={np.rad2deg(phiAngRV[short,0,-1]):-6.2f}')
         np.save(dataPath / 'phiCenter', phiCenter)
@@ -1371,12 +1372,12 @@ class ModuleTest():
                     break
 
             if doneMask is not None and np.any(notdoneMask):
-                self.logger.warn(f'{(notdoneMask == True).sum()} did not reach theta CW limit:')
+                self.logger.warning(f'{(notdoneMask == True).sum()} did not reach theta CW limit:')
                 for c_i in np.where(notdoneMask)[0]:
                     c = self.allCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
                     with np.printoptions(precision=2, suppress=True):
-                        self.logger.warn(f'  {str(c)}: {d}')
+                        self.logger.warning(f'  {c!s}: {d}')
 
             # make sure it goes to the limit
             self.logger.info(f'{n+1}/{repeat} theta forward {limitSteps} to limit')
@@ -1409,12 +1410,12 @@ class ModuleTest():
                     break
 
             if doneMask is not None and np.any(notdoneMask):
-                self.logger.warn(f'{(notdoneMask == True).sum()} did not reach theta CCW limit:')
+                self.logger.warning(f'{(notdoneMask == True).sum()} did not reach theta CCW limit:')
                 for c_i in np.where(notdoneMask)[0]:
                     c = self.allCobras[c_i]
                     d = np.rad2deg(lastAngles[c_i])
                     with np.printoptions(precision=2, suppress=True):
-                        self.logger.warn(f'  {str(c)}: {d}')
+                        self.logger.warning(f'  {c!s}: {d}')
 
             # At the end, make sure the cobra back to the hard stop
             self.logger.info(f'{n+1}/{repeat} theta reverse {-limitSteps} steps to limit')
@@ -1448,7 +1449,7 @@ class ModuleTest():
         thetaCenter, thetaRadius, thetaAngFW, thetaAngRV, badRange = self.cal.thetaCenterAngles(thetaFW,
                                                                                                 thetaRV)
         for short in badRange:
-            self.logger.warn(f'theta range for {short+1:-2d} is short: '
+            self.logger.warning(f'theta range for {short+1:-2d} is short: '
                              f'out={np.rad2deg(thetaAngRV[short,0,0]):-6.2f} '
                              f'back={np.rad2deg(thetaAngRV[short,0,-1]):-6.2f}')
         np.save(dataPath / 'thetaCenter', thetaCenter)
@@ -1472,7 +1473,7 @@ class ModuleTest():
         else:
             thetaMMFW, thetaMMRV, bad = self.cal.motorMaps(thetaAngFW, thetaAngRV, steps, delta)
         for bad_i in np.where(bad)[0]:
-            self.logger.warn(f'theta map for {bad_i+1} is bad')
+            self.logger.warning(f'theta map for {bad_i+1} is bad')
         bad[badRange] = True
         np.save(dataPath / 'thetaMMFW', thetaMMFW)
         np.save(dataPath / 'thetaMMRV', thetaMMRV)
@@ -1628,11 +1629,11 @@ class ModuleTest():
                         break
 
                 if doneMask is not None and np.any(notdoneMask):
-                    self.logger.warn(f'{(notdoneMask == True).sum()} did not finish:')
+                    self.logger.warning(f'{(notdoneMask == True).sum()} did not finish:')
                     for c_i in np.where(notdoneMask)[0]:
                         c = self.allCobras[c_i]
                         d = np.rad2deg(lastAngles[c_i])
-                        self.logger.warn(f'  {str(c)}: {np.round(d, 2)}')
+                        self.logger.warning(f'  {c!s}: {np.round(d, 2)}')
 
                 # make sure it goes to the limit
                 self.logger.info(f'{n+1}/{repeat} theta forward {limitSteps} to limit')
@@ -1667,11 +1668,11 @@ class ModuleTest():
                         break
 
                 if doneMask is not None and np.any(notdoneMask):
-                    self.logger.warn(f'{(notdoneMask == True).sum()} did not finish:')
+                    self.logger.warning(f'{(notdoneMask == True).sum()} did not finish:')
                     for c_i in np.where(notdoneMask)[0]:
                         c = self.allCobras[c_i]
                         d = np.rad2deg(lastAngles[c_i])
-                        self.logger.warn(f'  {str(c)}: {np.round(d, 2)}')
+                        self.logger.warning(f'  {c!s}: {np.round(d, 2)}')
 
                 # At the end, make sure the cobra back to the hard stop
                 self.logger.info(f'G{g} {n+1}/{repeat} theta reverse {-limitSteps} steps to limit')
@@ -1867,7 +1868,7 @@ class ModuleTest():
                     break
 
             if np.any(notdoneMask):
-                self.logger.warn(f'{(notdoneMask == True).sum()} cobras did not finish: '
+                self.logger.warning(f'{(notdoneMask == True).sum()} cobras did not finish: '
                                  f'{np.where(notdoneMask)[0]}, '
                                  f'{np.round(np.rad2deg(cAngles)[notdoneMask[self.goodIdx]], 2)}')
 
@@ -2045,7 +2046,7 @@ class ModuleTest():
                     break
 
             if np.any(notdoneMask):
-                self.logger.warn(f'{(notdoneMask == True).sum()} cobras did not finish: '
+                self.logger.warning(f'{(notdoneMask == True).sum()} cobras did not finish: '
                                  f'{np.where(notdoneMask)[0]}, '
                                  f'{np.round(np.rad2deg(cAngles)[notdoneMask[self.goodIdx]], 2)}')
 
@@ -2159,7 +2160,7 @@ class ModuleTest():
         onTimeHighSteps = 200
 
         if iteration < 3:
-            self.logger.warn(f'Change iteration parameter from {iteration} to 3!')
+            self.logger.warning(f'Change iteration parameter from {iteration} to 3!')
             iteration = 3
         if np.isscalar(speeds) or len(speeds) != 2:
             raise ValueError(f'speeds parameter should be a two value tuples: {speeds}')
@@ -2197,7 +2198,7 @@ class ModuleTest():
         _spdR.append(spdR.copy())
 
         # rough estimation for on time
-        for (fast, speed, step) in zip([False, True], speeds, steps):
+        for (fast, speed, step) in zip([False, True], speeds, steps, strict=False):
             # calculate on time
             for c_i in self.goodIdx:
                 ontF[c_i] = self.thetaModel.getOntimeFromData(speed, _spdF[0][c_i], onTimeHigh)
@@ -2259,7 +2260,7 @@ class ModuleTest():
         onTimeHighSteps = 100
 
         if iteration < 3:
-            self.logger.warn(f'Change iteration parameter from {iteration} to 3!')
+            self.logger.warning(f'Change iteration parameter from {iteration} to 3!')
             iteration = 3
         if np.isscalar(speeds) or len(speeds) != 2:
             raise ValueError(f'speeds parameter should be a two value tuples: {speeds}')
@@ -2296,7 +2297,7 @@ class ModuleTest():
         _spdF.append(spdF.copy())
         _spdR.append(spdR.copy())
 
-        for (fast, speed, step) in zip([False, True], speeds, steps):
+        for (fast, speed, step) in zip([False, True], speeds, steps, strict=False):
             # calculate on time
             self.logger.info(f'Run for best {"Fast" if fast else "Slow"} motor maps')
             for c_i in self.goodIdx:
@@ -2363,12 +2364,12 @@ class ModuleTest():
             err = model.buildModel(s, t)
 
             if err:
-                self.logger.warn(f'Building model failed #{c+1}, set to max value')
+                self.logger.warning(f'Building model failed #{c+1}, set to max value')
                 onTime[c] = np.max(t)
             else:
                 onTime[c] = model.toOntime(speed)
                 if not np.isfinite(onTime[c]):
-                    self.logger.warn(f'Curve fitting failed #{c+1}, set to median value')
+                    self.logger.warning(f'Curve fitting failed #{c+1}, set to median value')
                     onTime[c] = np.median(t)
 
         return onTime

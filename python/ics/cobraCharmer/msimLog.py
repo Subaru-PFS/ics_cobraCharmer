@@ -6,7 +6,9 @@ Bugs:
 
 """
 
-from . import fpgaLogger, fpgaProtocol
+import sys
+
+from ics.cobraCharmer import fpgaLogger, fpgaProtocol
 
 fpgaLog = fpgaLogger.FPGAProtocolLogger()
 
@@ -53,8 +55,6 @@ def main(f):
 
 
 if __name__ == "__main__":
-    import sys
-
     main(sys.stdin)
 
     # with open("/data/cobras/TEST_RESULTS/Spare1/18_01_10_14_31_35_TargetRun/fpga_log.txt", "rt") as f:

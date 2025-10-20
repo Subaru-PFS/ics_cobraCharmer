@@ -1,12 +1,14 @@
-from importlib import reload
-import numpy as np
-import time
-import subprocess as sub
-import astropy.io.fits as pyfits
-import threading
 import pathlib
+import threading
+import time
+from importlib import reload
+
+import astropy.io.fits as pyfits
 import ics.utils.cmd as cmdUtils
-from . import camera
+import numpy as np
+
+from ics.cobraCharmer.cobraCoach.mcs import camera
+
 reload(camera)
 
 class McsActorCamera(camera.Camera):
@@ -23,15 +25,15 @@ class McsActorCamera(camera.Camera):
 
     def _camConnect(self):
         self.logger.info('text="Starting camera initialization."')
-        cmdString = f'status'
+        cmdString = 'status'
         cmdVar = self.actor.cmdr.call(actor='mcs', cmdStr=cmdString,
                                       forUserCmd=cmd)
         if cmdVar.didFail:
-            self.logger.warn('text="Camera initialization failed"')
+            self.logger.warning('text="Camera initialization failed"')
             return None
 
     def _getCameraName(self):
-        
+
         self.cameraName = self.actor.models['mcs'].keyVarDict['cameraName']
 
     def _camExpose(self, exptime=None, frameNum=None, _takeDark=False,
@@ -68,7 +70,7 @@ class McsActorCamera(camera.Camera):
                                       forUserCmd=cmd, timeLim=exptime+60)
         if cmdVar.didFail:
             cmd.fail(f'text="MCS expose failed: {cmdUtils.interpretFailure(cmdVar)}"')
-            raise RuntimeError(f'FAILED to read mcs image!')
+            raise RuntimeError('FAILED to read mcs image!')
 
         t2=time.time()
 
@@ -190,7 +192,7 @@ class McsActorCamera(camera.Camera):
             linkname.symlink_to(filename.name)
 
         if doStack:
-            self.logger.info(f'Adding to a stacked image.')
+            self.logger.info('Adding to a stacked image.')
             img = pyfits.getdata(filename, extname='IMAGE')
             self._updateStack(img)
 

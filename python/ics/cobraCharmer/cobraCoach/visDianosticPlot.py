@@ -1,79 +1,51 @@
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-import numpy as np
-import glob
-import astropy.io.fits as pyfits
-import numpy as np
-import os
-import subprocess
-import sys
-import math
-import pathlib
-from scipy import optimize
-from scipy.optimize import curve_fit
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-import re
-from scipy.optimize import least_squares
-from functools import partial
-import multiprocessing as mp
-import time
-
-
-from bokeh.io import output_notebook, show, export_png,export_svgs
-from ics.cobraCharmer.cobraCoach import visUtils
-from selenium import webdriver
-#from webdriver_manager.chrome import ChromeDriverManager
-
-
-from bokeh.plotting import figure, show, output_file
-import bokeh.palettes
-from bokeh.layouts import column,gridplot
-from bokeh.models import HoverTool, ColumnDataSource, LinearColorMapper
-from bokeh.models.glyphs import Text
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-
-
-from bokeh.transform import linear_cmap
-from bokeh.palettes import Category20
-
-from ics.cobraCharmer import pfiDesign
-from ics.cobraCharmer import func
 import fnmatch
-import pandas as pd
-from opdb import opdb
+import glob
 import logging
+import os
+import pathlib
+import re
+import subprocess
 
-from pfs.utils.butler import Butler
+import astropy.io.fits as pyfits
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import pfs.utils.coordinates.transform as transformUtils
 import psycopg2
-from sqlalchemy import create_engine
+
+#from webdriver_manager.chrome import ChromeDriverManager
+from ics.cobraCharmer import func, pfiDesign
+from mcsActor.mcsRoutines import fiducials
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from opdb import opdb
+from pfs.utils.butler import Butler
 from pfs.utils.fiberids import FiberIds
+from scipy.optimize import curve_fit, least_squares
+from sqlalchemy import create_engine
 
-
-import mcsActor.mcsRoutines.fiducials as fiducials
 
 def findDesignFromVisit(visit):
     command = f"grep moveToPfsDesign /data/logs/actors/fps/202?-*-*.log | grep {visit}"
-    
+
     try:
         output = subprocess.check_output(command, shell=True, text=True)
         slist_str = str(output)
         pattern = r"designI[dD]\)=\[Long\((\d+)\)\]"
         match = re.search(pattern, str(slist_str))
-    
+
 
         if match:
             value = int(match.group(1))  # Extract the captured numerical value and convert it to float
             #print(value)
         else:
             value = None
-    
-    except subprocess.CalledProcessError as e:
-        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+
+    except subprocess.CalledProcessError:
+        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'")
         engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
 
 
-        pfsConfig = pd.read_sql(f'''
+        pfsConfig = pd.read_sql('''
                     SELECT 
                         visit0,pfs_design_id,converg_tolerance   FROM public.pfs_config
                     WHERE 
@@ -89,12 +61,12 @@ def findDesignFromVisit(visit):
 
 def findToleranceFromVisit(visit):
     #command = f"grep moveToPfsDesign /data/logs/actors/fps/2024-*-*.log | grep {visit}"
-    
+
     #try:
     #    output = subprocess.check_output(command, shell=True, text=True)
     #    slist_str = str(output)
     #    pattern = r"\{KEY\(tolerance\)=\[Float\((\d+(\.\d+)?)\)\]\}"
-        
+
     #    match = re.search(pattern, str(slist_str))
 
     #    if match:
@@ -103,13 +75,13 @@ def findToleranceFromVisit(visit):
     #    else:
     #        print("No match found. Set to default 0.01")
     #        value = 0.01
-    
+
     #except subprocess.CalledProcessError as e:
-    conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+    conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'")
     engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
 
 
-    pfsConfig = pd.read_sql(f'''
+    pfsConfig = pd.read_sql('''
                 SELECT 
                     visit0,converg_tolerance  FROM public.pfs_config
                 WHERE 
@@ -127,8 +99,8 @@ def findToleranceFromVisit(visit):
 
 
 def findRunDir(pfsVisitId):
-    import os
     import fnmatch
+    import os
     base_dir = "/data/MCS/"
     pattern = f"PFSC{pfsVisitId:06d}??.fits"
     # Only look in directories matching 202[2345]*
@@ -161,9 +133,9 @@ def gaussianFit(n, bins, initGuess = None):
         popt,pcov = curve_fit(gaus,histx,histy,p0=[1,np.sum(histx*histy)/np.sum(histy),0.01])
     else:
         mean, sigma = initGuess[0], initGuess[1]
-        
+
         popt,pcov = curve_fit(gaus,histx,histy,p0=[1,mean, sigma])
-    
+
     sigma=np.abs(popt[2])
 
     return popt
@@ -191,9 +163,9 @@ def fit_circle(x, y, initial_guess=None):
 
     # Use least_squares to perform the iterative nonlinear least squares optimization
     result = least_squares(circle_residuals, initial_guess, args=(x, y))
-    
+
     cx, cy, r = result.x
-    
+
     return cx, cy, r
 
 
@@ -228,11 +200,11 @@ def fit_circle_ransac(x, y, num_iterations=100, threshold=1.0):
     return cx, cy, r, best_inliers
 
 
-class VisDianosticPlot(object):
+class VisDianosticPlot:
 
     def __init__(self, runDir=None, xml=None, arm=None, datatype=None):
-        
-        
+
+
         # Initializing the logger
         logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
@@ -300,19 +272,19 @@ class VisDianosticPlot(object):
             for name in files:
                 if fnmatch.fnmatch(name, 'PFSC*.fits'):
                     result.append(os.path.join(root, name))
-    
-    
+
+
         return result
 
     def _loadCobraMMData(self, arm=None) :
-        
+
         try:
             self.alt=pyfits.open(self._findFITS()[0])[0].header['ALTITUDE']
         except:
             self.alt=90
 
         path = self.path+'data/'
-        
+
         if arm is None:
             raise Exception('Define the arm')
 
@@ -343,8 +315,8 @@ class VisDianosticPlot(object):
         self.badrange = np.load(path + 'badRange.npy')
         #self.mf2 = np.load(path + 'phiMMFW2.npy')
         #self.mr2 = np.load(path + 'phiMMRV2.npy')
-        #self.bad2 = np.load(path + 'bad2.npy')        
-    
+        #self.bad2 = np.load(path + 'bad2.npy')
+
     def _addLine(self, centers, length, angle, **kwargs):
         ax = plt.gca()
         x = length*np.cos(angle)
@@ -352,19 +324,18 @@ class VisDianosticPlot(object):
         for idx in self.goodIdx:
             ax.plot([centers.real[idx],  centers.real[idx]+x[idx]],
                         [centers.imag[idx],centers.imag[idx]+y[idx]],**kwargs)
-        pass
 
 
-    def visCreateNewPlot(self,title, xLabel, yLabel, size=(8, 8), nRows = 1, nCols = 1, 
+    def visCreateNewPlot(self,title, xLabel, yLabel, size=(8, 8), nRows = 1, nCols = 1,
         aspectRatio="equal", patchAlpha=0, supTitle=True, **kwargs):
-        
+
 
         #plt.figure(figsize=size, facecolor="white", tight_layout=True, **kwargs)
         fig, ax = plt.subplots(nRows, nCols,figsize=size, facecolor="white", **kwargs)
         fig.patch.set_alpha(patchAlpha)
-        
+
         if nRows*nCols == 1:
-        
+
             plt.clf()
             if supTitle is True:
                 plt.suptitle(title)
@@ -381,7 +352,7 @@ class VisDianosticPlot(object):
             plt.suptitle(title)
             plt.subplots_adjust(wspace=0.25,hspace=0.3)
 
-        
+
 
         self.fig = fig
 
@@ -398,24 +369,24 @@ class VisDianosticPlot(object):
         ax = plt.gca()
         ax.set_xlim(xLim)
         ax.set_ylim(yLim)
-    
+
     def visSetCobra(self, cobraIdx, scale=1.1):
         """
             Set plot region to a given cobra index
         """
         center = self.calibModel.centers[cobraIdx]
         dist = scale*(self.calibModel.L1[cobraIdx]+self.calibModel.L2[cobraIdx])
-        
+
         self.visSetAxesLimits([center.real-dist,center.real+dist],[center.imag-dist,center.imag+dist])
 
     def visUnassignedFibers(self, pfsVisitID):
 
-        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'")
         engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
 
 
         with conn:
-                fiberData = pd.read_sql(f'''
+                fiberData = pd.read_sql('''
                     SELECT DISTINCT 
                         fiber_id, pfi_center_final_x_mm, pfi_center_final_y_mm, 
                         pfi_nominal_x_mm, pfi_nominal_y_mm
@@ -432,15 +403,15 @@ class VisDianosticPlot(object):
         fiberData=fiberData.sort_values('cobra_id')
         df = fiberData.loc[fiberData['cobra_id'] != 65535]
         unassigned_rows = df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].isna().all(axis=1)]
-        unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1 
+        unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1
 
         ax = plt.gca()
 
-        ax.scatter(self.calibModel.centers.real[unassigned_cobraIdx], 
+        ax.scatter(self.calibModel.centers.real[unassigned_cobraIdx],
                    self.calibModel.centers.imag[unassigned_cobraIdx], marker='X', color='red', s=20)
 
     def visCobraArms(self, center, thetaLength, phiLength, thetaAngle, phiAngle):
-        
+
         ax = plt.gca()
         self._addLine(center,thetaLength, thetaAngle,color='blue',
                     linewidth=2,linestyle='-')
@@ -456,12 +427,12 @@ class VisDianosticPlot(object):
 
     def visGeometryFromXML(self, newXml=None, thetaAngle=None, phiAngle=None,
         markCobra=False, patrol=False, visHardStops = True, allCobra = False):
-        
+
         if newXml is None:
             des = self.calibModel
         else:
             des = pfiDesign.PFIDesign(newXml)
-        
+
         ax = plt.gca()
 
         if allCobra is False:
@@ -471,7 +442,7 @@ class VisDianosticPlot(object):
 
         # Adding theta hard-stops
         if visHardStops is True:
-            length=des.L1+des.L1 
+            length=des.L1+des.L1
 
             self._addLine(des.centers,length,des.tht0,color='orange',
                             linewidth=0.5,linestyle='--')
@@ -507,11 +478,11 @@ class VisDianosticPlot(object):
 
         if patrol is True:
             for i in self.goodIdx:
-                d = plt.Circle((des.centers[i].real, des.centers[i].imag), 
-                   des.L1[i]+des.L2[i], facecolor=('#D9DAFC'),edgecolor=None, 
+                d = plt.Circle((des.centers[i].real, des.centers[i].imag),
+                   des.L1[i]+des.L2[i], facecolor=('#D9DAFC'),edgecolor=None,
                    fill=True,alpha=0.7)
                 ax.add_artist(d)
-    
+
     def visVisitAllSpots(self, pfsVisitID = None, subVisit = None, camera = None, dataRange=None):
         '''
             This function plots data points of all spots of a given visitID, especailly for convergence and MM run. 
@@ -530,7 +501,7 @@ class VisDianosticPlot(object):
 
         path=f'{self.path}/data/'
         tarfile = path+'targets.npy'
-        
+
         if os.path.exists(tarfile):
             targets=np.load(tarfile)
 
@@ -538,14 +509,14 @@ class VisDianosticPlot(object):
 
         # Read fiducial and spot geometry
         fids = butler.get('fiducials')
-        
+
         try:
             db=opdb.OpDB(hostname='db-ics', port=5432,dbname='opdb',
                         username='pfs')
-        except:     
+        except:
             db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
                                 username='pfs')
-        
+
         dataRange = None
         subVisit = 1
 
@@ -586,21 +557,21 @@ class VisDianosticPlot(object):
 
             #if subid == 0:
             #self.logger.info(f'Using first frame for transformation')
-            pt = transformUtils.fromCameraName(cameraName,altitude=teleInfo['altitude'].values[0], 
+            pt = transformUtils.fromCameraName(cameraName,altitude=teleInfo['altitude'].values[0],
                         insrot=teleInfo['insrot'].values[0])
-        
-        
+
+
             outerRing = np.zeros(len(fids), dtype=bool)
             for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
                     outerRing[fids.fiducialId == i] = True
             pt.updateTransform(mcsData, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
-            
+
             for i in range(2):
                     rfid, rdmin = pt.updateTransform(mcsData, fids, matchRadius=4.2,nMatchMin=0.1)
 
 
             xx , yy = pt.mcsToPfi(mcsData['mcs_center_x_pix'],mcsData['mcs_center_y_pix'])
-            
+
             if count == 0:
                 ax.plot(xx,yy,'.',label='Spots from transformaion')
                 ax.plot(match['pfi_center_x_mm'],match['pfi_center_y_mm'],'x',label='Spots from match table')
@@ -613,14 +584,14 @@ class VisDianosticPlot(object):
 
         ax.legend()
 
-    
+
     def visArmlengthComp(self, diff, arm='theta', crange=[-0.025, 0.025], hrange=[-0.05,0.05],
         gauFit = True, extraLable=None):
-        
+
         if arm == 'phi':
             arm = 'L2'
         else: arm = 'L1'
-        
+
         fig, ax = plt.subplots(1,2, figsize=(14,6), facecolor="white")
 
         ax[0].set_aspect("equal")
@@ -641,7 +612,7 @@ class VisDianosticPlot(object):
 
         ax[1].plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
 
-        ax[1].text(0.7, 0.8, f'Median = {np.median(diff[self.goodIdx]):.4f}, $\sigma$={sigma:.4f}', 
+        ax[1].text(0.7, 0.8, rf'Median = {np.median(diff[self.goodIdx]):.4f}, $\sigma$={sigma:.4f}',
                         horizontalalignment='center', verticalalignment='center', transform=ax[1].transAxes)
         ax[1].set_xlabel('Difference (mm)')
         ax[1].set_ylabel('Counts')
@@ -665,7 +636,7 @@ class VisDianosticPlot(object):
         mov = np.load(movfile)
 
         mcs_finised = []
-        
+
         try:
             maxIteration = mov.shape[2]
         except:
@@ -675,24 +646,24 @@ class VisDianosticPlot(object):
             frameid = pfsVisitID*100+subID
             db=opdb.OpDB(hostname='db-ics', port=5432,
                         dbname='opdb',username='pfs')
-                
+
             match = db.bulkSelect('cobra_match','select * from cobra_match where '
                 f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
-            
+
             if len(match['pfi_center_x_mm']) != 0:
                 dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
                     (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
-            
+
                 inx = np.where(dist < tolerance)
                 mcs_finised.append(len(inx[0]))
         if len(mcs_finised) > maxIteration:
             mcs_finised = np.array(mcs_finised[1:])
         else:
             mcs_finised = np.array(mcs_finised)
-        
+
         print(f'MCS report: {mcs_finised}')
 
-        
+
 
         fpga_notDone = []
         for iteration in range(maxIteration):
@@ -703,12 +674,12 @@ class VisDianosticPlot(object):
                 ind = np.where(np.abs(mov[:,iteration]['position']) > 0)
                 notDone = len(np.where(np.abs(mov[ind[0],iteration]['position']-targets[ind[0]]) > tolerance)[0])
             fpga_notDone.append(notDone)
-        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'")
         engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
 
-        
+
         with conn:
-            fiberData = pd.read_sql(f'''
+            fiberData = pd.read_sql('''
                 SELECT DISTINCT 
                     fiber_id, pfi_center_final_x_mm, pfi_center_final_y_mm, 
                     pfi_nominal_x_mm, pfi_nominal_y_mm
@@ -718,21 +689,21 @@ class VisDianosticPlot(object):
                     pfs_config_fiber.visit0 = %(visit0)s
                 -- limit 10
             ''', engine, params={'visit0': pfsVisitID})
-        
-        
+
+
         fid=FiberIds()
         fiberData['cobra_id']=fid.fiberIdToCobraId(fiberData['fiber_id'].values)
         fiberData=fiberData.sort_values('cobra_id')
         df = fiberData.loc[fiberData['cobra_id'] != 65535]
         #unassigned_rows = df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].isna().all(axis=1)]
-        #unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1 
+        #unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1
 
 
         assigned_row= df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].notna().all(axis=1)]
-        assigned_cobraIdx =  assigned_row['cobra_id'].values - 1 
+        assigned_cobraIdx =  assigned_row['cobra_id'].values - 1
 
         print(f'FPGA report: {fpga_notDone}')
-        fpga_notDone = np.array(fpga_notDone)   
+        fpga_notDone = np.array(fpga_notDone)
         fpga_finished = len(self.goodIdx) - fpga_notDone
 
         ax.set_aspect('auto')
@@ -759,13 +730,13 @@ class VisDianosticPlot(object):
             visitID = int(self._findFITS()[0][-12:-7])
         else:
             visitID = pfsVisitID
-        
-        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+
+        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'")
         engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
 
 
         with conn:
-            fiberData = pd.read_sql(f'''
+            fiberData = pd.read_sql('''
                 SELECT DISTINCT 
                     fiber_id, pfi_center_final_x_mm, pfi_center_final_y_mm, 
                     pfi_nominal_x_mm, pfi_nominal_y_mm
@@ -782,11 +753,11 @@ class VisDianosticPlot(object):
         fiberData=fiberData.sort_values('cobra_id')
         df = fiberData.loc[fiberData['cobra_id'] != 65535]
         unassigned_rows = df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].isna().all(axis=1)]
-        unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1 
+        unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1
 
 
         assigned_row= df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].notna().all(axis=1)]
-        assigned_cobraIdx =  assigned_row['cobra_id'].values - 1 
+        assigned_cobraIdx =  assigned_row['cobra_id'].values - 1
 
         targetFromDB = df['pfi_nominal_x_mm'].values+df['pfi_nominal_y_mm'].values*1j
         isNan = np.isnan(targetFromDB)
@@ -797,7 +768,7 @@ class VisDianosticPlot(object):
         movfile = path+'moves.npy'
 
         mov = np.load(movfile)
-    
+
         frameid = pfsVisitID*100+(mov.shape[2]-1)
 
         db=opdb.OpDB(hostname='db-ics', port=5432,
@@ -815,7 +786,7 @@ class VisDianosticPlot(object):
         targets = targetFromDB
         dist=np.sqrt((match['pfi_center_x_mm'].values[assigned_cobraIdx]-targets[assigned_cobraIdx].real)**2+
                         (match['pfi_center_y_mm'].values[assigned_cobraIdx]-targets[assigned_cobraIdx].imag)**2)
-        
+
 
         try:
             maxIteration = mov.shape[2]
@@ -823,7 +794,7 @@ class VisDianosticPlot(object):
             mov = np.array([mov])
             maxIteration = mov.shape[2]
 
-            
+
         print(f'Tolerance: {tolerance}')
 
         #targets=np.load(tarfile)
@@ -833,15 +804,15 @@ class VisDianosticPlot(object):
 
         #notDone = fpga_notDone[-1]
         print(f'Number of not done cobra (FPGA): {notDone}')
-                
+
         if doPlots:
             sc=ax.scatter(self.calibModel.centers.real,self.calibModel.centers.imag,
                     c='grey',marker='s')
             ax.scatter(self.calibModel.centers.real[self.goodIdx[ind]],self.calibModel.centers.imag[self.goodIdx[ind]],
                 c='red',marker='s',label='Not Converged')
-        
+
         return ind[0]
-    
+
     def visCobraMovement(self, pfsVisitID, cobraIdx=0, iteration = 8, newPlot=True):
         """
         Visualize the movement of a specific cobra during a PFS visit.
@@ -850,7 +821,6 @@ class VisDianosticPlot(object):
             cobraIdx (int, optional): The index of the cobra. Defaults to 0.
             iteration (int, optional): The iteration number. Defaults to 8.
         """
-        pass
 
         #visit = 107682
         visit = pfsVisitID
@@ -860,16 +830,16 @@ class VisDianosticPlot(object):
 
         mov=np.load(f'/data/MCS/{runDir}/data/moves.npy')
         tar=np.load(f'/data/MCS/{runDir}/data/targets.npy')
-        
+
         movIdx = np.where(self.goodIdx == cobraIdx)[0][0]
-        
+
         if newPlot is True:
             self.visCreateNewPlot(f'Visit = {visit} Cobra Index = {self.goodIdx[movIdx]}','X','Y')
-        
+
         self.visGeometryFromXML(thetaAngle=mov[0,movIdx,iteration-1]['thetaAngle']+self.calibModel.tht0[self.goodIdx[movIdx]],
                             phiAngle=mov[0,movIdx,iteration-1]['phiAngle'],patrol=True)
 
-                            
+
         #self.visUnassignedFibers(pfsVisitID)
 
         ax=plt.gca()
@@ -879,7 +849,7 @@ class VisDianosticPlot(object):
         for i in range(len(x)):
             if x[i]==0 and y[i]==0:
                 x[i] = x[i-1]
-                y[i] = y[i-1]   
+                y[i] = y[i-1]
             ax.scatter(x[i], y[i], marker='.', alpha=0.5,label=f'{i+1}')
             ax.text(x[i], y[i],f'{i}')
         ax.scatter(tar.real[movIdx],tar.imag[movIdx],c='red',marker='x',label='target',s=80)
@@ -891,23 +861,23 @@ class VisDianosticPlot(object):
 
 
     def visTargetConvergence(self, pfsVisitID, maxIteration = 11, excludeUnassign=True, tolerance = None):
-        
+
         if tolerance is None:
             tolerance=findToleranceFromVisit(pfsVisitID)
-        
+
         vmax = 4*tolerance
 
         ax = plt.gcf().get_axes()[0]
-        self.visSubaruConvergence(Axes=ax, pfsVisitID = pfsVisitID,subVisit=maxIteration-1,excludeUnassign=excludeUnassign, 
+        self.visSubaruConvergence(Axes=ax, pfsVisitID = pfsVisitID,subVisit=maxIteration-1,excludeUnassign=excludeUnassign,
                         tolerance=tolerance,vmax=vmax)
         ax = plt.gcf().get_axes()[1]
         self.visSubaruConvergence(Axes=ax,pfsVisitID = pfsVisitID,subVisit=3,tolerance=tolerance, excludeUnassign=excludeUnassign,
                         histo=True, bins=20,range=(0,vmax))
-       
 
 
-    def visSubaruConvergence(self, Axes = None, pfsVisitID=None, subVisit=11, 
-        histo=False, histoThres = True, heatmap=True, vectormap=False, excludeUnassign = True, 
+
+    def visSubaruConvergence(self, Axes = None, pfsVisitID=None, subVisit=11,
+        histo=False, histoThres = True, heatmap=True, vectormap=False, excludeUnassign = True,
         plot_range=(0,0.08), bins=20, tolerance=0.01, **kwargs):
         '''
             Visulization of cobra convergence result at certain iteration.  
@@ -923,24 +893,24 @@ class VisDianosticPlot(object):
             visitID = int(self._findFITS()[0][-12:-7])
         else:
             visitID = pfsVisitID
-        
-        if subVisit is not None:    
+
+        if subVisit is not None:
             subID = subVisit
 
-        
-        
+
+
         import psycopg2
         from sqlalchemy import create_engine
 
         if excludeUnassign is True:
-            # Getting unassined fiber 
+            # Getting unassined fiber
             #pfsDesignID = int(findDesignFromVisit(pfsVisitID))
-            conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+            conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'")
             engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
 
-            
+
             with conn:
-                fiberData = pd.read_sql(f'''
+                fiberData = pd.read_sql('''
                     SELECT DISTINCT 
                         fiber_id, pfi_center_final_x_mm, pfi_center_final_y_mm, 
                         pfi_nominal_x_mm, pfi_nominal_y_mm
@@ -950,14 +920,14 @@ class VisDianosticPlot(object):
                         pfs_config_fiber.visit0 = %(visit0)s
                     -- limit 10
                 ''', engine, params={'visit0': pfsVisitID})
-            
-            
+
+
             fid=FiberIds()
             fiberData['cobra_id']=fid.fiberIdToCobraId(fiberData['fiber_id'].values)
             fiberData=fiberData.sort_values('cobra_id')
             df = fiberData.loc[fiberData['cobra_id'] != 65535]
             unassigned_rows = df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].isna().all(axis=1)]
-            unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1 
+            unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1
 
 
             assigned_row= df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].notna().all(axis=1)]
@@ -977,7 +947,7 @@ class VisDianosticPlot(object):
         except:
             db=opdb.OpDB(hostname='db-ics', port=5432,
                    dbname='opdb',username='pfs')
-        
+
             match = db.bulkSelect('cobra_match','select * from cobra_match where '
                       f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
 
@@ -994,7 +964,7 @@ class VisDianosticPlot(object):
             targets=np.load(tarfile)
             dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
                 (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
-        
+
         mov = np.load(movfile)
 
         try:
@@ -1002,29 +972,29 @@ class VisDianosticPlot(object):
         except:
             mov = np.array([mov])
             maxIteration = mov.shape[2]
-        
+
         #dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets[self.goodIdx].real)**2+
         #    (match['pfi_center_y_mm'].values[self.goodIdx]-targets[self.goodIdx].imag)**2)
-        
-        
+
+
         self.logger.info(f'Tolerance: {tolerance}')
-        
+
         #targets=np.load(tarfile)
         tar = targetFromDB[self.goodIdx]
         ind = np.where(np.abs(mov[0,:,maxIteration-1]['position']) > 0)
         notDone = len(np.where(np.abs(mov[0,ind[0],maxIteration-1]['position']-tar[ind[0]]) > tolerance)[0])
-        
+
         #notDone = fpga_notDone[-1]
         print(f'Number of not done cobra (FPGA): {notDone}')
-                
+
         if doPlots:
             sc=ax.scatter(self.calibModel.centers.real,self.calibModel.centers.imag,
                     c='grey',marker='s')
             ax.scatter(self.calibModel.centers.real[self.goodIdx[ind]],self.calibModel.centers.imag[self.goodIdx[ind]],
                 c='red',marker='s',label='Not Converged')
-        
+
         return ind[0]
-    
+
     def visCobraMovement(self, pfsVisitID, cobraIdx=0, iteration = 8, newPlot=True):
         """
         Visualize the movement of a specific cobra during a PFS visit.
@@ -1033,7 +1003,6 @@ class VisDianosticPlot(object):
             cobraIdx (int, optional): The index of the cobra. Defaults to 0.
             iteration (int, optional): The iteration number. Defaults to 8.
         """
-        pass
 
         #visit = 107682
         visit = pfsVisitID
@@ -1043,16 +1012,16 @@ class VisDianosticPlot(object):
 
         mov=np.load(f'/data/MCS/{runDir}/data/moves.npy')
         tar=np.load(f'/data/MCS/{runDir}/data/targets.npy')
-        
+
         movIdx = np.where(self.goodIdx == cobraIdx)[0][0]
-        
+
         if newPlot is True:
             self.visCreateNewPlot(f'Visit = {visit} Cobra Index = {self.goodIdx[movIdx]}','X','Y')
-        
+
         self.visGeometryFromXML(thetaAngle=mov[0,movIdx,iteration-1]['thetaAngle']+self.calibModel.tht0[self.goodIdx[movIdx]],
                             phiAngle=mov[0,movIdx,iteration-1]['phiAngle'],patrol=True)
 
-                            
+
         #self.visUnassignedFibers(pfsVisitID)
 
         ax=plt.gca()
@@ -1062,7 +1031,7 @@ class VisDianosticPlot(object):
         for i in range(len(x)):
             if x[i]==0 and y[i]==0:
                 x[i] = x[i-1]
-                y[i] = y[i-1]   
+                y[i] = y[i-1]
             ax.scatter(x[i], y[i], marker='.', alpha=0.5,label=f'{i+1}')
             ax.text(x[i], y[i],f'{i}')
         ax.scatter(tar.real[movIdx],tar.imag[movIdx],c='red',marker='x',label='target',s=80)
@@ -1074,23 +1043,23 @@ class VisDianosticPlot(object):
 
 
     def visTargetConvergence(self, pfsVisitID, maxIteration = 11, excludeUnassign=True, tolerance = None):
-        
+
         if tolerance is None:
             tolerance=findToleranceFromVisit(pfsVisitID)
-        
+
         vmax = 4*tolerance
 
         ax = plt.gcf().get_axes()[0]
-        self.visSubaruConvergence(Axes=ax, pfsVisitID = pfsVisitID,subVisit=maxIteration-1,excludeUnassign=excludeUnassign, 
+        self.visSubaruConvergence(Axes=ax, pfsVisitID = pfsVisitID,subVisit=maxIteration-1,excludeUnassign=excludeUnassign,
                         tolerance=tolerance,vmax=vmax)
         ax = plt.gcf().get_axes()[1]
         self.visSubaruConvergence(Axes=ax,pfsVisitID = pfsVisitID,subVisit=3,tolerance=tolerance, excludeUnassign=excludeUnassign,
                         histo=True, bins=20,range=(0,vmax))
-       
 
 
-    def visSubaruConvergence(self, Axes = None, pfsVisitID=None, subVisit=11, 
-        histo=False, histoThres = True, heatmap=True, vectormap=False, excludeUnassign = True, 
+
+    def visSubaruConvergence(self, Axes = None, pfsVisitID=None, subVisit=11,
+        histo=False, histoThres = True, heatmap=True, vectormap=False, excludeUnassign = True,
         plot_range=(0,0.08), bins=20, tolerance=0.01, **kwargs):
         '''
             Visulization of cobra convergence result at certain iteration.  
@@ -1106,24 +1075,24 @@ class VisDianosticPlot(object):
             visitID = int(self._findFITS()[0][-12:-7])
         else:
             visitID = pfsVisitID
-        
-        if subVisit is not None:    
+
+        if subVisit is not None:
             subID = subVisit
 
-        
-        
+
+
         import psycopg2
         from sqlalchemy import create_engine
 
         if excludeUnassign is True:
-            # Getting unassined fiber 
+            # Getting unassined fiber
             #pfsDesignID = int(findDesignFromVisit(pfsVisitID))
-            conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
+            conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'")
             engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
 
-            
+
             with conn:
-                fiberData = pd.read_sql(f'''
+                fiberData = pd.read_sql('''
                     SELECT DISTINCT 
                         fiber_id, pfi_center_final_x_mm, pfi_center_final_y_mm, 
                         pfi_nominal_x_mm, pfi_nominal_y_mm
@@ -1133,14 +1102,14 @@ class VisDianosticPlot(object):
                         pfs_config_fiber.visit0 = %(visit0)s
                     -- limit 10
                 ''', engine, params={'visit0': pfsVisitID})
-            
-            
+
+
             fid=FiberIds()
             fiberData['cobra_id']=fid.fiberIdToCobraId(fiberData['fiber_id'].values)
             fiberData=fiberData.sort_values('cobra_id')
             df = fiberData.loc[fiberData['cobra_id'] != 65535]
             unassigned_rows = df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].isna().all(axis=1)]
-            unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1 
+            unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1
 
 
             assigned_row= df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].notna().all(axis=1)]
@@ -1160,7 +1129,7 @@ class VisDianosticPlot(object):
         except:
             db=opdb.OpDB(hostname='db-ics', port=5432,
                    dbname='opdb',username='pfs')
-        
+
             match = db.bulkSelect('cobra_match','select * from cobra_match where '
                       f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
 
@@ -1177,7 +1146,7 @@ class VisDianosticPlot(object):
             targets=np.load(tarfile)
             dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
                 (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
-        
+
         mov = np.load(movfile)
 
         try:
@@ -1185,18 +1154,18 @@ class VisDianosticPlot(object):
         except:
             mov = np.array([mov])
             maxIteration = mov.shape[2]
-        
+
         #dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets[self.goodIdx].real)**2+
         #    (match['pfi_center_y_mm'].values[self.goodIdx]-targets[self.goodIdx].imag)**2)
-        
-        
+
+
         self.logger.info(f'Tolerance: {tolerance}')
-        
+
         #targets=np.load(tarfile)
         tar = targetFromDB[self.goodIdx]
         ind = np.where(np.abs(mov[0,:,maxIteration-1]['position']) > 0)
         notDone = len(np.where(np.abs(mov[0,ind[0],maxIteration-1]['position']-tar[ind[0]]) > tolerance)[0])
-        
+
         #notDone = fpga_notDone[-1]
         print(f'Number of not done cobra (FPGA): {notDone}')
 
@@ -1205,7 +1174,7 @@ class VisDianosticPlot(object):
 
             ax.set_aspect('auto')
             for subID in np.arange(subVisit,maxIteration):
-                
+
                 frameid = visitID*100+subID
 
                 try:
@@ -1217,24 +1186,24 @@ class VisDianosticPlot(object):
 
                 match = db.bulkSelect('cobra_match','select * from cobra_match where '
                             f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
-        
+
                 if excludeUnassign is True:
                     dist=np.sqrt((match['pfi_center_x_mm'].values[assigned_cobraIdx]-targets[assigned_cobraIdx].real)**2+
                             (match['pfi_center_y_mm'].values[assigned_cobraIdx]-targets[assigned_cobraIdx].imag)**2)
-                else:    
+                else:
                     dist=np.sqrt((match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)**2+
                             (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)**2)
-                
+
                 # This setting will set all value larger than the threshold to be exact the
-                #   thresold.  So that there will be a big bar in histogram. 
+                #   thresold.  So that there will be a big bar in histogram.
                 if histoThres is True:
                     dist[dist > plot_range[1]]=plot_range[1]
-                
+
                 n, bins, patches = ax.hist(dist,range=plot_range, bins=bins, alpha=0.7,
                     histtype='step',linewidth=3,
                     label=f'{subID+1}-th Iteration')
-            
-            
+
+
             x_vertical = tolerance  # x-coordinate for the vertical line
             #ax.axvline(x=x_vertical, color='r', linestyle='--')
             #ax.axhline(np.percentile(dist, 50), color='green', linewidth=2,label='50 percentile')
@@ -1250,15 +1219,15 @@ class VisDianosticPlot(object):
                 outRegion =  np.sum(n[outIdx[0][0]-1:])
             else:
                 outRegion = 0
-            #ax.text(0.7, 0.45, f'N. of non-converged (MCS) = {outRegion}', 
+            #ax.text(0.7, 0.45, f'N. of non-converged (MCS) = {outRegion}',
             #            horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
-            #ax.text(0.7, 0.4, f'N. of non-converged (FPS) = {notDone}', 
+            #ax.text(0.7, 0.4, f'N. of non-converged (FPS) = {notDone}',
             #            horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
             ax.legend(loc='upper right')
             ax.set_xlabel('Distance (mm)')
             ax.set_ylabel('Counts')
             self.logger.info(f'Number of not done cobra (MCS): {outRegion}')
-        
+
         if vectormap:
             heatmap, histo = False, False
             ind = np.where(dist < 0.02)
@@ -1269,14 +1238,14 @@ class VisDianosticPlot(object):
             dx = (match['pfi_center_x_mm'].values[self.goodIdx]-targets.real)[ind]
             dy = (match['pfi_center_y_mm'].values[self.goodIdx]-targets.imag)[ind]
             vectorLength = 0.01
-            q=ax.quiver(x,y, 
+            q=ax.quiver(x,y,
                     dx, dy, color='red',units='xy',**kwargs)
 
-         
+
             ax.quiverkey(q, X=0.2, Y=0.95, U=vectorLength,
                     label=f'length = {vectorLength} mm', labelpos='E')
 
-        
+
         if heatmap:
             ax.set_aspect('equal')
             if excludeUnassign is True:
@@ -1293,16 +1262,16 @@ class VisDianosticPlot(object):
                 #print('here')
                 ax.scatter(self.calibModel.centers.real[unassigned_cobraIdx],self.calibModel.centers.imag[unassigned_cobraIdx],
                 c='red',marker='s',label='UNASSIGNED', **kwargs)
-            
+
             # Plot the location of broken fibers
             ax.scatter(self.calibModel.centers.real[self.badIdx],self.calibModel.centers.imag[self.badIdx],
-                c='lightpink',marker='s',label='BROKEN', **kwargs)    
+                c='lightpink',marker='s',label='BROKEN', **kwargs)
 
             # Add a red line on the colorbar
             line_color = 'red'
             line_position = tolerance  # Position of the line on the colorbar (between 0 and 1)
             cax.axhline(line_position, color=line_color, linewidth=2,label='tolerance')
-            
+
 
             ax.set_xlabel('X (mm)')
             ax.set_ylabel('Y (mm)')
@@ -1317,7 +1286,7 @@ class VisDianosticPlot(object):
         self.logger.info(f'Number of not done cobra (FPS): {notDone}')
 
     def visCobraCenter(self, baseData, targetData, histo=False, gauFit = True, vectorLength=0.05, **kwargs):
-        
+
         '''
             This function is used to compare the center locations between two datasets (target - base).  
             
@@ -1326,7 +1295,7 @@ class VisDianosticPlot(object):
                 targetData: The target to be compared with.
                 compareObj:  The target we compare with.  Typically, it is the data-compareObj
         '''
-        
+
         ax = plt.gca()
         title = ax.get_title()
 
@@ -1340,7 +1309,7 @@ class VisDianosticPlot(object):
         diff = np.sqrt(dx**2+dy**2)
 
         if histo is True:
-            
+
             ax1 = plt.subplot(212)
             n, bins, patches = ax1.hist(diff,range=(0,np.mean(diff)+2*np.std(diff)), bins=15, color='#0504aa',
                 alpha=0.7)
@@ -1351,7 +1320,7 @@ class VisDianosticPlot(object):
                 ax1.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
 
 
-            ax1.text(0.8, 0.8, f'Median = {np.median(diff):.4f}, $\sigma$={sigma:.4f}', 
+            ax1.text(0.8, 0.8, rf'Median = {np.median(diff):.4f}, $\sigma$={sigma:.4f}',
                 horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
             ax1.set_title('2D')
             ax1.set_xlabel('distance (mm)')
@@ -1360,15 +1329,15 @@ class VisDianosticPlot(object):
 
 
             ax2 = plt.subplot(221)
-            n, bins, patches = ax2.hist(dx,range=(np.mean(dx)-3*np.std(dx),np.mean(dx)+3*np.std(dx)), 
+            n, bins, patches = ax2.hist(dx,range=(np.mean(dx)-3*np.std(dx),np.mean(dx)+3*np.std(dx)),
                 bins=30, color='#0504aa',alpha=0.7)
-            
+
             popt = gaussianFit(n, bins)
             sigma = popt[2]
             if gauFit is True:
                 ax2.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
-            
-            ax2.text(0.7, 0.85, f'Median = {np.median(dx):.4f}, $\sigma$={sigma:.4f}', 
+
+            ax2.text(0.7, 0.85, rf'Median = {np.median(dx):.4f}, $\sigma$={sigma:.4f}',
                 horizontalalignment='center', verticalalignment='center', transform=ax2.transAxes)
             ax2.set_title('X direction')
             ax2.set_xlabel('distance (mm)')
@@ -1380,15 +1349,15 @@ class VisDianosticPlot(object):
             ax3.tick_params(axis='both',labelleft=False)
 
 
-            n, bins, patches = ax3.hist(dy,range=(np.mean(dy)-3*np.std(dx),np.mean(dy)+3*np.std(dx)), 
+            n, bins, patches = ax3.hist(dy,range=(np.mean(dy)-3*np.std(dx),np.mean(dy)+3*np.std(dx)),
                 bins=30, color='#0504aa', alpha=0.7)
             popt = gaussianFit(n, bins)
             sigma = np.abs(popt[2])
-            
+
             if gauFit is True:
                 ax3.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
-            
-            ax3.text(0.7, 0.85, f'Median = {np.median(dy):.4f}, $\sigma$={sigma:.4f}', 
+
+            ax3.text(0.7, 0.85, rf'Median = {np.median(dy):.4f}, $\sigma$={sigma:.4f}',
                 horizontalalignment='center', verticalalignment='center', transform=ax3.transAxes)
 
             ax3.set_title('Y direction')
@@ -1399,20 +1368,20 @@ class VisDianosticPlot(object):
 
 
         else:
-            
+
             sigma = np.std(diff)
             self.logger.info(f'Mean = {np.mean(diff):.3f}, Median = {np.median(diff):.3f} Std={np.std(diff):.3f}')
             self.logger.info(f'CobraIdx for large center variant :{np.where(diff >= np.median(diff)+2.0*sigma)[0]}')
 
             #indx = np.where(diff < np.median(diff)+2.0*sigma)[0]
-            
-            q=ax.quiver(x,y, 
+
+            q=ax.quiver(x,y,
                     dx, dy, color='red',units='xy',**kwargs)
 
-         
+
             ax.quiverkey(q, X=0.2, Y=0.95, U=vectorLength,
                     label=f'length = {vectorLength} mm', labelpos='E')
-    
+
     def visFiducialFiber(self):
         '''
             This function plots the location of FFs used in data model.
@@ -1431,7 +1400,7 @@ class VisDianosticPlot(object):
             This function plots the residuals of FF measuremet from XY stage.
         
         '''
-        
+
         try:
             db=opdb.OpDB(hostname='db-ics', port=5432,dbname='opdb',
                         username='pfs')
@@ -1451,7 +1420,7 @@ class VisDianosticPlot(object):
 
         dx = -fidDataOne['ff_center_on_pfi_x_mm']+fidDataTwo['ff_center_on_pfi_x_mm']
         dy = fidDataOne['ff_center_on_pfi_y_mm']-fidDataTwo['ff_center_on_pfi_y_mm']
-        
+
         ax.plot(-fidDataOne['ff_center_on_pfi_x_mm'],fidDataOne['ff_center_on_pfi_y_mm'],'r.', label='EL90')
         ax.plot(-fidDataTwo['ff_center_on_pfi_x_mm'],fidDataTwo['ff_center_on_pfi_y_mm'],'b+',label='EL60')
         q=ax.quiver(-fidDataOne['ff_center_on_pfi_x_mm'],fidDataOne['ff_center_on_pfi_y_mm'],
@@ -1460,7 +1429,7 @@ class VisDianosticPlot(object):
                                 label='length = 0.05 mm', labelpos='E')
         ax.legend()
 
-    def visAllFFSpots(self, pfsVisitID=None, vector=True, vectorLength=0.05, camera = None, 
+    def visAllFFSpots(self, pfsVisitID=None, vector=True, vectorLength=0.05, camera = None,
         dataRange=None, histo=False, getAllFFPos = False, badFF=None, binNum=7, dataOnly=False):
 
         '''
@@ -1473,7 +1442,7 @@ class VisDianosticPlot(object):
             getAllFFPos : If this flag is set to be True, returing the averaged position.
             refXYstage: Compare with insdata or averaged positions
         '''
-        
+
         if dataOnly is False:
             ax=plt.gca()
 
@@ -1482,36 +1451,36 @@ class VisDianosticPlot(object):
         # Read fiducial and spot geometry
         #fids = butler.get('fiducials')
         fids = fiducials.Fiducials.read(butler)
-        
+
         try:
             db=opdb.OpDB(hostname='db-ics', port=5432,dbname='opdb',
                         username='pfs')
-        except:     
+        except:
             db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
                                 username='pfs')
 
         ffpos_array=[]
-        
+
         if camera is None:
             camera = 'canon'
 
         # Building stable FF list
         stableFF = np.zeros(len(fids), dtype=bool)
-        stableFF[:]=True 
+        stableFF[:]=True
 
         if badFF is not None:
             for idx in fids['fiducialId']:
                 if idx in badFF:
                     stableFF[fids.fiducialId == idx] = False
         self.logger.info(f'Stable FF = {stableFF}')
-        
+
 
         for count, sub in enumerate(range(*dataRange)):
             subid=sub
 
             frameid = pfsVisitID*100+subid
 
-            
+
 
             mcsData = db.bulkSelect('mcs_data','select * from mcs_data where '
                     f'mcs_frame_id = {frameid}').sort_values(by=['spot_id']).reset_index()
@@ -1523,12 +1492,12 @@ class VisDianosticPlot(object):
                 altitude = 90
             else:
                 altitude = teleInfo['altitude'].values[0]
-            
+
             rotation = teleInfo['insrot'].values[0]
-            
-            pt = transformUtils.fromCameraName(camera, altitude=altitude, 
+
+            pt = transformUtils.fromCameraName(camera, altitude=altitude,
                     insrot=rotation)
-    
+
             fidsGood = fids[fids.goodMask]
             fidsOuterRing = fids[fids.goodMask & fids.outerRingMask]
 
@@ -1537,12 +1506,12 @@ class VisDianosticPlot(object):
             for i in range(2):
                 rfid, rdmin = pt.updateTransform(mcsData, fidsGood, matchRadius=4.2,nMatchMin=0.1)
             nMatch = sum(rfid > 0)
-            self.logger.info(f'Total matched = {nMatch}')   
+            self.logger.info(f'Total matched = {nMatch}')
 
 
             xx , yy = pt.mcsToPfi(mcsData['mcs_center_x_pix'],mcsData['mcs_center_y_pix'])
             oriPt = fids['x_mm'].values+fids['y_mm'].values*1j
-            
+
             traPt = xx+yy*1j
             traPt = traPt[~np.isnan(traPt)]
             ranPt = []
@@ -1560,41 +1529,41 @@ class VisDianosticPlot(object):
                 if count == 0:
                     ax.plot(ranPt[stableFF].real,ranPt[stableFF].imag,'g.',label='FF observed')
                 else:
-                    ax.plot(ranPt[stableFF].real,ranPt[stableFF].imag,'g.')    
+                    ax.plot(ranPt[stableFF].real,ranPt[stableFF].imag,'g.')
 
         ffpos_array=np.array(ffpos_array)
 
         ffpos = np.mean(ffpos_array,axis=0)
         ffstd = np.abs(np.std(ffpos_array,axis=0))
-        
-        
+
+
         if dataOnly is False:
-        
+
             ax.plot(fids['x_mm'].values, fids['y_mm'].values,'b+',label='FF')
             ax.plot(ffpos.real[stableFF], ffpos.imag[stableFF],'r+',label='Avg')
-            
+
             # Mark the FF IDs
             for i in range(len(fids)):
-                ax.text(fids.x_mm.values[i], fids.y_mm.values[i], 
+                ax.text(fids.x_mm.values[i], fids.y_mm.values[i],
                         fids.fiducialId.values[i].astype('str'), fontsize=8)
 
             ax.legend()
-            
+
             if vector is True:
                 q=ax.quiver(oriPt[stableFF].real, oriPt[stableFF].imag,
                         ffpos.real[stableFF]-oriPt[stableFF].real, ffpos[stableFF].imag-oriPt[stableFF].imag,
                         color='red',units='xy')
-            
-            
+
+
                 ax.quiverkey(q, X=0.2, Y=0.95, U=vectorLength,
                             label=f'length = {vectorLength} mm', labelpos='E')
 
             if histo is True:
-            
+
 
                 dx = ffpos.real - fids['x_mm'].values
                 dy = ffpos.imag - fids['y_mm'].values
-                
+
                 diff = np.sqrt(dx**2+dy**2)
                 #import pdb; pdb.set_trace()
 
@@ -1607,9 +1576,9 @@ class VisDianosticPlot(object):
                 xPeak = popt[1]
 
                 ax1.plot(bins[:-1],gaus(bins[:-1],*popt),'r:',label='fit')
-                
-                #ax1.text(0.8, 0.8, f'Median = {np.nanmedian(diff[stableFF]):.2f}, $\sigma$={sigma:.2f}', 
-                ax1.text(0.8, 0.8, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}', 
+
+                #ax1.text(0.8, 0.8, f'Median = {np.nanmedian(diff[stableFF]):.2f}, $\sigma$={sigma:.2f}',
+                ax1.text(0.8, 0.8, rf'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}',
                     horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
                 ax1.set_title('2D')
                 ax1.set_xlabel('distance (mm)')
@@ -1618,14 +1587,14 @@ class VisDianosticPlot(object):
 
 
                 ax2 = plt.subplot(221)
-                n, bins, patches = ax2.hist(dx,range=(np.nanmean(dx[stableFF])-3*np.nanstd(dx[stableFF]),np.nanmean(dx[stableFF])+3*np.nanstd(dx[stableFF])), 
+                n, bins, patches = ax2.hist(dx,range=(np.nanmean(dx[stableFF])-3*np.nanstd(dx[stableFF]),np.nanmean(dx[stableFF])+3*np.nanstd(dx[stableFF])),
                     bins=(2*binNum)+1, color='#0504aa',alpha=0.7)
                 popt = gaussianFit(n, bins)
                 sigma = popt[2]
                 xPeak = popt[1]
 
                 ax2.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
-                ax2.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}', 
+                ax2.text(0.5, 0.9, rf'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}',
                     horizontalalignment='center', verticalalignment='center', transform=ax2.transAxes)
                 ax2.set_title('X direction')
                 ax2.set_xlabel('distance (mm)')
@@ -1637,16 +1606,16 @@ class VisDianosticPlot(object):
                 ax3.tick_params(axis='both',labelleft=False)
 
 
-                n, bins, patches = ax3.hist(dy,range=(np.nanmean(dy[stableFF])-3*np.nanstd(dy[stableFF]),np.nanmean(dy[stableFF])+3*np.nanstd(dy[stableFF])), 
+                n, bins, patches = ax3.hist(dy,range=(np.nanmean(dy[stableFF])-3*np.nanstd(dy[stableFF]),np.nanmean(dy[stableFF])+3*np.nanstd(dy[stableFF])),
                     bins=(2*binNum)+1, color='#0504aa', alpha=0.7)
-                
+
                 popt = gaussianFit(n, bins)
                 sigma = np.abs(popt[2])
                 xPeak = popt[1]
                 ax3.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
-                
-                #ax3.text(0.7, 0.8, f'Median = {np.nanmedian(dy):.2f}, $\sigma$={sigma:.2f}', 
-                ax3.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}', 
+
+                #ax3.text(0.7, 0.8, f'Median = {np.nanmedian(dy):.2f}, $\sigma$={sigma:.2f}',
+                ax3.text(0.5, 0.9, rf'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}',
                     horizontalalignment='center', verticalalignment='center', transform=ax3.transAxes)
 
                 ax3.set_title('Y direction')
@@ -1654,10 +1623,10 @@ class VisDianosticPlot(object):
                 plt.subplots_adjust(wspace=0,hspace=0.3)
 
         if getAllFFPos is True:
-            self.logger.info(f'Returing all fiducial fiber positions.')
+            self.logger.info('Returing all fiducial fiber positions.')
             return ffpos_array
 
-    def visIterationFFOffset(self, posData, Axes=None, iteration = 0, offsetThres = 0.006, offsetBox = 0.2, 
+    def visIterationFFOffset(self, posData, Axes=None, iteration = 0, offsetThres = 0.006, offsetBox = 0.2,
         heatMap = False, badFF = None, binNum=40):
 
         '''
@@ -1670,7 +1639,7 @@ class VisDianosticPlot(object):
         butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
         fids = butler.get('fiducials')
 
-        
+
         if Axes is None:
             ax = plt.gca()
         else:
@@ -1686,7 +1655,7 @@ class VisDianosticPlot(object):
         ax_histy.yaxis.set_tick_params(labelleft=False)
 
         stableFF = np.zeros(len(fids), dtype=bool)
-        stableFF[:]=True 
+        stableFF[:]=True
 
         if badFF is not None:
             for idx in fids['fiducialId']:
@@ -1694,7 +1663,7 @@ class VisDianosticPlot(object):
                     stableFF[fids.fiducialId == idx] = False
 
         avgPos = np.nanmean(posData,axis=0)
-        
+
 
         ffOffset = posData[iteration,:] - avgPos
 
@@ -1724,22 +1693,22 @@ class VisDianosticPlot(object):
         sigma = np.abs(popt[2])
         xPeak = popt[1]
         ax_histx.plot(bins[:-1],gaus(bins[:-1],*popt),'r:',label='fit')
-        ax_histx.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}', 
+        ax_histx.text(0.5, 0.9, rf'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}',
                     horizontalalignment='center', verticalalignment='center', transform=ax_histx.transAxes)
 
-        n, bins, patches = ax_histy.hist(ffOffset[stableFF].flatten().imag,bins=binNum,range=(-offsetBox,offsetBox),orientation='horizontal')        
+        n, bins, patches = ax_histy.hist(ffOffset[stableFF].flatten().imag,bins=binNum,range=(-offsetBox,offsetBox),orientation='horizontal')
         popt = gaussianFit(n, bins)
         sigma = np.abs(popt[2])
         xPeak = popt[1]
         ax_histy.plot(gaus(bins[:-1],*popt),bins[:-1],'r:',label='fit')
-        ax_histy.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}', 
+        ax_histy.text(0.5, 0.9, rf'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}',
                     horizontalalignment='center', verticalalignment='center', transform=ax_histy.transAxes)
 
         ax.set_xlim(-offsetBox,offsetBox)
         ax.set_ylim(-offsetBox,offsetBox)
 
     def visAllFFOffsetHisto(self, posData, Iteration = None, Axes = None, binNum = 80, offsetBox = 0.05, dataOnly=False):
-        
+
         if Axes is None:
             ax = plt.gca()
         else:
@@ -1752,25 +1721,25 @@ class VisDianosticPlot(object):
         else:
             ffOffset = np.abs(posData - avgPos)
             n, bins, patches = ax.hist(ffOffset.flatten(),bins=binNum,range=(0,offsetBox))
-        
+
         popt = gaussianFit(n, bins)
         sigma = np.abs(popt[2])
         xPeak = popt[1]
         ax.plot(bins[:-1],gaus(bins[:-1],*popt),'r:',label='fit')
-        ax.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}', 
+        ax.text(0.5, 0.9, rf'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}',
             horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
-        ax.text(0.5, 0.8, f'Median = {np.nanmedian(ffOffset.flatten()):.4f}, $\sigma$={sigma:.4f}', 
+        ax.text(0.5, 0.8, rf'Median = {np.nanmedian(ffOffset.flatten()):.4f}, $\sigma$={sigma:.4f}',
             horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
 
         if dataOnly:
             data = ffOffset.flatten()
             clean_data = np.array(data)[~np.isnan(data)]
             return xPeak, np.nanmedian(clean_data), np.percentile(clean_data, 75)
-    
 
-    def visAllFFOffset(self, posData, Axes=None, offsetThres = 0.006, offsetBox = 0.2, 
+
+    def visAllFFOffset(self, posData, Axes=None, offsetThres = 0.006, offsetBox = 0.2,
         heatMap = False, badFF = None, binNum=40):
-        
+
         '''
             This function plots the relative offsets for all FF.  It is very useful for 
             identifing the unstable FF.
@@ -1781,7 +1750,7 @@ class VisDianosticPlot(object):
         butler = Butler(configRoot=os.path.join(os.environ["PFS_INSTDATA_DIR"], "data"))
         fids = butler.get('fiducials')
 
-        
+
         if Axes is None:
             ax = plt.gca()
         else:
@@ -1797,7 +1766,7 @@ class VisDianosticPlot(object):
         ax_histy.yaxis.set_tick_params(labelleft=False)
 
         stableFF = np.zeros(len(fids), dtype=bool)
-        stableFF[:]=True 
+        stableFF[:]=True
 
         if badFF is not None:
             for idx in fids['fiducialId']:
@@ -1805,7 +1774,7 @@ class VisDianosticPlot(object):
                     stableFF[fids.fiducialId == idx] = False
 
         avgPos = np.nanmean(posData,axis=0)
-        
+
 
         ffOffset = posData - avgPos
 
@@ -1835,20 +1804,20 @@ class VisDianosticPlot(object):
         sigma = np.abs(popt[2])
         xPeak = popt[1]
         ax_histx.plot(bins[:-1],gaus(bins[:-1],*popt),'r:',label='fit')
-        ax_histx.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}', 
+        ax_histx.text(0.5, 0.9, rf'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}',
                     horizontalalignment='center', verticalalignment='center', transform=ax_histx.transAxes)
 
-        n, bins, patches = ax_histy.hist(ffOffset[:,stableFF].flatten().imag,bins=binNum,range=(-offsetBox,offsetBox),orientation='horizontal')        
+        n, bins, patches = ax_histy.hist(ffOffset[:,stableFF].flatten().imag,bins=binNum,range=(-offsetBox,offsetBox),orientation='horizontal')
         popt = gaussianFit(n, bins)
         sigma = np.abs(popt[2])
         xPeak = popt[1]
         ax_histy.plot(gaus(bins[:-1],*popt),bins[:-1],'r:',label='fit')
-        ax_histy.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}', 
+        ax_histy.text(0.5, 0.9, rf'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}',
                     horizontalalignment='center', verticalalignment='center', transform=ax_histy.transAxes)
 
         ax.set_xlim(-offsetBox,offsetBox)
         ax.set_ylim(-offsetBox,offsetBox)
-            
+
 
     def visFiducialResidual(self, visitID, subID, temp=0, elevation=90, ffdata='opdb',
         vectorOnly=False, vectorLength=0.05):
@@ -1886,7 +1855,7 @@ class VisDianosticPlot(object):
             fidData = db.bulkSelect('fiducial_fiber_geometry','select * from fiducial_fiber_geometry where '
                         f' ambient_temp = {temp} and elevation = {elevation} '
                         f'and fiducial_fiber_calib_id > 6').set_index('fiducial_fiber_id')
-            
+
         pfiTransform = transformUtils.fromCameraName('canon50M',
             altitude=teleInfo['altitude'].values[0],
             insrot=teleInfo['insrot'].values[0])
@@ -1896,26 +1865,26 @@ class VisDianosticPlot(object):
             outerRing = np.zeros(len(fids), dtype=bool)
             for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
                 outerRing[fids.fiducialId == i] = True
-        
+
             pfiTransform.updateTransform(mcsDataFirstFrame, fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
-            
+
             for i in range(2):
                 pfiTransform.updateTransform(mcsDataFirstFrame, fids, matchRadius=4.2,nMatchMin=0.1)
         else:
             # massage the data from opdb first.
-            ffData =  { 'fiducialId': fidData.index, 
+            ffData =  { 'fiducialId': fidData.index,
                     'x_mm' :-fidData['ff_center_on_pfi_x_mm'].values,
                      'y_mm' :fidData['ff_center_on_pfi_y_mm'].values
             }
             outerRing = np.zeros(len(ffData['fiducialId']), dtype=bool)
             for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
                 outerRing[ffData['fiducialId'] == i] = True
-        
+
             pfiTransform.updateTransform(mcsDataFirstFrame, pd.DataFrame(ffData)[outerRing], matchRadius=8.0, nMatchMin=0.1)
-            
+
             for i in range(2):
                 pfiTransform.updateTransform(mcsDataFirstFrame, pd.DataFrame(ffData), matchRadius=4.2,nMatchMin=0.1)
-            
+
             #pfiTransform.updateTransform(mcsData, pd.DataFrame(ffData),matchRadius=3.2)
 
         #matchid= np.where(pfiTransform.match_fid != -1)[0]
@@ -1981,9 +1950,9 @@ class VisDianosticPlot(object):
             xPeak = popt[1]
 
             ax1.plot(bins[:-1],gaus(bins[:-1],*popt),'r:',label='fit')
-            
-            #ax1.text(0.8, 0.8, f'Median = {np.nanmedian(diff[stableFF]):.2f}, $\sigma$={sigma:.2f}', 
-            ax1.text(0.8, 0.8, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}', 
+
+            #ax1.text(0.8, 0.8, f'Median = {np.nanmedian(diff[stableFF]):.2f}, $\sigma$={sigma:.2f}',
+            ax1.text(0.8, 0.8, rf'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}',
                 horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
             ax1.set_title('2D')
             ax1.set_xlabel('distance (mm)')
@@ -1992,9 +1961,9 @@ class VisDianosticPlot(object):
 
 
             ax2 = plt.subplot(221)
-            ax2.hist(dx,range=(np.nanmean(dx[stableFF])-3*np.nanstd(dx[stableFF]),np.nanmean(dx[stableFF])+3*np.nanstd(dx[stableFF])), 
+            ax2.hist(dx,range=(np.nanmean(dx[stableFF])-3*np.nanstd(dx[stableFF]),np.nanmean(dx[stableFF])+3*np.nanstd(dx[stableFF])),
                 bins=10, color='#0504aa',alpha=0.7)
-            ax2.text(0.7, 0.8, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}', 
+            ax2.text(0.7, 0.8, rf'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}',
                 horizontalalignment='center', verticalalignment='center', transform=ax2.transAxes)
             ax2.set_title('X direction')
             ax2.set_xlabel('distance (mm)')
@@ -2006,16 +1975,16 @@ class VisDianosticPlot(object):
             ax3.tick_params(axis='both',labelleft=False)
 
 
-            ax3.hist(dy,range=(np.nanmean(dy[stableFF])-3*np.nanstd(dy[stableFF]),np.nanmean(dy[stableFF])+3*np.nanstd(dy[stableFF])), 
+            ax3.hist(dy,range=(np.nanmean(dy[stableFF])-3*np.nanstd(dy[stableFF]),np.nanmean(dy[stableFF])+3*np.nanstd(dy[stableFF])),
                 bins=10, color='#0504aa', alpha=0.7)
-            
+
             popt = gaussianFit(n, bins)
             sigma = np.abs(popt[2])
             xPeak = popt[1]
             ax3.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
-            
-            #ax3.text(0.7, 0.8, f'Median = {np.nanmedian(dy):.2f}, $\sigma$={sigma:.2f}', 
-            ax3.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}', 
+
+            #ax3.text(0.7, 0.8, f'Median = {np.nanmedian(dy):.2f}, $\sigma$={sigma:.2f}',
+            ax3.text(0.5, 0.9, rf'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}',
                 horizontalalignment='center', verticalalignment='center', transform=ax3.transAxes)
 
             ax3.set_title('Y direction')
@@ -2029,8 +1998,8 @@ class VisDianosticPlot(object):
             print(cmd)
 
         del(moveData)
-    
-    def visModuleSNR(self, figPath = None, arm = 'phi', runs = 50, 
+
+    def visModuleSNR(self, figPath = None, arm = 'phi', runs = 50,
         margin = 15, pdffile=None):
 
         if arm == 'phi':
@@ -2050,7 +2019,7 @@ class VisDianosticPlot(object):
             max_array=[]
             snr_array=[]
             it_array = []
-            
+
             k_offset=1/(.075)**2
             tmax=76
             tobs=900
@@ -2062,23 +2031,23 @@ class VisDianosticPlot(object):
             for i in range(runs):
                 angle = margin + (angleLimit - 2 * margin) * i / (runs - 1)
 
-                dist=2*np.sin(0.5*(np.abs(np.deg2rad(angle)-(np.append([0], moveData[fiberIdx,i,:,0])))))*linklength            
-                
+                dist=2*np.sin(0.5*(np.abs(np.deg2rad(angle)-(np.append([0], moveData[fiberIdx,i,:,0])))))*linklength
+
                 snr=(1-k_offset*dist**2)*(np.sqrt((tmax+tobs-tstep[0:9])/(tobs)))
                 snr[snr < 0]=0
-        
+
                 snr_array.append(snr)
                 max_array.append(np.max(snr))
                 it_array.append(np.argmax(snr))
-                
+
             all_snr.append(snr_array)
             max_snr.append(max_array)
             it_max.append(it_array)
-            
-            
-        max_snr = np.array(max_snr)    
-        all_snr = np.array(all_snr)    
-        it_max = np.array(it_max)    
+
+
+        max_snr = np.array(max_snr)
+        all_snr = np.array(all_snr)
+        it_max = np.array(it_max)
 
         all_angle = margin + (angleLimit - 2 * margin) * np.arange(runs+1) / (runs)
         all_fiber = np.arange(1197)
@@ -2092,9 +2061,9 @@ class VisDianosticPlot(object):
         plt.title(f"SNR at {inx}-th iteration", fontsize = 20)
         plt.xlabel("Angle (Degree)", fontsize = 15)
         plt.ylabel("Fiber", fontsize = 15)
-        cbaxes = fig.add_axes([1.02,0.1,0.02,0.8]) 
+        cbaxes = fig.add_axes([1.02,0.1,0.02,0.8])
         cb = fig.colorbar(sc, cax = cbaxes,orientation='vertical')
-        
+
         if figPath is not None:
             if not (os.path.exists(figPath)):
                 os.mkdir(figPath)
@@ -2109,10 +2078,10 @@ class VisDianosticPlot(object):
         cmin = np.min(max_snr)
         cmax = np.max(max_snr)
         sc=plt.pcolor(all_angle, all_fiber,max_snr,cmap='inferno',vmin=0.95,vmax=cmax)
-        plt.title(f"Maximum SNR", fontsize = 20)
+        plt.title("Maximum SNR", fontsize = 20)
         plt.xlabel("Angle (Degree)", fontsize = 15)
         plt.ylabel("Fiber", fontsize = 15)
-        cbaxes = fig.add_axes([1.02,0.1,0.02,0.8]) 
+        cbaxes = fig.add_axes([1.02,0.1,0.02,0.8])
         cb = fig.colorbar(sc, cax = cbaxes,orientation='vertical')
 
         if figPath is not None:
@@ -2128,12 +2097,12 @@ class VisDianosticPlot(object):
         cmin = np.min(it_max)
         cmax = np.max(it_max)
         sc=plt.pcolor(all_angle, all_fiber,it_max,cmap='inferno',vmin=0,vmax=cmax)
-        plt.title(f"Iteration of maximum SNR", fontsize = 20)
+        plt.title("Iteration of maximum SNR", fontsize = 20)
         plt.xlabel("Angle (Degree)", fontsize = 15)
         plt.ylabel("Fiber", fontsize = 15)
 
-        cbaxes = fig.add_axes([1.02,0.1,0.02,0.8]) 
-        cb = fig.colorbar(sc, cax = cbaxes,orientation='vertical')       
+        cbaxes = fig.add_axes([1.02,0.1,0.02,0.8])
+        cb = fig.colorbar(sc, cax = cbaxes,orientation='vertical')
 
         if figPath is not None:
             if not (os.path.exists(figPath)):
@@ -2150,12 +2119,12 @@ class VisDianosticPlot(object):
         print(cmd)
         del(moveData)
 
-    def visConvergeHisto(self, figPath = None, filename = None, arm ='phi', 
+    def visConvergeHisto(self, figPath = None, filename = None, arm ='phi',
         brokens=None, runs = 16, margin = 15, title=None):
         #brokens = []
         #badIdx = np.array(brokens) - 1
         #goodIdx = np.array([e for e in range(57) if e not in badIdx])
-        
+
         if arm == 'phi':
             phiPath = self.path
             moveData = np.load(phiPath+'phiData.npy')
@@ -2164,7 +2133,7 @@ class VisDianosticPlot(object):
             thetaPath =  self.path
             moveData = np.load(thetaPath+'thetaData.npy')
             angleLimit = 360
-                
+
         fig, fax = plt.subplots(figsize=(15, 6),ncols=4, nrows=2, constrained_layout=True)
         fig.suptitle(f'{title}', fontsize=16)
         for ite in range(8):
@@ -2180,8 +2149,8 @@ class VisDianosticPlot(object):
                     diff.append(np.rad2deg(angle - moveData[cob,i,ite,0]))
             x= (np.arange(100)-50)/100
             diff = np.array(diff)
-            
-            
+
+
             if ite < 4:
                 fax[int(ite/4), ite%4].hist(diff, bins=100,range=(-10,10))
                 fax[int(ite/4), ite%4].set_xlim([-10, 10])
@@ -2191,8 +2160,8 @@ class VisDianosticPlot(object):
                 fax[int(ite/4), ite%4].set_xlim([-1, 1])
                 fax[int(ite/4), ite%4].set_ylim([0, 400])
 
-            
-            fax[int(ite/4), ite%4].title.set_text(f'{ite} Iteration')   
+
+            fax[int(ite/4), ite%4].title.set_text(f'{ite} Iteration')
 
         if filename is None:
             plt.savefig(figPath+f'{arm}_convergeHisto.png')
@@ -2205,16 +2174,16 @@ class VisDianosticPlot(object):
     def visMultiMotorMapfromXML(self, xmlList, cobraIdx = None, figPath=None, arm='phi', pdffile=None, fast=False):
         binSize = 3.6
         x=np.arange(112)*3.6
-        
+
         if cobraIdx is None:
             cobraIdx = self.goodIdx
-        
+
         for i in cobraIdx:
             plt.figure(figsize=(10, 8))
             #plt.clf()
 
             ax = plt.gca()
-            
+
             for xml in xmlList:
                 model = pfiDesign.PFIDesign(pathlib.Path(xml))
 
@@ -2230,7 +2199,7 @@ class VisDianosticPlot(object):
                     fastRVmm = np.rad2deg(model.angularSteps[i]/model.F1Nm[i])
 
                 labeltext=os.path.splitext(os.path.basename(xml))[0]
-                
+
                 if fast is True:
                     ln1 = ax.plot(x,fastFWmm,label=f'{labeltext} Fwd')
                     ln2 = ax.plot(x,-fastRVmm,label=f'{labeltext} Rev')
@@ -2249,7 +2218,7 @@ class VisDianosticPlot(object):
             else:
                 ax.set_xlim([0,400])
                 ax.set_ylim([-0.3,0.3])
-            
+
             if figPath is not None:
                 if not (os.path.exists(figPath)):
                     os.mkdir(figPath)
@@ -2274,14 +2243,14 @@ class VisDianosticPlot(object):
 
         basemodel = pfiDesign.PFIDesign(baseXML)
         var_fwd=[]
-        var_rev=[]        
+        var_rev=[]
         for i in self.goodIdx:
             plt.figure(figsize=(10, 12))
             plt.clf()
 
             ax1 = plt.subplot(2, 1, 1)
             ax2 = plt.subplot(2, 1, 2)
-          
+
             m = 0
             if arm == 'phi':
                 baseSlowFWmm = np.rad2deg(basemodel.angularSteps[i]/basemodel.S2Pm[i])
@@ -2289,7 +2258,7 @@ class VisDianosticPlot(object):
             else:
                 baseSlowFWmm = np.rad2deg(basemodel.angularSteps[i]/basemodel.S1Pm[i])
                 baseSlowRVmm = np.rad2deg(basemodel.angularSteps[i]/basemodel.S1Nm[i])
-            
+
 
             var_fwd_array=[]
             var_rev_array=[]
@@ -2303,13 +2272,13 @@ class VisDianosticPlot(object):
                 else:
                     slowFWmm = np.rad2deg(model.angularSteps[i]/model.S1Pm[i])
                     slowRVmm = np.rad2deg(model.angularSteps[i]/model.S1Nm[i])
-                
+
                 labeltext=os.path.splitext(os.path.basename(f))[0]
                 ln1=ax1.plot(x,np.abs(slowFWmm-baseSlowFWmm)/baseSlowFWmm,
                     marker=f'${m}$', markersize=13, label=f'{labeltext} Fwd' )
                 ln2=ax2.plot(x,np.abs(slowRVmm-baseSlowRVmm)/baseSlowRVmm,
                     marker=f'${m}$', markersize=13, label=f'{labeltext} Rev')
-                
+
                 var_fwd_array.append(np.abs(slowFWmm-baseSlowFWmm)/baseSlowFWmm)
                 var_rev_array.append(np.abs(slowFWmm-baseSlowFWmm)/baseSlowFWmm)
                 m=m+1
@@ -2339,17 +2308,17 @@ class VisDianosticPlot(object):
 
             var_fwd.append(var_fwd_array)
             var_rev.append(var_rev_array)
-        
-        
+
+
         var_fwd=np.array(var_fwd)
         var_rev=np.array(var_rev)
-        
-        
+
+
         plt.figure(figsize=(10, 12))
         plt.clf()
         ax1 = plt.subplot(2, 1, 1)
         ax2 = plt.subplot(2, 1, 2)
-            
+
         for i in self.goodIdx:
             x=range(len(xmlList))
             divfwd_array=[]
@@ -2359,19 +2328,19 @@ class VisDianosticPlot(object):
                     # applying 5-sigma filter
                     data = var_fwd[i,f,0:42]
                     divfwd_avg=np.mean(data[abs(data - np.mean(data)) < 5 * np.std(data)])
-                    
+
                     data = var_rev[i,f,0:42]
                     divrev_avg=np.mean(data[abs(data - np.mean(data)) < 5 * np.std(data)])
                 else:
                     data = var_fwd[i,f,0:84]
                     divfwd_avg=np.mean(data[abs(data - np.mean(data)) < 5 * np.std(data)])
-                    
+
                     data = var_rev[i,f,0:84]
                     divrev_avg=np.mean(data[abs(data - np.mean(data)) < 5 * np.std(data)])
 
                 divfwd_array.append(divfwd_avg)
                 divrev_array.append(divrev_avg)
-            
+
             divfwd_array=np.array(divfwd_array)
             divrev_array=np.array(divfwd_array)
 
@@ -2379,15 +2348,15 @@ class VisDianosticPlot(object):
                 ax1.scatter(x,divfwd_array,marker='.',s=25,label=f'{i+1}')
             else:
                 ax1.scatter(x,divfwd_array,marker='.',s=25)
-            
+
             if np.max(divrev_array) > 0.4:
                 ax2.scatter(x,divrev_array,marker='.',s=25,label=f'{i+1}')
             else:
                 ax2.scatter(x,divrev_array,marker='.',s=25)
         ax1.legend()
         ax2.legend()
-        ax1.set_title(f'Fiber FWD Variation')
-        ax2.set_title(f'Fiber REV Variation')
+        ax1.set_title('Fiber FWD Variation')
+        ax2.set_title('Fiber REV Variation')
         ax2.set_xlabel("Motor Map Run")
         ax1.set_ylabel("Variation")
         ax2.set_ylabel("Variation")

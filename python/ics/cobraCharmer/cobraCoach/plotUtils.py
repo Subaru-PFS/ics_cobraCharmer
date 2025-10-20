@@ -1,11 +1,10 @@
 import logging
 import pathlib
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
-import cycler
 
-from ics.cobraCharmer.utils import butler
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.ticker import MaxNLocator
+
 
 def plotRanges(model, moduleName):
     """ Plot the motor ranges and anomalies. """
@@ -207,7 +206,7 @@ def plotConvergenceRuns(runPaths, motor, endWidth=2.0, convergence=np.rad2deg(0.
             color = pp[0].get_color()
             p2.plot(x, np.rad2deg(data['left'][c_w][iterIdx]), '-+', color=color, alpha=0.5)
             p2.set_ylim(-endWidth, endWidth)
-            p2.set_title(f'end moves')
+            p2.set_title('end moves')
             p2.xaxis.set_major_locator(MaxNLocator(integer=True))
 
             dudSkip = 1
@@ -215,7 +214,7 @@ def plotConvergenceRuns(runPaths, motor, endWidth=2.0, convergence=np.rad2deg(0.
                 stepsOff = data['steps'][c_w[-1]]
                 p3.plot(x[dudSkip:], np.rad2deg(data['left'][c_w])[dudSkip:], '-+',
                         color=color, alpha=0.5, label=f'{c_i}')
-                p3.set_title(f'failures')
+                p3.set_title('failures')
                 p3.xaxis.set_major_locator(MaxNLocator(integer=True))
 
         if haveDud:

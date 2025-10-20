@@ -1,12 +1,11 @@
-from time import sleep
-
 import tkinter as tk
+from time import sleep
 from tkinter import messagebox
 
-from .ethernet import sock
-from .log import short_log, LOGS
-from .convert import get_per
-from .func import *
+from ics.cobraCharmer.convert import get_per
+from ics.cobraCharmer.ethernet import sock
+from ics.cobraCharmer.func import *
+from ics.cobraCharmer.log import LOGS, short_log
 
 
 class App(tk.Frame):
@@ -172,7 +171,7 @@ class App(tk.Frame):
         # Update log text in GUI
         txtLoggers = [short_log, medium_log, full_log]
         txtLogger = txtLoggers[self.infolvl.get() - 1]
-        file = open(txtLogger.getFilePath(), 'r')
+        file = open(txtLogger.getFilePath())
 
         logData = file.read()
         file.close()

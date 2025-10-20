@@ -1,14 +1,16 @@
 import os
 import sys
-import numpy as np
-from astropy.io import fits
-import sep
 from copy import deepcopy
-import calculation
-from ics.cobraCharmer import pfiDesign
-import pandas as pd
 
-class moduleAnalyze():
+import calculation
+import numpy as np
+import pandas as pd
+import sep
+from astropy.io import fits
+from ics.cobraCharmer import pfiDesign
+
+
+class moduleAnalyze:
     def __init__(self, xml, brokens=None, camSplit=26):
         if not os.path.exists(xml):
             print(f"Error: {xml} is not presented!")
@@ -273,7 +275,7 @@ class moduleAnalyze():
             'Phi Arm Length': phi_arm,
             'Theta Arm Length':theta_arm}
 
-        dataframe = pd.DataFrame(d)   
+        dataframe = pd.DataFrame(d)
 
         dataframe.to_csv(dataPath+'geometry.csv')
 
@@ -286,7 +288,7 @@ class moduleAnalyze():
         'Theta CW Stop': np.rad2deg(thetaCW),
         'Phi CCW Stop': np.rad2deg(phiCCW),
         'Phi CW Stop': np.rad2deg(phiCW)}
-        dataframe = pd.DataFrame(d)        
+        dataframe = pd.DataFrame(d)
         dataframe.to_csv(dataPath+'hardstop.csv')
 
     def convertXML(self, newXml, dataPath, image1=None, image2=None):
