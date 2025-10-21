@@ -8,10 +8,10 @@ import numpy as np
 import numpy.lib.recfunctions as recfuncs
 
 import astropy.io.fits as pyfits
+import pandas as pd
 
+from ics.utils.database.opdb import OpDB
 from ics.cobraCharmer.utils import butler
-from ics.fpsActor import najaVenator
-reload(najaVenator)
 
 # Configure the default formatter and logger.
 logging.basicConfig(datefmt = "%Y-%m-%d %H:%M:%S", level=logging.DEBUG,
@@ -172,16 +172,26 @@ class Camera(object):
         return filename
 
     def getPositionsForFrame(self, frameId):
-        self.nv = najaVenator.NajaVenator()
-        mcsData = self.nv.readCentroid(frameId)
+        opdb = OpDB()
 
-        df=mcsData.loc[mcsData['fiberId'] > 0]
+        sql = f"""SELECT * from mcs_data WHERE mcs_frame_id={frameId}"""
+
+        with opdb.connection() as conn:
+            mcsData = pd.read_sql_query(sql, conn)
+
+        renames = dict(mcs_frame_id='mcsId',
+                       spot_id='fiberId',
+                       mcs_center_x_pix='centroidx',
+                       mcs_center_y_pix='centroidy')
+
+        mcsData = mcsData[renames.keys()]
+        mcsData.rename(columns=renames, inplace=True)
+
+        mcsData=mcsData.loc[mcsData['fiberId'] > 0]
         self.logger.info(f'mcs data {mcsData.shape[0]}')
-        #centroids = {'x':mcsData['centroidx'].values.astype('float'),
-        #             'y':mcsData['centroidy'].values.astype('float')}
-        
-        centroids=np.rec.array([df['centroidx'].values.astype('float'),
-                                df['centroidy'].values.astype('float')],
+
+        centroids=np.rec.array([mcsData['centroidx'].values.astype('float'),
+                                mcsData['centroidy'].values.astype('float')],
                                formats='float,float',names='x,y')
         return centroids
 
