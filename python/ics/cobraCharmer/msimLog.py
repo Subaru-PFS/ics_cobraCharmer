@@ -6,7 +6,7 @@ Bugs:
 
 """
 
-from . import fpgaLogger, fpgaProtocol
+from ics.cobraCharmer import fpgaLogger, fpgaProtocol
 
 fpgaLog = fpgaLogger.FPGAProtocolLogger()
 

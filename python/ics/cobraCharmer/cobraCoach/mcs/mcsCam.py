@@ -5,7 +5,7 @@ import subprocess as sub
 import astropy.io.fits as pyfits
 import threading
 import pathlib
-from . import camera
+from ics.cobraCharmer.cobraCoach.mcs import camera
 reload(camera)
 
 class McsCamera(camera.Camera):
@@ -148,4 +148,3 @@ class McsCamera(camera.Camera):
             filename = self.saveImage(self._imRecord, extraName=name)
 
         return filename
-

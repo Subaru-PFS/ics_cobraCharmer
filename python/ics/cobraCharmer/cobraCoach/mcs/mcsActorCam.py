@@ -6,7 +6,7 @@ import astropy.io.fits as pyfits
 import threading
 import pathlib
 import ics.utils.cmd as cmdUtils
-from . import camera
+from ics.cobraCharmer.cobraCoach.mcs import camera
 reload(camera)
 
 class McsActorCamera(camera.Camera):

@@ -1,8 +1,8 @@
-from .fpgaState import fpgaState
-from .cmds import *
-from .convert import *
-from .log import full_log, medium_log, short_log, eth_hex_logger
-from . import ethernet
+from ics.cobraCharmer.fpgaState import fpgaState
+from ics.cobraCharmer.cmds import *
+from ics.cobraCharmer.convert import *
+from ics.cobraCharmer.log import full_log, medium_log, short_log, eth_hex_logger
+from ics.cobraCharmer import ethernet
 from importlib import reload
 
 import math
@@ -12,7 +12,7 @@ import time
 
 import numpy as np
 
-from . import cmds
+from ics.cobraCharmer import cmds
 reload(cmds)
 
 
@@ -205,8 +205,8 @@ def calibrate(cobras, thetaLow=60.4, thetaHigh=70.3, phiLow=94.4, phiHigh=108.2,
 
     spin = CW_DIR if clockwise else CCW_DIR
     for c in cobras:
-        c.p = CalParams(m0=(convert.get_per(thetaLow), convert.get_per(thetaHigh)),
-                        m1=(convert.get_per(phiLow), convert.get_per(phiHigh)),
+        c.p = CalParams(m0=(get_per(thetaLow), get_per(thetaHigh)),
+                        m1=(get_per(phiLow), get_per(phiHigh)),
                         en=(True, True), dir=spin)
 
     err = CAL(cobras)

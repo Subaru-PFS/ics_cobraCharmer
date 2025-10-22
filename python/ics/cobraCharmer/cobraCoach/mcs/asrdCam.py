@@ -5,7 +5,7 @@ import threading
 import numpy as np
 import astropy.io.fits as pyfits
 
-from .camera import Camera
+from ics.cobraCharmer.cobraCoach.mcs.camera import Camera
 
 class AsrdCamera(Camera):
     filePrefix = 'PFAC'

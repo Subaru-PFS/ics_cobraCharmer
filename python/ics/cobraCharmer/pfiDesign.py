@@ -13,7 +13,7 @@ import numpy as np
 import xml.etree.ElementTree as ElementTree
 from copy import deepcopy
 
-from .utils import butler
+from ics.cobraCharmer.utils import butler
 reload(butler)
 
 

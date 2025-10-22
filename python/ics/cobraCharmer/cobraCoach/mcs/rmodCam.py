@@ -5,7 +5,7 @@ import subprocess as sub
 import astropy.io.fits as pyfits
 import threading
 
-from . import camera
+from ics.cobraCharmer.cobraCoach.mcs import camera
 reload(camera)
 
 class RmodCamera(camera.Camera):
