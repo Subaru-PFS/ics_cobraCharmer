@@ -1,11 +1,11 @@
 from ast import literal_eval as make_tuple
 from time import sleep
 
-from log import short_log, LOGS
-from ethernet import sock
-import main
-from convert import get_per
-from func import *
+from ics.cobraCharmer.log import short_log, LOGS
+from ics.cobraCharmer.ethernet import sock
+import ics.cobraCharmer.main as main
+from ics.cobraCharmer.convert import get_per
+from ics.cobraCharmer.func import *
 
 
 def update():

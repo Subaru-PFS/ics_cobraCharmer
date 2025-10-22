@@ -3,8 +3,8 @@ import os
 import struct
 import multiprocessing
 
-from . import convert
-from . import fpgaProtocol as proto
+from ics.cobraCharmer import convert
+from ics.cobraCharmer import fpgaProtocol as proto
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(filename)s:%(lineno)s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")

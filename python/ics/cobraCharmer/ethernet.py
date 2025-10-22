@@ -3,7 +3,7 @@ import socket
 import struct
 import time
 
-from .hexprint import arr2Hex
+from ics.cobraCharmer.hexprint import arr2Hex
 
 # TODO:
 #  Replace all array with bytearray

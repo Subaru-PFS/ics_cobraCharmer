@@ -3,10 +3,10 @@ from time import sleep
 import tkinter as tk
 from tkinter import messagebox
 
-from .ethernet import sock
-from .log import short_log, LOGS
-from .convert import get_per
-from .func import *
+from ics.cobraCharmer.ethernet import sock
+from ics.cobraCharmer.log import short_log, LOGS
+from ics.cobraCharmer.convert import get_per
+from ics.cobraCharmer.func import *
 
 
 class App(tk.Frame):

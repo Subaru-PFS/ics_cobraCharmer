@@ -1,6 +1,6 @@
-from .ethernet import sock
-from log import dia_log, short_log, LOGS
-from func import *
+from ics.cobraCharmer.ethernet import sock
+from ics.cobraCharmer.log import dia_log, short_log, LOGS
+from ics.cobraCharmer.func import *
 
 ctrl_ip = '127.0.0.1'
 lcl_ip = '127.0.0.1'

@@ -47,29 +47,29 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None
             name = whereAmI()
 
         if name == 'mcsActor':
-            from . import mcsActorCam
+            from ics.cobraCharmer.cobraCoach.mcs import mcsActorCam
             reload(mcsActorCam)
             if simulationPath is not None:
                 raise NotImplementedError("for mcsActorCam, you *must* use the mcsActor-side simulation.")
             cameraFactory.__camera = mcsActorCam.McsActorCamera(actor=actor,
                                                                 cmd=cmd,runManager=runManager)
         elif name == 'mcs':
-            from . import mcsCam
+            from ics.cobraCharmer.cobraCoach.mcs import mcsCam
             reload(mcsCam)
             cameraFactory.__camera = mcsCam.McsCamera(simulationPath=simulationPath,actor=actor,
                                                       cmd=cmd,runManager=runManager)
         elif name == 'cit':
-            from . import citCam
+            from ics.cobraCharmer.cobraCoach.mcs import citCam
             reload(citCam)
             cameraFactory.__camera = citCam.CitCamera(simulationPath=simulationPath,
                                                       runManager=runManager)
         elif name == 'asrd':
-            from . import asrdCam
+            from ics.cobraCharmer.cobraCoach.mcs import asrdCam
             reload(asrdCam)
             cameraFactory.__camera = asrdCam.AsrdCamera(simulationPath=simulationPath,
                                                         runManager=runManager)
         elif name == 'rmod':
-            from . import rmodCam
+            from ics.cobraCharmer.cobraCoach.mcs import rmodCam
             reload(rmodCam)
             cameraFactory.__camera = rmodCam.RmodCamera(simulationPath=simulationPath,
                                                         runManager=runManager)

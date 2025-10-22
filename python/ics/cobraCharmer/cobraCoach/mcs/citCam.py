@@ -2,7 +2,7 @@ from importlib import reload
 import numpy as np
 import time
 
-from . import camera
+from ics.cobraCharmer.cobraCoach.mcs import camera
 reload(camera)
 
 class CitCamera(camera.Camera):

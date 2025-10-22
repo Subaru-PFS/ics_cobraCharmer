@@ -1,0 +1,90 @@
+[build-system]
+requires = ["setuptools>=61", "wheel", "lsst-versions"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ics-cobraCharmer"
+description = "Cobra Charmer: low-level control and utilities for the Cobra fiber positioners"
+authors = [
+    { name = "Subaru PFS ICS Team" }
+]
+license = { text = "GPL-3.0-or-later" }
+readme = "README.md"
+requires-python = ">=3.12"
+keywords = ["PFS", "Subaru", "ICS", "cobra", "control"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering",
+]
+
+# Core runtime dependencies inferred from imports
+dependencies = [
+    "PyQt5",
+    "PyYAML",
+    "astropy",
+    "bokeh",
+    "matplotlib",
+    "numpy",
+    "opencv-python",
+    "pandas",
+    "scikit-image",
+    "scipy",
+    "sep",
+    "setuptools",
+    "ics-utils @ git+https://github.com/Subaru-PFS/ics_utils.git",
+    "pfs-utils @ git+https://github.com/Subaru-PFS/pfs_utils.git",
+    "pfs-instdata @ git+https://github.com/Subaru-PFS/pfs_instdata.git",
+    "opdb @ git+https://github.com/Subaru-PFS/spt_operational_database.git",
+]
+
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/Subaru-PFS/ics_cobraCharmer"
+Repository = "https://github.com/Subaru-PFS/ics_cobraCharmer.git"
+
+# No console scripts are defined here; the repo provides bin/gui_manual which runs
+# `python3 -m ics.cobraCharmer.gui_manual` to start the Tkinter GUI.
+
+[tool.setuptools]
+# Use namespace packages under the ics namespace
+package-dir = {"" = "python"}
+zip-safe = false
+# Install scripts from the bin/ directory as executable script files
+script-files = [
+    "bin/gui_manual",
+    "bin/fpgaSim",
+    "bin/msimRelog",
+    "bin/gui_manual_w_keys.py",
+]
+
+[tool.setuptools.packages.find]
+where = ["python"]
+include = ["ics.cobraCharmer*"]
+
+[tool.setuptools.package-data]
+# Add package data patterns here if needed in the future
+"ics.cobraCharmer" = []
+
+[tool.lsst_versions]
+write_to = "python/ics/cobraCharmer/version.py"
+
+[tool.black]
+line-length = 110
+target-version = ["py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 110
+known_first_party = ["ics"]
+
+# Ruff configuration to ignore naming capitalization/camelCase rules for functions, methods, and variables
+[tool.ruff.lint]
+# Modern Ruff (>=0.1) lint configuration
+ignore = ["N802", "N803", "N806", "N815", "N816", "EM101", "TRY003"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
