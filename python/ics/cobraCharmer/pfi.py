@@ -203,13 +203,18 @@ class PFI(object):
         else:
             self.logger.debug(f'send SET command succeeded')
 
-    def calibrateFreq(self, cobras=None,
-                      thetaLow=60.4, thetaHigh=70.3, phiLow=94.4, phiHigh=108.2,
+    def calibrateFreq(self, cobras=None, board=None,
+                      thetaLow=55.0, thetaHigh=70.3,
+                      phiLow=90.0, phiHigh=120.0,
                       clockwise=True,
                       enabled=(True, True)):
         """ Calibrate COBRA motor frequency """
         if cobras is None:
             cobras = self.getAllDefinedCobras()
+        if board is not None:
+            module = (board - 1)//2 + 1
+            fpgaBoard = (board -1)%2 + 1
+            cobras = self.allocateCobraBoard(module, fpgaBoard)
 
         spin = func.CW_DIR if clockwise else func.CCW_DIR
         m0 = (self._freqToPeriod(thetaHigh), self._freqToPeriod(thetaLow))
@@ -222,7 +227,11 @@ class PFI(object):
         else:
             self.logger.debug(f'send Calibrate command succeeded')
 
-    def houseKeeping(self, modules=None, m0=(0, 1000), m1=(0, 1000), temps=(16.0, 31.0), cur=(0.25, 1.2), volt=(9.5, 10.5)):
+    def houseKeeping(self, modules=None,
+                     m0=(0, 1000), m1=(0, 1000),
+                     temps=(16.0, 31.0),
+                     cur=(0.25, 1.2),
+                     volt=(9.5, 10.5)):
         """ HK command """
 
         if modules is None:
