@@ -996,10 +996,16 @@ def thetaOnTimeSearch(newXml, speeds=(0.06,0.12), steps=(1000,500), iteration=3,
     _spdF = []
     _spdR = []
 
+    startingScaling = cc.useScaling
+    startingMode = cc.getMode()
+    cc.setScaling(enabled=False)
+    cc.setMode('theta')
+
     # get the average speeds for onTimeHigh, small step size since it's fast
     logger.info(f'Starting theta on-time search for speed = {np.rad2deg(speeds)}')
     logger.info(f'Initial run, onTime = {onTimeHigh}')
-    runDir, duds = makeThetaMotorMaps(newXml, repeat=repeat, steps=onTimeHighSteps, thetaOnTime=onTimeHigh)
+    runDir, duds = makeThetaMotorMaps(newXml, repeat=repeat, steps=onTimeHighSteps, thetaOnTime=onTimeHigh,
+                                      totalSteps=9600)
     spdF = np.load(runDir / 'data' / 'thetaSpeedFW.npy')
     spdR = np.load(runDir / 'data' / 'thetaSpeedRV.npy')
 
@@ -1026,7 +1032,8 @@ def thetaOnTimeSearch(newXml, speeds=(0.06,0.12), steps=(1000,500), iteration=3,
             ontF[ontF<onTimeLow] = onTimeLow
             ontR[ontR<onTimeLow] = onTimeLow
             logger.info(f'Run {n+1}/{iteration}, onTime = {np.round([ontF, ontR],4)}')
-            runDir, duds = makeThetaMotorMaps(newXml, repeat=repeat, steps=step, thetaOnTime=[ontF, ontR])
+            runDir, duds = makeThetaMotorMaps(newXml, repeat=repeat, steps=step, thetaOnTime=[ontF, ontR],
+                                              totalSteps=9600)
             spdF = np.load(runDir / 'data' / 'thetaSpeedFW.npy')
             spdR = np.load(runDir / 'data' / 'thetaSpeedRV.npy')
             _ontF.append(ontF.copy())
@@ -1065,6 +1072,9 @@ def thetaOnTimeSearch(newXml, speeds=(0.06,0.12), steps=(1000,500), iteration=3,
     runDir, duds = makeThetaMotorMaps(newXml, repeat=repeat, steps=steps[1], thetaOnTime=[ontF, ontR], fast=True)
     cc.pfi.loadModel([pathlib.Path(f'{runDir}/output/{newXml}')])
 
+    cc.setScaling(enabled=startingScaling)
+    cc.setMode(startingMode)
+
     return runDir / 'output' / newXml
 
 def phiOnTimeSearch(newXml, speeds=(0.06,0.12), steps=(500,250), iteration=3, repeat=1):
@@ -1095,6 +1105,11 @@ def phiOnTimeSearch(newXml, speeds=(0.06,0.12), steps=(500,250), iteration=3, re
     _ontR = []
     _spdF = []
     _spdR = []
+
+    startingScaling = cc.useScaling
+    startingMode = cc.getMode()
+    cc.setScaling(enabled=False)
+    cc.setMode('phi')
 
     # get the average speeds for onTimeHigh, small step size since it's fast
     logger.info(f'Starting phi on-time search for speed = {np.rad2deg(speeds)}')
@@ -1164,6 +1179,9 @@ def phiOnTimeSearch(newXml, speeds=(0.06,0.12), steps=(500,250), iteration=3, re
     logger.info(f'Build fast motor maps, best onTime = {np.round([ontF, ontR],4)}')
     runDir, duds = makePhiMotorMaps(newXml, repeat=repeat, steps=steps[1], phiOnTime=[ontF, ontR], fast=True)
     cc.pfi.loadModel([pathlib.Path(f'{runDir}/output/{newXml}')])
+
+    cc.setScaling(enabled=startingScaling)
+    cc.setMode(startingMode)
 
     return runDir / 'output' / newXml
 

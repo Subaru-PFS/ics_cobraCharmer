@@ -1703,7 +1703,7 @@ class CobraCoach():
             notdoneMask = np.zeros(self.nCobras, 'bool')
             notdoneMask[self.goodIdx] = True
             for k in range(iteration):
-                self.logger.info(f'{n+1}/{repeat} theta forward to {(k+1)*steps}')
+                self.logger.info(f'{n+1}/{repeat} theta forward to {(k+1)*steps}/{totalSteps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], steps, 0, thetaFast=False)
                 #thetaFW[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaForward{n}N{k}.fits',
                 #                                        arm='theta',guess=thetaFW[self.visibleIdx, n, k],tolerance=0.02)
@@ -1746,7 +1746,7 @@ class CobraCoach():
             notdoneMask = np.zeros(self.nCobras, 'bool')
             notdoneMask[self.goodIdx] = True
             for k in range(iteration):
-                self.logger.info(f'{n+1}/{repeat} theta backward to {(k+1)*steps}')
+                self.logger.info(f'{n+1}/{repeat} theta backward to {(k+1)*steps}/{totalSteps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], -steps, 0, thetaFast=False)
                 #thetaRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaReverse{n}N{k}.fits',
                 #                                    arm='theta',guess=thetaRV[self.visibleIdx, n, k],tolerance=0.02)
