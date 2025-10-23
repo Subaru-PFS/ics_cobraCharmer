@@ -14,7 +14,7 @@ from ics.utils.database.opdb import OpDB
 from ics.cobraCharmer.utils import butler
 
 # Configure the default formatter and logger.
-logging.basicConfig(datefmt = "%Y-%m-%d %H:%M:%S", level=logging.DEBUG,
+logging.basicConfig(datefmt = "%Y-%m-%d %H:%M:%S", level=logging.INFO,
                     format = "%(asctime)s.%(msecs)03dZ %(name)-16s %(levelno)s %(filename)s:%(lineno)d %(message)s")
 
 def whereAmI():
