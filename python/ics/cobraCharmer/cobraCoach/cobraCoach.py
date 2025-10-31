@@ -1530,6 +1530,9 @@ class CobraCoach():
         self.logger.info(f'phi home {-limitSteps} steps')
         self.pfi.moveAllSteps(self.goodCobras, 0, -limitSteps)  # default is fast
         for n in range(repeat):
+            if n > 0:
+                self.actor.visitor.forceNewVisit()
+
             self.cam.resetStack(f'phiForwardStack{n}.fits')
 
             # forward phi motor maps
@@ -1590,6 +1593,8 @@ class CobraCoach():
                         centers[c_i] = self.calibModel.centers[c_i] + offset
                     else:
                         centers[c_i] = np.average(phiFW[c_i, n])
+
+            self.actor.visitor.forceNewVisit()
 
             # reverse phi motor maps
             self.cam.resetStack(f'phiReverseStack{n}.fits')
@@ -1692,6 +1697,9 @@ class CobraCoach():
         self.logger.info(f'theta home {-limitSteps} steps')
         self.pfi.moveAllSteps(self.goodCobras, -limitSteps, 0)  # default is fast
         for n in range(repeat):
+            if n > 0:
+                self.actor.visitor.forceNewVisit()
+
             self.cam.resetStack(f'thetaForwardStack{n}.fits')
 
             # forward theta motor maps
@@ -1703,7 +1711,7 @@ class CobraCoach():
             notdoneMask = np.zeros(self.nCobras, 'bool')
             notdoneMask[self.goodIdx] = True
             for k in range(iteration):
-                self.logger.info(f'{n+1}/{repeat} theta forward to {(k+1)*steps}')
+                self.logger.info(f'{n+1}/{repeat} theta forward to {(k+1)*steps}/{totalSteps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], steps, 0, thetaFast=False)
                 #thetaFW[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaForward{n}N{k}.fits',
                 #                                        arm='theta',guess=thetaFW[self.visibleIdx, n, k],tolerance=0.02)
@@ -1734,6 +1742,8 @@ class CobraCoach():
             self.logger.info(f'{n+1}/{repeat} theta forward {limitSteps} to limit')
             self.pfi.moveAllSteps(self.goodCobras, limitSteps, 0)  # fast to limit
 
+            self.actor.visitor.forceNewVisit()
+
             # reverse theta motor maps
             self.cam.resetStack(f'thetaReverseStack{n}.fits')
             #thetaRV[self.visibleIdx, n, 0] = self.exposeAndExtractPositions(f'thetaEnd{n}.fits',arm='theta',
@@ -1746,7 +1756,7 @@ class CobraCoach():
             notdoneMask = np.zeros(self.nCobras, 'bool')
             notdoneMask[self.goodIdx] = True
             for k in range(iteration):
-                self.logger.info(f'{n+1}/{repeat} theta backward to {(k+1)*steps}')
+                self.logger.info(f'{n+1}/{repeat} theta backward to {(k+1)*steps}/{totalSteps}')
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], -steps, 0, thetaFast=False)
                 #thetaRV[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'thetaReverse{n}N{k}.fits',
                 #                                    arm='theta',guess=thetaRV[self.visibleIdx, n, k],tolerance=0.02)
