@@ -679,7 +679,7 @@ class Calculation():
         # update XML configuration
         if bad is None:
             bad = []
-        idx = np.array([c for c in self.goodIdx if not bad[c]])
+        idx = np.array([c for c in self.goodIdx if c not in bad])
         new = self.calibModel
 
         if slow:
@@ -697,7 +697,7 @@ class Calculation():
         # update XML configuration
         if bad is None:
             bad = []
-        idx = np.array([c for c in self.goodIdx if not bad[c]])
+        idx = np.array([c for c in self.goodIdx if c not in bad])
         new = self.calibModel
 
         if slow:
