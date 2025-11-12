@@ -74,8 +74,10 @@ class FPGAProtocolLogger(object):
 
         self.logger = logging.getLogger('fpga')
         if logRoot is not None:
+            handler = logging.FileHandler(os.path.join(logRoot, 'fpgaProtocol.log'))
+            handler.setFormatter(logging.getLogger().handlers[0].formatter)
             self.logger.handlers = []
-            self.logger.addHandler(logging.FileHandler(os.path.join(logRoot, 'fpgaProtocol.log')))
+            self.logger.addHandler(handler)
             self.logger.propagate = False
 
         self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
