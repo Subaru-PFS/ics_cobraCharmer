@@ -40,7 +40,7 @@ class FitsImageProcessor:
             self.centY = centY
 
     def loadXmlfile(self):
-        newXml = pathlib.Path('/software/mhs/products/Linux64/pfs_instdata/1.8.9/data/pfi/modules/ALL/ALL.xml')
+        newXml = pathlib.Path('/software/mhs/products/Linux64/pfs_instdata/1.8.45/data/pfi/modules/ALL/ALL.xml')
         vis=visDianosticPlot.VisDianosticPlot(xml=newXml)
         self.vis = vis
         return vis.calibModel.centers.real, vis.calibModel.centers.imag
