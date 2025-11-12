@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import logging
 import pandas as pd
+from pfs.utils import butler
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
@@ -279,9 +280,12 @@ def prepareThetaMotorMaps(group=0, phi_limit=np.pi/3*2, tolerance=0.1, tries=10,
     goodIdx = cc.goodIdx
     centers = cc.calibModel.centers
 
+    butler = butler.Butler()
     # Loading dot locations
-    dotFile = '/software/devel/pfs/pfs_instdata/data/pfi/dot/black_dots_mm.csv'
-    dotDF=pd.read_csv(dotFile)
+    #dotFile = '/software/devel/pfs/pfs_instdata/data/pfi/dot/black_dots_mm.csv'
+    dotDF = butler.get("black_dots", moduleName="ALL", version="")
+
+    #dotDF=pd.read_csv(dotFile)
     
     dots = (dotDF['x'].values)+(dotDF['y'].values)*1j
     dots_radii = dotDF['r'].values
