@@ -1,6 +1,5 @@
 from importlib import reload
 import logging
-from bokeh.transform import factor_cmap
 import numpy as np
 from astropy.io import fits
 import pathlib
