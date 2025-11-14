@@ -34,7 +34,7 @@ def whereAmI():
     return 'rmod'
 
 def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None,
-                  actor=None, cmd=None):
+                  actor=None, cmd=None, db=None):
     if doClear or simulationPath is not None:
         try:
             del cameraFactory.__camera
@@ -52,30 +52,30 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None
             if simulationPath is not None:
                 raise NotImplementedError("for mcsActorCam, you *must* use the mcsActor-side simulation.")
             cameraFactory.__camera = mcsActorCam.McsActorCamera(actor=actor,
-                                                                cmd=cmd,runManager=runManager)
+                                                                cmd=cmd,runManager=runManager, db=db)
         elif name == 'mcs':
             from ics.cobraCharmer.cobraCoach.mcs import mcsCam
             reload(mcsCam)
             cameraFactory.__camera = mcsCam.McsCamera(simulationPath=simulationPath,actor=actor,
-                                                      cmd=cmd,runManager=runManager)
+                                                      cmd=cmd,runManager=runManager, db=db)
         elif name == 'cit':
             from ics.cobraCharmer.cobraCoach.mcs import citCam
             reload(citCam)
             cameraFactory.__camera = citCam.CitCamera(simulationPath=simulationPath,
-                                                      runManager=runManager)
+                                                      runManager=runManager, db=db)
         elif name == 'asrd':
             from ics.cobraCharmer.cobraCoach.mcs import asrdCam
             reload(asrdCam)
             cameraFactory.__camera = asrdCam.AsrdCamera(simulationPath=simulationPath,
-                                                        runManager=runManager)
+                                                        runManager=runManager, db=db)
         elif name == 'rmod':
             from ics.cobraCharmer.cobraCoach.mcs import rmodCam
             reload(rmodCam)
             cameraFactory.__camera = rmodCam.RmodCamera(simulationPath=simulationPath,
-                                                        runManager=runManager)
+                                                        runManager=runManager, db=db)
         elif name == 'sim':
             cameraFactory.__camera = SimCamera(simulationPath=simulationPath,
-                                               runManager=runManager)
+                                               runManager=runManager, db=db)
         else:
             raise ValueError(f'camera type must be specified and known, not {name}')
 
@@ -84,7 +84,7 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None
 class Camera(object):
     filePrefix = 'PFXC'
 
-    def __init__(self, runManager=None, simulationPath=None, logLevel=logging.INFO, cmd=None):
+    def __init__(self, runManager=None, simulationPath=None, logLevel=logging.INFO, cmd=None, db=None, dbParams=None):
         self.logger = logging.getLogger('camera')
         self.logger.setLevel(logLevel)
         self.frameId = None
@@ -93,7 +93,10 @@ class Camera(object):
         self.dark = None
         self.exptime = 0.8
         self.doWriteFitsSpots = True
-        
+
+        # Use existing database connection or create a new one from params.
+        self.opdb = db or OpDB(dbParams)
+
         if runManager is None:
             runManager = butler.RunTree()
         self.runManager = runManager
@@ -172,11 +175,9 @@ class Camera(object):
         return filename
 
     def getPositionsForFrame(self, frameId):
-        opdb = OpDB()
-
         sql = f"""SELECT * from mcs_data WHERE mcs_frame_id={frameId}"""
 
-        with opdb.connection() as conn:
+        with self.opdb.connection() as conn:
             mcsData = pd.read_sql_query(sql, conn)
 
         renames = dict(mcs_frame_id='mcsId',
