@@ -20,7 +20,10 @@ import time
 
 
 from bokeh.io import output_notebook, show, export_png,export_svgs
-from selenium import webdriver
+try:
+    from selenium import webdriver
+except ImportError:
+    webdriver = None
 #from webdriver_manager.chrome import ChromeDriverManager
 
 
@@ -39,14 +42,19 @@ from ics.cobraCharmer import pfiDesign
 from ics.cobraCharmer import func
 import fnmatch
 import pandas as pd
-from opdb import opdb
+try:
+    from opdb import opdb
+except ImportError:
+    opdb = None
 import logging
 
 from pfs.utils.butler import Butler
 import pfs.utils.coordinates.transform as transformUtils
 import psycopg2
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from pfs.utils.fiberids import FiberIds
+from ics.cobraCharmer.cobraCoach import visUtils
+
 
 def findDesignFromVisit(visit):
     command = f"grep moveToPfsDesign /data/logs/actors/fps/202?-*-*.log | grep {visit}"
@@ -122,7 +130,7 @@ def findToleranceFromVisit(visit):
 
 
 def findRunDir(pfsVisitId):
-    search_pattern = f"/data/MCS/202[234]*/data/PFSC{pfsVisitId:06d}??.fits"
+    search_pattern = f"/data/MCS/202[2-5]*/data/PFSC{pfsVisitId:06d}??.fits"
     fits_files = glob.glob(search_pattern)
 
     if fits_files:
@@ -628,7 +636,7 @@ class VisDianosticPlot(object):
 
         ax[1].plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
 
-        ax[1].text(0.7, 0.8, f'Median = {np.median(diff[self.goodIdx]):.4f}, $\sigma$={sigma:.4f}', 
+        ax[1].text(0.7, 0.8, f'Median = {np.median(diff[self.goodIdx]):.4f}, $\\sigma$={sigma:.4f}', 
                         horizontalalignment='center', verticalalignment='center', transform=ax[1].transAxes)
         ax[1].set_xlabel('Difference (mm)')
         ax[1].set_ylabel('Counts')
@@ -637,6 +645,126 @@ class VisDianosticPlot(object):
             plt.suptitle(f'{arm} Arm Length Comparison')
         else:
             plt.suptitle(f'{arm} Arm Length Comparison {extraLable}')
+
+
+
+    def visStoppedCobraRun25(self, pfsVisit):
+        """
+            Visulization of stopped cobra in each iteration for a certain visitID
+            This is for run 25
+        """
+        runDir = findRunDir(pfsVisit) 
+
+        movfile = f'/data/MCS/{runDir}/data/moves.npy'
+        tarfile = f'/data/MCS/{runDir}/data/targets.npy'
+
+        mov = np.load(movfile)
+        targets = np.load(tarfile)
+
+        log_finished = visUtils.visGetSoppedCobraFromLogs(pfsVisit)
+        engine = create_engine(
+            "postgresql+psycopg2://pfs@db-ics:5432/opdb"
+        )
+
+        cobraTarget = pd.read_sql(
+            text("""
+                SELECT *
+                FROM public.cobra_target
+                WHERE pfs_visit_id = :visit
+                AND iteration = 7
+            """),
+            engine,
+            params={"visit": pfsVisit}
+        )
+
+        engine.dispose()
+
+        result = visUtils.parseFpgaLog(runDir, return_dataframe=True,iteration =1)
+        fgfm = visUtils.loadGrandFiberMap()
+
+        result["board_id"] = result["board_id"].astype("Int64")
+        result["positioner_id"] = result["positioner_id"].astype("Int64")
+
+        fgfm["boardId"] = fgfm["boardId"].astype("Int64")
+        fgfm["cobraInBoardId"] = fgfm["cobraInBoardId"].astype("Int64")
+
+
+        df_fpga_with_cob = result.merge(
+            fgfm[["cobraId", "boardId", "cobraInBoardId"]],
+            how="left",
+            left_on=["board_id", "positioner_id"],
+            right_on=["boardId", "cobraInBoardId"]
+        )
+
+        df_fpga_with_cob = df_fpga_with_cob.drop(columns=["boardId", "cobraInBoardId"])
+
+        cobraTarget["cobra_id"] = cobraTarget["cobra_id"].astype("Int64")
+
+        cols = [
+            "cobra_id",
+            "pfs_visit_id",
+            "iteration",
+            "pfi_nominal_x_mm",
+            "pfi_nominal_y_mm",
+            "pfi_target_x_mm",
+            "pfi_target_y_mm",
+            "flags",
+        ]
+
+        df_all = df_fpga_with_cob.merge(
+            cobraTarget[cols],
+            how="left",
+            left_on="cobraId",
+            right_on="cobra_id"
+        )
+
+        new_target = df_all['pfi_target_x_mm'].values+1j*df_all['pfi_target_y_mm'].values
+        targetIdx = df_all['cobra_id'].values - 1
+        maxIteration = mov.shape[-1]
+        tolerance = findToleranceFromVisit(pfsVisit)
+        fpga_notDone = []
+        for iteration in range(maxIteration):
+            try:
+                ind = np.where(np.abs(mov[0,:,iteration]['position']) > 0)
+                notDone = len(np.where(np.abs(mov[0,ind[0],iteration]['position']-new_target[ind[0]]) > tolerance)[0])
+            except:
+                ind = np.where(np.abs(mov[:,iteration]['position']) > 0)
+                notDone = len(np.where(np.abs(mov[ind[0],iteration]['position']-new_target[ind[0]]) > tolerance)[0])
+            fpga_notDone.append(notDone)
+
+        fpga_finished = fpga_notDone[0] - np.array(fpga_notDone)
+        mcs_finised =[]
+        new_target = (cobraTarget['pfi_target_x_mm']+cobraTarget['pfi_target_y_mm']*1j).values[targetIdx]
+
+        for subID in range(maxIteration+1):
+            frameid = pfsVisit*100+subID
+            db=opdb.OpDB(hostname='db-ics', port=5432,
+                        dbname='opdb',username='pfs')
+
+            match = db.bulkSelect('cobra_match','select * from cobra_match where '
+                f'mcs_frame_id = {frameid}').sort_values(by=['cobra_id']).reset_index()
+
+            if len(match['pfi_center_x_mm']) != 0:
+                dist=np.sqrt((match['pfi_center_x_mm'].values[targetIdx]-new_target.real)**2+
+                    (match['pfi_center_y_mm'].values[targetIdx]-new_target.imag)**2)
+
+                inx = np.where(dist < tolerance)
+                mcs_finised.append(len(inx[0]))
+        if len(mcs_finised) > maxIteration:
+            mcs_finised = np.array(mcs_finised[1:])
+        else:
+            mcs_finised = np.array(mcs_finised)
+
+        ax = plt.gca()
+        ax.set_aspect('auto')
+        ax.set_xlim(0,maxIteration+1)
+        ax.plot(log_finished, linestyle ='--', marker='o', color = 'red', label='FPS Log')
+        ax.plot(fpga_finished, linestyle ='-', marker='x', label='Move array')
+        ax.plot(mcs_finised, linestyle ='-',marker='.', color='orange',label='MCS')
+        ax.plot(fpga_finished - mcs_finised, color='green', label = 'FPS - MCS')
+
+        ax.legend()
+
 
     def visStoppedCobra(self, pfsVisitID, tolerance = 0.01, getStoppedNum=False):
         '''
@@ -1123,7 +1251,7 @@ class VisDianosticPlot(object):
                 ax1.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
 
 
-            ax1.text(0.8, 0.8, f'Median = {np.median(diff):.4f}, $\sigma$={sigma:.4f}', 
+            ax1.text(0.8, 0.8, f'Median = {np.median(diff):.4f}, $\\sigma$={sigma:.4f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
             ax1.set_title('2D')
             ax1.set_xlabel('distance (mm)')
@@ -1140,7 +1268,7 @@ class VisDianosticPlot(object):
             if gauFit is True:
                 ax2.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
             
-            ax2.text(0.7, 0.85, f'Median = {np.median(dx):.4f}, $\sigma$={sigma:.4f}', 
+            ax2.text(0.7, 0.85, f'Median = {np.median(dx):.4f}, $\\sigma$={sigma:.4f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax2.transAxes)
             ax2.set_title('X direction')
             ax2.set_xlabel('distance (mm)')
@@ -1160,7 +1288,7 @@ class VisDianosticPlot(object):
             if gauFit is True:
                 ax3.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
             
-            ax3.text(0.7, 0.85, f'Median = {np.median(dy):.4f}, $\sigma$={sigma:.4f}', 
+            ax3.text(0.7, 0.85, f'Median = {np.median(dy):.4f}, $\\sigma$={sigma:.4f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax3.transAxes)
 
             ax3.set_title('Y direction')
@@ -1379,8 +1507,8 @@ class VisDianosticPlot(object):
 
                 ax1.plot(bins[:-1],gaus(bins[:-1],*popt),'r:',label='fit')
                 
-                #ax1.text(0.8, 0.8, f'Median = {np.nanmedian(diff[stableFF]):.2f}, $\sigma$={sigma:.2f}', 
-                ax1.text(0.8, 0.8, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}', 
+                #ax1.text(0.8, 0.8, f'Median = {np.nanmedian(diff[stableFF]):.2f}, $\\sigma$={sigma:.2f}', 
+                ax1.text(0.8, 0.8, f'Mean = {xPeak:.4f}, $\\sigma$={sigma:.2f}', 
                     horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
                 ax1.set_title('2D')
                 ax1.set_xlabel('distance (mm)')
@@ -1396,7 +1524,7 @@ class VisDianosticPlot(object):
                 xPeak = popt[1]
 
                 ax2.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
-                ax2.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}', 
+                ax2.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\\sigma$={sigma:.2f}', 
                     horizontalalignment='center', verticalalignment='center', transform=ax2.transAxes)
                 ax2.set_title('X direction')
                 ax2.set_xlabel('distance (mm)')
@@ -1416,8 +1544,8 @@ class VisDianosticPlot(object):
                 xPeak = popt[1]
                 ax3.plot(bins[:-1],gaus(bins[:-1],*popt),'ro:',label='fit')
                 
-                #ax3.text(0.7, 0.8, f'Median = {np.nanmedian(dy):.2f}, $\sigma$={sigma:.2f}', 
-                ax3.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.2f}', 
+                #ax3.text(0.7, 0.8, f'Median = {np.nanmedian(dy):.2f}, $\\sigma$={sigma:.2f}', 
+                ax3.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\\sigma$={sigma:.2f}', 
                     horizontalalignment='center', verticalalignment='center', transform=ax3.transAxes)
 
                 ax3.set_title('Y direction')
@@ -1495,7 +1623,7 @@ class VisDianosticPlot(object):
         sigma = np.abs(popt[2])
         xPeak = popt[1]
         ax_histx.plot(bins[:-1],gaus(bins[:-1],*popt),'r:',label='fit')
-        ax_histx.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}', 
+        ax_histx.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\\sigma$={sigma:.4f}', 
                     horizontalalignment='center', verticalalignment='center', transform=ax_histx.transAxes)
 
         n, bins, patches = ax_histy.hist(ffOffset[stableFF].flatten().imag,bins=binNum,range=(-offsetBox,offsetBox),orientation='horizontal')        
@@ -1503,7 +1631,7 @@ class VisDianosticPlot(object):
         sigma = np.abs(popt[2])
         xPeak = popt[1]
         ax_histy.plot(gaus(bins[:-1],*popt),bins[:-1],'r:',label='fit')
-        ax_histy.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}', 
+        ax_histy.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\\sigma$={sigma:.4f}', 
                     horizontalalignment='center', verticalalignment='center', transform=ax_histy.transAxes)
 
         ax.set_xlim(-offsetBox,offsetBox)
@@ -1528,9 +1656,9 @@ class VisDianosticPlot(object):
         sigma = np.abs(popt[2])
         xPeak = popt[1]
         ax.plot(bins[:-1],gaus(bins[:-1],*popt),'r:',label='fit')
-        ax.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}', 
+        ax.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\\sigma$={sigma:.4f}', 
             horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
-        ax.text(0.5, 0.8, f'Median = {np.nanmedian(ffOffset.flatten()):.4f}, $\sigma$={sigma:.4f}', 
+        ax.text(0.5, 0.8, f'Median = {np.nanmedian(ffOffset.flatten()):.4f}, $\\sigma$={sigma:.4f}', 
             horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
 
         if dataOnly:
@@ -1606,7 +1734,7 @@ class VisDianosticPlot(object):
         sigma = np.abs(popt[2])
         xPeak = popt[1]
         ax_histx.plot(bins[:-1],gaus(bins[:-1],*popt),'r:',label='fit')
-        ax_histx.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}', 
+        ax_histx.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\\sigma$={sigma:.4f}', 
                     horizontalalignment='center', verticalalignment='center', transform=ax_histx.transAxes)
 
         n, bins, patches = ax_histy.hist(ffOffset[:,stableFF].flatten().imag,bins=binNum,range=(-offsetBox,offsetBox),orientation='horizontal')        
@@ -1614,7 +1742,7 @@ class VisDianosticPlot(object):
         sigma = np.abs(popt[2])
         xPeak = popt[1]
         ax_histy.plot(gaus(bins[:-1],*popt),bins[:-1],'r:',label='fit')
-        ax_histy.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\sigma$={sigma:.4f}', 
+        ax_histy.text(0.5, 0.9, f'Mean = {xPeak:.4f}, $\\sigma$={sigma:.4f}', 
                     horizontalalignment='center', verticalalignment='center', transform=ax_histy.transAxes)
 
         ax.set_xlim(-offsetBox,offsetBox)
@@ -1746,7 +1874,7 @@ class VisDianosticPlot(object):
             ax1 = plt.subplot(223)
             n, bins, patches = ax1.hist(diff,range=(0,np.mean(diff)+1*np.std(diff)), bins=10, color='#0504aa',
                 alpha=0.7)
-            ax1.text(0.8, 0.8, f'Mean = {np.mean(diff):.2f}, $\sigma$={np.std(diff):.2f}', 
+            ax1.text(0.8, 0.8, f'Mean = {np.mean(diff):.2f}, $\\sigma$={np.std(diff):.2f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax1.transAxes)
             ax1.set_title('2D')
             ax1.set_xlabel('distance (mm)')
@@ -1757,7 +1885,7 @@ class VisDianosticPlot(object):
             ax2 = plt.subplot(221)
             ax2.hist(dx,range=(np.mean(dx)-2*np.std(dx),np.mean(dx)+2*np.std(dx)), 
                 bins=10, color='#0504aa',alpha=0.7)
-            ax2.text(0.7, 0.8, f'Mean = {np.mean(dx):.2f}, $\sigma$={np.std(dx):.2f}', 
+            ax2.text(0.7, 0.8, f'Mean = {np.mean(dx):.2f}, $\\sigma$={np.std(dx):.2f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax2.transAxes)
             ax2.set_title('X direction')
             ax2.set_xlabel('distance (mm)')
@@ -1771,7 +1899,7 @@ class VisDianosticPlot(object):
 
             ax3.hist(dy,range=(np.mean(dy)-2*np.std(dx),np.mean(dy)+2*np.std(dx)), 
                 bins=10, color='#0504aa', alpha=0.7)
-            ax3.text(0.7, 0.8, f'Mean = {np.mean(dy):.2f}, $\sigma$={np.std(dy):.2f}', 
+            ax3.text(0.7, 0.8, f'Mean = {np.mean(dy):.2f}, $\\sigma$={np.std(dy):.2f}', 
                 horizontalalignment='center', verticalalignment='center', transform=ax3.transAxes)
 
             ax3.set_title('Y direction')
