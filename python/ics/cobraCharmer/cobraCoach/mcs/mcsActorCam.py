@@ -1,7 +1,6 @@
 from importlib import reload
 import numpy as np
 import time
-import subprocess as sub
 import astropy.io.fits as pyfits
 import threading
 import pathlib

@@ -1,7 +1,6 @@
 from importlib import reload
 import logging
 import numpy as np
-from astropy.io import fits
 import pathlib
 import time
 
@@ -16,7 +15,7 @@ from ics.cobraCharmer.utils import butler as cbutler
 from pfs.utils import butler 
 import pfs.utils.coordinates.transform as transformUtils
 
-from opdb import opdb
+from pfs.utils.database import opdb
 import pandas as pd
 
 class CobraCoach():
@@ -471,25 +470,23 @@ class CobraCoach():
 
         cmd = self.actor.visitor.cmd
         frameNum = self.actor.visitor.getNextFrameNum()
-        centroids, filename, bkgd = self.cam.expose(name,
-                                                    exptime=self.expTime,
-                                                    frameNum=frameNum,
-                                                    cmd=cmd, doStack=doStack)
+        if not self.simMode:
+            centroids, filename, bkgd = self.cam.expose(name,
+                                                        exptime=self.expTime,
+                                                        frameNum=frameNum,
+                                                        cmd=cmd, doStack=doStack)
 
         self.frameNum = frameNum
-        self.logger.info(f'Exposure done and filename = {self.frameNum}')
+        self.logger.info(f'Exposure done and frameNum = {self.frameNum}')
 
 
         if dbMatch is True:
             '''
-                We extract matchin table from databse instead of calling matching sequence.
+                We extract matching table from database instead of calling matching sequence.
             '''
-            db=opdb.OpDB(hostname='db-ics', port=5432,
-                   dbname='opdb',
-                   username='pfs')
-            match = db.bulkSelect('cobra_match','select * from cobra_match where '
-                      f'mcs_frame_id = {frameNum}').sort_values(by=['cobra_id']).reset_index()
-            
+            db = opdb.OpDB()
+            match = db.query_dataframe('select * from cobra_match where '
+                                       f'mcs_frame_id = {frameNum}').sort_values(by=['cobra_id']).reset_index()
 
             positions = match['pfi_center_x_mm'].values+match['pfi_center_y_mm'].values*(1j)
             
@@ -504,14 +501,11 @@ class CobraCoach():
             #idx = self.visibleIdx
             # Here we start to process the centroid.  Converting them from pixel to mm
             fids = butler.Butler().get('fiducials')
-            db=opdb.OpDB(hostname='db-ics', port=5432,
-                   dbname='opdb',
-                   username='pfs')
-            mcsData = db.bulkSelect('mcs_data','select * from mcs_data where '
-                        f'mcs_frame_id = {frameNum} and spot_id > 0').sort_values(by=['spot_id'])
-            teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
-                        f'mcs_frame_id = {frameNum}')
-
+            db = opdb.OpDB()
+            mcsData = db.query_dataframe('select * from mcs_data where '
+                                         f'mcs_frame_id = {frameNum} and spot_id > 0').sort_values(by=['spot_id'])
+            teleInfo = db.query_dataframe('select altitude, insrot from mcs_exposure where '
+                                          f'mcs_frame_id = {frameNum}')
 
             if 'rmod' in str(self.cameraName).lower():
                 altitude = 90.0
@@ -1797,5 +1791,5 @@ class CobraCoach():
         return dataPath, thetaFW, thetaRV
 
     def camResetStack(self, doStack=False):
-        if not self.trajectoryMode:
+        if not self.trajectoryMode and self.cam is not None:
             self.cam.resetStack(doStack)
