@@ -5,6 +5,8 @@ from astropy.io import fits
 import pathlib
 import time
 
+from ics.utils.database.opdb import OpDB
+
 from ics.cobraCharmer.cobraCoach import calculus
 from ics.cobraCharmer.cobraCoach.speedModel import SpeedModel
 
@@ -64,7 +66,7 @@ class CobraCoach():
 
     def __init__(self, fpgaHost='localhost', loadModel=True, logLevel=logging.INFO,
                  trajectoryMode=False, rootDir=None, actor=None, cmd=None,
-                 simDataPath=None):
+                 simDataPath=None, db=None, dbParams=None):
         self.logger = logging.getLogger('cobraCoach')
         self.logger.setLevel(logLevel)
 
@@ -72,8 +74,7 @@ class CobraCoach():
         self.pfi = None
         self.cam = None
         self.fpgaHost = fpgaHost
-
-        
+        self.opdb = db or OpDB(dbParams)
 
         # scaling model
         self.useScaling = True
@@ -325,13 +326,13 @@ class CobraCoach():
             if self.actor is not None:
                 if self.simMode is False:
                     self.logger.info(f'MCS actor is given, try using mcsActor camera. simMode = {self.simMode}')
-                    self.cam = camera.cameraFactory(name='mcsActor',doClear=True, runManager=self.runManager,
-                                                    actor=self.actor, cmd=self.cmd)
+                    self.cam = camera.cameraFactory(name='mcsActor', doClear=True, runManager=self.runManager,
+                                                    actor=self.actor, cmd=self.cmd, db=self.opdb)
                 else:
                     self.logger.info(f'MCS actor is given, try using mcsActor camera in simulation mode')
-                    self.cam = camera.cameraFactory(name='mcsActor',doClear=True,
+                    self.cam = camera.cameraFactory(name='mcsActor', doClear=True,
                                                     runManager=self.runManager, actor=self.actor,
-                                                    cmd=self.cmd, simulationPath=self.simDataPath)
+                                                    cmd=self.cmd, db=self.opdb, simulationPath=self.simDataPath)
             else:
                 self.logger.info('MCS actor is not present, using RMOD camera')    
                 self.cam = camera.cameraFactory(name='rmod',doClear=True, runManager=self.runManager)
