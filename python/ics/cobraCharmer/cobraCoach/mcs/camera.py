@@ -10,7 +10,7 @@ import numpy.lib.recfunctions as recfuncs
 import astropy.io.fits as pyfits
 import pandas as pd
 
-from ics.utils.database.opdb import OpDB
+from pfs.utils.database import opdb
 from ics.cobraCharmer.utils import butler
 
 # Configure the default formatter and logger.
@@ -49,10 +49,15 @@ def cameraFactory(name=None, doClear=False, simulationPath=None, runManager=None
         if name == 'mcsActor':
             from ics.cobraCharmer.cobraCoach.mcs import mcsActorCam
             reload(mcsActorCam)
+
             if simulationPath is not None:
-                raise NotImplementedError("for mcsActorCam, you *must* use the mcsActor-side simulation.")
-            cameraFactory.__camera = mcsActorCam.McsActorCamera(actor=actor,
-                                                                cmd=cmd,runManager=runManager)
+                cameraFactory.__camera = SimCamera(simulationPath=simulationPath,
+                                                   cmd=cmd,
+                                                   runManager=runManager)
+                cmd.warn('text="using a non-camera simulator"')
+            else:
+                cameraFactory.__camera = mcsActorCam.McsActorCamera(actor=actor,
+                                                                    cmd=cmd,runManager=runManager)
         elif name == 'mcs':
             from ics.cobraCharmer.cobraCoach.mcs import mcsCam
             reload(mcsCam)
@@ -172,12 +177,11 @@ class Camera(object):
         return filename
 
     def getPositionsForFrame(self, frameId):
-        opdb = OpDB()
+        db = opdb.OpDB()
 
         sql = f"""SELECT * from mcs_data WHERE mcs_frame_id={frameId}"""
 
-        with opdb.connection() as conn:
-            mcsData = pd.read_sql_query(sql, conn)
+        mcsData = db.query_dataframe(sql)
 
         renames = dict(mcs_frame_id='mcsId',
                        spot_id='fiberId',

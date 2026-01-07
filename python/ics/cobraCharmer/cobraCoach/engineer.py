@@ -1,4 +1,3 @@
-#from cobraCoach.cobraCoach import CobraCoach as cc
 from ics.cobraCharmer.cobraCoach import calculus as cal
 from ics.cobraCharmer.cobraCoach import build_maps_with_dots as bmds
 import numpy as np
@@ -7,7 +6,7 @@ from copy import deepcopy
 import pathlib
 from ics.cobraCharmer.cobraCoach.speedModel import SpeedModel
 from ics.cobraCharmer.cobraCoach.trajectory import Trajectories
-#import cv2
+
 import os, fnmatch
 
 from ics.cobraCharmer import pfiDesign

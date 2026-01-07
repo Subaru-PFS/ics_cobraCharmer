@@ -69,7 +69,7 @@ class FPGAProtocol(asyncio.Protocol):
         self.connectTime = time.time()
 
     def connection_lost(self, exc):
-        self.ioLogger.warn('FPGA connection lost')
+        self.ioLogger.warning('FPGA connection lost')
 
     def data_received(self, data):
         """ The asyncio call with new data. We buffer until a complete command has been accepted. """
@@ -262,7 +262,7 @@ class FPGAProtocol(asyncio.Protocol):
         try:
             _, _, debugLevel, _, timeout, CRC = struct.unpack('>BBBBHH', header)
         except:
-            self.logger.warn('admin unpack WTF: %f', header)
+            self.logger.warning('admin unpack WTF: %f', header)
         self.logger.info('admin debugLevel=%d', debugLevel)
 
         uptime = int(time.time() - self.connectTime)

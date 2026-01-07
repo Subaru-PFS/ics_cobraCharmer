@@ -1,8 +1,6 @@
 import numpy as np
 import sep
-from ics.cobraCharmer import pfiDesign
 import os
-import sys
 from ics.cobraCharmer import func
 import pandas as pd
 import logging 
@@ -10,7 +8,7 @@ import logging
 from pfs.utils.butler import Butler
 import pfs.utils.coordinates.transform as transformUtils
 
-from opdb import opdb
+from pfs.utils.database import opdb
 
 binSize = np.deg2rad(3.6)
 regions = 112
@@ -274,23 +272,12 @@ class Calculation():
             logger.info(f'Loading FF from file = {ffFile}')
             fids = pd.read_csv(ffFile)
             
-        try:
-            db=opdb.OpDB(hostname='db-ics', port=5432,
-                    dbname='opdb',
-                    username='pfs')
-            teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
-                      f'mcs_frame_id = {frameid}')
-            mcsData = db.bulkSelect('mcs_data',f'select spot_id, mcs_center_x_pix, mcs_center_y_pix '
-                    f'from mcs_data where mcs_frame_id = {frameid}')
+        db=opdb.OpDB()
+        teleInfo = db.query_dataframe('select altitude, insrot from mcs_exposure where '
+                                      f'mcs_frame_id = {frameid}')
+        mcsData = db.query_dataframe('mcs_data',f'select spot_id, mcs_center_x_pix, mcs_center_y_pix '
+                                     f'from mcs_data where mcs_frame_id = {frameid}')
 
-        except:
-            db=opdb.OpDB(hostname='pfsa-db01', port=5432,dbname='opdb',
-                        username='pfs')
-            teleInfo = db.bulkSelect('mcs_exposure','select altitude, insrot from mcs_exposure where '
-                      f'mcs_frame_id = {frameid}')
-            mcsData = db.bulkSelect('mcs_data',f'select spot_id, mcs_center_x_pix, mcs_center_y_pix '
-                    f'from mcs_data where mcs_frame_id = {frameid}')
-        
         logger.info(f'Total spots from opDB= {len(mcsData)}')
         df=mcsData.loc[mcsData['spot_id'] > 0]
 
