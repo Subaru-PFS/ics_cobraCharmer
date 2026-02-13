@@ -235,7 +235,7 @@ def modulesForPfi(version=None, rootDir=None):
         #   and equivalent to yaml.load() for pyyaml 5.1+
         #   https://github.com/yaml/pyyaml/wiki/PyYAML-yaml.load(input)-Deprecation
         #   https://github.com/yaml/pyyaml/blob/155ec463f6a854ac14ccd5e2dda8017ce42a508a/CHANGES#L21C40-L21C40
-        from pkg_resources import parse_version
+        from packaging.version import parse as parse_version
         if parse_version(yaml.__version__) < parse_version('6.0'):
             config = yaml.load(yamlFile)
         else:
