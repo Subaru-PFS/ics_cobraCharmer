@@ -66,8 +66,7 @@ class McsActorCamera(camera.Camera):
         cmdVar = self.actor.cmdr.call(actor='mcs', cmdStr=cmdString,
                                       forUserCmd=cmd, timeLim=exptime+60)
         if cmdVar.didFail:
-            cmd.fail(f'text="MCS expose failed: {cmdUtils.interpretFailure(cmdVar)}"')
-            raise RuntimeError(f'FAILED to read mcs image!')
+            raise RuntimeError(f'MCS expose FAILED: {cmdUtils.interpretFailure(cmdVar)}')
 
         t2=time.time()
 
