@@ -125,7 +125,7 @@ class CobraCoach():
         self.thetaInfoIsValid = False
         self.phiInfoIsValid = False
 
-        self.connect()
+        self.connect(False)
 
     def setScaling(self, enabled=True, thetaScaleFactor=None, phiScaleFactor=None,
                    minThetaSteps=None, minPhiSteps=None, thetaScaling=None, phiScaling=None):
@@ -678,16 +678,17 @@ class CobraCoach():
             self.cam.startRecord()
         self.logger.info('Sending step numbers to FPGA for moving cobra.')
         if nSegments == 0:
-            self.pfi.moveSteps(cobras, thetaSteps, phiSteps,
-                               thetaFast=thetaFast, phiFast=phiFast,
-                               thetaOntimes=thetaOntimes, phiOntimes=phiOntimes,
-                               trajectoryMode=self.trajectoryMode)
+            pass
+            # self.pfi.moveSteps(cobras, thetaSteps, phiSteps,
+            #                    thetaFast=thetaFast, phiFast=phiFast,
+            #                    thetaOntimes=thetaOntimes, phiOntimes=phiOntimes,
+            #                    trajectoryMode=self.trajectoryMode)
         else:
             for n in range(nSegments):
-                
-                self.pfi.moveSteps(cobras, thetaSteps[n], phiSteps[n],
-                                   thetaOntimes=thetaOntimes[n], phiOntimes=phiOntimes[n],
-                                   trajectoryMode=self.trajectoryMode)
+                pass
+                # self.pfi.moveSteps(cobras, thetaSteps[n], phiSteps[n],
+                #                    thetaOntimes=thetaOntimes[n], phiOntimes=phiOntimes[n],
+                #                    trajectoryMode=self.trajectoryMode)
         if not self.trajectoryMode and self.cam.filePrefix == 'PFAC':
             self.cam.stopRecord()
         self.logger.info('cobra control FPGA operation done.')
@@ -748,14 +749,16 @@ class CobraCoach():
             if tSteps == 0:
                 self.moveInfo['thetaOntime'][cId] = 0
             elif nSegments == 0:
-                self.moveInfo['thetaOntime'][cId] = cobras[c_i].p.pulses[0] / 1000
+               # self.moveInfo['thetaOntime'][cId] = cobras[c_i].p.pulses[0] / 1000
+                self.moveInfo['thetaOntime'][cId] = 0.1
             else:
                 tOn = thetaOntimes[:,c_i]
                 self.moveInfo['thetaOntime'][cId] = np.average(tOn[np.nonzero(tOn)])
             if pSteps == 0:
                 self.moveInfo['phiOntime'][cId] = 0
             elif nSegments == 0:
-                self.moveInfo['phiOntime'][cId] = cobras[c_i].p.pulses[1] / 1000
+               #  self.moveInfo['phiOntime'][cId] = cobras[c_i].p.pulses[1] / 1000
+                self.moveInfo['phiOntime'][cId]  = 0.2
             else:
                 pOn = phiOntimes[:,c_i]
                 self.moveInfo['phiOntime'][cId] = np.average(pOn[np.nonzero(pOn)])
@@ -1171,7 +1174,7 @@ class CobraCoach():
             self.cobraInfo['position'][cIds] = self.pfi.anglesToPositions(cobras, thetas, phis)
 
         else:
-            self.pfi.moveAllSteps(cobras, thetaSteps, phiSteps, thetaFast=True, phiFast=True)
+            # self.pfi.moveAllSteps(cobras, thetaSteps, phiSteps, thetaFast=True, phiFast=True)
             # update current positions
             # Here we need to think about how to deal with it. 
             # There are dots, so we may wanto to skip this

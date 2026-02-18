@@ -32,7 +32,7 @@ class PFI(object):
     thetaParameter = 0.09
     phiParameter = 0.07
 
-    def __init__(self, fpgaHost='localhost', logDir=None, doConnect=True, doLoadModel=False, debug=False):
+    def __init__(self, fpgaHost='localhost', logDir=None, doConnect=False, doLoadModel=False, debug=False):
         """ Initialize a PFI class
         Args:
            fpgaHost    - fpga device
