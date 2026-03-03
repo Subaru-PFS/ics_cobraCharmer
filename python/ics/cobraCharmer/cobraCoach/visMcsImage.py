@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 from ics.cobraCharmer.cobraCoach import visDianosticPlot
+from ics.cobraCharmer.cobraCoach import visUtils
 from pfs.utils.fiberids import FiberIds
 import logging
 import pathlib
@@ -40,39 +41,15 @@ class FitsImageProcessor:
             self.centY = centY
 
     def loadXmlfile(self):
-        newXml = pathlib.Path('/software/mhs/products/Linux64/pfs_instdata/1.8.45/data/pfi/modules/ALL/ALL.xml')
+        newXml = pathlib.Path('/software/mhs/products/Linux64/pfs_instdata/1.8.64/data/pfi/modules/ALL/ALL.xml')
         vis=visDianosticPlot.VisDianosticPlot(xml=newXml)
         self.vis = vis
         return vis.calibModel.centers.real, vis.calibModel.centers.imag
     
     def fetchTarget(self):
-        conn = psycopg2.connect("dbname='opdb' host='db-ics' port=5432 user='pfs'") 
-        engine = create_engine('postgresql+psycopg2://', creator=lambda: conn)
+        newTargets, targerIdx = visUtils.getRun25Targets(self.pfsVisit)
+        return newTargets.real, newTargets.imag
 
-        
-        with conn:
-            fiberData = pd.read_sql(f'''
-                SELECT DISTINCT 
-                    fiber_id, pfi_center_final_x_mm, pfi_center_final_y_mm, 
-                    pfi_nominal_x_mm, pfi_nominal_y_mm
-                FROM 
-                    pfs_config_fiber
-                WHERE
-                    pfs_config_fiber.visit0 = %(visit0)s
-                -- limit 10
-            ''', engine, params={'visit0': self.pfsVisit})
-            
-        fid=FiberIds()
-        fiberData['cobra_id']=fid.fiberIdToCobraId(fiberData['fiber_id'].values)
-        fiberData=fiberData.sort_values('cobra_id')
-        df = fiberData.loc[fiberData['cobra_id'] != 65535]    
-        unassigned_rows = df[df[['pfi_nominal_x_mm', 'pfi_nominal_y_mm']].isna().all(axis=1)]
-        unassigned_cobraIdx =  unassigned_rows['cobra_id'].values - 1
-
-        self.unassigned_cobraIdx = unassigned_cobraIdx
-        targetFromDB = df['pfi_nominal_x_mm'].values+df['pfi_nominal_y_mm'].values*1j
-        
-        return targetFromDB.real, targetFromDB.imag
         
     def findFitsFiles(self):
         pattern = f'PFSC{self.pfsVisit:06d}??.fits'
@@ -140,9 +117,12 @@ class FitsImageProcessor:
         self.fidsGood = self.fids[self.fids.goodMask]
         self.fidsOuterRing = self.fids[self.fids.goodMask & self.fids.outerRingMask]
         num_matches = []
-        ffid, dist = pfiTransform.updateTransform(mcsData, self.fidsOuterRing, matchRadius=8.0, nMatchMin=0.1)
+        ffid, dist, _, _  = pfiTransform.updateTransform(mcsData, self.fidsOuterRing, matchRadius=8.0, nMatchMin=0.1)
+        
+        
         num_matches.append((ffid != -1).sum())
         
+
         nsigma = 0
         pfiTransform.nsigma = nsigma
         pfiTransform.alphaRot = 0
@@ -151,7 +131,7 @@ class FitsImageProcessor:
         for i in range(2):
             #ifig = 1
             #fig = plt.figure(ifig); plt.clf()
-            ffid, dist = pfiTransform.updateTransform(mcsData, self.fidsGood, matchRadius=4.2,nMatchMin=0.1)
+            ffid, dist, _, _  = pfiTransform.updateTransform(mcsData, self.fidsGood, matchRadius=4.2,nMatchMin=0.1)
             #num_matches = (ffid != -1).sum()
             num_matches.append((ffid != -1).sum())
             
@@ -210,9 +190,9 @@ class FitsImageProcessor:
 
         numFiles = len(fitsFiles)
         ncols = 3
-        nrows = (numFiles + ncols - 1) // ncols+3 # Add 1 row for the additional plot
+        nrows = int((numFiles) // ncols)+1 # Add 1 row for the additional plot
 
-        fig, axes = plt.subplots(nrows, ncols, figsize=(12, 4 * nrows))
+        fig, axes = plt.subplots(nrows, ncols, figsize=(9, 3 * nrows))
         axes = axes.flatten()
 
         for i, fitsFile in enumerate(fitsFiles):
@@ -251,9 +231,9 @@ class FitsImageProcessor:
             #axes[j].axis('off')
 
         # Create the bottom plot
-        ax_bottom = plt.subplot2grid((nrows, ncols), (ncols, 0), colspan=3,rowspan=3)
+        #ax_bottom = plt.subplot2grid((nrows, ncols), (ncols, 0), colspan=3,rowspan=3)
         
-        self.vis.visCobraMovement(self.pfsVisit, cobraIdx=cobraIdx, newPlot=False)
+        #self.vis.visCobraMovement(self.pfsVisit, cobraIdx=cobraIdx, newPlot=False)
         #ax_bottom.set_aspect('equal')  # Set equal aspect ratio to make height = width
 
         plt.tight_layout()

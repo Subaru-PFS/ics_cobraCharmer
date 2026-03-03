@@ -1,4 +1,3 @@
-
 import numpy as np
 from ics.cobraCharmer.cobraCoach import visDianosticPlot
 import psycopg2
@@ -7,6 +6,8 @@ from sqlalchemy import create_engine
 import pandas as pd
 import re
 from pfs.utils.fiberids import FiberIds
+from sqlalchemy import create_engine, text
+
 
 def parseFpsLog(pfsVisit, logPattern='/data/logs/actors/fps/202?-*-*.log'):
     """
@@ -15,36 +16,41 @@ def parseFpsLog(pfsVisit, logPattern='/data/logs/actors/fps/202?-*-*.log'):
     Parameters:
     -----------
     pfsVisit : int
-        PFS visit ID (e.g., 134301)
+        PFS visit ID (e.g., 136134)
     logPattern : str
         Log 檔案的搜尋路徑 pattern (default: '/data/logs/actors/fps/202?-*-*.log')
+        也支援完整路徑，例如：'/data/logs/actors/fps/2025-12-20T23:11:30.538.log'
     
     Returns:
     --------
     dict : 包含以下欄位的字典
         - 'timestamp': 命令時間戳記
-        - 'designId': Design ID
+        - 'designId': Design ID (hex 格式，例如 '0x74b6096adcbaf25c')
         - 'iteration': 迭代次數
         - 'tolerance': 收斂容忍度
-        - 'exptime': 曝光時間
+        - 'exptime': 曝光時間 (可能為 None)
         - 'visit': Visit ID
         - 'log_file': 找到的 log 檔案路徑
+        - 'total_time': 總執行時間（秒）
         - 'cobras_left': 各階段剩餘的 cobra 數量列表 (例如 ['2107 left', '1983 left'])
+        - 'left_lines': 包含 "left" 的完整行列表
         - 'full_log_section': 完整的 log 區段內容
     
     Example:
     --------
-    >>> result = parseFpsLog(134301)
+    >>> result = parseFpsLog(136134)
     >>> print(result['cobras_left'])
     ['2107 left', '1983 left', '1876 left']
     >>> print(result['designId'])
-    '18887845828571423'
+    '0x74b6096adcbaf25c'
     """
     import subprocess
     import re
     import glob as glob_module
+    import os
     
     # Step 1: 用 grep 找出包含 visit 的 log 檔案
+    # 新格式：pfsConfig=0x74b6096adcbaf25c,136134,Preparing
     grep_cmd = f"grep -l '{pfsVisit},Preparing' {logPattern}"
     
     try:
@@ -78,48 +84,86 @@ def parseFpsLog(pfsVisit, logPattern='/data/logs/actors/fps/202?-*-*.log'):
         print(f"Error reading log file {log_file}: {e}")
         return None
     
-    # Step 3: 找到包含 moveToPfsDesign 和 visit 的命令行
-    cmd_pattern = f"moveToPfsDesign.*visit={pfsVisit}"
-    cmd_match = re.search(cmd_pattern, log_content)
+    # Step 3: 找到包含 pfsConfig 和 visit 的那一行
+    # 格式：pfsConfig=0x74b6096adcbaf25c,136134,Preparing
+    pfsConfig_pattern = f"pfsConfig=([0-9a-fx]+),{pfsVisit},Preparing"
+    pfsConfig_match = re.search(pfsConfig_pattern, log_content, re.IGNORECASE)
     
-    if not cmd_match:
+    if not pfsConfig_match:
+        print(f"Warning: No pfsConfig found for visit {pfsVisit}")
+        return None
+    
+    # 從 pfsConfig 往前找最近的 moveToPfsDesign 命令
+    # 搜尋範圍：pfsConfig 前面 2000 個字元
+    search_start = max(0, pfsConfig_match.start() - 2000)
+    search_section = log_content[search_start:pfsConfig_match.start()]
+    
+    # 找最後一個 moveToPfsDesign
+    cmd_pattern = r'new cmd: moveToPfsDesign (.+?)(?:\n|$)'
+    cmd_matches = list(re.finditer(cmd_pattern, search_section))
+    
+    if not cmd_matches:
         print(f"Warning: No moveToPfsDesign command found for visit {pfsVisit}")
         return None
     
-    # Step 4: 解析命令參數
-    cmd_line = log_content[cmd_match.start():cmd_match.end() + 200]  # 取多一點以確保完整
+    # 使用最後一個匹配（最接近 pfsConfig 的）
+    cmd_match = cmd_matches[-1]
+    cmd_start_in_content = search_start + cmd_match.start()
     
-    timestamp_match = re.search(r'(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}Z)', cmd_line)
+    # Step 4: 解析命令參數
+    cmd_line = cmd_match.group(1)
+    
+    # 從命令行往前找時間戳記
+    timestamp_search_start = max(0, cmd_start_in_content - 200)
+    timestamp_section = log_content[timestamp_search_start:cmd_start_in_content + 200]
+    timestamp_match = re.search(r'(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}Z).*new cmd: moveToPfsDesign', timestamp_section)
     if timestamp_match:
         result['timestamp'] = timestamp_match.group(1)
     
-    designId_match = re.search(r'designId=(\w+)', cmd_line)
+    # 解析 designId（新格式支援 hex）
+    designId_match = re.search(r'designId=(0x[0-9a-fA-F]+|\d+)', cmd_line)
     if designId_match:
         result['designId'] = designId_match.group(1)
     
+    # 解析 iteration
     iteration_match = re.search(r'iteration=(\d+)', cmd_line)
     if iteration_match:
         result['iteration'] = int(iteration_match.group(1))
     
-    tolerance_match = re.search(r'tolerance=([\d.]+)', cmd_line)
+    # 解析 tolerance（可能在後續的 text 中）
+    # 從命令位置往後搜尋
+    tolerance_search_end = min(len(log_content), cmd_start_in_content + 1000)
+    tolerance_section = log_content[cmd_start_in_content:tolerance_search_end]
+    tolerance_match = re.search(r'tolerance=([\d.]+)', tolerance_section)
     if tolerance_match:
         result['tolerance'] = float(tolerance_match.group(1))
     
-    exptime_match = re.search(r'exptime=([\d.]+)', cmd_line)
+    # 解析 exptime（可能在 text 中顯示為 None）
+    exptime_match = re.search(r'expTime=([\d.]+|None)', tolerance_section)
     if exptime_match:
-        result['exptime'] = float(exptime_match.group(1))
+        exptime_str = exptime_match.group(1)
+        result['exptime'] = None if exptime_str == 'None' else float(exptime_str)
     
-    # Step 5: 找到這個命令的區段（從命令開始到下一個命令或檔案結尾）
-    start_pos = cmd_match.start()
+    # Step 5: 找到這個命令的區段（從命令開始到完成）
+    start_pos = cmd_start_in_content
     
-    # 找下一個 new cmd: 作為結束點（通常是下一個命令）
-    next_cmd_pattern = r'new cmd:'
-    next_cmd_match = re.search(next_cmd_pattern, log_content[start_pos + 500:])
-    if next_cmd_match:
-        end_pos = start_pos + 500 + next_cmd_match.start()
+    # 首先找 "We are at design position" 作為結束點（最準確）
+    completion_pattern = r'We are at design position in ([\d.]+) seconds\.'
+    completion_match = re.search(completion_pattern, log_content[start_pos:])
+    
+    if completion_match:
+        # 找到完成訊息，記錄總時間
+        end_pos = start_pos + completion_match.end()
+        result['total_time'] = float(completion_match.group(1))
     else:
-        # 如果沒有下一個命令，取後面 50000 個字元（足夠涵蓋整個執行過程）
-        end_pos = min(start_pos + 50000, len(log_content))
+        # 如果沒找到完成訊息，找下一個 new cmd: 作為結束點
+        next_cmd_pattern = r'new cmd:'
+        next_cmd_match = re.search(next_cmd_pattern, log_content[start_pos + 500:])
+        if next_cmd_match:
+            end_pos = start_pos + 500 + next_cmd_match.start()
+        else:
+            # 如果沒有下一個命令，取後面 50000 個字元
+            end_pos = min(start_pos + 50000, len(log_content))
     
     section = log_content[start_pos:end_pos]
     result['full_log_section'] = section
@@ -370,8 +414,10 @@ def visGetSoppedCobraFromLogs(visit):
     except:
         maxIteration = mov.shape[-1]  
 
+    totalMoves = mov.shape[-2]
+
     logCobraStopped = np.concatenate((
-        [mov[0,:,0].shape[0]],
+        [totalMoves],
         extractNotDoneCobraCounts(parseFpsLog(visit))[-maxIteration+1:]
         ))
     log_finished = logCobraStopped[0] - logCobraStopped
@@ -388,6 +434,72 @@ def getMaxIterationFromRunDir(runDir):
 
     return iteration
 
+
+def getRun25Targets(pfsVisit):
+           
+    runDir = visDianosticPlot.findRunDir(pfsVisit) 
+
+    log_finished = visGetSoppedCobraFromLogs(pfsVisit)
+    engine = create_engine(
+        "postgresql+psycopg2://pfs@db-ics:5432/opdb"
+    )
+
+    cobraTarget = pd.read_sql(
+        text("""
+            SELECT *
+            FROM public.cobra_target
+            WHERE pfs_visit_id = :visit
+            AND iteration = 7
+        """),
+        engine,
+        params={"visit": pfsVisit}
+    )
+
+    engine.dispose()
+
+    result = parseFpgaLog(runDir, return_dataframe=True,iteration =1)
+    fgfm = loadGrandFiberMap()
+
+    result["board_id"] = result["board_id"].astype("Int64")
+    result["positioner_id"] = result["positioner_id"].astype("Int64")
+
+    fgfm["boardId"] = fgfm["boardId"].astype("Int64")
+    fgfm["cobraInBoardId"] = fgfm["cobraInBoardId"].astype("Int64")
+
+
+    df_fpga_with_cob = result.merge(
+        fgfm[["cobraId", "boardId", "cobraInBoardId"]],
+        how="left",
+        left_on=["board_id", "positioner_id"],
+        right_on=["boardId", "cobraInBoardId"]
+    )
+
+    df_fpga_with_cob = df_fpga_with_cob.drop(columns=["boardId", "cobraInBoardId"])
+
+    cobraTarget["cobra_id"] = cobraTarget["cobra_id"].astype("Int64")
+
+    cols = [
+        "cobra_id",
+        "pfs_visit_id",
+        "iteration",
+        "pfi_nominal_x_mm",
+        "pfi_nominal_y_mm",
+        "pfi_target_x_mm",
+        "pfi_target_y_mm",
+        "flags",
+    ]
+
+    df_all = df_fpga_with_cob.merge(
+        cobraTarget[cols],
+        how="left",
+        left_on="cobraId",
+        right_on="cobra_id"
+    )
+
+    new_target = df_all['pfi_target_x_mm'].values+1j*df_all['pfi_target_y_mm'].values
+    targetIdx = df_all['cobra_id'].values - 1
+
+    return new_target, targetIdx
 
 def getMeanTargetDist(runDir, iteration):
     

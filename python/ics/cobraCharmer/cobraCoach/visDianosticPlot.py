@@ -349,6 +349,30 @@ class VisDianosticPlot(object):
                         [centers.imag[idx],centers.imag[idx]+y[idx]],**kwargs)
         pass
 
+    def _addLineForIndices(self, centers, length, angle, indices, **kwargs):
+        """
+        Add lines for specific cobra indices
+        
+        Parameters:
+        -----------
+        centers : complex array
+            Centers of cobras
+        length : float or array
+            Length of arms
+        angle : float or array
+            Angles for arms
+        indices : array
+            Indices of cobras to draw
+        **kwargs : dict
+            Additional plot arguments
+        """
+        ax = plt.gca()
+        x = length * np.cos(angle)
+        y = length * np.sin(angle)
+        for idx in indices:
+            ax.plot([centers.real[idx], centers.real[idx] + x[idx]],
+                   [centers.imag[idx], centers.imag[idx] + y[idx]], **kwargs)
+
 
     def visCreateNewPlot(self,title, xLabel, yLabel, size=(8, 8), nRows = 1, nCols = 1, 
         aspectRatio="equal", patchAlpha=0, supTitle=True, **kwargs):
@@ -450,7 +474,33 @@ class VisDianosticPlot(object):
                 linewidth=10,linestyle='-', solid_capstyle='round',alpha=0.5)
 
     def visGeometryFromXML(self, newXml=None, thetaAngle=None, phiAngle=None,
-        markCobra=False, patrol=False, visHardStops = True, allCobra = False):
+        markCobra=False, patrol=False, visHardStops = True, allCobra = False, 
+        cobraIdx=None):
+        """
+        Visualize cobra geometry
+        
+        Parameters:
+        -----------
+        newXml : str, optional
+            Path to XML file with cobra geometry
+        thetaAngle : float or array, optional
+            Theta angles for cobras. If scalar, applies to all cobras in cobraIdx.
+            If array, must match length of cobraIdx or self.goodIdx
+        phiAngle : float or array, optional
+            Phi angles for cobras. If scalar, applies to all cobras in cobraIdx.
+            If array, must match length of cobraIdx or self.goodIdx
+        markCobra : bool
+            Whether to mark cobra IDs
+        patrol : bool
+            Whether to show patrol regions
+        visHardStops : bool
+            Whether to show hard stops
+        allCobra : bool
+            Whether to show all cobras or just good ones
+        cobraIdx : int or array, optional
+            Specific cobra index/indices to visualize with angles.
+            If None, uses self.goodIdx
+        """
         
         if newXml is None:
             des = self.calibModel
@@ -474,20 +524,63 @@ class VisDianosticPlot(object):
             self._addLine(des.centers,length,des.tht1,color='black',
                             linewidth=0.5,linestyle='-.')
 
+        # Determine which cobras to draw angles for
+        if cobraIdx is not None:
+            # Convert single index to array
+            if np.isscalar(cobraIdx):
+                drawIdx = np.array([cobraIdx])
+            else:
+                drawIdx = np.asarray(cobraIdx)
+        else:
+            drawIdx = self.goodIdx
+        
         if thetaAngle is not None:
-            self._addLine(des.centers,des.L1,thetaAngle,color='blue',
-                    linewidth=2,linestyle='-')
+            # Convert scalar to array if needed
+            if np.isscalar(thetaAngle):
+                theta_arr = np.full(len(des.centers), thetaAngle)
+            else:
+                theta_arr = np.asarray(thetaAngle)
+                # If array length matches drawIdx, expand to full array
+                if len(theta_arr) == len(drawIdx):
+                    full_theta = np.zeros(len(des.centers))
+                    full_theta[drawIdx] = theta_arr
+                    theta_arr = full_theta
+            
+            self._addLineForIndices(des.centers, des.L1, theta_arr, drawIdx,
+                                   color='blue', linewidth=2, linestyle='-')
 
         if phiAngle is not None:
+            # Convert scalar to array if needed
+            if np.isscalar(phiAngle):
+                phi_arr = np.full(len(des.centers), phiAngle)
+            else:
+                phi_arr = np.asarray(phiAngle)
+                # If array length matches drawIdx, expand to full array
+                if len(phi_arr) == len(drawIdx):
+                    full_phi = np.zeros(len(des.centers))
+                    full_phi[drawIdx] = phi_arr
+                    phi_arr = full_phi
+            
+            # Convert scalar theta to array if needed for phi calculation
+            if thetaAngle is not None:
+                if np.isscalar(thetaAngle):
+                    theta_for_phi = np.full(len(des.centers), thetaAngle)
+                else:
+                    theta_for_phi = theta_arr
+            else:
+                theta_for_phi = np.zeros(len(des.centers))
+            
             # Calculate the end point first
-            x = des.L1*np.cos(thetaAngle)
-            y = des.L1*np.sin(thetaAngle)
+            x = des.L1 * np.cos(theta_for_phi)
+            y = des.L1 * np.sin(theta_for_phi)
             newx = des.centers.real + x
             newy = des.centers.imag + y
-            newPos = newx+newy*1j
-            phiOpenAngle = phiAngle+thetaAngle - np.pi
-            self._addLine(newPos,des.L2,phiOpenAngle,color='blue',
-                    linewidth=10,linestyle='-', solid_capstyle='round',alpha=0.5)
+            newPos = newx + newy * 1j
+            phiOpenAngle = phi_arr + theta_for_phi - np.pi
+            
+            self._addLineForIndices(newPos, des.L2, phiOpenAngle, drawIdx,
+                                   color='blue', linewidth=10, linestyle='-', 
+                                   solid_capstyle='round', alpha=0.5)
 
 
         if markCobra is True:
@@ -648,7 +741,7 @@ class VisDianosticPlot(object):
 
 
 
-    def visStoppedCobraRun25(self, pfsVisit):
+    def visStoppedCobraRun25(self, pfsVisit, mcsTolerance = 0.01):
         """
             Visulization of stopped cobra in each iteration for a certain visitID
             This is for run 25
@@ -748,7 +841,7 @@ class VisDianosticPlot(object):
                 dist=np.sqrt((match['pfi_center_x_mm'].values[targetIdx]-new_target.real)**2+
                     (match['pfi_center_y_mm'].values[targetIdx]-new_target.imag)**2)
 
-                inx = np.where(dist < tolerance)
+                inx = np.where(dist < mcsTolerance)
                 mcs_finised.append(len(inx[0]))
         if len(mcs_finised) > maxIteration:
             mcs_finised = np.array(mcs_finised[1:])
@@ -942,28 +1035,35 @@ class VisDianosticPlot(object):
             iteration (int, optional): The iteration number. Defaults to 8.
         """
         pass
-
-        #visit = 107682
-        visit = pfsVisitID
-
-        runDir = findRunDir(pfsVisitID)
-        iteration=8
+        pfsVisit = pfsVisitID
+        runDir = findRunDir(pfsVisit)
 
         mov=np.load(f'/data/MCS/{runDir}/data/moves.npy')
-        tar=np.load(f'/data/MCS/{runDir}/data/targets.npy')
-        
-        movIdx = np.where(self.goodIdx == cobraIdx)[0][0]
-        
-        if newPlot is True:
-            self.visCreateNewPlot(f'Visit = {visit} Cobra Index = {self.goodIdx[movIdx]}','X','Y')
-        
-        self.visGeometryFromXML(thetaAngle=mov[0,movIdx,iteration-1]['thetaAngle']+self.calibModel.tht0[self.goodIdx[movIdx]],
-                            phiAngle=mov[0,movIdx,iteration-1]['phiAngle'],patrol=True)
 
-                            
-        #self.visUnassignedFibers(pfsVisitID)
+
+        targetsRun25, targetIdx = visUtils.getRun25Targets(pfsVisit)
+        movIdx = np.where(targetIdx == cobraIdx)[0][0]
+
+        self.visCreateNewPlot(f'Visit = {pfsVisit} Cobra Index = {targetIdx[movIdx]}','X','Y', size=(6, 6))
+
+        theta_angles = np.zeros(2394)+self.calibModel.tht0
+        theta_angles[targetIdx] = mov[0, :, iteration-1]['thetaAngle']+self.calibModel.tht0[targetIdx]
+
+        phi_angles = np.zeros(2394)
+        phi_angles[targetIdx] = mov[0, :, iteration-1]['phiAngle']                                                                                   
+                                                                                        
+        self.logger.info(f'cobraIdx={cobraIdx}, theta={theta_angles[cobraIdx]}, phi={phi_angles[cobraIdx]}')
+        self.visGeometryFromXML(thetaAngle=theta_angles,phiAngle=phi_angles,patrol=True)
+
+        #vis.visGeometryFromXML(
+        #    #thetaAngle=thetaSolution[movIdx][0],phiAngle=phiSolution[movIdx][0],cobraIdx=489,          
+        #    thetaAngle=mov[0,movIdx,0]['thetaAngle'],phiAngle=mov[0,movIdx,0]['phiAngle'],cobraIdx=489,          
+        #    patrol=True
+        #)
+
 
         ax=plt.gca()
+
         x = mov[0,movIdx,:]['position'].real
         y = mov[0,movIdx,:]['position'].imag
 
@@ -971,13 +1071,46 @@ class VisDianosticPlot(object):
             if x[i]==0 and y[i]==0:
                 x[i] = x[i-1]
                 y[i] = y[i-1]   
-            ax.scatter(x[i], y[i], marker='.', alpha=0.5,label=f'{i+1}')
+            #ax.scatter(x[i], y[i], marker='.', alpha=0.5,label=f'{i+1}')
             ax.text(x[i], y[i],f'{i}')
-        ax.scatter(tar.real[movIdx],tar.imag[movIdx],c='red',marker='x',label='target',s=80)
-        #ax.scatter(self.calibModel.centers.real[idx], vis.calibModel.centers.imag[idx])
+        ax.scatter(targetsRun25.real[movIdx],targetsRun25.imag[movIdx],c='red',marker='x',label='target',s=80)
 
-        #ax.legend()
-        self.visSetCobra(self.goodIdx[movIdx], scale=1.0)
+        engine = create_engine(
+            "postgresql+psycopg2://pfs@db-ics:5432/opdb"
+        )
+
+        cobraMatch = pd.read_sql(
+            text("""
+                SELECT *
+                FROM public.cobra_match
+                WHERE pfs_visit_id = :visit
+                AND cobra_id = :cobra_id
+            """),
+            engine,
+            params={"visit": pfsVisit, "cobra_id": cobraIdx + 1}
+        )
+
+        engine.dispose()
+
+        xx = cobraMatch['pfi_center_x_mm'].values
+        yy = cobraMatch['pfi_center_y_mm'].values
+        for ii in range(len(xx)):
+            if xx[ii]==0 and yy[ii]==0:
+                xx[ii] = xx[ii-1]
+                yy[ii] = yy[ii-1]   
+            ax.scatter(xx[ii], yy[ii], marker='+', alpha=0.5,label=f'{ii+1}')
+            ax.text(xx[ii], yy[ii],f'{ii}')
+
+
+        b = Butler()
+        dots = b.get("black_dots", moduleName="ALL", version="")
+
+        for dotidx in range(len(dots)):
+            e = plt.Circle((dots['x'].values[dotidx], dots['y'].values[dotidx]), dots['r'].values[dotidx], 
+                        color='grey', fill=True, alpha=0.5)
+            ax.add_artist(e)
+
+        self.visSetCobra(targetIdx[movIdx], scale=2.2)
 
 
 
@@ -2199,6 +2332,7 @@ class VisDianosticPlot(object):
         
         ax = plt.gca()
 
+        
         if dotDF is None:
             dotFile = '/software/devel/pfs/pfs_instdata/data/pfi/dot/black_dots_mm.csv'
             newDot = pd.read_csv(dotFile)
@@ -2330,6 +2464,86 @@ class VisDianosticPlot(object):
 
         im = ax.imshow(data, interpolation='nearest', 
                     cmap='gray', vmin=m-s, vmax=m+3*s, origin='lower')
+
+
+    def visCobrasStep(self, cobraIdx=0):
+        idx = cobraIdx
+
+        phi_slowFWmm = np.rad2deg(self.calibModel.angularSteps[idx]/self.calibModel.S2Pm[idx])
+        phi_slowRVmm = np.rad2deg(self.calibModel.angularSteps[idx]/self.calibModel.S2Nm[idx])
+        phi_fastFWmm = np.rad2deg(self.calibModel.angularSteps[idx]/self.calibModel.F2Pm[idx])
+        phi_fastRVmm = np.rad2deg(self.calibModel.angularSteps[idx]/self.calibModel.F2Nm[idx])
+        theta_slowFWmm = np.rad2deg(self.calibModel.angularSteps[idx]/self.calibModel.S1Pm[idx])
+        theta_slowRVmm = np.rad2deg(self.calibModel.angularSteps[idx]/self.calibModel.S1Nm[idx])
+        theta_fastFWmm = np.rad2deg(self.calibModel.angularSteps[idx]/self.calibModel.F1Pm[idx])
+        theta_fastRVmm = np.rad2deg(self.calibModel.angularSteps[idx]/self.calibModel.F1Nm[idx])
+        
+        fig, axes = plt.subplots(
+            nrows=2,
+            ncols=2,
+            figsize=(10, 6),
+            sharey='row',
+            sharex='col'
+
+        )
+
+        ax1 = axes[0, 0]
+        ax2 = axes[0, 1]
+        ax3 = axes[1, 0]
+        ax4 = axes[1, 1]
+
+        x=np.arange(112)*3.6
+        # 左圖
+        ax1.plot(x,theta_fastFWmm,'--',label=f'Fast Fwd')
+        ax1.plot(x,-theta_fastRVmm,'--',label=f'Fast Rev')
+        ax1.plot(x,theta_slowFWmm,label=f'Slow Fwd')
+        ax1.plot(x,-theta_slowRVmm,label=f'Slow Rev')
+        ax1.set_title('Theta')
+        #ax1.set_xlabel('Degree')
+        ax1.set_ylabel('Speed')
+        ax1.legend()
+
+        # 右圖
+        ax2.plot(x,phi_fastFWmm,'--',label=f'Fast Fwd')
+        ax2.plot(x,-phi_fastRVmm,'--',label=f'Fast Rev')
+        ax2.plot(x,phi_slowFWmm,label=f'Slow Fwd')
+        ax2.plot(x,-phi_slowRVmm,label=f'Slow Rev')
+        ax2.set_title('Phi')
+        #ax2.set_xlabel('Degree')
+        ax2.set_xlim([0,200])
+
+
+
+        zeros = np.zeros((2394, 1))
+        posThtSlowSteps = np.hstack((zeros, np.cumsum(self.calibModel.S1Pm, axis=1)))
+        negThtSlowSteps = np.hstack((zeros, np.cumsum(self.calibModel.S1Nm, axis=1)))
+        posPhiSlowSteps = np.hstack((zeros, np.cumsum(self.calibModel.S2Pm, axis=1)))
+        negPhiSlowSteps = np.hstack((zeros, np.cumsum(self.calibModel.S2Nm, axis=1)))
+        posThtSteps = np.hstack((zeros, np.cumsum(self.calibModel.F1Pm, axis=1)))
+        negThtSteps = np.hstack((zeros, np.cumsum(self.calibModel.F1Nm, axis=1)))
+        posPhiSteps = np.hstack((zeros, np.cumsum(self.calibModel.F2Pm, axis=1)))
+        negPhiSteps = np.hstack((zeros, np.cumsum(self.calibModel.F2Nm, axis=1)))    
+
+        x=np.arange(113)*3.6
+        # 左圖
+        ax3.plot(x,posThtSteps[cobraIdx],'--',label=f'Fast Fwd')
+        ax3.plot(x,-negThtSteps[cobraIdx],'--',label=f'Fast Rev')
+        ax3.plot(x,posThtSlowSteps[cobraIdx],label=f'Slow Fwd')
+        ax3.plot(x,-negThtSlowSteps[cobraIdx],label=f'Slow Rev')
+        ax3.set_xlabel('Degree')
+        ax3.set_ylabel('Steps')
+        ax3.set_ylim([-5000,5000])
+        # 右圖
+        ax4.plot(x,posPhiSteps[cobraIdx],'--',label=f'Fast Fwd')
+        ax4.plot(x,-negPhiSteps[cobraIdx],'--',label=f'Fast Rev')
+        ax4.plot(x,posPhiSlowSteps[cobraIdx],label=f'Slow Fwd')
+        ax4.plot(x,-negPhiSlowSteps[cobraIdx],label=f'Slow Rev')
+        ax4.set_xlabel('Degree')
+        ax4.set_xlim([0,200])
+
+
+        plt.tight_layout()
+        plt.show()
 
 
     def visCobraMotorMap(self, stepsize=50, figPath=None, arm=None, pdffile=None, debug=False):
