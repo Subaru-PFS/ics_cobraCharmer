@@ -103,6 +103,11 @@ class CobraCoach():
         self.frameNum = None
         self.expTime = None
 
+        butlerResource = butler.Butler()
+
+        self.fiducialsModel = butlerResource.get('fiducials')
+        self.blackdotModel = butlerResource.get('blackdots')
+
     def loadModel(self, file=None, version='ALL', moduleVersion=None, camSplit=28):
         if file is not None:
             self.calibModel = pfiDesign.PFIDesign(file)
