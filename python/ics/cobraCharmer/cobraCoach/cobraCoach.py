@@ -505,7 +505,10 @@ class CobraCoach():
             
             #idx = self.visibleIdx
             # Here we start to process the centroid.  Converting them from pixel to mm
-            fids = butler.Butler().get('fiducials')
+            #fids = butler.Butler().get('fiducials')
+            
+            fids = self.fiducialsModel
+            
             db = opdb.OpDB()
             mcsData = db.query_dataframe('select * from mcs_data where '
                                          f'mcs_frame_id = {frameNum} and spot_id > 0').sort_values(by=['spot_id'])
