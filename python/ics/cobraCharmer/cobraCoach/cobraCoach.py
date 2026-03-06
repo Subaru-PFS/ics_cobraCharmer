@@ -106,7 +106,7 @@ class CobraCoach():
         butlerResource = butler.Butler()
 
         self.fiducialsModel = butlerResource.get('fiducials')
-        self.blackdotModel = butlerResource.get('blackdots')
+        self.blackdotModel = butlerResource.get('black_dots')
 
     def loadModel(self, file=None, version='ALL', moduleVersion=None, camSplit=28):
         if file is not None:
