@@ -941,7 +941,7 @@ class PFI(object):
         ang = self.calibModel.tht0[cIdx] + thetaAngles
         return self.calibModel.centers[cIdx] + self.calibModel.L1[cIdx] * np.exp(1j * ang)
 
-    def positionsToAngles(self, cobras, positions):
+    def positionsToAngles(self, cobras, positions, priorThetas=None):
         """Convert the fiber positions to theta, phi angles from CCW limit.
 
         Parameters
@@ -949,6 +949,11 @@ class PFI(object):
         cobras: a list of cobras
         positions: numpy array
             A complex numpy array with the fiber positions.
+        priorThetas: numpy array, optional
+            Prior theta estimates indexed by cobra index (same indexing as calibModel).
+            When provided, the returned theta angles are unwrapped using the prior to
+            resolve the 0/2π boundary ambiguity: a cobra at 370° is indistinguishable
+            from one at 10° in the image, but the prior picks the correct branch.
 
         Returns
         -------
@@ -1048,6 +1053,11 @@ class PFI(object):
                 # check if tht is within two theta hard stops
                 if tht[i][1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
                     flags[i][1] |= self.IN_OVERLAPPING_REGION
+
+        if priorThetas is not None:
+            prior = priorThetas[cIdx]  # align prior to cobra ordering
+            tht += 2 * np.pi * np.round((prior[:, None] - tht) / (2 * np.pi))
+
         return (tht, phi, flags)
 
     def moveXY(self, cobras, startPositions, targetPositions, overlappingCW=False,

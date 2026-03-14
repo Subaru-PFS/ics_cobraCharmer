@@ -574,8 +574,8 @@ class CobraCoach():
 
         pos = np.zeros(self.nCobras, 'complex')
         pos[self.visibleIdx] = self.exposeAndExtractPositions()
-        thetas, phis, flags = self.pfi.positionsToAngles(self.allCobras, pos)
-
+        thetas, phis, flags = self.pfi.positionsToAngles(self.allCobras, pos,
+                                                         priorThetas=self.cobraInfo['thetaAngle'])
         self.cobraInfo['position'] = pos
         self.cobraInfo['thetaAngle'] = thetas[:, 0]
         self.cobraInfo['phiAngle'] = phis[:, 0]
@@ -735,8 +735,9 @@ class CobraCoach():
             pos[self.visibleIdx] = self.exposeAndExtractPositions(dbMatch=True)[self.visibleIdx]
 
             #np.save('/tmp/cobraCharmer_pos',pos)
-        # update status
-        thetas, phis, flags = self.pfi.positionsToAngles(self.allCobras, pos)
+        # update status — pass prior angles to resolve the 0/2π ambiguity near tht1
+        thetas, phis, flags = self.pfi.positionsToAngles(self.allCobras, pos,
+                                                         priorThetas=self.cobraInfo['thetaAngle'])
         for c_i in range(len(cobras)):
             cId = cIds[c_i]
             if nSegments == 0:
