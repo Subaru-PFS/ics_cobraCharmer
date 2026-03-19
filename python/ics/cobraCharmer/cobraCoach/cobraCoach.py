@@ -574,7 +574,8 @@ class CobraCoach():
 
         pos = np.zeros(self.nCobras, 'complex')
         pos[self.visibleIdx] = self.exposeAndExtractPositions()
-        thetas, phis, flags = self.pfi.positionsToAngles(self.allCobras, pos)
+        thetas, phis, flags = self.pfi.positionsToAngles(self.allCobras, pos,
+                                                         priorThetas=self.cobraInfo['thetaAngle'])
 
         self.cobraInfo['position'] = pos
         self.cobraInfo['thetaAngle'] = thetas[:, 0]
