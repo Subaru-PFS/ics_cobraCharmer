@@ -736,7 +736,8 @@ class CobraCoach():
 
             #np.save('/tmp/cobraCharmer_pos',pos)
         # update status
-        thetas, phis, flags = self.pfi.positionsToAngles(self.allCobras, pos)
+        thetas, phis, flags = self.pfi.positionsToAngles(self.allCobras, pos,
+                                                         priorThetas=self.cobraInfo['thetaAngle'])
         for c_i in range(len(cobras)):
             cId = cIds[c_i]
             if nSegments == 0:
