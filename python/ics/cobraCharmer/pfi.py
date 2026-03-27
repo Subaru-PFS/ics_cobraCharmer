@@ -32,7 +32,7 @@ class PFI(object):
     thetaParameter = 0.09
     phiParameter = 0.07
 
-    def __init__(self, fpgaHost='localhost', logDir=None, doConnect=True, doLoadModel=False, debug=False):
+    def __init__(self, fpgaHost='localhost', logDir=None, doConnect=False, doLoadModel=False, debug=False):
         """ Initialize a PFI class
         Args:
            fpgaHost    - fpga device
@@ -691,7 +691,7 @@ class PFI(object):
                         ontime1 = self.calibModel.motorOntimeSlowRev1[cobraId]
             else:
                 ontime1 = thetaOntimes[c_i]
-            ontime1 = self.adjustThetaOnTime(cobraId, ontime1, fast=_thetaFast[c_i], direction=dirs1[0])
+            # ontime1 = self.adjustThetaOnTime(cobraId, ontime1, fast=_thetaFast[c_i], direction=dirs1[0])
 
             if phiOntimes is None:
                 if _phiFast[c_i]:
@@ -706,7 +706,7 @@ class PFI(object):
                         ontime2 = self.calibModel.motorOntimeSlowRev2[cobraId]
             else:
                 ontime2 = phiOntimes[c_i]
-            ontime2 = self.adjustPhiOnTime(cobraId, ontime2, fast=_phiFast[c_i], direction=dirs1[1])
+            # ontime2 = self.adjustPhiOnTime(cobraId, ontime2, fast=_phiFast[c_i], direction=dirs1[1])
 
             offtime1 = 0
             offtime2 = 0
@@ -728,14 +728,15 @@ class PFI(object):
                     offtime2 = waitPhiSteps[c_i]
 
             #self.logger.info(f'{c_i} {cobraId} {ontime1} {ontime2}')
-            c.p = func.RunParams(pu=(int(1000*ontime1), int(1000*ontime2)),
-                                 st=(steps1),
-                                 sl=(int(offtime1), int(offtime2)),
-                                 en=en,
-                                 dir=dirs1)
+            # c.p = func.RunParams(pu=(int(1000*ontime1), int(1000*ontime2)),
+            #                      st=(steps1),
+            #                      sl=(int(offtime1), int(offtime2)),
+            #                      en=en,
+            #                      dir=dirs1)
         # temperarily fix for interval and timeout
         if not trajectoryMode:
-            err = func.RUN(cobras, inter=int(interval*1000/16), timeout=65535)
+            # err = func.RUN(cobras, inter=int(interval*1000/16), timeout=65535)
+            err = False
             if err:
                 self.logger.error(f'send RUN command failed')
             else:

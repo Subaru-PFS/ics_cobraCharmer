@@ -8,7 +8,8 @@ import yaml
 
 logger = logging.getLogger('butler')
 
-dataRoot = pathlib.Path("/data/MCS")
+dataRoot = pathlib.Path("/tmp/MCS")
+os.makedirs(dataRoot, exist_ok=True)
 
 
 class RunTree(object):
@@ -70,6 +71,7 @@ class RunTree(object):
     @property
     def outputDir(self):
         return self.runDir / 'output'
+
     xmlDir = outputDir
 
     @property
@@ -149,6 +151,7 @@ def configPathForPfi(version=None, rootDir=None):
 
     return rootDir / fname
 
+
 def configPathForDot(version=None, rootDir=None):
     """ Return the pathname for a dot config file.
 
@@ -174,6 +177,7 @@ def configPathForDot(version=None, rootDir=None):
 
     return rootDir / fname
 
+
 def configPathForFFDot(version=None, rootDir=None):
     """ Return the pathname for a FF locatiopn file when dot is measured.
 
@@ -195,8 +199,9 @@ def configPathForFFDot(version=None, rootDir=None):
     if version is None:
         fname = 'ff_subaru_20210710_el90_rot+00_ave.csv'
 
-
     return rootDir / fname
+
+
 def configPathForModule(module, version=None, rootDir=None):
     """ Return the pathname for a module config file.
 
