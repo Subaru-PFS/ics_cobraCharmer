@@ -364,7 +364,7 @@ class CobraCoach():
         # Remove 'SC' from 'Module #' and 'PID' from 'Cobra ID'
         df["Module #"] = df["Module #"].str.replace("SC", "", regex=False)
         df["Cobra ID"] = df["Cobra ID"].str.replace("PID", "", regex=False)
-        df = df[df["comments"] != "no cllision"]
+        df = df[df["comments"] != "no collision"]
 
         # Convert 'Module #' and 'Cobra ID' to integers
         df["Module #"] = df["Module #"].astype(int)
