@@ -309,7 +309,8 @@ def phiConvergenceTest(cIds, margin=15.0, runs=50, tries=8, fast=False, toleranc
 def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
                  tolerance=0.1, tries=6, homed=False,
                  newDir=True, thetaFast=False, phiFast=False,
-                 threshold=10.0, thetaMargin=np.deg2rad(15.0)):
+                 threshold=10.0, thetaMargin=np.deg2rad(15.0),
+                 phiRamp=None, thetaRamp=None):
     """
     move cobras to the target angles
 
@@ -327,14 +328,21 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     phiFast: using fast if true else slow phi motor maps
     threshold: using slow motor maps if the distance to the target is below this value
     thetaMargin : the minimum theta angles to the theta hard stops
+    phiRamp : ndarray (tries, len(cIds)), optional
+        Per-iteration cumulative phi offset from phis.  Zero for science cobras,
+        non-zero for dot cobras.  At iteration j:
+            targetPhi[cIds] = phis + phiRamp[j]
+        Dot cobras (TO_DOT_MASK = phiRamp.any(axis=0)) are kept in the loop
+        until they disappear from MCS (position == 0, hidden under dot); science
+        cobras use the normal distance-based done check.
+        If None, defaults to zeros (no ramp, pure science convergence).
 
     Returns
     ----
-    A tuple with three elements:
-    - dataPath
-    - errors for theta angles
-    - errors for phi angles
-    - a numpy array for the moving history
+    A tuple of (dataPath, atThetas, atPhis, moves).
+
+    When phiRamp is provided, dot cobras run for all tries iterations regardless
+    of convergence.  Any post-loop blind moves are the caller's responsibility.
     """
     if cc.getMode() != 'normal':
         raise RuntimeError('Switch to normal mode first!!!')
@@ -375,6 +383,11 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     notDoneMask[cIds] = True
     farAwayMask[cIds] = True
 
+    if phiRamp is None:
+        phiRamp = np.zeros((tries, len(thetas)))
+    if thetaRamp is None:
+        thetaRamp = np.zeros((tries, len(thetas)))
+
     if relative:
         targetThetas[cIds] = thetas + cc.thetaInfo[cIds]['angle']
         targetPhis[cIds] = phis + cc.phiInfo[cIds]['angle']
@@ -388,7 +401,13 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     else:
         targetThetas[cIds] = thetas
         targetPhis[cIds] = phis
-    targets = cc.pfi.anglesToPositions(cc.allCobras, targetThetas, targetPhis)
+
+    # Save converted base targets; ramps are offsets from here (local-angle space).
+    baseThetas = targetThetas.copy()
+    basePhis   = targetPhis.copy()
+
+    TO_DOT_MASK = np.zeros(cc.nCobras, bool)
+    TO_DOT_MASK[cIds] = phiRamp.any(axis=0) | thetaRamp.any(axis=0)
 
     cc.camResetStack(f'Stack.fits')
     logger.info(f'Move theta arms to angle={np.round(np.rad2deg(targetThetas[cIds]),2)} degree')
@@ -402,6 +421,10 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
         cc.moveToHome(cobras, thetaEnable=True, phiEnable=True, thetaCCW=False)
 
     for j in range(tries):
+        targetThetas[cIds] = baseThetas[cIds] + thetaRamp[j]
+        targetPhis[cIds]   = basePhis[cIds]   + phiRamp[j]
+        targets = cc.pfi.anglesToPositions(cc.allCobras, targetThetas, targetPhis)
+
         cobras = cc.allCobras[notDoneMask]
         _thetaFast = farAwayMask[notDoneMask] & thetaFast[notDoneMask]
         _phiFast = farAwayMask[notDoneMask] & phiFast[notDoneMask]
@@ -414,7 +437,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
 
         atPositions = cc.cobraInfo['position']
         distances = np.abs(atPositions - targets)
-        nowDone[distances < tolerance] = True
+        nowDone[~TO_DOT_MASK & (distances < tolerance)] = True
         newlyDone = nowDone & notDoneMask
         farAwayMask = (distances > threshold) & farAwayMask
 
