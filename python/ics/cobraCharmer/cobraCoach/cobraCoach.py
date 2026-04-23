@@ -350,7 +350,7 @@ class CobraCoach():
 
         return cIds
 
-    def checkFiducialInterference(self, thetas, phis, unassignedCobrasIndexies=None):
+    def checkFiducialInterference(self, thetas, phis, unassignedCobraIndexies=None):
         """Check if the targets interfere with the fiducial fiber.
         
         Returns:
@@ -443,8 +443,8 @@ class CobraCoach():
             else:
                 print("No fiducial interference detected for the given theta and phi angles")
         
-        if unassignedCobrasIndexies is not None:
-            unassigned_set = set(np.asarray(unassignedCobrasIndexies).tolist())
+        if unassignedCobraIndexies is not None:
+            unassigned_set = set(np.asarray(unassignedCobraIndexies).tolist())
             filtered_indices = []
             for idx in interfering_cobra_indices:
                 if idx not in unassigned_set:
