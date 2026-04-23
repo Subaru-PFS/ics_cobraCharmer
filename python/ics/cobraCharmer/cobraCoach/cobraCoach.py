@@ -350,14 +350,13 @@ class CobraCoach():
 
         return cIds
 
-    def checkFiducialInterference(self, thetas, phis):
+    def checkFiducialInterference(self, thetas, phis, unassignedCobrasIndexies=None):
         """Check if the targets interfere with the fiducial fiber.
         
         Returns:
             list: Indices of cobra arms that have interference/collision
         """
-        #file = 'cobraInterferenceROM_20250627.csv'
-        #df = pd.read_csv(file)
+
         butlerResource = butler.Butler()
         df = pd.read_csv(butlerResource.getPath("cobraInterferenced"))
 
@@ -444,6 +443,15 @@ class CobraCoach():
             else:
                 print("No fiducial interference detected for the given theta and phi angles")
         
+        if unassignedCobrasIndexies is not None:
+            unassigned_set = set(np.asarray(unassignedCobrasIndexies).tolist())
+            filtered_indices = []
+            for idx in interfering_cobra_indices:
+                if idx not in unassigned_set:
+                    filtered_indices.append(idx)
+            interfering_cobra_indices = filtered_indices
+
+
         return interfering_cobra_indices
 
     def exposeAndExtractPositions(self, name=None, guess=None, tolerance=None, 
