@@ -55,8 +55,8 @@ class CobraCoach():
                                formats=['c8', 'f4', 'f4', 'f4']))
     phiDtype = np.dtype(dict(names=['center', 'ccwHome', 'cwHome', 'angle'],
                              formats=['c8', 'f4', 'f4', 'f4']))
-    cobraDtype = np.dtype(dict(names=['position', 'thetaAngle', 'phiAngle'],
-                               formats=['c8', 'f4', 'f4']))
+    cobraDtype = np.dtype(dict(names=['position', 'thetaAngle', 'phiAngle', 'detected'],
+                               formats=['c8', 'f4', 'f4', '?']))
     moveDtype = np.dtype(dict(names=['thetaSteps', 'movedTheta', 'expectedTheta', 'thetaOntime', 'thetaFast',
                                      'phiSteps', 'movedPhi', 'expectedPhi', 'phiOntime', 'phiFast'],
                               formats=['i4', 'f4', 'f4', 'f4', '?', 'i4', 'f4', 'f4', 'f4', '?']))
@@ -484,6 +484,9 @@ class CobraCoach():
         self.frameNum = frameNum
         self.logger.info(f'Exposure done and frameNum = {self.frameNum}')
 
+        # default: assume every cobra is detected; dbMatch path will override
+        # any cobra whose spot_id == -1.
+        self.cobraInfo['detected'] = True
 
         if dbMatch is True:
             '''
@@ -494,7 +497,12 @@ class CobraCoach():
                                        f'mcs_frame_id = {frameNum}').sort_values(by=['cobra_id']).reset_index()
 
             positions = match['pfi_center_x_mm'].values+match['pfi_center_y_mm'].values*(1j)
-            
+            # spot_id == -1 ⇒ MCS did not match a real spot to this cobra; the
+            # pfi_center_* columns then default to the dot center.  Surface this
+            # so callers (e.g. engineer.moveThetaPhi) can stop commanding hidden
+            # cobras instead of acting on the dot-center fallback.
+            self.cobraInfo['detected'] = (match['spot_id'].values != -1)
+
             self.logger.info(f'Returing result from matching table ncen={len(positions)} ')
             
         else:

@@ -409,6 +409,13 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     TO_DOT_MASK = np.zeros(cc.nCobras, bool)
     TO_DOT_MASK[cIds] = phiRamp.any(axis=0) | thetaRamp.any(axis=0)
 
+    # After half the iterations, freeze any dot cobra whose spot has disappeared
+    # from MCS (cobraInfo['detected']==False).  Beyond that point the position
+    # fallback is the dot center and any reappearance is almost always a
+    # partially-occluded edge centroid — refining further only causes oscillation.
+    # The lock is sticky: once frozen, a cobra stays frozen for the rest of the loop.
+    HIDE_LOCK_ITER = tries // 2
+
     cc.camResetStack(f'Stack.fits')
     logger.info(f'Move theta arms to angle={np.round(np.rad2deg(targetThetas[cIds]),2)} degree')
     logger.info(f'Move phi arms to angle={np.round(np.rad2deg(targetPhis[cIds]),2)} degree')
@@ -438,6 +445,9 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
         atPositions = cc.cobraInfo['position']
         distances = np.abs(atPositions - targets)
         nowDone[~TO_DOT_MASK & (distances < tolerance)] = True
+        if j >= HIDE_LOCK_ITER:
+            # sticky: any dot cobra now seen as not-detected is done forever
+            nowDone |= TO_DOT_MASK & ~cc.cobraInfo['detected']
         newlyDone = nowDone & notDoneMask
         farAwayMask = (distances > threshold) & farAwayMask
 
