@@ -27,8 +27,10 @@ phiModel = SpeedModel(p1=0.07)
 move1Dtype = np.dtype(dict(names=['position', 'angle', 'steps', 'ontime', 'fast'],
                            formats=['c16', 'f4', 'i4', 'f4', '?']))
 moveDtype = np.dtype(dict(names=['position', 'thetaAngle', 'thetaSteps', 'thetaOntime',
-                                 'thetaFast', 'phiAngle', 'phiSteps', 'phiOntime', 'phiFast'],
-                          formats=['c16', 'f4', 'i4', 'f4', '?', 'f4', 'i4', 'f4', '?']))
+                                 'thetaFast', 'phiAngle', 'phiSteps', 'phiOntime', 'phiFast',
+                                 'detected'],
+                          formats=['c16', 'f4', 'i4', 'f4', '?', 'f4', 'i4', 'f4', '?',
+                                   '?']))
 mmDtype = np.dtype(dict(names=['angle', 'ontime', 'speed'], formats=['f4', 'f4', 'f4']))
 
 cc = None
@@ -462,6 +464,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
         moves['phiSteps'][ndIdx,j] = cc.moveInfo['phiSteps'][notDoneMask]
         moves['phiOntime'][ndIdx,j] = cc.moveInfo['phiOntime'][notDoneMask]
         moves['phiFast'][ndIdx,j] = cc.moveInfo['phiFast'][notDoneMask]
+        moves['detected'][ndIdx,j] = cc.cobraInfo['detected'][notDoneMask]
 
         if np.any(newlyDone):
             notDoneMask &= ~newlyDone
