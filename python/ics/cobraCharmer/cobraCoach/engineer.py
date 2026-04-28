@@ -312,7 +312,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
                  tolerance=0.1, tries=6, homed=False,
                  newDir=True, thetaFast=False, phiFast=False,
                  threshold=10.0, thetaMargin=np.deg2rad(15.0),
-                 phiRamp=None, thetaRamp=None):
+                 phiRamp=None, thetaRamp=None, hideLockIter=None):
     """
     move cobras to the target angles
 
@@ -411,12 +411,14 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     TO_DOT_MASK = np.zeros(cc.nCobras, bool)
     TO_DOT_MASK[cIds] = phiRamp.any(axis=0) | thetaRamp.any(axis=0)
 
-    # After half the iterations, freeze any dot cobra whose spot has disappeared
-    # from MCS (cobraInfo['detected']==False).  Beyond that point the position
-    # fallback is the dot center and any reappearance is almost always a
-    # partially-occluded edge centroid — refining further only causes oscillation.
-    # The lock is sticky: once frozen, a cobra stays frozen for the rest of the loop.
-    HIDE_LOCK_ITER = tries // 2
+    # Freeze any dot cobra whose spot has disappeared from MCS
+    # (cobraInfo['detected']==False) once iter >= HIDE_LOCK_ITER.  Beyond
+    # that point the position fallback is the dot center and any
+    # reappearance is almost always a partially-occluded edge centroid
+    # or an IK-driven yo-yo — refining further only causes oscillation.
+    # Sticky: once frozen, a cobra stays frozen for the rest of the loop.
+    # Caller can override via hideLockIter; default is tries // 2.
+    HIDE_LOCK_ITER = hideLockIter if hideLockIter is not None else tries // 2
 
     cc.camResetStack(f'Stack.fits')
     logger.info(f'Move theta arms to angle={np.round(np.rad2deg(targetThetas[cIds]),2)} degree')
