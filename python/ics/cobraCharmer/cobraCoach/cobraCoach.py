@@ -379,8 +379,8 @@ class CobraCoach():
         df = df[cols]
 
         # Convert theta and phi values from radians to degrees
-        thetas_deg = np.rad2deg(thetas)[self.goodIdx]
-        phis_deg = np.rad2deg(phis)[self.goodIdx]
+        thetas_deg = np.rad2deg((thetas+self.calibModel.tht0) % (2 * np.pi))[self.goodIdx]
+        phis_deg = np.rad2deg((phis) % (2 * np.pi))[self.goodIdx]
 
         # Track cobra indices with interference
         interfering_cobra_indices = []
@@ -388,7 +388,7 @@ class CobraCoach():
         
         # Check the number of thetas and phis match the number of good cobras
         self.logger.info(f"Number of thetas: {len(thetas)}, Number of phis: {len(thetas)}, "
-                            "Number of good cobras: {len(self.goodIdx)}")
+                            f"Number of good cobras: {len(self.goodIdx)}")
 
         for i, (theta_deg, phi_deg) in enumerate(zip(thetas_deg, phis_deg)):
             # Get the goodIdx for this theta/phi position
