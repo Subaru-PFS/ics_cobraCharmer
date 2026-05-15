@@ -379,7 +379,7 @@ class CobraCoach():
         df = df[cols]
 
         # Check the number of thetas and phis match the number of good cobras
-        self.logger.info(f"Number of thetas: {len(thetas)}, Number of phis: {len(thetas)}, "
+        self.logger.info(f"Number of thetas: {len(thetas)}, Number of phis: {len(phis)}, "
                             f"Number of good cobras: {len(self.goodIdx)}")
 
         # Convert theta and phi values from radians to degrees
@@ -401,32 +401,28 @@ class CobraCoach():
                 cobra_has_interference = False
                 
                 for _, row in matching_rows.iterrows():
-                    # Check if theta is within the forbidden range
+                    # Determine if theta is within the forbidden range (handle wrap-around)
+                    theta_in_range = False
                     if 'theta limit 1' in df.columns and 'theta limit 2' in df.columns:
                         theta_limit_1 = row['theta limit 1']
                         theta_limit_2 = row['theta limit 2']
 
-                        # Handle wrap-around case
-                        if theta_limit_1 > theta_limit_2:
-                            if theta_deg >= theta_limit_1 or theta_deg <= theta_limit_2:
-                                warning_msg = (f"WARNING: Cobra {cobra_idx} theta angle {theta_deg:.2f}° "
-                                            f"is within interference limits [{theta_limit_1:.2f}°, {theta_limit_2:.2f}°]")
-                                interference_warnings.append(warning_msg)
-                                cobra_has_interference = True
-                        else:
-                            if theta_limit_1 <= theta_deg <= theta_limit_2:
-                                warning_msg = (f"WARNING: Cobra {cobra_idx} theta angle {theta_deg:.2f}° "
-                                            f"is within interference limits [{theta_limit_1:.2f}°, {theta_limit_2:.2f}°]")
-                                interference_warnings.append(warning_msg)
-                                cobra_has_interference = True
+                        if not (pd.isna(theta_limit_1) or pd.isna(theta_limit_2)):
+                            if theta_limit_1 > theta_limit_2:
+                                if theta_deg >= theta_limit_1 or theta_deg <= theta_limit_2:
+                                    theta_in_range = True
+                            else:
+                                if theta_limit_1 <= theta_deg <= theta_limit_2:
+                                    theta_in_range = True
 
-                    # Check if phi exceeds the maximum allowed angle
-                    if 'max phi angle for full theta circular motion' in df.columns:
+                    # Only consider interference when BOTH: theta is in the forbidden range AND phi exceeds the max phi
+                    if 'max phi angle for full theta circular motion' in df.columns and theta_in_range:
                         max_phi_angle = row['max phi angle for full theta circular motion']
 
-                        if phi_deg > max_phi_angle:
-                            warning_msg = (f"WARNING: Cobra {cobra_idx} phi angle {phi_deg:.2f}° "
-                                        f"exceeds the maximum allowed angle {max_phi_angle:.2f}°")
+                        if not pd.isna(max_phi_angle) and phi_deg > max_phi_angle:
+                            warning_msg = (f"WARNING: Cobra {cobra_idx} theta angle {theta_deg:.2f}° "
+                                           f"is within interference limits [{theta_limit_1:.2f}°, {theta_limit_2:.2f}°] "
+                                           f"and phi angle {phi_deg:.2f}° exceeds max {max_phi_angle:.2f}°")
                             interference_warnings.append(warning_msg)
                             cobra_has_interference = True
                 
