@@ -384,7 +384,7 @@ class CobraCoach():
 
         # Convert theta and phi values from radians to degrees
         thetas_deg = np.rad2deg((thetas+self.calibModel.tht0[self.goodIdx]) % (2 * np.pi))
-        phis_deg = np.rad2deg((phis) % (2 * np.pi))
+        phis_deg = np.rad2deg(phis) % np.pi
 
         # Track cobra indices with interference
         interfering_cobra_indices = []
