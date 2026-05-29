@@ -20,16 +20,16 @@ reload(butler)
 class PFIDesign():
     """ Class describing a cobras calibration product, the "motor map"  """
 
-    COBRA_OK_MASK           = 0x0001  # a synthetic summary bit: 1 for good, 0 for bad.
-    COBRA_INVISIBLE_MASK    = 0x0002  # 1 if the fiber is not visible
-    COBRA_BROKEN_THETA_MASK = 0x0004  # 1 if the phi motor do not work
-    COBRA_BROKEN_PHI_MASK   = 0x0008  # 1 if the theta motor does not work
+    COBRA_OK_MASK           = np.uint16(0x0001)  # a synthetic summary bit: 1 for good, 0 for bad.
+    COBRA_INVISIBLE_MASK    = np.uint16(0x0002)  # 1 if the fiber is not visible
+    COBRA_BROKEN_THETA_MASK = np.uint16(0x0004)  # 1 if the phi motor do not work
+    COBRA_BROKEN_PHI_MASK   = np.uint16(0x0008)  # 1 if the theta motor does not work
 
     COBRA_BROKEN_MOTOR_MASK = COBRA_BROKEN_THETA_MASK | COBRA_BROKEN_PHI_MASK
 
-    FIBER_A_BROKEN = 0x0010  # 5th bit is 1 if cable A is broken
-    FIBER_B_BROKEN = 0x0020  # 6th bit is 1 if cable B is broken
-    FIBER_C_BROKEN = 0x0040  # 7th bit is 1 if cable C is broken
+    FIBER_A_BROKEN = np.uint16(0x0010)  # 5th bit is 1 if cable A is broken
+    FIBER_B_BROKEN = np.uint16(0x0020)  # 6th bit is 1 if cable B is broken
+    FIBER_C_BROKEN = np.uint16(0x0040)  # 7th bit is 1 if cable C is broken
 
     FIBER_BROKEN_MASK = FIBER_A_BROKEN | FIBER_B_BROKEN | FIBER_C_BROKEN
 
@@ -478,22 +478,22 @@ class PFIDesign():
         self.status[cobraIdx] = self.COBRA_OK_MASK
         if invisible:
             self.status[cobraIdx] |= self.COBRA_INVISIBLE_MASK
-            self.status[cobraIdx] &= ~self.COBRA_OK_MASK
+            self.status[cobraIdx] &= (~self.COBRA_OK_MASK & 0xFFFF)
         if brokenTheta:
             self.status[cobraIdx] |= self.COBRA_BROKEN_THETA_MASK
-            self.status[cobraIdx] &= ~self.COBRA_OK_MASK
+            self.status[cobraIdx] &= (~self.COBRA_OK_MASK & 0xFFFF)
         if brokenPhi:
             self.status[cobraIdx] |= self.COBRA_BROKEN_PHI_MASK
-            self.status[cobraIdx] &= ~self.COBRA_OK_MASK
+            self.status[cobraIdx] &= (~self.COBRA_OK_MASK & 0xFFFF)
         if brokenFiberA:
             self.status[cobraIdx] |= self.FIBER_A_BROKEN
-            self.status[cobraIdx] &= ~self.COBRA_OK_MASK
+            self.status[cobraIdx] &= (~self.COBRA_OK_MASK & 0xFFFF)
         if brokenFiberB:
             self.status[cobraIdx] |= self.FIBER_B_BROKEN
-            self.status[cobraIdx] &= ~self.COBRA_OK_MASK
+            self.status[cobraIdx] &= (~self.COBRA_OK_MASK & 0xFFFF)
         if brokenFiberC:
             self.status[cobraIdx] |= self.FIBER_C_BROKEN
-            self.status[cobraIdx] &= ~self.COBRA_OK_MASK
+            self.status[cobraIdx] &= (~self.COBRA_OK_MASK & 0xFFFF)
 
         # Arrange for the new value to be persisted.
         header = self.dataContainers[cobraIdx].find("DATA_HEADER")
