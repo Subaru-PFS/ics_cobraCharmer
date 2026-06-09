@@ -403,6 +403,8 @@ class CobraCoach():
                 for _, row in matching_rows.iterrows():
                     # Determine if theta is within the forbidden range (handle wrap-around)
                     theta_in_range = False
+                    end_angle_in_range = False
+                    
                     if 'theta limit 1' in df.columns and 'theta limit 2' in df.columns:
                         theta_limit_1 = row['theta limit 1']
                         theta_limit_2 = row['theta limit 2']
@@ -415,6 +417,19 @@ class CobraCoach():
                                 if theta_limit_1 <= theta_deg <= theta_limit_2:
                                     theta_in_range = True
 
+                            L1 = self.calibModel.L1[cobra_idx]
+                            L2 = self.calibModel.L2[cobra_idx]
+                            ang1 = self.calibModel.tht0[cobra_idx] + np.deg2rad(theta_deg)
+                            ang2 = ang1 + np.deg2rad(phi_deg) + self.calibModel.phiIn[cobra_idx]
+                            endAngle = np.rad2deg(np.angle(L1 * np.exp(1j * ang1) + L2 * np.exp(1j * ang2))) % 360
+
+                            if theta_limit_1 > theta_limit_2:
+                                if endAngle >= theta_limit_1 or endAngle <= theta_limit_2:
+                                    end_angle_in_range = True
+                            else:
+                                if theta_limit_1 <= endAngle <= theta_limit_2:
+                                    end_angle_in_range = True
+
                     # Only consider interference when BOTH: theta is in the forbidden range AND phi exceeds the max phi
                     if 'max phi angle for full theta circular motion' in df.columns and theta_in_range:
                         max_phi_angle = row['max phi angle for full theta circular motion']
@@ -425,7 +440,16 @@ class CobraCoach():
                                            f"and phi angle {phi_deg:.2f}° exceeds max {max_phi_angle:.2f}°")
                             interference_warnings.append(warning_msg)
                             cobra_has_interference = True
-                
+
+                    # Also treat the cobra as interfering if the phi-arm endpoint angle falls in the forbidden range.
+                    if end_angle_in_range:
+                        warning_msg = (f"WARNING: Cobra {cobra_idx} end angle {endAngle:.2f}° "
+                                       f"is within interference limits [{theta_limit_1:.2f}°, {theta_limit_2:.2f}°]")
+                        interference_warnings.append(warning_msg)
+                        cobra_has_interference = True
+                    
+
+
                 # Add to interfering list if this cobra has any interference
                 if cobra_has_interference and cobra_idx not in interfering_cobra_indices:
                     interfering_cobra_indices.append(cobra_idx)
