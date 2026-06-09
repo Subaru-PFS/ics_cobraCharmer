@@ -442,7 +442,7 @@ class CobraCoach():
                             cobra_has_interference = True
 
                     # Also treat the cobra as interfering if the phi-arm endpoint angle falls in the forbidden range.
-                    if end_angle_in_range:
+                    if end_angle_in_range and phi_deg > max_phi_angle:
                         warning_msg = (f"WARNING: Cobra {cobra_idx} end angle {endAngle:.2f}° "
                                        f"is within interference limits [{theta_limit_1:.2f}°, {theta_limit_2:.2f}°]")
                         interference_warnings.append(warning_msg)
