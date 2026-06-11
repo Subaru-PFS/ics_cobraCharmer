@@ -108,6 +108,9 @@ class CobraCoach():
         self.fiducialsModel = butlerResource.get('fiducials')
         self.blackdotModel = butlerResource.get('black_dots')
 
+        self.cobraInterferenceTable = self._loadcobraInterferenceTable()
+
+
     def loadModel(self, file=None, version='ALL', moduleVersion=None, camSplit=28):
         if file is not None:
             self.calibModel = pfiDesign.PFIDesign(file)
@@ -343,6 +346,7 @@ class CobraCoach():
             self.logger.warning(f'Problem when connecting to camera: {e}')
             #self.cam = None
 
+
     def _getIndex(self, cobras):
         cIds = np.zeros(len(cobras), 'int')
         for c_i, c in enumerate(cobras):
@@ -350,12 +354,8 @@ class CobraCoach():
 
         return cIds
 
-    def checkFiducialInterference(self, thetas, phis, unassignedCobraIndexies=None):
-        """Check if the targets interfere with the fiducial fiber.
-        
-        Returns:
-            list: Indices of cobra arms that have interference/collision
-        """
+    def _loadcobraInterferenceTable(self):
+        '''Load the cobra interference table from the database and return a DataFrame with cobra indices.'''
 
         butlerResource = butler.Butler()
         df = pd.read_csv(butlerResource.getPath("cobraInterferenced"))
@@ -377,6 +377,21 @@ class CobraCoach():
         cols = df.columns.tolist()
         cols.insert(2, cols.pop(cols.index("Cobra Index")))
         df = df[cols]
+
+        return df
+
+    def checkFiducialInterference(self, thetas, phis, unassignedCobraIndexies=None):
+        """Check if the targets interfere with the fiducial fiber.
+        
+        Returns:
+            list: Indices of cobra arms that have interference/collision
+        """
+        
+        if self.cobraInterferenceTable is not None:
+            df = self.cobraInterferenceTable
+        else:
+            self.logger.warning("Cobra interference table is not available.")
+            return []
 
         # Check the number of thetas and phis match the number of good cobras
         self.logger.info(f"Number of thetas: {len(thetas)}, Number of phis: {len(phis)}, "
@@ -421,7 +436,7 @@ class CobraCoach():
                             L2 = self.calibModel.L2[cobra_idx]
                             ang1 = self.calibModel.tht0[cobra_idx] + np.deg2rad(theta_deg)
                             ang2 = ang1 + np.deg2rad(phi_deg) + self.calibModel.phiIn[cobra_idx]
-                            endAngle = np.rad2deg(np.angle(L1 * np.exp(1j * ang1) + L2 * np.exp(1j * ang2))) % 360
+                            endAngle = np.rad2deg(np.angle(L1 * np.exp(1j * ang1) + L2 * np.exp(1j * ang2)) - self.calibModel.tht0[cobra_idx]) % 360
 
                             if theta_limit_1 > theta_limit_2:
                                 if endAngle >= theta_limit_1 or endAngle <= theta_limit_2:
@@ -442,12 +457,16 @@ class CobraCoach():
                             cobra_has_interference = True
 
                     # Also treat the cobra as interfering if the phi-arm endpoint angle falls in the forbidden range.
-                    if end_angle_in_range and phi_deg > max_phi_angle:
-                        warning_msg = (f"WARNING: Cobra {cobra_idx} end angle {endAngle:.2f}° "
-                                       f"is within interference limits [{theta_limit_1:.2f}°, {theta_limit_2:.2f}°]")
-                        interference_warnings.append(warning_msg)
-                        cobra_has_interference = True
-                    
+                    if 'max phi angle for full theta circular motion' in df.columns and end_angle_in_range:
+                        max_phi_angle = row['max phi angle for full theta circular motion']
+
+                        if not pd.isna(max_phi_angle) and phi_deg > max_phi_angle:
+                            warning_msg = (f"WARNING: Cobra {cobra_idx} theta angle {theta_deg:.2f}° and phi angle {phi_deg:.2f}° "
+                                            f"end angle {endAngle:.2f}° "
+                                            f"is within interference limits [{theta_limit_1:.2f}°, {theta_limit_2:.2f}°]")
+                            interference_warnings.append(warning_msg)
+                            cobra_has_interference = True
+                        
 
 
                 # Add to interfering list if this cobra has any interference
@@ -473,9 +492,12 @@ class CobraCoach():
             for idx in interfering_cobra_indices:
                 if idx not in unassigned_set:
                     filtered_indices.append(idx)
+                    self.logger.info(f"Cobra {idx} has fiducial interference and is not in unassigned list, adding to interfering cobras.")
             interfering_cobra_indices = filtered_indices
 
-
+        
+        self.logger.info(f"Total number of cobras with fiducial interference: {len(interfering_cobra_indices)}")     
+        self.logger.info(f"Indices of cobras with fiducial interference: {interfering_cobra_indices}")   
         return interfering_cobra_indices
 
     def exposeAndExtractPositions(self, name=None, guess=None, tolerance=None, 
