@@ -2018,7 +2018,7 @@ def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0
         toggleFlag = True
     else:
         toggleFlag = False
-    cc.trajectory = Trajectories(cc.nCobras, timeStep)
+    cc.trajectory = Trajectories(cc.nCobras, cc.calibModel, timeStep)
 
     tolerance = 0.005
     if twoSteps:

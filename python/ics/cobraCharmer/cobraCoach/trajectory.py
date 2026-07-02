@@ -7,12 +7,14 @@ class Trajectories():
     trajectory until target convergence.
     """
 
-    def __init__(self, nCobras, timeStep=10):
+    def __init__(self, nCobras, calibModel, timeStep=10):
         """Constructs a new Trajectories instance.
         Parameters
         ----------
         nCobras: int
             The total number of cobras.
+        calibModel: object
+            The calibration model for the cobras.
         timeStep: integer, optional
             The trajectories time step resolution in steps. Default is 10
             steps.
@@ -24,7 +26,7 @@ class Trajectories():
         # Store the input parameters
         self.nCobras = nCobras
         self.timeStep = timeStep
-
+        self.calibModel = calibModel
         # Initialize the movements list
         self.movements = []
 
@@ -61,7 +63,7 @@ class Trajectories():
         """
         # Create the arrays for the new movement information
         movementSteps = thetaAngles.shape[1]
-        newThetaAngles = np.zeros((self.nCobras, movementSteps))
+        newThetaAngles = np.zeros((self.nCobras, movementSteps))+((self.calibModel.tht1 - self.calibModel.tht0 + np.pi) % (np.pi * 2) + np.pi)[:, np.newaxis]
         newPhiAngles = np.zeros((self.nCobras, movementSteps))
 
         # update positions for moving cobras
