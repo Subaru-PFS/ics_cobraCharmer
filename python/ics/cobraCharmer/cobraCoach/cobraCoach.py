@@ -68,6 +68,7 @@ class CobraCoach():
         self.logger.setLevel(logLevel)
 
         self.runManager = cbutler.RunTree(doCreate=False, rootDir=rootDir)
+        self.calibModel = None
         self.pfi = None
         self.cam = None
         self.fpgaHost = fpgaHost
@@ -102,13 +103,12 @@ class CobraCoach():
 
         self.frameNum = None
         self.expTime = None
+        self.cobraInterferenceTable = None
 
         butlerResource = butler.Butler()
 
         self.fiducialsModel = butlerResource.get('fiducials')
         self.blackdotModel = butlerResource.get('black_dots')
-
-        self.cobraInterferenceTable = self._loadcobraInterferenceTable()
 
 
     def loadModel(self, file=None, version='ALL', moduleVersion=None, camSplit=28):
@@ -134,6 +134,7 @@ class CobraCoach():
         self.phiInfoIsValid = False
 
         self.connect()
+        self.cobraInterferenceTable = self._loadcobraInterferenceTable()
 
     def setScaling(self, enabled=True, thetaScaleFactor=None, phiScaleFactor=None,
                    minThetaSteps=None, minPhiSteps=None, thetaScaling=None, phiScaling=None):
@@ -387,6 +388,12 @@ class CobraCoach():
             list: Indices of cobra arms that have interference/collision
         """
         
+        if self.cobraInterferenceTable is None:
+            if self.calibModel is None:
+                self.logger.warning("Cobra interference table is not available.")
+                return []
+            self.cobraInterferenceTable = self._loadcobraInterferenceTable()
+
         if self.cobraInterferenceTable is not None:
             df = self.cobraInterferenceTable
         else:
