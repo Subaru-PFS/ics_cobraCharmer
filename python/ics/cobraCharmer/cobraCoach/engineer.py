@@ -383,7 +383,8 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     atThetas = np.zeros(cc.nCobras)
     atPhis = np.zeros(cc.nCobras)
     notDoneMask[cIds] = True
-    farAwayMask[cIds] = True
+    # INSTRM-2976: farAwayMask is seeded below from the real start-to-target distance
+    # (after any homing), not all-True — see the seed just before the convergence loop.
 
     if phiRamp is None:
         phiRamp = np.zeros((tries, len(thetas)))
@@ -430,6 +431,28 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
         cobras = cc.allCobras[cIds]
         logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
         cc.moveToHome(cobras, thetaEnable=True, phiEnable=True, thetaCCW=False)
+
+    # INSTRM-2976: seed the far-away mask from the ACTUAL distance of the first
+    # commanded move.  `cobraInfo['position']` is just wherever the arms are now --
+    # freshly homed, or carried over from a previous phase -- so the gate is correct
+    # either way; how they got there does not matter.
+    # Previously farAwayMask was all-True, so iteration 0 always used the fast map
+    # regardless of distance/threshold and the distance gate could only ever clear it
+    # afterwards.  Now the fast map engages only for cobras genuinely starting beyond
+    # `threshold` -- with moveToPfsDesign's 99.9 mm that never happens (in-patrol =
+    # slow-map only); lower the threshold to bring back the fast far-approach phase.
+    #
+    # The iteration-0 target is built here rather than read from `targets`: INSTRM-2845
+    # moved the per-iteration `targets` computation inside the loop below (the dot ramp
+    # shifts the target every iteration), so at this point `targets` is still the zeros
+    # array from its declaration.  Reading it would compare each cobra against the PFI
+    # origin instead of against its target, which is true for 77% of the fleet at a
+    # 99.9 mm threshold -- exactly the behaviour this fix removes.
+    seedThetas, seedPhis = baseThetas.copy(), basePhis.copy()
+    seedThetas[cIds] = baseThetas[cIds] + thetaRamp[0]
+    seedPhis[cIds] = basePhis[cIds] + phiRamp[0]
+    seedTargets = cc.pfi.anglesToPositions(cc.allCobras, seedThetas, seedPhis)
+    farAwayMask[cIds] = np.abs(cc.cobraInfo['position'][cIds] - seedTargets[cIds]) > threshold
 
     for j in range(tries):
         targetThetas[cIds] = baseThetas[cIds] + thetaRamp[j]
