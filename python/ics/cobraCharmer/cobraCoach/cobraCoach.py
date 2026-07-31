@@ -19,6 +19,23 @@ import pfs.utils.coordinates.transform as transformUtils
 from pfs.utils.database import opdb
 
 
+class NullCam:
+    """No-op camera used when no real camera is available (e.g. offline replay)."""
+    filePrefix = ''
+
+    def expose(self, *args, **kwargs):
+        pass
+
+    def startRecord(self, *args, **kwargs):
+        pass
+
+    def stopRecord(self, *args, **kwargs):
+        pass
+
+    def resetStack(self, *args, **kwargs):
+        pass
+
+
 class CobraCoach():
     nCobrasPerModule = 57
     nModules = 42
@@ -71,7 +88,7 @@ class CobraCoach():
         self.runManager = cbutler.RunTree(doCreate=False, rootDir=rootDir)
         self.calibModel = None
         self.pfi = None
-        self.cam = None
+        self.cam = NullCam()
         self.fpgaHost = fpgaHost
 
         
@@ -133,7 +150,7 @@ class CobraCoach():
         self.thetaInfoIsValid = False
         self.phiInfoIsValid = False
 
-        self.connect()
+        self.connect(False)
 
     def setScaling(self, enabled=True, thetaScaleFactor=None, phiScaleFactor=None,
                    minThetaSteps=None, minPhiSteps=None, thetaScaling=None, phiScaling=None):
@@ -701,14 +718,16 @@ class CobraCoach():
             if tSteps == 0:
                 self.moveInfo['thetaOntime'][cId] = 0
             elif nSegments == 0:
-                self.moveInfo['thetaOntime'][cId] = cobras[c_i].p.pulses[0] / 1000
+               # self.moveInfo['thetaOntime'][cId] = cobras[c_i].p.pulses[0] / 1000
+                self.moveInfo['thetaOntime'][cId] = 0.1
             else:
                 tOn = thetaOntimes[:,c_i]
                 self.moveInfo['thetaOntime'][cId] = np.average(tOn[np.nonzero(tOn)])
             if pSteps == 0:
                 self.moveInfo['phiOntime'][cId] = 0
             elif nSegments == 0:
-                self.moveInfo['phiOntime'][cId] = cobras[c_i].p.pulses[1] / 1000
+               #  self.moveInfo['phiOntime'][cId] = cobras[c_i].p.pulses[1] / 1000
+                self.moveInfo['phiOntime'][cId]  = 0.2
             else:
                 pOn = phiOntimes[:,c_i]
                 self.moveInfo['phiOntime'][cId] = np.average(pOn[np.nonzero(pOn)])
