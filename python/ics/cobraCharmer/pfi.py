@@ -15,18 +15,20 @@ from ics.cobraCharmer import cobraState
 reload(pfiDesign)
 reload(func)
 
+from ics.cobraCharmer import targetValidation
+
 
 class PFI(object):
     nCobrasPerModule = 57
     nModules = 42
 
     # bit array for (x,y) to (theta, phi) convertion
-    SOLUTION_OK           = 0x0001  # 1 if the solution is valid
-    IN_OVERLAPPING_REGION = 0x0002  # 1 if the position in overlapping region
-    PHI_NEGATIVE          = 0x0004  # 1 if phi angle is negative(phi CCW limit < 0)
-    PHI_BEYOND_PI         = 0x0008  # 1 if phi angle is beyond PI(phi CW limit > PI)
-    TOO_CLOSE_TO_CENTER   = 0x0010  # 1 if the position is too close to the center
-    TOO_FAR_FROM_CENTER   = 0x0020  # 1 if the position is too far from the center
+    SOLUTION_OK           = targetValidation.SOLUTION_OK  # 1 if the solution is valid
+    IN_OVERLAPPING_REGION = targetValidation.IN_OVERLAPPING_REGION  # 1 if the position in overlapping region
+    PHI_NEGATIVE          = targetValidation.PHI_NEGATIVE  # 1 if phi angle is negative(phi CCW limit < 0)
+    PHI_BEYOND_PI         = targetValidation.PHI_BEYOND_PI  # 1 if phi angle is beyond PI(phi CW limit > PI)
+    TOO_CLOSE_TO_CENTER   = targetValidation.TOO_CLOSE_TO_CENTER  # 1 if the position is too close to the center
+    TOO_FAR_FROM_CENTER   = targetValidation.TOO_FAR_FROM_CENTER  # 1 if the position is too far from the center
 
     # on time vs speed model parameters
     thetaParameter = 0.09
@@ -353,7 +355,7 @@ class PFI(object):
         if thetaFroms is not None:
             _thetaFroms[cIdx] = thetaFroms
         elif not ccwLimit:
-            _thetaFroms = (self.calibModel.tht1 - self.calibModel.tht0 + np.pi) % (2*np.pi) + np.pi
+            _thetaFroms = targetValidation.thetaRange(self.calibModel)
 
         if isinstance(thetaFast, bool):
             _thetaFast = thetaFast
@@ -944,111 +946,13 @@ class PFI(object):
     def positionsToAngles(self, cobras, positions):
         """Convert the fiber positions to theta, phi angles from CCW limit.
 
-        Parameters
-        ----------
-        cobras: a list of cobras
-        positions: numpy array
-            A complex numpy array with the fiber positions.
-
-        Returns
-        -------
-        tuple
-            A python tuples with all the possible angles (theta, phi, flags).
-            Since there are possible 2 phi solutions (since phi CCW<0 and CW>PI)
-            so the dimensions of theta and phi are (len(cobras), 2), the value
-            np.nan indicates there is no solution. flags is a bit map.
-
-            There are several different cases:
-            - No solution: This means the distance from the given position to
-              the center and two arm lengths(theta, phi) can't form a triangle.
-              In this case, either TOO_CLOSE_TO_CENTER or TOO_FAR_FROM_CENTER
-              is set. For TOO_CLOSE_TO_CENTER case, phi is set to 0 and for
-              TOO_FAR_FROM_CENTER case, phi is set to PI, theta is set to
-              the angle from the center to the given position for both cases.
-            - Two phi solutions: This happens because the range of phi arms can
-              be negative and beyond PI. When the measured phi angle is small or
-              close to PI, this case may happen. The second solution is also
-              calculated and returned. The bit PHI_NEGATIVE or PHI_BEYOND_PI is
-              set in this situation. If this solution is within the hard stops,
-              the bit SOLUTION_OK is set.
-            - Theta overlapping region: Since theta arms can move beyond PI*2,
-              so in the overlapping region(between two hard stops) we have two
-              possible theta solutions. The bit IN_OVERLAPPING_REGION is set.
+        Thin wrapper: resolves cobras to indices and defers to the module-level
+        anglesFromPositions, which is the single implementation of this geometry.
         """
         if len(cobras) != len(positions):
             raise RuntimeError("number of positions must match number of cobras")
         cIdx = np.array([self._mapCobraIndex(c) for c in cobras])
-
-        # Calculate the cobras rotation angles applying the law of cosines
-        relativePositions = positions - self.calibModel.centers[cIdx]
-        distance = np.abs(relativePositions)
-        L1 = self.calibModel.L1[cIdx]
-        L2 = self.calibModel.L2[cIdx]
-        distanceSq = distance ** 2
-        L1Sq = L1 ** 2
-        L2Sq = L2 ** 2
-        phiIn = self.calibModel.phiIn[cIdx] + np.pi
-        phiOut = self.calibModel.phiOut[cIdx] + np.pi
-        tht0 = self.calibModel.tht0[cIdx]
-        tht1 = self.calibModel.tht1[cIdx]
-        phi = np.full((len(cobras), 2), np.nan)
-        tht = np.full((len(cobras), 2), np.nan)
-        flags = np.full((len(cobras), 2), 0, dtype='u2')
-
-        for i in range(len(positions)):
-            if L1[i] == 0 or L2[i] == 0:
-                # bad cobras
-                continue
-            if distance[i] > L1[i] + L2[i]:
-                # too far away, return theta= spot angle and phi=PI
-                flags[i][0] |= self.TOO_FAR_FROM_CENTER
-                phi[i][0] = np.pi
-                tht[i][0] = (np.angle(relativePositions[i]) - tht0[i]) % (2 * np.pi)
-                if tht[i][0] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-                    flags[i][0] |= self.IN_OVERLAPPING_REGION
-                continue
-            if distance[i] < np.abs(L1[i] - L2[i]):
-                # too close to center, theta is undetermined, return theta=spot angle and phi=0
-                flags[i][0] |= self.TOO_CLOSE_TO_CENTER
-                phi[i][0] = 0
-                tht[i][0] = (np.angle(relativePositions[i]) - tht0[i]) % (2 * np.pi)
-                if tht[i][0] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-                    flags[i][0] |= self.IN_OVERLAPPING_REGION
-                continue
-
-            ang1 = np.arccos((L1Sq[i] + L2Sq[i] - distanceSq[i]) / (2 * L1[i] * L2[i]))
-            ang2 = np.arccos((L1Sq[i] + distanceSq[i] - L2Sq[i]) / (2 * L1[i] * distance[i]))
-
-            # the regular solutions, phi angle is between 0 and pi, no checking for phi hard stops
-            flags[i][0] |= self.SOLUTION_OK
-            phi[i][0] = ang1 - phiIn[i]
-            tht[i][0] = (np.angle(relativePositions[i]) + ang2 - tht0[i]) % (2 * np.pi)
-            # check if tht is within two theta hard stops
-            if tht[i][0] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-                flags[i][0] |= self.IN_OVERLAPPING_REGION
-
-            # check if there are additional solutions
-            if ang1 <= np.pi/2 and ang1 > 0:
-                if phiIn[i] <= -ang1:
-                    flags[i][1] |= self.SOLUTION_OK
-                flags[i][1] |= self.PHI_NEGATIVE
-                # phiIn < 0
-                phi[i][1] = -ang1 - phiIn[i]
-                tht[i][1] = (np.angle(relativePositions[i]) - ang2 - tht0[i]) % (2 * np.pi)
-                # check if tht is within two theta hard stops
-                if tht[i][1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-                    flags[i][1] |= self.IN_OVERLAPPING_REGION
-            elif ang1 > np.pi/2 and ang1 < np.pi:
-                if phiOut[i] >= 2 * np.pi - ang1:
-                    flags[i][1] |= self.SOLUTION_OK
-                flags[i][1] |= self.PHI_BEYOND_PI
-                # phiOut > np.pi
-                phi[i][1] = 2 * np.pi - ang1 - phiIn[i]
-                tht[i][1] = (np.angle(relativePositions[i]) - ang2 - tht0[i]) % (2 * np.pi)
-                # check if tht is within two theta hard stops
-                if tht[i][1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-                    flags[i][1] |= self.IN_OVERLAPPING_REGION
-        return (tht, phi, flags)
+        return targetValidation.anglesFromPositions(self.calibModel, cIdx, positions)
 
     def moveXY(self, cobras, startPositions, targetPositions, overlappingCW=False,
                thetaThreshold=1e10, phiThreshold=1e10, delta=10.0):

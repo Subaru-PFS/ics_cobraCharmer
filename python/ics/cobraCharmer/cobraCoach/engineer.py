@@ -14,6 +14,7 @@ from ics.cobraCharmer.cobraCoach import calculation
 import astropy.io.fits as pyfits
 
 import time
+from ics.cobraCharmer import targetValidation
 
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
@@ -312,7 +313,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
                  tolerance=0.1, tries=6, homed=False,
                  newDir=True, thetaFast=False, phiFast=False,
                  threshold=10.0, thetaMargin=np.deg2rad(15.0),
-                 phiRamp=None, thetaRamp=None, hideLockIter=None):
+                 phiRamp=None, thetaRamp=None):
     """
     move cobras to the target angles
 
@@ -397,7 +398,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     elif not local:
         targetThetas[cIds] = (thetas - cc.calibModel.tht0[cIds]) % (np.pi*2)
         targetThetas[targetThetas < thetaMargin] += np.pi*2
-        thetaRange = (cc.calibModel.tht1 - cc.calibModel.tht0 + np.pi) % (np.pi*2) + np.pi
+        thetaRange = targetValidation.thetaRange(cc.calibModel)
         tooBig = targetThetas > thetaRange - thetaMargin
         targetThetas[tooBig] = thetaRange[tooBig] - thetaMargin
         targetPhis[cIds] = phis - cc.calibModel.phiIn[cIds] - np.pi
@@ -418,8 +419,8 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     # reappearance is almost always a partially-occluded edge centroid
     # or an IK-driven yo-yo — refining further only causes oscillation.
     # Sticky: once frozen, a cobra stays frozen for the rest of the loop.
-    # Caller can override via hideLockIter; default is tries // 2.
-    HIDE_LOCK_ITER = hideLockIter if hideLockIter is not None else tries // 2
+    # Frozen for the last four iterations of the loop.
+    HIDE_LOCK_ITER = max(0, tries - 4)
 
     cc.camResetStack(f'Stack.fits')
     logger.info(f'Move theta arms to angle={np.round(np.rad2deg(targetThetas[cIds]),2)} degree')
@@ -561,7 +562,7 @@ def convergenceTest(cIds, runs=8,
     targets = np.zeros((runs, len(cIds), 2))
     moves = np.zeros((runs, len(cIds), tries), dtype=moveDtype)
     positions = np.zeros((runs, len(cIds)), dtype=complex)
-    thetaRange = ((cc.calibModel.tht1 - cc.calibModel.tht0 + np.pi) % (np.pi*2) + np.pi)[cIds]
+    thetaRange = targetValidation.thetaRange(cc.calibModel)[cIds]
     phiRange = ((cc.calibModel.phiOut - cc.calibModel.phiIn) % (np.pi*2))[cIds]
 
     for i in range(runs):
@@ -1831,7 +1832,7 @@ def convergenceTestX(cIds, runs=3, thetaMargin=np.deg2rad(15.0), phiMargin=np.de
     targets = np.zeros((runs, len(cIds), 2))
     moves = np.zeros((runs, len(cIds), tries), dtype=moveDtype)
     positions = np.zeros((runs, len(cIds)), dtype=complex)
-    thetaRange = ((cc.calibModel.tht1 - cc.calibModel.tht0 + np.pi) % (np.pi*2) + np.pi)[cIds]
+    thetaRange = targetValidation.thetaRange(cc.calibModel)[cIds]
     phiRange = ((cc.calibModel.phiOut - cc.calibModel.phiIn) % (np.pi*2))[cIds]
 
     for i in range(runs):
@@ -1926,7 +1927,7 @@ def convergenceTest2(cIds, runs=8, thetaMargin=np.deg2rad(15.0), phiMargin=np.de
     targets = np.zeros((runs, len(cIds), 2))
     moves = np.zeros((runs, len(cIds), tries), dtype=moveDtype)
     positions = np.zeros((runs, len(cIds)), dtype=complex)
-    thetaRange = ((cc.calibModel.tht1 - cc.calibModel.tht0 + np.pi) % (np.pi*2) + np.pi)[cIds]
+    thetaRange = targetValidation.thetaRange(cc.calibModel)[cIds]
     phiRange = ((cc.calibModel.phiOut - cc.calibModel.phiIn) % (np.pi*2))[cIds]
     cm = cIds % 57
     cf = cIds % 798
@@ -1995,7 +1996,7 @@ def convergenceTestX2(cIds, runs=3, thetaMargin=np.deg2rad(15.0), phiMargin=np.d
     targets = np.zeros((runs, len(cIds), 2))
     moves = np.zeros((runs, len(cIds), tries), dtype=moveDtype)
     positions = np.zeros((runs, len(cIds)), dtype=complex)
-    thetaRange = ((cc.calibModel.tht1 - cc.calibModel.tht0 + np.pi) % (np.pi*2) + np.pi)[cIds]
+    thetaRange = targetValidation.thetaRange(cc.calibModel)[cIds]
     phiRange = ((cc.calibModel.phiOut - cc.calibModel.phiIn) % (np.pi*2))[cIds]
     ydir = np.angle(cc.calibModel.centers[1] - cc.calibModel.centers[55])
 
@@ -2066,7 +2067,7 @@ def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0
     targets = np.zeros((len(cIds), 2))
     moves = np.zeros((len(cIds), tries), dtype=moveDtype)
     positions = np.zeros(len(cIds), dtype=complex)
-    thetaRange = ((cc.calibModel.tht1 - cc.calibModel.tht0 + np.pi) % (np.pi*2) + np.pi)[cIds]
+    thetaRange = targetValidation.thetaRange(cc.calibModel)[cIds]
     phiRange = ((cc.calibModel.phiOut - cc.calibModel.phiIn) % (np.pi*2))[cIds]
 
     targets[:,0] = thetas

@@ -9,6 +9,7 @@ from ics.cobraCharmer.cobraCoach.speedModel import SpeedModel
 
 from ics.cobraCharmer.cobraCoach.mcs import camera
 from ics.cobraCharmer import pfi as pfiControl
+from ics.cobraCharmer import targetValidation
 import ics.cobraCharmer.pfiDesign as pfiDesign
 from ics.cobraCharmer import func
 from ics.cobraCharmer.utils import butler as cbutler
@@ -16,7 +17,7 @@ from pfs.utils import butler
 import pfs.utils.coordinates.transform as transformUtils
 
 from pfs.utils.database import opdb
-import pandas as pd
+
 
 class CobraCoach():
     nCobrasPerModule = 57
@@ -103,7 +104,6 @@ class CobraCoach():
 
         self.frameNum = None
         self.expTime = None
-        self.cobraInterferenceTable = None
 
         butlerResource = butler.Butler()
 
@@ -134,7 +134,6 @@ class CobraCoach():
         self.phiInfoIsValid = False
 
         self.connect()
-        self.cobraInterferenceTable = self._loadcobraInterferenceTable()
 
     def setScaling(self, enabled=True, thetaScaleFactor=None, phiScaleFactor=None,
                    minThetaSteps=None, minPhiSteps=None, thetaScaling=None, phiScaling=None):
@@ -355,157 +354,34 @@ class CobraCoach():
 
         return cIds
 
-    def _loadcobraInterferenceTable(self):
-        '''Load the cobra interference table from the database and return a DataFrame with cobra indices.'''
-
-        butlerResource = butler.Butler()
-        df = pd.read_csv(butlerResource.getPath("cobraInterferenced"))
-
-        # Remove 'SC' from 'Module #' and 'PID' from 'Cobra ID'
-        df["Module #"] = df["Module #"].str.replace("SC", "", regex=False)
-        df["Cobra ID"] = df["Cobra ID"].str.replace("PID", "", regex=False)
-        df = df[df["comments"] != "no collision"]
-
-        # Convert 'Module #' and 'Cobra ID' to integers
-        df["Module #"] = df["Module #"].astype(int)
-        df["Cobra ID"] = df["Cobra ID"].astype(int)
-        df["Cobra Index"] = df.apply(
-            lambda row: self.calibModel.findCobraByModuleAndPositioner(row["Module #"], row["Cobra ID"]),
-            axis=1
-        )
-
-        # Reorder columns to move 'Cobra Index' to third column
-        cols = df.columns.tolist()
-        cols.insert(2, cols.pop(cols.index("Cobra Index")))
-        df = df[cols]
-
-        return df
-
     def checkFiducialInterference(self, thetas, phis, unassignedCobraIndexies=None):
-        """Check if the targets interfere with the fiducial fiber.
-        
-        Returns:
-            list: Indices of cobra arms that have interference/collision
+        """Cobra indices whose arm would interfere with a fiducial fiber.
+
+        Deprecated shim.  The implementation is targetValidation.fiducialInterference,
+        which works in (nCobras,) throughout; prefer calling it directly.  This
+        signature forces callers to subset to goodIdx and then map the returned
+        indices back, which is what it is kept only to avoid breaking.
+
+        thetas/phis are local angles for self.goodIdx, as before.
         """
-        
-        if self.cobraInterferenceTable is None:
-            if self.calibModel is None:
-                self.logger.warning("Cobra interference table is not available.")
-                return []
-            self.cobraInterferenceTable = self._loadcobraInterferenceTable()
+        fidAvoidance = targetValidation.loadFidAvoidance()
 
-        if self.cobraInterferenceTable is not None:
-            df = self.cobraInterferenceTable
-        else:
-            self.logger.warning("Cobra interference table is not available.")
-            return []
-
-        # Check the number of thetas and phis match the number of good cobras
-        self.logger.info(f"Number of thetas: {len(thetas)}, Number of phis: {len(phis)}, "
-                            f"Number of good cobras: {len(self.goodIdx)}")
-
-        # Convert theta and phi values from radians to degrees
-        thetas_deg = np.rad2deg((thetas+self.calibModel.tht0[self.goodIdx]) % (2 * np.pi))
-        phis_deg = np.rad2deg(phis % np.pi)
-
-        # Track cobra indices with interference
-        interfering_cobra_indices = []
-        interference_warnings = []
-        
-
-        for i, (theta_deg, phi_deg) in enumerate(zip(thetas_deg, phis_deg)):
-            # Get the goodIdx for this theta/phi position
-            cobra_idx = self.goodIdx[i]
-            # Find matching rows in the interference DataFrame for this cobra
-            matching_rows = df[df["Cobra Index"] == cobra_idx]
-
-            if not matching_rows.empty:
-                cobra_has_interference = False
-                
-                for _, row in matching_rows.iterrows():
-                    # Determine if theta is within the forbidden range (handle wrap-around)
-                    theta_in_range = False
-                    end_angle_in_range = False
-                    
-                    if 'theta limit 1' in df.columns and 'theta limit 2' in df.columns:
-                        theta_limit_1 = row['theta limit 1']
-                        theta_limit_2 = row['theta limit 2']
-
-                        if not (pd.isna(theta_limit_1) or pd.isna(theta_limit_2)):
-                            if theta_limit_1 > theta_limit_2:
-                                if theta_deg >= theta_limit_1 or theta_deg <= theta_limit_2:
-                                    theta_in_range = True
-                            else:
-                                if theta_limit_1 <= theta_deg <= theta_limit_2:
-                                    theta_in_range = True
-
-                            L1 = self.calibModel.L1[cobra_idx]
-                            L2 = self.calibModel.L2[cobra_idx]
-                            ang1 = self.calibModel.tht0[cobra_idx] + np.deg2rad(theta_deg)
-                            ang2 = ang1 + np.deg2rad(phi_deg) + self.calibModel.phiIn[cobra_idx]
-                            endAngle = np.rad2deg(np.angle(L1 * np.exp(1j * ang1) + L2 * np.exp(1j * ang2)) - self.calibModel.tht0[cobra_idx]) % 360
-
-                            if theta_limit_1 > theta_limit_2:
-                                if endAngle >= theta_limit_1 or endAngle <= theta_limit_2:
-                                    end_angle_in_range = True
-                            else:
-                                if theta_limit_1 <= endAngle <= theta_limit_2:
-                                    end_angle_in_range = True
-
-                    # Only consider interference when BOTH: theta is in the forbidden range AND phi exceeds the max phi
-                    if 'max phi angle for full theta circular motion' in df.columns and theta_in_range:
-                        max_phi_angle = row['max phi angle for full theta circular motion']
-
-                        if not pd.isna(max_phi_angle) and phi_deg > max_phi_angle:
-                            warning_msg = (f"WARNING: Cobra {cobra_idx} theta angle {theta_deg:.2f}° "
-                                           f"is within interference limits [{theta_limit_1:.2f}°, {theta_limit_2:.2f}°] "
-                                           f"and phi angle {phi_deg:.2f}° exceeds max {max_phi_angle:.2f}°")
-                            interference_warnings.append(warning_msg)
-                            cobra_has_interference = True
-
-                    # Also treat the cobra as interfering if the phi-arm endpoint angle falls in the forbidden range.
-                    if 'max phi angle for full theta circular motion' in df.columns and end_angle_in_range:
-                        max_phi_angle = row['max phi angle for full theta circular motion']
-
-                        if not pd.isna(max_phi_angle) and phi_deg > max_phi_angle:
-                            warning_msg = (f"WARNING: Cobra {cobra_idx} theta angle {theta_deg:.2f}° and phi angle {phi_deg:.2f}° "
-                                            f"end angle {endAngle:.2f}° "
-                                            f"is within interference limits [{theta_limit_1:.2f}°, {theta_limit_2:.2f}°]")
-                            interference_warnings.append(warning_msg)
-                            cobra_has_interference = True
-                        
-
-
-                # Add to interfering list if this cobra has any interference
-                if cobra_has_interference and cobra_idx not in interfering_cobra_indices:
-                    interfering_cobra_indices.append(cobra_idx)
-
-        # Log or raise warnings if interferences are found
-        if interference_warnings:
-            for warning in interference_warnings:
-                if hasattr(self, 'logger'):
-                    self.logger.warning(warning)
-                else:
-                    print(warning)
-        else:
-            if hasattr(self, 'logger'):
-                self.logger.info("No fiducial interference detected for the given theta and phi angles")
-            else:
-                print("No fiducial interference detected for the given theta and phi angles")
-        
+        # Angles are passed straight through: converting them to positions and back
+        # could resolve to the other branch in the overlapping region and change the
+        # verdict.  Unassigned cobras become NaN rather than dummy zeros plus a filter
+        # list, so they drop out natively.
+        allThetas = np.full(self.nCobras, np.nan)
+        allPhis = np.full(self.nCobras, np.nan)
+        allThetas[self.goodIdx] = thetas
+        allPhis[self.goodIdx] = phis
         if unassignedCobraIndexies is not None:
-            unassigned_set = set(np.asarray(unassignedCobraIndexies).tolist())
-            filtered_indices = []
-            for idx in interfering_cobra_indices:
-                if idx not in unassigned_set:
-                    filtered_indices.append(idx)
-                    self.logger.info(f"Cobra {idx} has fiducial interference and is not in unassigned list, adding to interfering cobras.")
-            interfering_cobra_indices = filtered_indices
+            allThetas[np.asarray(unassignedCobraIndexies, dtype=int)] = np.nan
 
-        
-        self.logger.info(f"Total number of cobras with fiducial interference: {len(interfering_cobra_indices)}")     
-        self.logger.info(f"Indices of cobras with fiducial interference: {interfering_cobra_indices}")   
-        return interfering_cobra_indices
+        hit = targetValidation.fiducialInterferenceFromAngles(
+            self.calibModel, allThetas, allPhis, fidAvoidance)
+        idx = np.flatnonzero(hit).tolist()
+        self.logger.info(f"Total number of cobras with fiducial interference: {len(idx)}")
+        return idx
 
     def exposeAndExtractPositions(self, name=None, guess=None, tolerance=None, 
                                   exptime=None, dbMatch = True, writeData = None, doStack=False):
@@ -1255,9 +1131,7 @@ class CobraCoach():
             if noMCS is True:
                 self.logger.info('noMCS flag is passed, set angles instead of exposure.')
                 if thetaEnable:
-                    thetaHome = ((self.calibModel.tht1 - self.calibModel.tht0 + np.pi)
-                                  % (np.pi*2) + np.pi)
-                    thetaHome = thetaHome[cIds]
+                    thetaHome = targetValidation.thetaRange(self.calibModel)[cIds]
                 else:
                     thetaHome = None
                 if phiEnable:

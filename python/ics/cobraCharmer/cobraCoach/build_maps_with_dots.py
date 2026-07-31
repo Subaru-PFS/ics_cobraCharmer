@@ -4,6 +4,7 @@ import pandas as pd
 import logging
 import pandas as pd
 from pfs.utils import butler
+from ics.cobraCharmer import targetValidation
 
 logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelno)s %(name)-10s %(message)s",
                     datefmt="%Y-%m-%dT%H:%M:%S")
@@ -112,7 +113,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     elif not local:
         targetThetas[cIds] = (thetas - cc.calibModel.tht0[cIds]) % (np.pi*2)
         targetThetas[targetThetas < thetaMargin] += np.pi*2
-        thetaRange = (cc.calibModel.tht1 - cc.calibModel.tht0 + np.pi) % (np.pi*2) + np.pi
+        thetaRange = targetValidation.thetaRange(cc.calibModel)
         tooBig = targetThetas > thetaRange - thetaMargin
         targetThetas[tooBig] = thetaRange[tooBig] - thetaMargin
         targetPhis[cIds] = phis - cc.calibModel.phiIn[cIds] - np.pi
@@ -224,7 +225,7 @@ def moveThetaPhi2Steps(cIds, thetas, phis, relative=False, local=True,
     elif not local:
         thetas = (thetas - cc.calibModel.tht0[cIds]) % (np.pi*2)
         thetas[thetas < thetaMargin] += np.pi*2
-        thetaRange = ((cc.calibModel.tht1 - cc.calibModel.tht0 + np.pi) % (np.pi*2) + np.pi)[cIds]
+        thetaRange = targetValidation.thetaRange(cc.calibModel)[cIds]
         tooBig = thetas > thetaRange - thetaMargin
         thetas[tooBig] = thetaRange[tooBig] - thetaMargin
         phis -= cc.calibModel.phiIn[cIds] + np.pi
