@@ -1,4 +1,5 @@
 import numpy as np
+from ics.cobraCharmer import targetValidation
 
 
 class Trajectories():
@@ -63,7 +64,8 @@ class Trajectories():
         """
         # Create the arrays for the new movement information
         movementSteps = thetaAngles.shape[1]
-        newThetaAngles = np.zeros((self.nCobras, movementSteps))+((self.calibModel.tht1 - self.calibModel.tht0 + np.pi) % (np.pi * 2) + np.pi)[:, np.newaxis]
+        newThetaAngles = (np.zeros((self.nCobras, movementSteps))
+                          + targetValidation.thetaRange(self.calibModel)[:, np.newaxis])
         newPhiAngles = np.zeros((self.nCobras, movementSteps))
 
         # update positions for moving cobras
