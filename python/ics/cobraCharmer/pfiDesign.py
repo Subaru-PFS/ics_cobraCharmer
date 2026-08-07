@@ -230,6 +230,8 @@ class PFIDesign():
         self.positionerIds = np.empty(self.nCobras, dtype="u2")
         self.serialIds = np.empty(self.nCobras, dtype="u2")
         self.centers = np.empty(self.nCobras, dtype="complex")
+        self.geoCenters = np.full(self.nCobras, np.nan + np.nan * 1j, dtype="complex")
+        self.hasGeomCenter = np.zeros(self.nCobras, dtype=bool)
         self.status = np.empty(self.nCobras, dtype="u2")
         self.tht0 = np.empty(self.nCobras)
         self.tht1 = np.empty(self.nCobras)
@@ -295,6 +297,19 @@ class PFIDesign():
             kinematics = dataContainers[i].find("KINEMATICS")
             self.centers[i] = float(kinematics.find("Global_base_pos_x").text) + \
                 float(kinematics.find("Global_base_pos_y").text) * 1j
+
+            geomCenterX = kinematics.find("Geometry_center_x")
+            geomCenterY = kinematics.find("Geometry_center_y")
+            if (geomCenterX is not None and geomCenterX.text is not None and
+                    geomCenterY is not None and geomCenterY.text is not None):
+                try:
+                    self.geoCenters[i] = float(geomCenterX.text) + float(geomCenterY.text) * 1j
+                    self.hasGeomCenter[i] = True
+                except ValueError:
+                    raise ValueError(f"Invalid geometry center values for cobra {self.serialIds[i]}: "
+                                     f"Geometry_center_x={geomCenterX.text}, Geometry_center_y={geomCenterY.text}")
+            
+
             self.tht0[i] = np.deg2rad(float(kinematics.find("CCW_Global_base_ori_z").text))
             self.tht1[i] = np.deg2rad(float(kinematics.find("CW_Global_base_ori_z").text))
             self.phiIn[i] = np.deg2rad(float(kinematics.find("Joint2_CCW_limit_angle").text)) - np.pi
