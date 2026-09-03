@@ -384,7 +384,7 @@ class CobraCoach():
         return idx
 
     def exposeAndExtractPositions(self, name=None, guess=None, tolerance=None, 
-                                  exptime=None, dbMatch = True, writeData = None, doStack=False):
+                                  dbMatch = True, writeData = None, doStack=False):
         """ Take an exposure, measure centroids, match to cobras, save info.
 
         Args
@@ -1424,14 +1424,9 @@ class CobraCoach():
         else:
             return None, None
 
-    def roundTripForPhi(self,
-                        steps=250,
-                        totalSteps=5000,
-                        repeat=1,
-                        fast=False,
-                        phiOnTime=None,
-                        limitOnTime=0.08,
-                        limitSteps=5000):
+    def roundTripForPhi(self, steps=250, totalSteps=5000, repeat=1, fast=False,
+                        phiOnTime=None, limitOnTime=0.08, limitSteps=5000):
+        
         """ move all phi arms from CCW to CW hard stops and then back, in steps and return the positions """
         if self.trajectoryMode:
             raise RuntimeError('roundTrip command not available in trajectoryMode mode!')
@@ -1492,8 +1487,7 @@ class CobraCoach():
                 self.pfi.moveAllSteps(self.allCobras[notdoneMask], 0, steps, phiFast=False)
                 # Here we turn-off dbMatch because we need good matching 
                 phiFW[self.visibleIdx, n, k+1] = self.exposeAndExtractPositions(f'phiForward{n}N{k}.fits',
-                                                    guess=phiFW[:, n, k], 
-                                                    tolerance=1.0, dbMatch = True, doStack=False)[self.visibleIdx]
+                                                    guess=phiFW[:, n, k], tolerance=1.0, dbMatch = True, doStack=False)[self.visibleIdx]
 
                 self.cobraInfo['position'][self.visibleIdx] = phiFW[self.visibleIdx, n, k+1]
                 doneMask, lastAngles = self.phiFWDone(phiFW[:,n,:], k)
@@ -1589,17 +1583,22 @@ class CobraCoach():
         self.setCurrentAngles(self.goodCobras, phiAngles=0)
         return dataPath, phiFW, phiRV
 
-    def roundTripForTheta(self,
-            steps=500,
-            totalSteps=10000,
-            repeat=1,
-            fast=False,
-            thetaOnTime=None,
-            limitOnTime=0.08,
-            limitSteps=10000,
-            force=False
-        ):
-        """ move all theta arms from CCW to CW hard stops and then back, in steps and return the positions """
+    def roundTripForTheta(self, steps=500, totalSteps=10000, repeat=1, fast=False, thetaOnTime=None,
+                        limitOnTime=0.08, limitSteps=10000, force=False):
+        
+        """ 
+            move all theta arms from CCW to CW hard stops and then back, in steps and return the positions 
+            steps: number of steps to move in each iteration
+            totalSteps: total number of steps to move from CCW to CW hard stop
+            repeat: number of times to repeat the round trip
+            fast: if True, use fast on-time for the whole round trip, otherwise use slow on-time for the whole round trip
+            thetaOnTime: if not None, use this on-time for the whole round trip, otherwise use the default on-time for the whole round trip
+            limitOnTime: on-time to use for the final move to the hard stop
+            limitSteps: number of steps to move to the hard stop
+            force: if True, ignore the thetaInfoIsValid flag and force the round trip, otherwise, if thetaInfoIsValid is True, 
+                    and some cobras did not reach the hard stop, raise a warning and return the data, otherwise, if thetaInfoIsValid is False, raise a warning and return the data
+            exptime: exposure time for each image
+        """
         if self.trajectoryMode:
             raise RuntimeError('roundTrip command not available in trajectoryMode mode!')
         if self.mode != self.thetaMode:

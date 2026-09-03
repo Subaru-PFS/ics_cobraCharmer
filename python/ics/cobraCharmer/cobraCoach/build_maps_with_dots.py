@@ -355,7 +355,7 @@ def homePhiArms(group=0):
 
 def runThetaMotorMaps(newXml, group=0, steps=500, totalSteps=10000, repeat=1, fast=False, thetaOnTime=None,
                        limitOnTime=0.08, limitSteps=10000, updateGeometry=False, phiRunDir=None,
-                       delta=np.deg2rad(5.0), force=False):
+                       delta=np.deg2rad(5.0), force=False, exptime = 0.8):
     """
     generate theta motor maps, it accepts custom thetaOnTIme parameter.
     all cobras should have been placed in the proper position,
@@ -380,6 +380,7 @@ def runThetaMotorMaps(newXml, group=0, steps=500, totalSteps=10000, repeat=1, fa
     defaultGoodIdx = cc.goodIdx
     cc.goodIdx = np.where(groupIdx)[0]
     cc.goodCobras = cc.allCobras[cc.goodIdx]
+    cc.expTime = exptime
 
     # aquire data for motor maps
     dataPath, posF, posR = cc.roundTripForTheta(steps, totalSteps, repeat, fast,
@@ -513,7 +514,7 @@ def preparePhiMotorMaps(thetaAngle=np.pi/3, tolerance=0.01, tries=12, homed=True
     np.save(dataPath / 'moves', moves)
 
 def runPhiMotorMaps(newXml, steps=250, totalSteps=5000, repeat=1, fast=False, phiOnTime=None,
-                     limitOnTime=0.05, limitSteps=5000, delta=np.deg2rad(5.0)):
+                     limitOnTime=0.05, limitSteps=5000, delta=np.deg2rad(5.0), exptime=0.8):
     """ generate phi motor maps, it accepts custom phiOnTIme parameter.
 
         if phiOnTime is not None, fast parameter is ignored. Otherwise use fast/slow ontime
@@ -526,6 +527,8 @@ def runPhiMotorMaps(newXml, steps=250, totalSteps=5000, repeat=1, fast=False, ph
     lastMode = cc.getMode()
     if lastMode != 'phi':
         cc.setMode('phi')
+
+    cc.expTime = exptime
 
     # aquire data for motor maps
     dataPath, posF, posR = cc.roundTripForPhi(steps, totalSteps, repeat, fast, phiOnTime, limitOnTime, limitSteps)
