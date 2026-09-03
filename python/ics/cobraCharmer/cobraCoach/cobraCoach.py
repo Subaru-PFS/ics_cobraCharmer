@@ -692,6 +692,10 @@ class CobraCoach():
                 pSteps = np.sum(phiSteps[:,c_i])
 
             self.cobraInfo['position'][cId] = pos[cId]
+            # An undetected cobra is reported at its dot centre rather than as a NaN, so
+            # the position is finite and the move it implies is fiction.  Nothing may be
+            # learned from it.
+            measured = self.cobraInfo['detected'][cId]
             self.moveInfo['thetaSteps'][cId] = tSteps
             self.moveInfo['phiSteps'][cId] = pSteps
             self.moveInfo['expectedTheta'][cId] = expectedThetas[c_i]
@@ -735,7 +739,7 @@ class CobraCoach():
                 self.cobraInfo['phiAngle'][cId] = phi
 
                 if self.useScaling and self.mode == self.normalMode:
-                    if self.thetaScaling[cId] and not np.isnan(expectedThetas[c_i]) and not np.isnan(self.moveInfo['movedTheta'][cId]) and abs(tSteps) > self.minThetaStepsForScaling:
+                    if measured and self.thetaScaling[cId] and not np.isnan(expectedThetas[c_i]) and not np.isnan(self.moveInfo['movedTheta'][cId]) and abs(tSteps) > self.minThetaStepsForScaling:
                         direction = 'cw' if expectedThetas[c_i] > 0 else 'ccw'
                         scale = expectedThetas[c_i] / self.moveInfo['movedTheta'][cId]
                         if scale < 0:
@@ -744,7 +748,7 @@ class CobraCoach():
                             scale = (scale - 1) / self.thetaScaleFactor + 1
                             self.pfi.scaleMotorOntime(cobras[c_i], 'theta', direction, scale)
 #                            self.pfi.scaleMotorOntimeBySpeed(cobras[c_i], 'theta', direction, thetaFast[c_i], scale, self.moveInfo['thetaOntime'][cId])
-                    if self.phiScaling[cId] and not np.isnan(expectedPhis[c_i]) and not np.isnan(self.moveInfo['movedPhi'][cId]) and abs(pSteps) > self.minPhiStepsForScaling:
+                    if measured and self.phiScaling[cId] and not np.isnan(expectedPhis[c_i]) and not np.isnan(self.moveInfo['movedPhi'][cId]) and abs(pSteps) > self.minPhiStepsForScaling:
                         direction = 'cw' if expectedPhis[c_i] > 0 else 'ccw'
                         scale = expectedPhis[c_i] / self.moveInfo['movedPhi'][cId]
                         if scale < 0:
@@ -767,7 +771,7 @@ class CobraCoach():
                 self.moveInfo['movedPhi'][cId] = 0
                 self.thetaInfo['angle'][cId] = angle
 
-                if self.useScaling and self.thetaScaling[cId] and not np.isnan(expectedThetas[c_i]) and abs(tSteps) > self.minThetaStepsForScaling:
+                if measured and self.useScaling and self.thetaScaling[cId] and not np.isnan(expectedThetas[c_i]) and abs(tSteps) > self.minThetaStepsForScaling:
                     direction = 'cw' if expectedThetas[c_i] > 0 else 'ccw'
                     scale = expectedThetas[c_i] / self.moveInfo['movedTheta'][cId]
                     if scale < 0:
@@ -784,7 +788,7 @@ class CobraCoach():
                 self.moveInfo['movedPhi'][cId] = angle - self.phiInfo['angle'][cId]
                 self.phiInfo['angle'][cId] = angle
 
-                if self.useScaling and self.phiScaling[cId] and not np.isnan(expectedPhis[c_i]) and abs(pSteps) > self.minPhiStepsForScaling:
+                if measured and self.useScaling and self.phiScaling[cId] and not np.isnan(expectedPhis[c_i]) and abs(pSteps) > self.minPhiStepsForScaling:
                     direction = 'cw' if expectedPhis[c_i] > 0 else 'ccw'
                     scale = expectedPhis[c_i] / self.moveInfo['movedPhi'][cId]
                     if scale < 0:
