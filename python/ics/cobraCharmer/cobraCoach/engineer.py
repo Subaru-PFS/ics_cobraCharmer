@@ -2114,7 +2114,7 @@ def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0
 
 
 '''
-We changed the motormap/geometry sequence.  The position controll prior to the motormap/geometry sequence is
+We changed the motormap/geometry sequence.  The position allowcation prior to the motormap/geometry sequence is
 contoller by sending moveToSafePosition with phiAngle predefined. 
 '''
 def buildThetaMotorMaps(xml, steps=500, group=1, repeat=1, fast=False, homed=True, cmd=None, exptime=0.8):
@@ -2135,7 +2135,7 @@ def buildPhiMotorMaps(xml, steps=250, repeat=1, fast=False, homed=True, exptime=
         logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
         cc.moveToHome(cc.goodCobras, thetaEnable=False, phiEnable=True, thetaCCW=False)
 
-    bmds.runPhiMotorMaps(xml, steps=steps, repeat=repeat, fast=fast)
+    bmds.runPhiMotorMaps(xml, steps=steps, repeat=repeat, fast=fast, exptime=exptime)
 
 
 
