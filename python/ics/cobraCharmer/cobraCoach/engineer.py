@@ -2112,7 +2112,12 @@ def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0
         cc.trajectoryMode = False
     return cc.trajectory, moves
 
-def buildThetaMotorMaps(xml, steps=500, group=1, repeat=1, fast=False, tries=10, homed=True, cmd=None):
+
+'''
+We changed the motormap/geometry sequence.  The position controll prior to the motormap/geometry sequence is
+contoller by sending moveToSafePosition with phiAngle predefined. 
+'''
+def buildThetaMotorMaps(xml, steps=500, group=1, repeat=1, fast=False, homed=True, cmd=None, exptime=0.8):
     bmds.setCobraCoach(cc)
     if homed:
         logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
@@ -2121,10 +2126,10 @@ def buildThetaMotorMaps(xml, steps=500, group=1, repeat=1, fast=False, tries=10,
     logger.info(f'Move theta group = {group}')
     
     bmds.homePhiArms(group=group)
-    bmds.runThetaMotorMaps(xml, group=group, steps=steps, repeat=repeat, fast=fast)
+    bmds.runThetaMotorMaps(xml, group=group, steps=steps, repeat=repeat, fast=fast, exptime=exptime)
 
 
-def buildPhiMotorMaps(xml, steps=250, repeat=1, fast=False, tries=10, homed=True):
+def buildPhiMotorMaps(xml, steps=250, repeat=1, fast=False, homed=True, exptime=0.8):
     bmds.setCobraCoach(cc)
     if homed:
         logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
