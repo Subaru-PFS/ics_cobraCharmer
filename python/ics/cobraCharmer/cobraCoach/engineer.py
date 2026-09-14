@@ -2117,7 +2117,7 @@ def createTrajectory(cIds, thetas, phis, tries=8, twoSteps=False, threshold=20.0
 We changed the motormap/geometry sequence.  The position allowcation prior to the motormap/geometry sequence is
 contoller by sending moveToSafePosition with phiAngle predefined. 
 '''
-def buildThetaMotorMaps(xml, steps=500, group=1, repeat=1, fast=False, homed=True, cmd=None, exptime=0.8):
+def buildThetaMotorMaps(xml, steps=500, group=1, repeat=1, fast=False, homed=True, cmd=None):
     bmds.setCobraCoach(cc)
     if homed:
         logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
@@ -2126,16 +2126,16 @@ def buildThetaMotorMaps(xml, steps=500, group=1, repeat=1, fast=False, homed=Tru
     logger.info(f'Move theta group = {group}')
     
     bmds.homePhiArms(group=group)
-    bmds.runThetaMotorMaps(xml, group=group, steps=steps, repeat=repeat, fast=fast, exptime=exptime)
+    bmds.runThetaMotorMaps(xml, group=group, steps=steps, repeat=repeat, fast=fast)
 
 
-def buildPhiMotorMaps(xml, steps=250, repeat=1, fast=False, homed=True, exptime=0.8):
+def buildPhiMotorMaps(xml, steps=250, repeat=1, fast=False, homed=True):
     bmds.setCobraCoach(cc)
     if homed:
         logger.info(f'Move theta arms CW and phi arms CCW to the hard stops')
         cc.moveToHome(cc.goodCobras, thetaEnable=False, phiEnable=True, thetaCCW=False)
 
-    bmds.runPhiMotorMaps(xml, steps=steps, repeat=repeat, fast=fast, exptime=exptime)
+    bmds.runPhiMotorMaps(xml, steps=steps, repeat=repeat, fast=fast)
 
 
 
