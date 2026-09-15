@@ -18,6 +18,11 @@ import pfs.utils.coordinates.transform as transformUtils
 
 from pfs.utils.database import opdb
 
+DEFAULT_EXPTIME = 0.8
+"""Seconds.  The exposure time an MCS frame is taken at until a caller sets another:
+the camera substitutes the same value for a missing one, so leaving expTime unset used
+to reach it as None and be filled in out of sight."""
+
 
 class CobraCoach():
     nCobrasPerModule = 57
@@ -103,7 +108,7 @@ class CobraCoach():
         self.cmd = cmd
 
         self.frameNum = None
-        self.expTime = None
+        self.expTime = DEFAULT_EXPTIME
 
         butlerResource = butler.Butler()
 
@@ -395,8 +400,6 @@ class CobraCoach():
            Where to center searches. By default uses the cobra center.
         tolerance : `float`
            Additional factor to scale search region by. 1 = cobra radius (phi+theta)
-        exptime : `float`
-           What exposure time to use.
 
         Returns
         -------
@@ -1601,7 +1604,6 @@ class CobraCoach():
             limitSteps: number of steps to move to the hard stop
             force: if True, ignore the thetaInfoIsValid flag and force the round trip, otherwise, if thetaInfoIsValid is True, 
                     and some cobras did not reach the hard stop, raise a warning and return the data, otherwise, if thetaInfoIsValid is False, raise a warning and return the data
-            exptime: exposure time for each image
         """
         if self.trajectoryMode:
             raise RuntimeError('roundTrip command not available in trajectoryMode mode!')
