@@ -425,6 +425,43 @@ class PFIDesign():
 
         return np.where((self.moduleIds == moduleId) & (self.positionerIds == positionerId))[0][0]
 
+    def findCobrasByModuleAndPositioner(self, moduleIds, positionerIds):
+        """ Find the cobras at the given modules and positioners, in one pass.
+
+        Args
+        ----
+        moduleIds : array_like of int
+          The 1..42 numbers of PFI modules
+        positionerIds : array_like of int
+          The 1..57 numbers of module cobras, same shape as moduleIds
+
+        Returns
+        -------
+        ids : ndarray of int
+          The indices into our data for the given cobras, same shape as moduleIds
+
+        Raises
+        ------
+        IndexError
+          If any (moduleId, positionerId) pair is not in this design.
+        """
+        moduleIds = np.asarray(moduleIds, dtype=int)
+        positionerIds = np.asarray(positionerIds, dtype=int)
+
+        lookup = np.full((self.moduleIds.max() + 1, self.positionerIds.max() + 1), -1)
+        lookup[self.moduleIds, self.positionerIds] = np.arange(len(self.moduleIds))
+
+        # Ids outside the table are not in this design; negative ones would wrap around
+        inTable = ((moduleIds >= 0) & (moduleIds < lookup.shape[0])
+                   & (positionerIds >= 0) & (positionerIds < lookup.shape[1]))
+        ids = np.full(moduleIds.shape, -1)
+        ids[inTable] = lookup[moduleIds[inTable], positionerIds[inTable]]
+        missing = ids < 0
+        if missing.any():
+            pairs = list(zip(moduleIds[missing].tolist(), positionerIds[missing].tolist()))
+            raise IndexError(f'no cobra at (module, positioner) {pairs}')
+        return ids
+
     def findCobraBySerialNumber(self, serialNumber):
         """ Find cobra with the given serial number.
 

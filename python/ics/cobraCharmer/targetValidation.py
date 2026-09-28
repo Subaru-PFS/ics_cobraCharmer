@@ -56,92 +56,78 @@ def anglesFromPositions(calibModel, cIdx, positions):
     ----------
     calibModel : PFIDesign
         Cobra calibration model.
-    cIdx : ndarray of int
-        Cobra indices (0-based) the positions correspond to.
+    cIdx : int or ndarray of int
+        Cobra indices (0-based) the positions correspond to, broadcast against
+        positions: a scalar solves many positions for one cobra, and cIdx[:, None]
+        against (n, m) positions solves m positions for each of n cobras.
     positions : ndarray of complex
-        Fiber positions, same length as cIdx.
+        Fiber positions.
 
     Returns
     -------
-    (tht, phi, flags) : each (len(cIdx), 2)
-        Both possible solutions per cobra, with the flag bits below describing each.
+    (tht, phi, flags) : each of shape broadcast(cIdx, positions).shape + (2,)
+        Both possible solutions per position, with the flag bits below describing each.
+        A NaN position is flagged SOLUTION_OK with NaN angles; a cobra with L1 or L2 of
+        zero gets no flag and NaN angles.
     """
+    # Per-cobra arrays keep the shape of cIdx and broadcast in the arithmetic
+    cIdx = np.asarray(cIdx)
+    positions = np.broadcast_to(positions, np.broadcast_shapes(cIdx.shape, np.shape(positions)))
 
     # Calculate the cobras rotation angles applying the law of cosines
     relativePositions = positions - calibModel.centers[cIdx]
     distance = np.abs(relativePositions)
     L1 = calibModel.L1[cIdx]
     L2 = calibModel.L2[cIdx]
-    # Reach comes from the phi hard stops, not |L1-L2|..L1+L2 -- the latter assumes
-    # phi reaches -pi and 0, which no cobra does (1278 cannot fold that far, 134
-    # cannot extend that far).  Using it accepted targets needing a NEGATIVE phi,
-    # i.e. the arm folding past its own stop.
-    _rMin, _rMax = reachAnnulus(calibModel)
-    rMin, rMax = _rMin[cIdx], _rMax[cIdx]
-    distanceSq = distance ** 2
-    L1Sq = L1 ** 2
-    L2Sq = L2 ** 2
+    rMin, rMax = _reachAnnulus(L1, L2, calibModel.phiIn[cIdx], calibModel.phiOut[cIdx])
     phiIn = calibModel.phiIn[cIdx] + np.pi
     phiOut = calibModel.phiOut[cIdx] + np.pi
     tht0 = calibModel.tht0[cIdx]
-    tht1 = calibModel.tht1[cIdx]
-    phi = np.full((len(cIdx), 2), np.nan)
-    tht = np.full((len(cIdx), 2), np.nan)
-    flags = np.full((len(cIdx), 2), 0, dtype='u2')
+    overlapEnd = (calibModel.tht1[cIdx] - tht0) % (2 * np.pi)
+    spotAngle = np.angle(relativePositions)
 
-    for i in range(len(positions)):
-        if L1[i] == 0 or L2[i] == 0:
-            # bad cobras
-            continue
-        if distance[i] > rMax[i]:
-            # too far away, return theta= spot angle and phi=PI
-            flags[i][0] |= TOO_FAR_FROM_CENTER
-            phi[i][0] = np.pi
-            tht[i][0] = (np.angle(relativePositions[i]) - tht0[i]) % (2 * np.pi)
-            if tht[i][0] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-                flags[i][0] |= IN_OVERLAPPING_REGION
-            continue
-        if distance[i] < rMin[i]:
-            # too close to center, theta is undetermined, return theta=spot angle and phi=0
-            flags[i][0] |= TOO_CLOSE_TO_CENTER
-            phi[i][0] = 0
-            tht[i][0] = (np.angle(relativePositions[i]) - tht0[i]) % (2 * np.pi)
-            if tht[i][0] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-                flags[i][0] |= IN_OVERLAPPING_REGION
-            continue
+    # NaN distances fail both reach tests and fall through to the solve
+    good = (L1 != 0) & (L2 != 0)
+    tooFar = good & (distance > rMax)
+    tooClose = good & ~tooFar & (distance < rMin)
+    solved = good & ~tooFar & ~tooClose
 
-        ang1 = np.arccos((L1Sq[i] + L2Sq[i] - distanceSq[i]) / (2 * L1[i] * L2[i]))
-        ang2 = np.arccos((L1Sq[i] + distanceSq[i] - L2Sq[i]) / (2 * L1[i] * distance[i]))
+    with np.errstate(invalid='ignore', divide='ignore'):
+        ang1 = np.arccos((L1 ** 2 + L2 ** 2 - distance ** 2) / (2 * L1 * L2))
+        ang2 = np.arccos((L1 ** 2 + distance ** 2 - L2 ** 2) / (2 * L1 * distance))
 
-        # the regular solutions, phi angle is between 0 and pi, no checking for phi hard stops
-        flags[i][0] |= SOLUTION_OK
-        phi[i][0] = ang1 - phiIn[i]
-        tht[i][0] = (np.angle(relativePositions[i]) + ang2 - tht0[i]) % (2 * np.pi)
-        # check if tht is within two theta hard stops
-        if tht[i][0] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-            flags[i][0] |= IN_OVERLAPPING_REGION
+    # Regular solution, phi between 0 and pi, no checking for phi hard stops.  Out of
+    # reach, theta points at the spot and phi is fully extended (too far) or folded (too
+    # close), where theta is undetermined.
+    thtRegular = np.where(tooFar | tooClose, spotAngle - tht0, spotAngle + ang2 - tht0) % (2 * np.pi)
+    thtRegular = np.where(good, thtRegular, np.nan)
+    phiRegular = np.select([tooFar, tooClose, solved], [np.pi, 0, ang1 - phiIn], np.nan)
 
-        # check if there are additional solutions
-        if np.pi / 2 >= ang1 > 0:
-            if phiIn[i] <= -ang1:
-                flags[i][1] |= SOLUTION_OK
-            flags[i][1] |= PHI_NEGATIVE
-            # phiIn < 0
-            phi[i][1] = -ang1 - phiIn[i]
-            tht[i][1] = (np.angle(relativePositions[i]) - ang2 - tht0[i]) % (2 * np.pi)
-            # check if tht is within two theta hard stops
-            if tht[i][1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-                flags[i][1] |= IN_OVERLAPPING_REGION
-        elif np.pi / 2 < ang1 < np.pi:
-            if phiOut[i] >= 2 * np.pi - ang1:
-                flags[i][1] |= SOLUTION_OK
-            flags[i][1] |= PHI_BEYOND_PI
-            # phiOut > np.pi
-            phi[i][1] = 2 * np.pi - ang1 - phiIn[i]
-            tht[i][1] = (np.angle(relativePositions[i]) - ang2 - tht0[i]) % (2 * np.pi)
-            # check if tht is within two theta hard stops
-            if tht[i][1] <= (tht1[i] - tht0[i]) % (2 * np.pi):
-                flags[i][1] |= IN_OVERLAPPING_REGION
+    # Additional solution, on the other side of the phi arc
+    phiNegative = solved & (ang1 > 0) & (ang1 <= np.pi / 2)
+    phiBeyondPi = solved & (ang1 > np.pi / 2) & (ang1 < np.pi)
+    thtOther = np.where(phiNegative | phiBeyondPi, (spotAngle - ang2 - tht0) % (2 * np.pi), np.nan)
+    phiOther = np.select([phiNegative, phiBeyondPi], [-ang1 - phiIn, 2 * np.pi - ang1 - phiIn], np.nan)
+
+    flagsRegular = np.zeros(positions.shape, dtype='u2')
+    flagsRegular[tooFar] |= TOO_FAR_FROM_CENTER
+    flagsRegular[tooClose] |= TOO_CLOSE_TO_CENTER
+    flagsRegular[solved] |= SOLUTION_OK
+    flagsRegular[thtRegular <= overlapEnd] |= IN_OVERLAPPING_REGION
+
+    flagsOther = np.zeros(positions.shape, dtype='u2')
+    flagsOther[phiNegative] |= PHI_NEGATIVE
+    flagsOther[phiBeyondPi] |= PHI_BEYOND_PI
+    # Only if the phi hard stops allow it
+    flagsOther[phiNegative & (phiIn <= -ang1)] |= SOLUTION_OK
+    flagsOther[phiBeyondPi & (phiOut >= 2 * np.pi - ang1)] |= SOLUTION_OK
+    flagsOther[thtOther <= overlapEnd] |= IN_OVERLAPPING_REGION
+
+    # The two solutions go along a new last axis
+    tht = np.stack([thtRegular, thtOther], axis=-1)
+    phi = np.stack([phiRegular, phiOther], axis=-1)
+    flags = np.stack([flagsRegular, flagsOther], axis=-1)
+
     return tht, phi, flags
 
 
@@ -230,10 +216,13 @@ def reachAnnulus(calibModel):
     rMin, rMax : ndarray of float, (nCobras,)
         Inner and outer reach radius per cobra, in mm.
     """
-    rMin = np.abs(calibModel.L1
-                  + calibModel.L2 * np.exp(1j * np.maximum(-np.pi, calibModel.phiIn)))
-    rMax = np.abs(calibModel.L1
-                  + calibModel.L2 * np.exp(1j * np.minimum(calibModel.phiOut, 0)))
+    return _reachAnnulus(calibModel.L1, calibModel.L2, calibModel.phiIn, calibModel.phiOut)
+
+
+def _reachAnnulus(L1, L2, phiIn, phiOut):
+    """Inner and outer reach radius from the arm lengths and phi hard stops, elementwise."""
+    rMin = np.abs(L1 + L2 * np.exp(1j * np.maximum(-np.pi, phiIn)))
+    rMax = np.abs(L1 + L2 * np.exp(1j * np.minimum(phiOut, 0)))
     return rMin, rMax
 
 
