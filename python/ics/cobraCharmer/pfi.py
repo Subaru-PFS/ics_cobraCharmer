@@ -112,6 +112,26 @@ class PFI(object):
             self.logger.warn('no calibModel, so we are guessing about the calibModel index for a cobra')
             return ((cobra.module - 1)*self.nCobrasPerModule + cobra.cobraNum-1)
 
+    def _mapCobraIndices(self, cobras):
+        """ Convert a sequence of cobras to an int array of calibration product indices. """
+
+        modules = np.array([c.module for c in cobras], dtype=int)
+        cobraNums = np.array([c.cobraNum for c in cobras], dtype=int)
+        return self.calibModel.findCobrasByModuleAndPositioner(modules, cobraNums)
+
+    def _broadcastCobraIndices(self, cobras, values):
+        """ Calibration indices of cobras, shaped to broadcast against values of shape (n,) or (n, m). """
+
+        cIdx = self._mapCobraIndices(cobras)
+        return cIdx[:, np.newaxis] if np.ndim(values) == 2 else cIdx
+
+    def _checkThetaRange(self, cIdx, thetaAngles):
+        """ Log an error if any theta angle falls outside its cobra's hard stops. """
+
+        thtRange = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx] + np.pi) % (2*np.pi) + np.pi
+        if np.any(0 > thetaAngles) or np.any(thtRange < thetaAngles):
+            self.logger.error('Some theta angles are out of range')
+
     def reset(self, sectors=0x3f):
         """ Reset COBRA fpga device """
         err = func.RST(sectors)
@@ -297,7 +317,7 @@ class PFI(object):
         thetaSteps, phiSteps = self.calculateSteps(
             thetaHomes, thetaMoves, phiHomes, phiMoves, thetaFast, phiFast)
 
-        cIdx = [self._mapCobraIndex(c) for c in cobras]
+        cIdx = self._mapCobraIndices(cobras)
         cThetaSteps = thetaSteps[cIdx]
         cPhiSteps = phiSteps[cIdx]
         self.logger.debug(f'steps: {list(zip(cThetaSteps, cPhiSteps))}')
@@ -347,7 +367,7 @@ class PFI(object):
         _phiFroms = np.zeros(nCobras)
         _thetaFroms = np.zeros(nCobras)
 
-        cIdx = [self._mapCobraIndex(c) for c in cobras]
+        cIdx = self._mapCobraIndices(cobras)
         _phiMoves[cIdx] = phiMoves
         _thetaMoves[cIdx] = thetaMoves
         if phiFroms is not None:
@@ -404,7 +424,7 @@ class PFI(object):
             raise RuntimeError("number of theta angles must match number of cobras")
 
         thetaGlobals = np.zeros(len(cobras))
-        cIdx = [self._mapCobraIndex(c) for c in cobras]
+        cIdx = self._mapCobraIndices(cobras)
         for i, c in enumerate(cIdx):
             if thetaLocals[i] < 0:
                 thetaGlobals[i] = (self.calibModel.tht1[c] + thetaLocals[i]) % (2 * np.pi)
@@ -425,7 +445,7 @@ class PFI(object):
         if len(cobras) != len(thetaGlobals):
             raise RuntimeError("number of theta angles must match number of cobras")
 
-        cIdx = [self._mapCobraIndex(c) for c in cobras]
+        cIdx = self._mapCobraIndices(cobras)
         thetaLocals = (thetaGlobals - self.calibModel.tht0[cIdx]) % (2 * np.pi)
         return thetaLocals
 
@@ -882,14 +902,14 @@ class PFI(object):
         ----------
         cobras: a list of cobras
         thetaAngles: object
-            A numpy array with the theta angles from CCW limit.
+            A numpy array with the theta angles from CCW limit, (n,) or (n, m).
         phiAngles: object
-            A numpy array with the phi angles from CCW limit.
+            A numpy array with the phi angles from CCW limit, same shape as thetaAngles.
 
         Returns
         -------
         numpy array
-            A complex numpy array with the fiber positions.
+            A complex numpy array with the fiber positions, same shape as thetaAngles.
 
         """
         if len(cobras) != len(thetaAngles):
@@ -897,14 +917,9 @@ class PFI(object):
         if len(cobras) != len(phiAngles):
             raise RuntimeError("number of phi angles must match number of cobras")
 
-        cIdx = np.array([self._mapCobraIndex(c) for c in cobras])
+        cIdx = self._broadcastCobraIndices(cobras, thetaAngles)
 
-        if thetaAngles.ndim == 2:
-            cIdx = cIdx[:, np.newaxis]
-
-        thtRange = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx] + np.pi) % (2*np.pi) + np.pi
-        if np.any(0 > thetaAngles) or np.any(thtRange < thetaAngles):
-            self.logger.error('Some theta angles are out of range')
+        self._checkThetaRange(cIdx, thetaAngles)
         phiRange = self.calibModel.phiOut[cIdx] - self.calibModel.phiIn[cIdx]
         if np.any(0 > phiAngles) or np.any(phiRange < phiAngles):
             self.logger.error('Some phi angles are out of range')
@@ -920,25 +935,20 @@ class PFI(object):
         ----------
         cobras: a list of cobras
         thetaAngles: object
-            A numpy array with the theta angles from CCW limit.
+            A numpy array with the theta angles from CCW limit, (n,) or (n, m).
 
         Returns
         -------
         numpy array
-            A complex numpy array with the elbow positions.
+            A complex numpy array with the elbow positions, same shape as thetaAngles.
 
         """
         if len(cobras) != len(thetaAngles):
             raise RuntimeError("number of theta angles must match number of cobras")
 
-        cIdx = np.array([self._mapCobraIndex(c) for c in cobras])
+        cIdx = self._broadcastCobraIndices(cobras, thetaAngles)
 
-        if thetaAngles.ndim == 2:
-            cIdx = cIdx[:, np.newaxis]
-
-        thtRange = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx] + np.pi) % (2*np.pi) + np.pi
-        if np.any(0 > thetaAngles) or np.any(thtRange < thetaAngles):
-            self.logger.error('Some theta angles are out of range')
+        self._checkThetaRange(cIdx, thetaAngles)
 
         ang = self.calibModel.tht0[cIdx] + thetaAngles
         return self.calibModel.centers[cIdx] + self.calibModel.L1[cIdx] * np.exp(1j * ang)
@@ -946,12 +956,22 @@ class PFI(object):
     def positionsToAngles(self, cobras, positions):
         """Convert the fiber positions to theta, phi angles from CCW limit.
 
-        Thin wrapper: resolves cobras to indices and defers to the module-level
-        anglesFromPositions, which is the single implementation of this geometry.
+        Parameters
+        ----------
+        cobras: a list of cobras
+        positions: object
+            A complex numpy array with the fiber positions, (n,) or (n, m).
+
+        Returns
+        -------
+        (tht, phi, flags) : numpy arrays, each of shape positions.shape + (2,)
+            Both possible solutions per position, see targetValidation.anglesFromPositions.
+
         """
         if len(cobras) != len(positions):
             raise RuntimeError("number of positions must match number of cobras")
-        cIdx = np.array([self._mapCobraIndex(c) for c in cobras])
+
+        cIdx = self._broadcastCobraIndices(cobras, positions)
         return targetValidation.anglesFromPositions(self.calibModel, cIdx, positions)
 
     def moveXY(self, cobras, startPositions, targetPositions, overlappingCW=False,
@@ -994,7 +1014,7 @@ class PFI(object):
         elif not np.all(valids):
             self.logger.info("some target positions are invalid")
 
-        cIdx = [self._mapCobraIndex(c) for c in cobras]
+        cIdx = self._mapCobraIndices(cobras)
         gapTht = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx] + np.pi) % (2*np.pi) - np.pi
         for c_i in np.where(valids)[0]:
             if targetTht[c_i, 0] < gapTht[c_i] and overlappingCW:
@@ -1055,7 +1075,7 @@ class PFI(object):
         if ccwLimit:
             thtHomes = phiHomes
         else:
-            cIdx = np.array([self._mapCobraIndex(c) for c in valid_cobras])
+            cIdx = self._mapCobraIndices(valid_cobras)
             thtHomes = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx] + np.pi) % (2*np.pi) + np.pi
         self.logger.info(f"engaged cobras: {[(c.module,c.cobraNum) for c in valid_cobras]}")
         self.logger.info(f"move to: {list(zip(targetTht[valids,0], targetPhi[valids,0]))}")
@@ -1103,7 +1123,7 @@ class PFI(object):
 
         # define home positions
         phiHomes = np.zeros(len(valid_cobras))
-        cIdx = np.array([self._mapCobraIndex(c) for c in valid_cobras])
+        cIdx = self._mapCobraIndices(valid_cobras)
         thtHomes = (self.calibModel.tht1[cIdx] - self.calibModel.tht0[cIdx]) % (2*np.pi) + (2*np.pi)
         with np.printoptions(precision=2, suppress=True):
             self.logger.info(f"engaged cobras: {[(c.module,c.cobraNum) for c in valid_cobras]}")
