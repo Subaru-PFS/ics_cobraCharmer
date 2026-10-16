@@ -435,6 +435,9 @@ class CobraCoach():
             db = opdb.OpDB()
             match = db.query_dataframe('select * from cobra_match where '
                                        f'mcs_frame_id = {frameNum}').sort_values(by=['cobra_id']).reset_index()
+            if match.empty:
+                raise RuntimeError(f'no cobra_match rows for MCS frame {frameNum}: '
+                                   'MCS did not identify the fibres, see its log')
 
             positions = match['pfi_center_x_mm'].values+match['pfi_center_y_mm'].values*(1j)
             # spot_id == -1 ⇒ MCS did not match a real spot to this cobra; the
