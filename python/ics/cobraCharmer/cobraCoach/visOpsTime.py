@@ -262,10 +262,16 @@ def parse_mcs_log(pfsVisit, debug=False):
     
     start_analysis = False
     last_frame = False
+
+    # mcs ends expose with this line; in logs written before it did, exposureState=done came last
+    endMarker = 'expose command finished'
+    if not any(endMarker in line for line in log_lines):
+        endMarker = 'exposureState=done'
     
     expStart=[]
     readDone = []
     saveDone = []
+    expDone = []
     
     fidStart = []
     fidDone = []
@@ -318,15 +324,18 @@ def parse_mcs_log(pfsVisit, debug=False):
             elif 'Fiber ID finished' in line:
                 if debug: print(line)
                 fidDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
+            elif endMarker in line:
+                if debug: print(line)
+                expDone.append(datetime.datetime.strptime(f'{line.split()[0]} {line.split()[1]}', '%Y-%m-%d %H:%M:%S.%fZ'))
                 if last_frame is True:
                     start_analysis = False
     #return expStart, readDone, saveDone, cenTime, outFF, allFF, appTrans, fidStart, fidDone, expDone
-    return expStart, readDone, saveDone, cenTime, fidStart, fidDone
+    return expStart, readDone, saveDone, cenTime, fidStart, expDone
     #return expStart[:-1], readDone[:-1], saveDone[:-1], cenTime[:-1], fidStart[:-1], expDone[:-1]
 
 def visMCSTimeBar(visit, figName=None):
     #expStart, readDone, saveDone, cenTime, outFF, allFF, appTrans, fidStart, fidDone, expDone = parse_mcs_log(visit)
-    expStart, readDone, saveDone, cenTime, fidStart, fidDone = parse_mcs_log(visit)
+    expStart, readDone, saveDone, cenTime, fidStart, expDone = parse_mcs_log(visit)
 
     duration = []
     for i in range(len(readDone)):
@@ -337,7 +346,7 @@ def visMCSTimeBar(visit, figName=None):
             #(allFF[i] - outFF[i]).total_seconds(),
             #(appTrans[i] - allFF[i]).total_seconds(),
             (fidStart[i] - cenTime[i]).total_seconds(),
-            (fidDone[i] - fidStart[i]).total_seconds(),
+            (expDone[i] - fidStart[i]).total_seconds(),
             #(expDone[i] - fidDone[i]).total_seconds(),        
         ]))
 
