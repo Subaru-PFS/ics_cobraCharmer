@@ -9,7 +9,7 @@ from ics.cobraCharmer.cobraCoach.trajectory import Trajectories
 
 import os, fnmatch
 
-from ics.cobraCharmer import pfiDesign
+from ics.cobraCharmer import cobraState, pfiDesign
 from ics.cobraCharmer.cobraCoach import calculation
 import astropy.io.fits as pyfits
 
@@ -313,7 +313,7 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
                  tolerance=0.1, tries=6, homed=False,
                  newDir=True, thetaFast=False, phiFast=False,
                  threshold=10.0, thetaMargin=np.deg2rad(15.0),
-                 phiRamp=None, thetaRamp=None):
+                 phiRamp=None, thetaRamp=None, unscaledPhi=None):
     """
     move cobras to the target angles
 
@@ -339,6 +339,10 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
         until they disappear from MCS (position == 0, hidden under dot); science
         cobras use the normal distance-based done check.
         If None, defaults to zeros (no ramp, pure science convergence).
+    unscaledPhi : ndarray of bool (tries, len(cIds)), optional
+        True where a cobra's phi move of iteration j is driven at its nominal on-time,
+        scale 1.0, and is not used to update the learned phi scale.  The learned scale
+        is restored after that move.  If None, every move is scaled as learned.
 
     Returns
     ----
@@ -391,6 +395,11 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
         phiRamp = np.zeros((tries, len(thetas)))
     if thetaRamp is None:
         thetaRamp = np.zeros((tries, len(thetas)))
+    if unscaledPhi is None:
+        unscaledPhi = np.zeros((tries, len(cIds)), dtype=bool)
+    unscaledPhi = np.asarray(unscaledPhi, dtype=bool)
+    if unscaledPhi.shape != (tries, len(cIds)):
+        raise RuntimeError(f'unscaledPhi must have shape {(tries, len(cIds))}, got {unscaledPhi.shape}')
 
     if relative:
         targetThetas[cIds] = thetas + cc.thetaInfo[cIds]['angle']
@@ -465,10 +474,15 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
         _phiFast = farAwayMask[notDoneMask] & phiFast[notDoneMask]
         cc.thetaScaling = np.logical_not(farAwayMask)
         cc.phiScaling = np.logical_not(farAwayMask)
-        
-        logger.info(f'Sending angles to moveToAngles for {j}-th iteration')
-        atThetas[notDoneMask], atPhis[notDoneMask] = \
-            cc.moveToAngles(cobras, targetThetas[notDoneMask], targetPhis[notDoneMask], _thetaFast, _phiFast, True)
+        unscaledIdx = np.asarray(cIds)[unscaledPhi[j]]
+        cc.phiScaling[unscaledIdx] = False
+
+        unscaledNote = f', {len(unscaledIdx)} phi unscaled' if len(unscaledIdx) else ''
+        logger.info(f'Sending angles to moveToAngles for {j}-th iteration{unscaledNote}')
+        with cobraState.unscaled(unscaledIdx, motor='phi'):
+            atThetas[notDoneMask], atPhis[notDoneMask] = \
+                cc.moveToAngles(cobras, targetThetas[notDoneMask], targetPhis[notDoneMask],
+                                _thetaFast, _phiFast, True)
 
         atPositions = cc.cobraInfo['position']
         distances = np.abs(atPositions - targets)
