@@ -2,3 +2,6 @@ setupRequired(pfs_instdata)
 
 pathAppend(PATH, ${PRODUCT_DIR}/bin)
 pathPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
+
+# Offline test branch: drive the FPGA path against fps' pfiSimServer on this machine.
+envSet(COBRACHARMER_FPGA_HOST, localhost)
