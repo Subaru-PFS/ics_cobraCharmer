@@ -309,11 +309,54 @@ def phiConvergenceTest(cIds, margin=15.0, runs=50, tries=8, fast=False, toleranc
     np.save(dataPath / 'moves', moves)
     return moves
 
+def resolveFromXY(cIds, thetas, phis, xy):
+    """Re-solve angle targets from xy targets with the current cobra centres, in place.
+
+    For the cobras of cIds, the first solution of `pfi.positionsToAngles` when its
+    SOLUTION_OK flag is set, else the second; theta is taken at the equivalent nearest the
+    current one.  A cobra without a valid solution, or whose theta would leave
+    [0, thetaRange], keeps its angles.
+
+    Parameters
+    ----------
+    cIds : `numpy.ndarray` of `int`
+        Indices of the cobras to re-solve.
+    thetas, phis : `numpy.ndarray`, (nCobras,)
+        Local angle targets, radians.
+    xy : `numpy.ndarray` of `complex`, (nCobras,)
+        Targets in mm.
+
+    Returns
+    -------
+    `tuple`
+        Cobras re-solved, cobras kept, median absolute change of theta and of phi in degrees.
+    """
+    idx = np.unique(np.asarray(cIds, dtype=int))
+    if not len(idx):
+        return 0, 0, 0.0, 0.0
+    sol, solPhi, flags = cc.pfi.positionsToAngles(cc.allCobras[idx], xy[idx])
+    old, oldPhi = thetas[idx], phis[idx]
+    wrapped = (sol - old[:, None] + np.pi) % (2 * np.pi) - np.pi
+    valid = ((flags & cc.pfi.SOLUTION_OK) != 0) & np.isfinite(wrapped) & np.isfinite(solPhi)
+    pick = np.where(valid[:, 0], 0, 1)
+    rows = np.arange(len(idx))
+    newThetas = old + wrapped[rows, pick]
+    newPhis = solPhi[rows, pick]
+    thetaRange = targetValidation.thetaRange(cc.calibModel)[idx]
+    ok = valid[rows, pick] & (newThetas >= 0) & (newThetas <= thetaRange)
+    thetas[idx[ok]] = newThetas[ok]
+    phis[idx[ok]] = newPhis[ok]
+    dTheta = np.rad2deg(np.abs(newThetas[ok] - old[ok]))
+    dPhi = np.rad2deg(np.abs(newPhis[ok] - oldPhi[ok]))
+    return (int(ok.sum()), int((~ok).sum()), float(np.median(dTheta)) if ok.any() else 0.0,
+            float(np.median(dPhi)) if ok.any() else 0.0)
+
+
 def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
                  tolerance=0.1, tries=6, homed=False,
                  newDir=True, thetaFast=False, phiFast=False,
                  threshold=10.0, thetaMargin=np.deg2rad(15.0),
-                 phiRamp=None, thetaRamp=None, unscaledPhi=None):
+                 phiRamp=None, thetaRamp=None, unscaledPhi=None, skyTargets=None):
     """
     move cobras to the target angles
 
@@ -343,6 +386,11 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
         True where a cobra's phi move of iteration j is driven at its nominal on-time,
         scale 1.0, and is not used to update the learned phi scale.  The learned scale
         is restored after that move.  If None, every move is scaled as learned.
+    skyTargets : ndarray of complex (len(cIds),), optional
+        Targets fixed on the sky rather than on the cobra plate, mm; NaN for the others.  A
+        cobra with one has its angles re-solved from it every iteration with the centres of
+        the moment (`resolveFromXY`), and must have no ramp.  The others keep their angles:
+        they move with the plate.  If None, every target keeps its angles.
 
     Returns
     ----
@@ -419,6 +467,18 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     baseThetas = targetThetas.copy()
     basePhis   = targetPhis.copy()
 
+    skyIds = np.zeros(0, dtype=int)
+    skyXY = np.full(cc.nCobras, np.nan + np.nan * 1j)
+    if skyTargets is not None:
+        skyTargets = np.asarray(skyTargets, dtype=complex)
+        if skyTargets.shape != (len(cIds),):
+            raise RuntimeError(f'skyTargets must have shape {(len(cIds),)}, got {skyTargets.shape}')
+        onSky = np.isfinite(skyTargets)
+        if (phiRamp[:, onSky].any() or thetaRamp[:, onSky].any()):
+            raise RuntimeError('a cobra with a sky target must have no ramp')
+        skyIds = np.asarray(cIds)[onSky]
+        skyXY[skyIds] = skyTargets[onSky]
+
     TO_DOT_MASK = np.zeros(cc.nCobras, bool)
     TO_DOT_MASK[cIds] = phiRamp.any(axis=0) | thetaRamp.any(axis=0)
 
@@ -467,7 +527,10 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
     for j in range(tries):
         targetThetas[cIds] = baseThetas[cIds] + thetaRamp[j]
         targetPhis[cIds]   = basePhis[cIds]   + phiRamp[j]
-        targets = cc.pfi.anglesToPositions(cc.allCobras, targetThetas, targetPhis)
+        if len(skyIds):
+            nDone, nKept, dTheta, dPhi = resolveFromXY(skyIds, targetThetas, targetPhis, skyXY)
+            logger.info(f'{j}-th iteration: {nDone} sky targets re-solved, median change theta '
+                        f'{dTheta:.4f} phi {dPhi:.4f} degree, {nKept} kept; plate {cc.plate.describe()}')
 
         cobras = cc.allCobras[notDoneMask]
         _thetaFast = farAwayMask[notDoneMask] & thetaFast[notDoneMask]
@@ -485,6 +548,10 @@ def moveThetaPhi(cIds, thetas, phis, relative=False, local=True,
                                 _thetaFast, _phiFast, True)
 
         atPositions = cc.cobraInfo['position']
+        # The targets with the centres of the frame just taken.
+        targets = cc.pfi.anglesToPositions(cc.allCobras, targetThetas, targetPhis)
+        if len(skyIds):
+            targets[skyIds] = skyXY[skyIds]
         distances = np.abs(atPositions - targets)
         nowDone[~TO_DOT_MASK & (distances < tolerance)] = True
         if j >= HIDE_LOCK_ITER:

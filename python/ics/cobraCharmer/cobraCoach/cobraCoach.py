@@ -9,6 +9,7 @@ from ics.cobraCharmer.cobraCoach.speedModel import SpeedModel
 
 from ics.cobraCharmer.cobraCoach.mcs import camera
 from ics.cobraCharmer import pfi as pfiControl
+from ics.cobraCharmer import plateFrame
 from ics.cobraCharmer import targetValidation
 import ics.cobraCharmer.pfiDesign as pfiDesign
 from ics.cobraCharmer import func
@@ -79,6 +80,10 @@ class CobraCoach():
         self.cam = None
         self.fpgaHost = fpgaHost
 
+        # Plate of each MCS frame, see _updatePlate.
+        self.plateSource = None
+        self.plate = plateFrame.IDENTITY
+
         
 
         # scaling model
@@ -137,8 +142,99 @@ class CobraCoach():
         self.moveInfo = np.zeros(self.nCobras, dtype=self.moveDtype)
         self.thetaInfoIsValid = False
         self.phiInfoIsValid = False
+        self._resetPlate()
 
         self.connect()
+
+    def _resetPlate(self):
+        """Take the centres of the current model as the XML centres, the plate at the identity."""
+        self.plate = plateFrame.IDENTITY
+        self._plateModel = self.calibModel
+        self._xmlCenters = self.calibModel.centers.copy()
+        self._appliedCenters = self._xmlCenters.copy()
+
+    @property
+    def xmlCenters(self):
+        """Cobra centres as the XML gives them, in the frame of its FIBER_REFERENCE (complex mm)."""
+        return self._xmlCenters.copy()
+
+    def _updatePlate(self, frameNum, positions, detected):
+        """Put the cobra centres where the plate of this frame puts the XML centres.
+
+        ``plateSource(frameNum, measured)`` gives the plate, a `plateFrame.PlateFit` or None for
+        the identity, from the positions of all cobras measured in the frame (complex mm, NaN
+        where not detected); the centres become ``plate.apply(xmlCenters)``.
+
+        Nothing is done without a plateSource; without anchors in the model the plate is
+        the identity and the centres are left as they are.  Centres
+        changed by anything else since the last frame (a recentring) are taken into the XML
+        frame through the plate they were measured under; a model put in place other than by
+        loadModel is taken as the XML.  When the plate moves the centres, the angles of the
+        last positions are re-solved with the new centres (`_rebaseAngles`), so the move this
+        frame measures does not include the plate's.
+
+        Parameters
+        ----------
+        frameNum : `int`
+            MCS frame id.
+        positions : `numpy.ndarray` of `complex`, (nCobras,)
+            Measured positions, mm.
+        detected : `numpy.ndarray` of `bool`, (nCobras,)
+            Whether each position is a spot of that cobra.
+        """
+        model = self.calibModel
+        if self.plateSource is None:
+            return
+        if model is not self._plateModel:
+            self.logger.warning('the calibration model was replaced: its centres are taken as the XML centres')
+            self._resetPlate()
+        if not np.isfinite(model.fiberReference).any():
+            if self.plate is not plateFrame.IDENTITY:
+                self.logger.warning('no anchor cobras in the calibration model: plate back to the identity, '
+                                    'its centres taken as the XML centres')
+                self._resetPlate()
+            return
+        if self.pfi is not None and self.pfi.calibModel is not model:
+            self.logger.warning(f'frame {frameNum}: the cobras run another calibration model, plate not applied')
+            return
+        changed = ~((model.centers == self._appliedCenters)
+                    | (np.isnan(model.centers) & np.isnan(self._appliedCenters)))
+        if changed.any():
+            self._xmlCenters[changed] = (model.centers[changed] - self.plate.a) / self.plate.b
+            self._appliedCenters = model.centers.copy()
+            self.logger.info(f'{int(changed.sum())} cobra centres changed: taken into the XML frame '
+                             f'through {self.plate.describe()}')
+        try:
+            measured = np.where(detected, positions, np.nan + np.nan * 1j)
+            plate = self.plateSource(frameNum, measured)
+        except Exception as e:
+            self.logger.warning(f'frame {frameNum}: no plate ({e}); centres kept at {self.plate.describe()}')
+            return
+        before = model.centers.copy()
+        self.plate = plateFrame.IDENTITY if plate is None else plate
+        model.centers[:] = self.plate.apply(self._xmlCenters)
+        self._appliedCenters = model.centers.copy()
+        if not np.array_equal(model.centers, before):
+            self._rebaseAngles()
+
+    def _rebaseAngles(self):
+        """Re-solve the angles of the cobras' last positions with the current centres, in place.
+
+        Theta stays on its branch (the nearest equivalent of the old angle); a cobra whose
+        solution is neither SOLUTION_OK nor TOO_FAR_FROM_CENTER, or that has no position or
+        angle, keeps its angles.
+        """
+        if self.pfi is None:
+            return
+        positions = self.cobraInfo['position'].astype(complex)
+        thetas, phis, flags = self.pfi.positionsToAngles(self.allCobras, positions)
+        old = self.cobraInfo['thetaAngle'].astype(float)
+        solved = (flags[:, 0] & (self.pfi.SOLUTION_OK | self.pfi.TOO_FAR_FROM_CENTER)) != 0
+        ok = (solved & (positions != 0) & np.isfinite(old) & np.isfinite(thetas[:, 0])
+              & np.isfinite(phis[:, 0]) & np.isfinite(self.cobraInfo['phiAngle']))
+        wrapped = (thetas[:, 0] - old + np.pi) % (2 * np.pi) - np.pi
+        self.cobraInfo['thetaAngle'][ok] = (old + wrapped)[ok]
+        self.cobraInfo['phiAngle'][ok] = phis[ok, 0]
 
     def setScaling(self, enabled=True, thetaScaleFactor=None, phiScaleFactor=None,
                    minThetaSteps=None, minPhiSteps=None, thetaScaling=None, phiScaling=None):
@@ -445,6 +541,7 @@ class CobraCoach():
             # so callers (e.g. engineer.moveThetaPhi) can stop commanding hidden
             # cobras instead of acting on the dot-center fallback.
             self.cobraInfo['detected'] = (match['spot_id'].values != -1)
+            matched = self.cobraInfo['detected']
 
             self.logger.info(f'Returing result from matching table ncen={len(positions)} ')
             
@@ -513,7 +610,9 @@ class CobraCoach():
         
             self.logger.info('Running object matching!')
             positions, indexMap = calculus.matchPositions(centroids, guess=centers, dist=radii)
+            matched = np.asarray(indexMap) >= 0
             self.logger.info(f'Total detected spots={len(centroids)} Npos={len(positions)} nguess={len(centers)}')
+        self._updatePlate(frameNum, positions, matched)
         return positions
 
     def getCurrentPositionsUNUSED(self):

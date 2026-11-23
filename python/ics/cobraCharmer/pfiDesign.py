@@ -232,6 +232,8 @@ class PFIDesign():
         self.centers = np.empty(self.nCobras, dtype="complex")
         self.geoCenters = np.full(self.nCobras, np.nan + np.nan * 1j, dtype="complex")
         self.hasGeomCenter = np.zeros(self.nCobras, dtype=bool)
+        # Fibre position of the anchor cobras (FIBER_REFERENCE), NaN for the others.
+        self.fiberReference = np.full(self.nCobras, np.nan + np.nan * 1j, dtype="complex")
         self.status = np.empty(self.nCobras, dtype="u2")
         self.tht0 = np.empty(self.nCobras)
         self.tht1 = np.empty(self.nCobras)
@@ -308,7 +310,16 @@ class PFIDesign():
                 except ValueError:
                     raise ValueError(f"Invalid geometry center values for cobra {self.serialIds[i]}: "
                                      f"Geometry_center_x={geomCenterX.text}, Geometry_center_y={geomCenterY.text}")
-            
+
+            # Anchor cobras: where their fibre is, in the frame of the centres (plateFrame).
+            fiberReference = dataContainers[i].find("FIBER_REFERENCE")
+            if fiberReference is not None:
+                try:
+                    self.fiberReference[i] = (float(fiberReference.find("Global_pos_x").text)
+                                              + float(fiberReference.find("Global_pos_y").text) * 1j)
+                except (AttributeError, TypeError, ValueError):
+                    raise ValueError(f"Invalid FIBER_REFERENCE for cobra {self.serialIds[i]}: "
+                                     f"{ElementTree.tostring(fiberReference, encoding='unicode')}")
 
             self.tht0[i] = np.deg2rad(float(kinematics.find("CCW_Global_base_ori_z").text))
             self.tht1[i] = np.deg2rad(float(kinematics.find("CW_Global_base_ori_z").text))
@@ -796,10 +807,20 @@ class PFIDesign():
         phiArms: object
             A numpy array with the cobras phi arm lengths.
 
+        New centres drop the anchor fibre positions (FIBER_REFERENCE, fiberReference): those
+        are in the frame of the centres they were recorded with.
         """
 
         if centers is not None and len(centers) != self.nCobras:
             raise RuntimeError("number of cobra centers must match number of cobras")
+        if centers is not None and np.isfinite(self.fiberReference).any():
+            self.logger.warning(f'new centres: the {int(np.isfinite(self.fiberReference).sum())} '
+                                f'anchor fibre positions (FIBER_REFERENCE) are dropped')
+            for container in self.dataContainers:
+                node = container.find("FIBER_REFERENCE")
+                if node is not None:
+                    container.remove(node)
+            self.fiberReference[:] = np.nan + np.nan * 1j
         if thetaArms is not None and len(thetaArms) != self.nCobras:
             raise RuntimeError("number of theta arm lengths must match number of cobras")
         if phiArms is not None and len(phiArms) != self.nCobras:
