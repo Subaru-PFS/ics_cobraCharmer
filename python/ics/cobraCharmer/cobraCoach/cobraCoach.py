@@ -787,6 +787,7 @@ class CobraCoach():
             #np.save('/tmp/cobraCharmer_pos',pos)
         # update status
         thetas, phis, flags = self.pfi.positionsToAngles(self.allCobras, pos)
+        thetaRanges = targetValidation.thetaRange(self.calibModel)
         for c_i in range(len(cobras)):
             cId = cIds[c_i]
             if nSegments == 0:
@@ -836,8 +837,9 @@ class CobraCoach():
 
             #self.logger.info(f'print {theta}')
             if not np.isnan(theta):
-                angle = calculus.unwrappedAngle(theta, tSteps, self.cobraInfo['thetaAngle'][cId],
-                                                self.cobraInfo['thetaAngle'][cId] + expectedThetas[c_i])
+                angle = calculus.unwrappedAngle(theta, tSteps, fromAngle=self.cobraInfo['thetaAngle'][cId],
+                                                toAngle=self.cobraInfo['thetaAngle'][cId] + expectedThetas[c_i],
+                                                thetaRange=thetaRanges[cId])
                 self.moveInfo['movedTheta'][cId] = angle - self.cobraInfo['thetaAngle'][cId]
                 self.moveInfo['movedPhi'][cId] = phi - self.cobraInfo['phiAngle'][cId]
                 self.cobraInfo['thetaAngle'][cId] = angle

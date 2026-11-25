@@ -240,9 +240,23 @@ def diffAngle(angle1, angle2):
 def absDiffAngle(angle1, angle2):
     return np.abs(diffAngle(angle1, angle2))
 
-def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, minSteps=50, delta=0.02, delta2=0.2):
-    """ Adjust theta angles near 0 accounting for possible overshoots given the move """
+def unwrappedAngle(angle, steps, fromAngle=np.nan, toAngle=np.nan, minSteps=50, delta=0.02, delta2=0.2,
+                   thetaRange=None, stopMargin=np.deg2rad(12.0)):
+    """ Adjust theta angles near 0 accounting for possible overshoots given the move
+
+    thetaRange : `float`, optional
+        The cobra's theta travel from its CCW to its CW hard stop, radians (slightly over 2 pi).  When
+        given, an angle more than ``stopMargin`` away from both ends of the overlap has a single position
+        in the travel and is returned as it is; the rules below then only decide near the hard stops.
+    stopMargin : `float`
+        Radians by which the overlap is widened at each end: a cobra held at a hard stop reads up to
+        about 10 degrees past the stop angle of its calibration.
+    """
     angle = angle % (np.pi*2)
+
+    if thetaRange is not None and np.isfinite(thetaRange):
+        if thetaRange - np.pi*2 + stopMargin < angle < np.pi*2 - stopMargin:
+            return angle
 
     if np.isnan(fromAngle):
         # no clever way to unwrapped angle
